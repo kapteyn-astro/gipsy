@@ -1,0 +1,36 @@
+
+Document:     history
+
+Purpose:      The file history, which resides in the gip_sys directory,
+              Maintains a history of all GIPSY source files.
+
+Category:     MANAGEMENT
+
+File:         history.doc
+
+Author:       K.G. Begeman
+
+Description:  The history file keeps a record of each installation of a
+              source file. It is updated by $gip_exe/compile.
+              Each modification of a source file has a one line entry
+              in the history file, which consists of several fields,
+              separated by colons (:).
+              The fields have the following meaning:
+              field    meaning
+                1      name of source file.
+                2      type of source file (i.e. doc, inc, sub or tsk).
+                3      version number of source file starting from zero.
+                4      date of installing a particular version.
+                5      username of person who installed the version.
+                6      current owner of source file. If owner is
+                       not equal to GIPSY or WASTEBASKET, the file has
+                       been reserved (by the owner). If owner is
+                       WASTEBASKET, the file has been removed and is
+                       currently stored in $gip_old.
+                7      the size of the source file in bytes.
+
+Notes:        With the command '$gip_exe/compile -history <source> the
+              complete history of source file <source> will be shown.
+
+Updates:      May 21, 1991: KGB Document created.
+

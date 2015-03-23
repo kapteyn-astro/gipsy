@@ -1,0 +1,4610 @@
+gaufit2d.src
+
+        Copyright (c) Kapteyn Laboratorium Groningen 2010
+        All Rights Reserved.
+
+Name:         gaufit2d.src
+Creator:      vogelaar
+Host:         zeearend
+Date:         Apr 18, 2010
+Contents:     gaufit2d.make gui.h gaufit2d.c gui.c gaufit2d.dc1
+
+#>            gaufit2d.make
+#----------------------------------------------------------------------
+# Makefile for GAUFIT2D, mar 4, 1998
+#
+#
+# Pack sources into gaufit2d.src with:   > make -f gaufit2d.make pack
+# Unpack source files with:              > $gip_exe/xfile gaufit2d.src
+# Install source file with:              > p -reserve gaufit2d.src
+#                                        > p -install gaufit2d.src
+#
+# Local compilation for testing:         > p gaufit2d.make
+#
+# The CC_OPTS etc are set by 'compile'
+#----------------------------------------------------------------------
+
+SHELL = /bin/sh
+
+OPTS  = $(CC_OPTS)
+COMP  = $(CC_COMP)
+LIBS  = $(CC_LIBS)
+
+.SUFFIXES: .c .o
+
+
+INCLUDES  = gui.h
+
+SOURCES   = gaufit2d.c gui.c
+
+OBJECTS   = gaufit2d.o gui.o 
+
+DOCUMENTS = gaufit2d.dc1
+
+default:: gaufit2d
+
+pack::
+	$${gip_sys}/pack.csh gaufit2d.src gaufit2d.make \
+        $(INCLUDES) $(SOURCES) $(DOCUMENTS)
+
+clean::
+	rm -f gaufit2d $(OBJECTS)
+
+.c.o:
+	@echo "$(CC_COMP) -c $(CC_OPTS) $(X11_OPTS) $< ";\
+	$(CC_COMP) -c $(CC_OPTS) $(X11_OPTS) $<
+
+gaufit2d:  $(INCLUDES) $(OBJECTS)
+	@echo "$(CC_COMP) -o gaufit2d $(OBJECTS) $(X11_LIBS) $(CC_LIBS) $(XT_LIBS)";\
+	$(CC_COMP) -o gaufit2d $(OBJECTS) $(X11_LIBS) $(CC_LIBS) $(XT_LIBS)
+#<
+
+#>            gui.h
+#if !defined(_gui_h_)
+#define _gui_h_
+void gui(void);                       /* activate GUI */
+void gui_subsets(bool sensitive);     /* allow/prevent subset input */
+void gui_units(char *units[]);        /* display parameter units */
+void gui_results(double fit[], double errors[]); /* display fit results */
+void gui_textline(char *text, int lineno);  /* display text line */
+void gui_status(char *message, int lineno); /* display status message */
+void gui_error(char *message);        /* display error message */
+void gui_residue(bool state);         /* set residue button sensitivity */
+void trigger_key(char *key);          /* if keyword present, force event */
+#endif
+#<
+
+#>            gaufit2d.c
+/*
+                            COPYRIGHT (c) 1998
+                      Kapteyn Astronomical Institute
+                University of Groningen, The Netherlands
+                           All Rights Reserved.
+
+
+*/
+
+/*  gaufit2d.c: include files     */
+
+#include    "stdio.h"        /* Defines ANSI C input and output utilities */
+#include    "stdlib.h"       /* Defines the ANSI C functions for number */
+                             /* conversion, storage allocation, and similar tasks.*/
+#include    "string.h"       /* Declares the ANSI C string functions*/
+                             /* like:strcpy, strcat etc.*/
+#include    "math.h"         /* Declares the mathematical functions and macros.*/
+#include    "cmain.h"        /* Defines the main body of a C program with */
+                             /* MAIN_PROGRAM_ENTRY and IDENTIFICATION */
+#include    "gipsyc.h"       /* Defines the ANSI-F77 types for Fortran to C intface */
+                             /* including def. of char2str,str2char,tofchar,zadd */
+                             /* and macros tobool and toflog */
+#include    "float.h"        /* Definition of FLT_MAX etc.*/
+#include    "ctype.h"        /* Declares ANSI C functions for testing characters */
+                             /* like: isalpha, isdigit etc. also tolower, toupper.*/
+
+
+/* Common includes */
+
+#include    "init.h"         /* Declare task running to HERMES and initialize.*/
+#include    "finis.h"        /* Informs HERMES that servant quits and cleans up the mess.*/
+#include    "anyout.h"       /* General character output routine for GIPSY programs.*/
+#include    "setfblank.h"    /* Subroutine to set a data value to the universal BLANK.*/
+#include    "setdblank.h"
+#include    "error.h"        /* User error handling routine. */
+#include    "myname.h"       /* Obtain the name under which a GIPSY task is being run.*/
+#include    "nelc.h"         /* Characters in F-string discarding trailing blanks.*/
+#include    "matrix.h"       /* Read data in M[y1..yn][x1..xn] format */
+#include    "hmsdmsC.h"
+
+
+/* User input routines */
+
+#include    "userfio.h"      /* Easy-C companions for user interface routines.*/
+#include    "userint.h"      /* User input interface routines.*/
+#include    "userlog.h"
+#include    "userreal.h"
+#include    "userdble.h"
+#include    "usertext.h"
+#include    "usercharu.h"
+#include    "userfio.h"      /* Easy-C companions of userxxx_c */
+#include    "reject.h"       /* Reject user input.*/
+#include    "cancel.h"       /* Remove user input from table maintained by HERMES.*/
+#include    "keyevents.h"    /* Definitions for event-driven operation */
+#include    "wkey.h"
+#include    "subst.h"
+
+/* Input of sets */
+
+#include    "gdsinp.h"       /* Input of set, subsets, return # subsets.*/
+#include    "gdsbox.h"       /* Define a box inside/around a subset.*/
+#include    "gdsc_range.h"   /* Return lower left and upper right corner of a subset.*/
+#include    "gdsc_ndims.h"   /* Return the dimensionality of a coordinate word.*/
+#include    "gdsc_grid.h"    /* Extract grid value.*/
+#include    "gdsc_fill.h"    /* return coordinate word filled with a grid */
+                             /* value for each axis.*/
+#include    "gdsi_read.h"    /* Reads data from (part of) a set.*/
+#include    "gdsd_rchar.h"   /* Reads character item from header */
+#include    "gdsd_rdble.h"   /* Reads double from header */
+#include    "gds_exist.h"
+#include    "gds_delete.h"
+#include    "gds_create.h"
+#include    "gds_extend.h"
+#include    "gds_close.h"
+#include    "gdsd_wdble.h"
+#include    "gdsd_wchar.h"
+#include    "gdsi_write.h"
+
+
+/* Gids related */
+
+#include    "gdi_iinfo.h"    /* Obtains info about GDS image loaded in DISPLAY SERVER. */
+#include    "gdi_open.h"     /* Opens a display. */
+#include    "gdi_open2.h"    /* Opens a d. only if the d. server is already running. */
+#include    "gdi_frame.h"    /* Obtains info about frame currently on display. */
+#include    "gdi_close.h"    /* Closes an opened display device. */
+
+
+/* PGPLOT includes */
+
+#include    "pgplot.h"
+
+
+/* Miscellaneous */
+
+#include    "skyrot.h"
+#include    "axtype.h"
+#include    "factor.h"
+#include    "grtoph.h"
+#include    "lsqfitd.h"
+#include    "deputy.h"
+#include    "listctrl.h"
+#include    "gui.h"
+#include    "time.h"
+#include    "minmax3.h"      /* Find min, max and #blanks in subset. */
+#include    "beam.h"
+
+
+/* DEFINITIONS: */
+
+
+#define MYMAX(a,b)     ( (a) > (b) ? (a) : (b) )
+#define MYMIN(a,b)     ( (a) > (b) ? (b) : (a) )
+#define ABS(a)         ( (a) < 0 ? (-(a)) : (a) )
+#define PI             3.141592653589793
+#define RAD(a)         ( (a) * 0.017453292519943295769237 )
+#define DEG(a)         ( (a) * 57.295779513082320876798155 )
+
+#define MAXAXES        10         /* Max. axes in a set */
+#define MAXSUBSETS     1024       /* Max. allowed subsets */
+#define MAXBUF         4096       /* Buffer size for I/O */
+#define STRLEN         256        /* Max length of strings */
+#define MAXPAR         7          /* #pars in 2-dim gaussian */
+#define FITSLEN        20
+#define NONE           0          /* Default levels in userxxx routines */
+#define REQUEST        1
+#define HIDDEN         2
+#define EXACT          4
+#define YES            1          /* C versions for true and false */
+#define NO             0
+#define AMPL           0
+#define AXIS_X         1
+#define AXIS_Y         2
+#define MAJOR          1
+#define MINOR          2
+#define XO             3
+#define YO             4
+#define PA             5
+#define ZERO           6
+#define GR2PH          1
+#define PH2GR          2
+#define FIRSTLINE      0
+#define SECONDLINE     1
+#define THIRDLINE      2
+#define FOURTHLINE     3
+#define FIFTHLINE      4
+#define DEBUG          16
+#define FREE           1
+#define FIXED          0
+#define TMPSETNAME     "XXXXresidualXXXX"
+#define EXAMPLESET     "GAUFIT2Dexampleset"
+#define GAUSSCUTOFF    0.05        /* Gauss cutoff in moments method */
+
+#define RED            2
+#define GREEN          3
+#define YELLOW         7
+#define FOREGROUND     1
+#define BACKGROUND     0
+#define PLUS           2
+
+#define KEY_BOX        tofchar("BOX=")
+
+
+/* Miscellaneous */
+
+static fint     setlevel = 0;            /* To get header items at set level. */
+static float    blank;                             /* Global value for BLANK. */
+static int      odev;                   /* Device to which output is directed */
+
+
+typedef struct
+{
+   float    **image;                              /* 2-dim matrix with floats */
+   int      setexist;
+   int      boxexist;
+   fchar    Setin;                                       /* Name of input set */
+   char     setbuf[STRLEN];
+   fint     subin[MAXSUBSETS];                     /* Subset coordinate words */
+   fint     axnum[MAXAXES];
+   fint     blo[2];                              /* Low  edge of box in grids */
+   fint     bhi[2];                              /* High edge of box in grids */
+   fint     nsubs;                                 /* Number of input subsets */
+   fint     imagesize;
+   fint     subsetindx;
+   int      allowconv;
+   int      forcegrids;
+   int      viewfit;
+   int      setdisplayed;                    /* Decide to view current subset */
+   int      has_estimates;
+   double   mompar[MAXPAR];                /* Grid estimates z0,x0,y0,a,b,c,o */
+   double   respar[MAXPAR];  /* Storage for converted est. z0,maj,min,x0,y0,o */
+   double   usrpar[MAXPAR];                      /* Estimates changed by user */
+   double   fitpar[MAXPAR];                /* In- and output pars. for lsqfit */
+   double   outpar[MAXPAR];
+   double   pltpar[MAXPAR];
+   double   fiterr[MAXPAR];
+   double   outerr[MAXPAR];                       /* Output errors for lsqfit */
+   char     units[MAXPAR][FITSLEN];
+   char     keys[MAXPAR][FITSLEN];         /* Base keywords for the estimates */
+   char     items[MAXPAR][FITSLEN];
+   char     cunit[2][FITSLEN];
+   int      itemnr;                            /* For scheduling purpose only */
+   fint     mpar[MAXPAR];
+   double   crota;
+   int      counterclockwise;
+   double   cdelt[2];
+   double   grid2arcsec[2];
+   double   crpix[2];
+   float    clip;
+   double   redchi2;
+   double   tol;
+   double   lab;
+   int      its;
+   fint     maxits;
+   int      excluded;
+   int      nblanks;
+   int      hmsconvert;
+   fint     gids_id;
+   int      first_is_major;
+} globaltype;
+
+
+
+
+static void clearstr( fchar Fstr )
+/*------------------------------------------------------------*/
+/* Purpose: Blank a Fortran string up to 'len' characters     */
+/*------------------------------------------------------------*/
+{
+   int    i;
+   fint   len = Fstr.l;
+
+
+   for (i = 0; i < (int) len; i++)
+   {
+      Fstr.a[i] = '\0';
+   }
+}
+
+
+static bool UserLog(char *key)
+/*------------------------------------------------------------*/
+/* Purpose: Special version of userlog with default.          */ 
+/*------------------------------------------------------------*/
+{
+   bool result=toflog(FALSE);
+   fint fint1=1, fint2=2;
+
+   (void)userlog_c(&result, &fint1, &fint2, tofchar(key), tofchar(" "));
+   return tobool(result);
+}
+
+
+
+static void error_status( char *errstr,
+                          char *statstr1,
+                          char *statstr2 )
+/*------------------------------------------------------------*/
+/* PURPOSE: Update status and error messages in gui.          */
+/*------------------------------------------------------------*/
+{
+   gui_error( errstr );
+   gui_status( statstr1, FIRSTLINE );
+   gui_status( statstr2, SECONDLINE );
+}
+
+
+
+static void setmarker( double x,
+                       double y,
+                       int    symbol )
+/*------------------------------------------------------------*/
+/* PURPOSE: C version of pgpt_c (plot a graphmarker).         */
+/*------------------------------------------------------------*/
+{
+   float x0 = (float) x;
+   float y0 = (float) y;
+   fint  sym = (fint) symbol;
+   fint  one = 1;
+
+   pgpt_c( &one, &x0, &y0, &sym );
+}
+
+
+
+static void ellipse( double Cpx,
+                     double Cpy,
+                     double Major,
+                     double Minor,
+                     double Pa,
+                     float  *x,
+                     float  *y )
+/*------------------------------------------------------------*/
+/* PURPOSE: Given the parameters of an ellipse, draw ellipse  */
+/*          at given center. Store the endpoints of major and */
+/* minor axes in arrays x, y (angle 'alpha'=0,90,180,270 deg.)*/
+/*------------------------------------------------------------*/
+{
+   double    CosP, SinP;                    /* Angles */
+   double    CosA, SinA;                    /* Angles */
+   double    Alpha;                         /* Used in Polar coordinates */
+   double    R;                             /* Radius used in Polar coordinates */
+   double    Denom;                         /* Help var. */
+   double    Xell, Yell;                    /* Points of not rotated ellipse */
+   double    Startangle = 0.0;
+   double    Endangle = 360.0;
+   float     Xpoints[368], Ypoints[368];    /* Outline ellipse in arrays */
+   int       i;                             /* Array index */
+   fint      Numpoints;                     /* Number of points in arrays */
+
+
+   CosP  = cos( RAD(Pa) );
+   SinP  = sin( RAD(Pa) );
+
+   i = 0;
+   for (Alpha = Startangle; Alpha <= Endangle; Alpha += 1.0)
+   /*-----------------------------------------------------------*/
+   /* Ellipse: b^2.x^2 + a^2.y^2 = a^2.b^2                      */
+   /* Substitute: x = r.cos(alpha), y = r.sin(alpha) and solve  */
+   /* for r.                                                    */
+   /*-----------------------------------------------------------*/
+   {
+      CosA = cos(RAD(Alpha));
+      SinA = sin(RAD(Alpha));
+      Denom = (Minor*CosA * Minor*CosA + Major*SinA * Major*SinA);
+      if (Denom == 0.0)
+      {
+         R = 0;
+      }
+      else
+      {
+         R = sqrt( Minor*Major * Minor*Major / Denom );
+      }
+      Xell = R * CosA;
+      Yell = R * SinA;
+      /* We have a point on this ellipse, now rotate this point */
+      /* and move to given origin. Rotate counter clockwise */
+      Xpoints[i] = (float) (Xell * CosP - Yell * SinP  + Cpx);
+      Ypoints[i] = (float) (Xell * SinP + Yell * CosP  + Cpy);
+      if (Alpha == 0.0)
+      {
+         x[0] =  Xpoints[i];
+         y[0] =  Ypoints[i];
+      }
+      else if (Alpha == 90.0)
+      {
+         x[1] =  Xpoints[i];
+         y[1] =  Ypoints[i];
+      }
+      else if (Alpha == 180.0)
+      {
+         x[2] =  Xpoints[i];
+         y[2] =  Ypoints[i];
+      }
+      else if (Alpha == 270.0)
+      {
+         x[3] =  Xpoints[i];
+         y[3] =  Ypoints[i];
+      }
+      i++;
+   }
+   Numpoints = i;
+   pgline_c( &Numpoints, Xpoints, Ypoints );   /* Can be replaced by 'pgpoly' */
+
+}
+
+
+static int gauss2ellipse( double   a,
+                          double   b,
+                          double   c,
+                          double   *X,
+                          double   *Y,
+                          double   *phi,
+                          double   ellipseconst )
+/*------------------------------------------------------------*/
+/* PURPOSE: Convert gauss parameters a,b,c to ellipse         */
+/*          parameters axis in X, axis in Y, position angle   */
+/*          The axes are the Full Widths at Half Maximum.     */
+/*                                                            */
+/* The equation of the gaussian is:                           */
+/*                                                            */
+/* z(x,y) = z0.exp[-{a(x-xc)^2+b(y-yc)^2+2c(x-xc)(y-yc)}]     */
+/*------------------------------------------------------------*/
+{
+   double    p;
+   double    theta;
+
+   if (a*b-c*c <= 0.0)
+   {
+      error_status( "Estimates from moments are unusable",
+                    "Try another box...", "" );
+      anyoutf( DEBUG, "a=%f, b=%f, c=%f do not make an ellipse!", a, b, c );
+      return( 0 );
+   }
+   if (a == b)
+      theta = 0.0;
+   else
+   {
+      /*--------------------------------------------------*/
+      /* Use atan (instead of atan2) because result must  */
+      /* be between -PI/2 and PI/2. Then                  */
+      /* 'theta' is in the in the range -PI/4 and PI/4    */ 
+      /*--------------------------------------------------*/
+      theta = DEG( 0.5 * atan(2.0*c/(a-b)) );
+   }
+
+   p = sqrt( (a-b)*(a-b)+4.0*c*c );
+   {
+      double axisX, axisY;
+      if (a>b)
+      {
+         axisX = 2.0 * sqrt( ellipseconst/(a+b+p) );
+         axisY = 2.0 * sqrt( ellipseconst/(a+b-p) );
+      }
+      else
+      {
+         axisX = 2.0 * sqrt( ellipseconst/(a+b-p) );
+         axisY = 2.0 * sqrt( ellipseconst/(a+b+p) );
+      }
+
+      anyoutf( DEBUG, "A=%f b=%f 2C=%f converted to:", a , b, 2.0*c );
+      anyoutf( DEBUG, "angle=%f (deg), axisX=%f axisY=%f",
+               theta, axisX, axisY );
+      *X = axisX;
+      *Y = axisY;
+   }
+   *phi = theta;
+   return( 1 );
+}
+
+
+double funcd_c( double  *xdat,
+                double  *parlist,
+                fint    *npar,
+                fint    *fopt )
+/*----------------------------------------------------------------------
+ PURPOSE: Calculate the value of a gaussian with parameters P at the
+          position Xdat.
+          The parameters are:
+          parlist(0) : Amplitude
+          parlist(1) : Axis (FWHM) in X-direction
+          parlist(2) : Axis (FWHM) in Y-direction
+          parlist(3) : X0, center of gauss wrt center of
+                       subset
+          parlist(4) : Y0, center of gauss wrt center of
+                       subset
+          parlist(5) : Rotation angle in radians wrt. positive X-axis
+                       counted anti-clockwise
+          parlist(6) : Zero level
+          Units center and FWHM are the same
+
+          The 2d-gaussian is:
+
+          F(x,y) = par(0) * EXP( -4.0*ALOG(2.0) *
+                   [(xr / par(1))**2 + (yr / par(2))**2] + par(6)
+
+               where: xr =  xo * cos(par(5)) + yo * sin(par(5))
+                      yr = -xo * sin(par(5)) + yo * cos(par(5))
+
+               and:   xo = x - par(3)
+                      yo = y - par(4)
+
+----------------------------------------------------------------------*/
+{
+      double     xd, yd;            /* FWHM's of  ellipse */
+      double     x, y;              /* Position */
+      double     sinpa, cospa;      /* Sine, cosine of position angle */
+      double     argXD, argYD;      /* Arguments in the exponent */
+
+      xd = fabs(parlist[1]);
+      yd = fabs(parlist[2]);
+      x   = xdat[0] - parlist[3];
+      y   = xdat[1] - parlist[4];
+      cospa = cos( parlist[5] );
+      sinpa = sin( parlist[5] );
+      /* What are the values of x,y in an unrotated frame?       */
+      argXD =   x * cospa + y * sinpa;
+      argYD =  -x * sinpa + y * cospa;
+      return (
+               parlist[0] * exp( -4.0*log(2.0) *
+               ( (argXD/xd)*(argXD/xd) + (argYD/yd)*(argYD/yd) ) )
+               + parlist[6]
+             );
+}
+
+
+
+void dervd_c( double  *xdat,
+              double  *parlist,
+              double  *dervs,
+              fint    *npar,
+              fint    *fopt )
+/*----------------------------------------------------------------------
+ PURPOSE: Calculate the partial derivatives wrt. the parameters for a
+          gaussian with parameters 'parlist' at position Xdat
+          The parameters are:
+          parlist(0) : Amplitude
+          parlist(1) : Axis (FWHM) in X-direction
+          parlist(2) : Axis (FWHM) in Y-direction
+          parlist(3) : X0, center of gauss wrt center of
+                       subset
+          parlist(4) : Y0, center of gauss wrt center of
+                       subset
+          parlist(5) : Rotation angle in radians wrt. positive X-axis
+                       counted anti-clockwise
+          parlist(6) : Zero level
+          Units center and FWHM are the same
+----------------------------------------------------------------------*/
+{
+      /* Major and minor axis */
+      double                XD, YD;
+      double                XD2, YD2;
+      /* Position */
+      double                x, y;
+      /* Sine, cosine of rotation angle */
+      double                sinpa, cospa;
+      /* Arguments in the exponent */
+      double                argXD, argYD;
+      double                expon;
+      double                e8log2;
+
+
+      /* Positive widths  */
+      XD = fabs(parlist[1]);
+      YD = fabs(parlist[2]);
+      XD2 = XD * XD;
+      YD2 = YD * YD;
+      /* Offset from position peak       */
+      x = xdat[0] - parlist[3];
+      y = xdat[1] - parlist[4];
+      cospa = cos( parlist[5] );
+      sinpa = sin( parlist[5] );
+      argXD =   x * cospa + y * sinpa;
+      argYD =  -x * sinpa + y * cospa;
+
+      /* Determine the derivatives: */
+
+      expon    =  -4.0*log(2.0) *
+                  ( (argXD/XD)*(argXD/XD) + (argYD/YD)*(argYD/YD) );
+
+      expon    = exp( expon );
+
+      /* Partial derivative amplitude */
+      dervs[0] = expon;
+      /* Calculate A.exp(-arg)        */
+      expon    = parlist[0] * expon;
+      e8log2   = expon * 8.0 * log(2.0);
+
+      /* Partial derivative fwhm x */
+      dervs[1] = e8log2 * argXD*argXD / (XD2*XD);
+
+      /* Partial derivative fwhm y axis */
+      dervs[2] = e8log2 * argYD*argYD / (YD2*YD);
+
+      /* Partial derivative x-position */
+      dervs[3] = -e8log2 * ( -argXD*cospa/(XD2) + argYD*sinpa/(YD2) );
+
+      /* Partial derivative y-position */
+      dervs[4] = -e8log2 * ( -argXD*sinpa/(XD2) - argYD*cospa/(YD2) );
+
+      /* Partial derivative rotation angle */
+      dervs[5] = -e8log2 * argYD * argXD * ( 1.0/(XD2) - 1.0/(YD2) );
+
+      /* Partial derivative zero level */
+      dervs[6] = 1.0;
+}
+
+
+
+static void lsqerr( int  err,
+                    char *message )
+/*------------------------------------------------------------*/
+/* PURPOSE: return lsqfit error in character string           */
+/*------------------------------------------------------------*/
+{
+   if (err == -1)
+      strcpy( message, "Too many free parameters, maximum is 32" );
+   else if (err == -2)
+      strcpy( message, "No free parameters");
+   else if (err == -3)
+      strcpy( message, "Not enough degrees of freedom" );
+   else if (err == -4)
+      strcpy( message, "Max. number of its. too small to obtain a solution which satisfies tol." );
+   else if (err == -5)
+      strcpy( message, "Diagonal of matrix in fit procedure contains elements which are zero" );
+   else if (err == -6)
+      strcpy( message, "Determinant of the coefficient matrix is zero" );
+   else if (err == -7)
+      strcpy( message, "Square root of negative number in fit procedure" );
+   else
+      strcpy( message, "Unknown error in lsqfit" );
+}
+
+
+
+static int fit2dimgausspars(  float   **data,
+                              float   clip,
+                              fint    *blo,
+                              fint    *bhi,
+                              double  *par,
+                              double  *err,
+                              fint    *mpar,
+                              double  tol,
+                              fint    its,
+                              double  lab,
+                              double  *grid2arcsec,
+                              double  *redchi2,
+                              int     *excluded,
+                              int     *nblanks )
+/*------------------------------------------------------------*/
+/* PURPOSE: Least squares fit using moments estimates.        */
+/*------------------------------------------------------------*/
+{
+   double    *xydat = NULL;
+   double    *zdat  = NULL;
+   double    *wdat  = NULL;
+   double    x, y;
+   fint      iters;
+   int       len = (bhi[0]-blo[0]+1) * (bhi[1]-blo[1]+1);
+   int       i, j;
+   int       indx = 0;
+   fint      ndat;
+   fint      npar;
+   fint      xdim = 2;
+   fint      fopt;
+   fint      excludebyclip;
+   fint      numblanks;
+
+
+   setfblank_c( &blank );
+   xydat = (double *) calloc( xdim*len, sizeof(double) );
+   if (xydat == NULL)
+   {
+      error_status( "Cannot allocate memory for work space",
+                    "Select smaller box or restart program", "" );
+      return( 0 );
+   }
+
+   zdat = (double *) calloc( len, sizeof(double) );
+   if (zdat == NULL)
+   {
+      error_status( "Cannot allocate memory for work space",
+                    "Select smaller box or restart program", "" );
+      free( xydat );
+      return( 0 );
+   }
+
+   wdat = (double *) calloc( len, sizeof(double) );
+   if (wdat == NULL)
+   {
+      error_status( "Cannot allocate memory for work space",
+                    "Select smaller box or restart program", "" );
+      free( zdat );
+      free( xydat );
+      return( 0 );
+   }
+
+   excludebyclip = 0;
+   numblanks = 0;
+   for (j = blo[1]; j <= bhi[1]; j++)
+   {
+      y = grid2arcsec[1] * (double) j;
+      for (i = blo[0]; i <= bhi[0]; i++)
+      {
+         float    val = data[j][i];
+
+         x = grid2arcsec[0] * (double) i;
+         xydat[xdim*indx]   = x;
+         xydat[xdim*indx+1] = y;
+         if (val == blank)
+         {
+            val = 0.0;
+            wdat[indx] = 0.0;
+            numblanks++;
+         }
+         else
+         {
+            if (val <= clip)
+            {
+               val = 0.0;
+               wdat[indx] = 0.0;
+               excludebyclip++;
+            }
+            else
+            {
+               wdat[indx] = 1.0;
+            }
+         }
+         zdat[indx] = (double) val;
+         indx++;
+      }
+   }
+
+   npar   = MAXPAR;
+   ndat   = len;
+   fopt   = 0;
+   iters  = lsqfitd_c( xydat,
+                       &xdim,
+                       zdat,
+                       wdat,
+                       &ndat,
+                       par,
+                       err,
+                       mpar,
+                       &npar,
+                       &tol,
+                       &its,
+                       &lab,
+                       &fopt );
+
+
+   /* Calculate reduced chi2 */
+   {
+      double chi2 = 0.0;
+      for (j = blo[1]; j <= bhi[1]; j++)
+      {
+         double   xy[2];
+
+         xy[1] = grid2arcsec[1] * (double) j;
+         for (i = blo[0]; i <= bhi[0]; i++)
+         {
+            float    val = data[j][i];
+
+            xy[0] = grid2arcsec[0] * (double) i;
+            if (val == blank || val <= clip)
+            {
+               /* Nothing for the moment */
+            }
+            else
+            {
+               double diff, f;
+
+               fint   fopt = 0;
+               f = funcd_c( xy, par, &npar, &fopt );
+               diff = ((double) val) - f;
+               chi2 += diff * diff;
+            }
+         }
+      }
+      *redchi2 = chi2 / (ndat - npar);
+   }
+
+
+   free( wdat );
+   free( zdat );
+   free( xydat );
+   *excluded = excludebyclip;
+   *nblanks = numblanks;
+   return( (int) iters );
+}
+
+
+
+static int updatefitpar( globaltype *g )
+/*------------------------------------------------------------*/
+/* PURPOSE: Copy the 'usrpar' array to the 'fitpar' array and */
+/*          adjust paramters for lsqfit.                      */
+/*------------------------------------------------------------*/
+{
+   int i;
+
+   for (i = 0; i < MAXPAR; i++)
+      g->fitpar[i] = g->usrpar[i];
+
+   g->fitpar[XO] *= g->grid2arcsec[0];
+   g->fitpar[YO] *= g->grid2arcsec[1];
+   g->fitpar[PA] = RAD(g->fitpar[PA]);
+
+   return( 1 );
+}
+
+
+static int updaterespar( globaltype *g )
+/*------------------------------------------------------------*/
+/* PURPOSE: Input is an array with moments calculated with a  */
+/*          moments routine which returned parameters:        */
+/*          z0, x0, y0, a, b, c, o. These parameters must be  */
+/*          converted to an array of parameters which the user*/
+/*          can change and which can be converted to initial  */
+/*          estimates for the lsqfit routine. The values in   */
+/*          'respar' cannot be changed because the array is   */
+/*          used to restore previous values. The 'usrpar'     */
+/*          array is a copy of this array and is used to      */
+/*          change initial estimates.                         */
+/*------------------------------------------------------------*/
+{
+   int      r;
+   int      i;
+   double   twoln2 = 2.0*log(2.0);
+
+   /* These parameters are just copies */
+   g->respar[AMPL] = g->mompar[0];
+   g->respar[XO]   = g->mompar[1];
+   g->respar[YO]   = g->mompar[2];
+   g->respar[ZERO] = g->mompar[6];
+
+   /* Transform (a,b,c) -> (maj,min,pa) */
+
+   r = gauss2ellipse(  g->mompar[3],
+                       g->mompar[4],
+                       g->mompar[5],
+                     &(g->respar[AXIS_X]),
+                     &(g->respar[AXIS_Y]),
+                     &(g->respar[PA]),
+                       twoln2 );
+
+   if (r == 0)
+   {
+      return( 0 );
+   }
+   /* Update the array used for user changeable estimates */
+   for (i = 0; i < MAXPAR; i++)
+   {
+      g->usrpar[i] = g->respar[i];
+   }
+   return( 1 );
+}
+
+
+
+
+static void updateoutpar( globaltype *g )
+/*------------------------------------------------------------*/
+/* PURPOSE: Convert the lsq fit output parameters             */
+/*          to values defined in an 'arcsec' system.          */
+/*------------------------------------------------------------*/
+{
+   int    i;
+   double dblank;
+
+   for (i = 0; i < MAXPAR; i++)
+   {
+      g->outpar[i] = g->fitpar[i];
+      g->outerr[i] = g->fiterr[i];
+   }
+
+
+   g->outerr[PA] = DEG( g->outerr[PA] );        /* PA from radians to degrees */
+   g->outpar[PA] = DEG( g->outpar[PA] );                     /* PA wrt Y-axis */
+   g->outpar[XO] /= g->grid2arcsec[0];
+   g->outpar[YO] /= g->grid2arcsec[1];
+   g->outerr[XO] /= g->grid2arcsec[0];
+   g->outerr[YO] /= g->grid2arcsec[1];
+
+
+
+   setdblank_c( &dblank );
+   for (i = 0; i < MAXPAR; i++)
+   {
+      if (g->mpar[i] == FIXED)
+         g->outerr[i] = dblank;
+   }
+
+   /*--------------------------------------------------*/
+   /* Keep track of which axis is the major axis. The  */
+   /* possibility exists that a conversion to grids    */
+   /* swaps the major and minor axis.                  */
+   /*--------------------------------------------------*/
+   if (g->fitpar[AXIS_X] >= g->fitpar[AXIS_Y])
+      g->first_is_major = YES;
+   else
+      g->first_is_major = NO;
+  
+ 
+   /*--------------------------------------------------*/
+   /* Copy the parameters for the plot. At this point  */
+   /* all parameters are either defined in the grid    */
+   /* system or the arcsec system.                     */
+   /* The ellipse plot is always in this grid system.  */
+   /*--------------------------------------------------*/
+   for (i = 0; i < MAXPAR; i++)
+   {
+      g->pltpar[i] = g->outpar[i];
+   }
+
+
+   /* If necessary, convert plot parameters to grid system */
+   if (g->allowconv)
+   {
+      double A, B, C;
+      double a , b;
+      double radphi = RAD(g->pltpar[PA]);
+      double cosphi = cos(radphi);
+      double sinphi = sin(radphi);
+      double cosphi2 = cosphi * cosphi;
+      double sinphi2 = sinphi * sinphi;
+      double lambda, mu;
+
+
+      /* From arcsec to grid */
+      lambda = 1.0 / g->grid2arcsec[0];
+      mu     = 1.0 / g->grid2arcsec[1];
+      a = g->outpar[AXIS_X]/2.0;
+      b = g->outpar[AXIS_Y]/2.0;
+
+
+      /* Transform rotatated and scaled ellipse to form: */
+      /* AX^2 + BY^2 + CXY = 1 to find new angle and axes.  */
+
+      A = (cosphi2/(a*a)+sinphi2/(b*b))/(lambda*lambda);
+      B = (sinphi2/(a*a)+cosphi2/(b*b))/(mu*mu);
+      C = -2.0*cosphi*sinphi*( 1.0/(a*a) - 1.0/(b*b) )/(lambda*mu);
+
+#ifdef GHSJJJS
+      {
+         double phi2, phi3;
+         double l, m;
+         l = g->grid2arcsec[0];
+         m = g->grid2arcsec[1];
+         phi2 = DEG(0.5*atan( 2*sinphi*cosphi*(1/(a*a)-1/(b*b))
+                /(cosphi2*(m/(l*a*a)-l/(m*b*b))-sinphi2*(l/(m*a*a)-m/(l*b*b)))));
+         anyoutf( 1, "Phi2=%f", phi2 );
+      }
+      
+      
+     
+      {
+         double  l, m;
+         double phimax;      
+         
+         l = mu/(lambda*a*a)-lambda/(mu*b*b);
+         m = lambda/(mu*a*a)-mu/(lambda*b*b);
+         phimax = DEG( 0.5*acos((-l-m)/(l-m)) );
+         if (g->pltpar[PA] > phimax)
+            correct = YES;
+         else
+            correct = NO;
+      }
+      {
+         double p = 1.0/(a*a) - 1.0/(b*b);
+         double q = mu/(lambda*a*a)-lambda/(mu*b*b);
+         double r = lambda/(mu*a*a)-mu/(lambda*b*b);
+         double teller, noemer, derv;
+         double x = RAD(g->pltpar[PA]);
+         teller = (p*(q + r + (q - r)*cos(2.0*x)));
+         noemer = q*q*cos(x)*cos(x)*cos(x)*cos(x) +
+                  2.0*(2.0*p*p-q*r)*cos(x)*cos(x)*sin(x)*sin(x)+
+                  r*r*sin(x)*sin(x)*sin(x)*sin(x);
+         derv = teller/noemer;
+         anyoutf(1, "Afgeleide = %f", derv );         
+         if (derv < 0.0)
+            correct = YES;
+         else
+            correct = NO;
+      } 
+#endif     
+      /*------------------------------------------------------------*/
+      /* Angle that was derived is defined as the angle over which  */
+      /* you have to rotate to position the ellipse axes parallel to*/
+      /* the x-y axes. The angle that we want to use is defined in  */
+      /* the other direction. The function 'gauss2ellipse' wants    */
+      /* the value of c=C/2                                         */
+      /*------------------------------------------------------------*/      
+      gauss2ellipse( A, B, -0.5*C,
+                     &(g->pltpar[AXIS_X]),
+                     &(g->pltpar[AXIS_Y]),
+                     &(g->pltpar[PA]),                   /* Output in degrees */                     
+                     2.0 );
+
+      anyoutf( DEBUG, "Ellipse parameters converted to grids:");
+      anyoutf( DEBUG, "Axis_x=%f, Axis_y=%f, pa(wrt x axis)=%f",
+                       g->pltpar[AXIS_X], g->pltpar[AXIS_Y], g->pltpar[PA] );
+   }
+}
+
+
+
+static void fit( globaltype *g )
+/*------------------------------------------------------------*/
+/* PURPOSE: Prepare for a call to the lsqfit function.        */
+/*------------------------------------------------------------*/
+{
+   int i;
+
+   updatefitpar( g );
+
+   for (i = 0; i < MAXPAR; i++)
+   {
+      if (i == PA)
+         anyoutf( DEBUG, "Estimate %d before lsq: %f (=%f deg.) mpar=%d",
+                  i, g->fitpar[i], DEG(g->fitpar[i]), g->mpar[i] );
+      else
+         anyoutf( DEBUG, "Estimate %d before lsq: %f mpar=%d",
+                  i, g->fitpar[i], g->mpar[i] );
+   }
+
+   g->its = fit2dimgausspars( g->image,
+                              g->clip,
+                              g->blo,
+                              g->bhi,
+                              g->fitpar,
+                              g->fiterr,
+                              g->mpar,
+                              g->tol,
+                              g->maxits,
+                              g->lab,
+                              g->grid2arcsec,
+                             &(g->redchi2),
+                             &(g->excluded),
+                             &(g->nblanks) );
+
+   for (i = 0; i < MAXPAR; i++)
+   {
+      if (i == PA)
+         anyoutf( DEBUG, "Estimate %d after lsq: %f (=%f deg.) mpar=%d",
+                  i, g->fitpar[i], DEG(g->fitpar[i]), g->mpar[i] );
+      else
+         anyoutf( DEBUG, "Estimate %d after lsq: %f mpar=%d",
+                  i, g->fitpar[i], g->mpar[i] );
+   }
+   updateoutpar( g );
+}
+
+
+
+
+static int comp( float *x1,
+                 float *x2 )
+/*------------------------------------------------------------*/
+/* PURPOSE: Let qsort sort in DESCENDING order                */
+/*          This function is called from 'gauestmom2dim'      */
+/*------------------------------------------------------------*/
+{
+   if (*x1 < *x2)
+      return( +1 );
+   else if (*x1 == *x2)
+      return( 0 );
+   return( -1 );
+}
+
+
+
+static int gauestmom2dim( float  **image,
+                          fint   *blo,
+                          fint   *bhi,
+                          double *pars,
+                          double *grid2arcsec )
+/*------------------------------------------------------------*/
+/* PURPOSE: Using the moments method, return BWHP and         */
+/* position angle of 2dim gaussian represented by data in     */
+/* array 'data' in a box that is set by 'blo', 'bhi'.         */
+/* Include only data >= 0.                                    */
+/*                                                            */
+/* The method that  uses the first and second                 */
+/* moment of the data to estimate the parameters of the       */
+/* gaussian. The function has no offset wrt. the x axis, and  */
+/* can be represented by:                                     */
+/*                                                            */
+/*   z(x,y) = z0.exp[-{a(x-xc)^2+b(y-yc)^2+2c(x-xc)(y-yc)}]+o */
+/*                                                            */
+/* Define the moments:                                        */
+/*                                                            */
+/* First moment M0: M0 = SjSi Tji   (S == Sigma character)    */
+/* For the peak position in gridcoordinates we have:          */
+/* x_av = 1/M0.SjSj[xi.Tji]   and  y_av = 1/M0.SjSj[yi.Tji]   */
+/*                                                            */
+/* Second moments Mxx = 1/M0.SjSi[xi^2.Mji]  - x_av^2         */
+/*                Myy = 1/M0.SjSi[yi^2.Mji]  - y_av^2         */
+/*                Mxy = 1/M0.SjSi[xi.yi.Mji] - y_av.x_av      */
+/*                                                            */
+/* Note that calculations are done in grids. Then the angle   */
+/* found after converting the 2d-gauss parameters to ellipse  */
+/* parameters, is defined in a system with SQUARE grids.      */
+/* This angle must be converted then if the grids are not     */
+/* square.                                                    */
+/* Return values: 0   -- Failure                              */
+/*                1   -- Return parameter for 1-dim gauss in  */
+/*                       'a', centre in 'xc' and 'zo'.        */
+/*                2   -- Parameters of 2 dim gauss            */
+/*------------------------------------------------------------*/
+{
+   double  S   = 0.0;
+   double  Sx  = 0.0;
+   double  Sy  = 0.0;
+   double  Sxx = 0.0;
+   double  Syy = 0.0;
+   double  Sxy = 0.0;
+   double  x, y;
+   double  Xav, Yav;
+   double  M0, Mxx, Myy, Mxy;
+   double  denom;
+   double  z0, xc, yc, a, b, c, zero;
+   float   clip;
+   float   *dummy;
+   int     i, j;
+   int     numonborder = 0;
+   int     indx = 0;
+   int     len = (bhi[0]-blo[0]+1) * (bhi[1]-blo[1]+1);
+   int     k;
+
+
+   setfblank_c( &blank );
+   dummy = (float *) calloc( len, sizeof(float) );
+   if (dummy == NULL)
+   {
+      error_status( "Cannot allocate memory for work array.",
+                    "Try smaller box or restart program.", "" );
+      return( 0 );
+   }
+
+   /* Try to find the offset in height for this gaussian. */
+   /* Estimate a value by averaging all pixels on the borders */
+   S = 0.0;
+   k = 0;
+   for (j = blo[1]; j <= bhi[1]; j++)
+   {
+      for (i = blo[0]; i <= bhi[0]; i++)
+      {
+         float val = image[j][i];
+         if (val != blank)
+         {
+            dummy[k++] = val;
+            if ( j == blo[1] || j == bhi[1] ||
+                 i == blo[0] || i == bhi[0] )
+            {
+               S += (double) val;
+               numonborder++;
+            }
+         }
+      }
+   }
+   zero = S / (double) numonborder;
+
+   /* Sort these k non-blank numbers */
+   qsort( dummy, k, sizeof(float), (int(*)())comp );
+
+
+   /*--------------------------------------------------*/
+   /* The process of finding reasonable estimates is   */
+   /* depends a lot on the noise in the map. Therefore */
+   /* we decrease the number of points that contribute */
+   /* to the calculations by setting a clip. First     */
+   /* find a maximum value by averaging the four       */
+   /* highest values in the box after sorting the      */
+   /* input array. Then include only those data points */
+   /* that have a value higher than GAUSSCUTOFF times  */
+   /* the top value wrt. the zero level!               */
+   /*--------------------------------------------------*/
+   {
+      float  topaverage;
+
+      topaverage = (dummy[0] + dummy[1] + dummy[2] + dummy[3]) / 4.0;
+      clip = zero + GAUSSCUTOFF * (topaverage - zero);
+
+      anyoutf( DEBUG, "Moments method uses only data > %f", clip );
+      free( dummy );                      /* We don't need this array anymore */
+   }
+
+   S = 0.0;
+   for (j = blo[1]; j <= bhi[1]; j++)
+   {
+      y = ((double) j) * grid2arcsec[1];
+      for (i = blo[0]; i <= bhi[0]; i++)
+      {
+         float valfloat = image[j][i];
+         x = ((double) i) * grid2arcsec[0];
+
+         if (valfloat != blank && valfloat > clip)
+         {
+            double val = ((double) valfloat) - zero;
+            S   += val;
+            Sx  += val * x;
+            Sy  += val * y;
+            Sxx += val * x * x;
+            Syy += val * y * y;
+            Sxy += val * x * y;
+         }
+         indx++;
+      }
+   }
+   M0  = S;
+   if (M0 == 0.0)
+   {
+      error_status( "Cannot estimate moments because first moment is 0",
+                    "Try another box", "" );
+      return( 0 );
+   }
+   Xav = Sx  / M0;
+   Yav = Sy  / M0;
+   Mxx = Sxx / M0 - Xav*Xav;
+   Myy = Syy / M0 - Yav*Yav;
+   Mxy = Sxy / M0 - Xav*Yav;
+
+   if (Mxx != 0.0 && Myy == 0.0 && Mxy == 0.0)
+   {
+      /* One dimensional gauss in x */
+      a = 1.0 / (2.0*Mxx);
+      xc = Xav / grid2arcsec[0];
+      b = c = yc = 0.0;      /* dummies */
+      z0 = grid2arcsec[0] * M0 / (sqrt(2.0*PI*Mxx));
+      pars[0] = z0;
+      pars[1] = xc;
+      pars[2] = yc;
+      pars[3] = a;
+      pars[4] = b;
+      pars[5] = c;
+      pars[6] = zero;
+      return( 1 );
+   }
+   if (Mxx == 0.0 && Myy != 0.0 && Mxy == 0.0)
+   {
+      /* One dimensional gauss in y */
+      a = 1.0 / (2.0*Myy);
+      xc = Yav / grid2arcsec[1];
+      b = c = yc = 0.0;      /* dummies */
+      z0 = grid2arcsec[1] * M0 / (sqrt(2.0*PI*Myy));
+      pars[0] = z0;
+      pars[1] = xc;
+      pars[2] = yc;
+      pars[3] = a;
+      pars[4] = b;
+      pars[5] = c;
+      pars[6] = zero;
+      return( 1 );
+   }
+
+   denom = 2.0 * (Mxx*Myy-Mxy*Mxy);
+   if (denom == 0.0)
+   {
+      error_status( "Cannot estimate moments because Mxx*Myy-Mxy*Mxy == 0",
+                    "Try another box", "" );
+      anyoutf( DEBUG, "Mxx=%f Myy=%f Mxy=%f", Mxx, Myy, Mxy );
+      return( 0 );
+   }
+   a = Myy / denom;
+   b = Mxx / denom;
+   c = -1.0*Mxy/denom;
+   xc = Xav / grid2arcsec[0];               /* This goes from arcsec to grids */
+   yc = Yav / grid2arcsec[1];
+   z0 = grid2arcsec[0]*grid2arcsec[1]*M0 / ( 2.0*PI*sqrt(Mxx*Myy-Mxy*Mxy) );
+   pars[0] = z0;
+/*   pars[0] = maxval; */
+   pars[1] = xc;
+   pars[2] = yc;
+   pars[3] = a;
+   pars[4] = b;
+   pars[5] = c;
+   pars[6] = zero;
+
+   return( 2 );
+}
+
+
+
+static void restore_usrpar( globaltype *g,
+                            int         i,
+                            char       *key )
+/*------------------------------------------------------------*/
+/* PURPOSE: Do the actual restoring of the value of an        */
+/*          estimate. The value of 'i' determines which para- */
+/*          meter has to be stored.                           */
+/* Each time a box or set is changed, new estimates are       */
+/* calculated and stored.                                     */
+/*------------------------------------------------------------*/
+{
+   char  message[40];
+   bool  value;
+   fint  nitems = 1;
+   fint  dfault = HIDDEN;
+
+   value = toflog( FALSE );
+   (void)userlog_c( &value, &nitems, &dfault, tofchar(key), tofchar(" "));
+   value = tobool( value );
+   if (value)
+   {
+      g->usrpar[i] = g->respar[i];
+      sprintf( message, "%s%f", g->keys[i], g->usrpar[i] );  /* equal sign is included in 'keys' */
+      wkey_c( tofchar(message) );
+      wkey_c( tofchar(key) );  /* Update field */
+   }
+}
+
+
+static void restore_amp( ident id,
+                         char  *key,
+                         int   code,
+                         void  *arg )
+/*------------------------------------------------------------*/
+/* PURPOSE: Determine which estimate must be restored.        */
+/*------------------------------------------------------------*/
+{
+   globaltype *g = (globaltype *) arg;
+   restore_usrpar( g, AMPL, key );
+}
+static void restore_maj( ident id, char  *key, int   code, void  *arg )
+{
+   globaltype *g = (globaltype *) arg;
+   restore_usrpar( g, MAJOR, key );
+}
+static void restore_min( ident id, char  *key, int   code, void  *arg )
+{
+   globaltype *g = (globaltype *) arg;
+   restore_usrpar( g, MINOR, key );
+}
+static void restore_x0( ident id, char  *key, int   code, void  *arg )
+{
+   globaltype *g = (globaltype *) arg;
+   restore_usrpar( g, XO, key );
+}
+static void restore_y0( ident id, char  *key, int   code, void  *arg )
+{
+   globaltype *g = (globaltype *) arg;
+   restore_usrpar( g, YO, key );
+}
+static void restore_pa( ident id, char  *key, int   code, void  *arg )
+{
+   globaltype *g = (globaltype *) arg;
+   restore_usrpar( g, PA, key );
+}
+static void restore_zero( ident id, char  *key, int   code, void  *arg )
+{
+   globaltype *g = (globaltype *) arg;
+   restore_usrpar( g, ZERO, key );
+}
+
+
+
+static int getestimates( globaltype *g )
+/*------------------------------------------------------------*/
+/* PURPOSE: Get the estimates and update gui with the values. */
+/*------------------------------------------------------------*/
+{
+   int  i, r;
+   char message[STRLEN];
+
+   r = gauestmom2dim( g->image,
+                      g->blo,
+                      g->bhi,
+                      g->mompar,
+                      g->grid2arcsec );
+   if (r != 2)
+   {
+      g->has_estimates = NO;
+      return( 0 );
+   }
+
+   /* The moments method returned estimates for a square  */
+   /* grid system. These estimates must be transformed to */
+   /* estimates for the 'user' system. In that system,    */
+   /* the parameters a,b,c are translated to major, minor */
+   /* (in arcsec if possible) and angle phi.              */
+
+
+   r = updaterespar( g );                  /* And give usrpar their values */
+   if (r != 1)
+   {
+      g->has_estimates = NO;
+      return( 0 );
+   }
+
+
+   for (i = 0; i < MAXPAR; i++)
+   {
+      sprintf( message, "%s%f", g->keys[i], g->usrpar[i] );
+      wkey_c( tofchar(message) );
+   }
+
+   /* The fitpar parameters are copied from the usrpar parameters, */
+   /* therefore this routine can be called any time.               */
+
+   r = updatefitpar( g );
+   if (r != 1)
+   {
+      g->has_estimates = NO;
+      return( 0 );
+   }
+
+   g->has_estimates = YES;
+   return( 1 );
+}
+
+
+
+static void subsetcw2str( fchar   Setin,
+                          fint    subset,
+                          fint    *axnum,
+                          char    *str )
+/*------------------------------------------------------------*/
+/* PURPOSE: Convert a subset coordinate word to a string.     */
+/*          e.g. 488080 -> FREQ 4                             */
+/*------------------------------------------------------------*/
+{
+   int       i;
+   fint      setdim;
+   char      ctype[FITSLEN];
+   fchar     Ctype;
+   fint      setlevel = 0;
+   char      mes1[STRLEN];
+   char      mes2[STRLEN];
+
+
+   setdim = gdsc_ndims_c( Setin, &setlevel );
+   mes1[0] = '\0';
+   for (i = 2; i < setdim; i++)
+   {
+      char  *cptr;
+      fint  r1;
+      fint  grid;
+
+      Ctype.a = ctype; Ctype.l = FITSLEN; clearstr( Ctype );
+      (void) sprintf( mes2, "CTYPE%d", axnum[i] );
+      r1 = 0;
+      gdsd_rchar_c( Setin, tofchar(mes2), &setlevel, Ctype, &r1 );
+      Ctype.a[nelc_c(Ctype)] = '\0';
+      cptr = strtok( Ctype.a, " -" );
+      if (cptr != NULL)
+      {
+         (void) sprintf( ctype, "%s", cptr );
+      }
+      r1 = 0;
+      grid = gdsc_grid_c( Setin, &axnum[i], &subset, &r1 );
+      sprintf( mes2, "%s %d ", ctype, grid );
+      strcat( mes1, mes2 );
+   }
+   strcpy( str, mes1 );
+}
+
+
+static int displayset( globaltype *g )
+/*------------------------------------------------------------*/
+/* PURPOSE: Display current set in current box.               */
+/*------------------------------------------------------------*/
+{
+   char      viewmessage[STRLEN];
+   char      mes[STRLEN];
+   fint      status;
+   int       res;
+   fint      hermesold, hermesnew;
+
+
+   sprintf( viewmessage, "V_INSET=%.*s ", nelc_c(g->Setin), g->Setin.a );
+   subsetcw2str( g->Setin, g->subin[g->subsetindx], g->axnum, mes );
+   strcat( viewmessage, mes );
+   wkey_c( tofchar(viewmessage) );
+   if (g->boxexist)
+   {
+      sprintf( viewmessage, "V_BOX=%d %d %d %d", g->blo[0], g->blo[1], g->bhi[0], g->bhi[1] );
+      wkey_c( tofchar(viewmessage) );
+   }
+   else
+   {
+      wkey_c( tofchar("V_BOX=") );
+   }
+   wkey_c( tofchar("V_CLIP=") );
+   hermesnew = 0;
+   hermesold = listctrl_c( &hermesnew );
+   deputy_c( tofchar("VIEW"), &status );
+   (void) listctrl_c( &hermesold );
+   if (status == 1)
+   {
+      res = 1;
+   }
+   else
+   {
+      res = 0;
+      if (status == -7)
+      {
+         error_status( "Max. number of tasks already active",
+                       "Abort one task and retry", "" );
+      }
+   }
+   return( res );
+}
+
+
+
+static void viewfit( ident id,
+                     char  *key,
+                     int   code,
+                     void  *arg )
+/*------------------------------------------------------------*/
+/* PURPOSE: VIEW= displays image and plot.                    */
+/*------------------------------------------------------------*/
+{
+   globaltype *g = (globaltype *) arg;
+   bool       value;
+   fint       nitems  = 1;
+   fint       dfault  = HIDDEN;
+
+   value = toflog( FALSE );
+   (void) userlog_c( &value, &nitems, &dfault, tofchar(key), tofchar(" "));
+   value = tobool( value );
+   if (value)
+   {
+      /* Button <VIEW> is on */
+      if (g->setexist)
+      {
+         error_status( "", "Trying to display set, wait a moment...", "" );
+         if ( displayset(g) )
+         {
+            g->setdisplayed = YES;
+            error_status( "", "Set displayed", "" );
+            g->viewfit = YES;
+         }
+         else
+         {
+            g->setdisplayed = NO;
+            g->viewfit = NO;
+         }
+      }
+      else
+      {
+         error_status( "", "Cannot view set, because set does not exist!", "" );
+         g->setdisplayed = NO;
+         g->viewfit = NO;
+      }
+   }
+   else
+   {
+      g->viewfit = NO;
+      g->setdisplayed = NO;
+      gui_residue( FALSE );
+      pgend_c();                                         /* Close plot device */
+   }
+   if (!g->setdisplayed)
+   {
+      char message[STRLEN];
+      gui_residue(FALSE);
+      if (value)
+      {
+         sprintf( message, "%sNO", key );
+         wkey_c( tofchar(message) );
+      }
+   }
+}
+
+
+static void convert_to_astronomical( double angle,
+                                     int    counterclockwise,
+                                     double crota,
+                                     double X_axis,
+                                     double Y_axis,
+                                     double *major,
+                                     double *minor,
+                                     double *pa )
+/*------------------------------------------------------------*/
+/* PURPOSE: Convert the mathematical angle between major axis */
+/*          and the North and sort the axes.                  */
+/* Header item CROTA stores the map rotation.                 */
+/* CROTA is the angle in degrees between the +y               */
+/* axis and the +m axis (latitude axis) at the                */
+/* position of the PC. The angle is counter-clock-            */
+/* wise if the grid separation (CDELT) in longitude           */
+/* is < 0.0.                                                  */
+/*------------------------------------------------------------*/
+{
+   *major = MYMAX( X_axis, Y_axis );
+   *minor = MYMIN( X_axis, Y_axis );
+
+
+   if (X_axis > Y_axis)
+      angle += 90.0;
+
+   /* Adjust for map rotation (North != +y) */
+   if (counterclockwise)
+      angle -= crota;
+   else
+      angle += crota;
+
+   /* Bring back in standard interval [0..180] */
+   while(angle >= 180.0)
+      angle -= 180.0;
+
+   while(angle < 0.0)
+      angle += 180.0;
+
+   *pa = angle;
+}
+
+
+static void displayresults( globaltype *g )
+/*------------------------------------------------------------*/
+/* PURPOSE: If there is a fit, update the GUI with the        */
+/*          results.                                          */
+/*------------------------------------------------------------*/
+{
+   char   mes1[STRLEN];
+   char   mes2[STRLEN];
+   double dblank;
+
+
+   setdblank_c( &dblank );
+   if (g->its < 0)
+   {
+      lsqerr( g->its, mes1 );
+      error_status( mes1,
+        "Fix one or more parameters or change one or more estimates manually",
+        "to improve results. Also setting a clip might help." );
+      return;
+   }
+
+   gui_results( g->outpar, g->outerr );
+   sprintf( mes1, "Fit completed in %d iterations. Variance of fit: %g",
+            g->its, g->redchi2 );
+   sprintf( mes2, "Number of points in box: %d (%d excluded by clip). Number of blanks: %d",
+            g->imagesize, g->excluded, g->nblanks );
+   error_status( "", mes1, mes2 );
+
+
+   if (g->allowconv)
+   {
+      double    coordin[2], coordout[2];
+      fint      subset = g->subin[g->subsetindx];
+      fint      r;
+      fint      mode;
+      char      hmsdmsstr[STRLEN];
+
+      coordin[0] = g->outpar[XO];
+      coordin[1] = g->outpar[YO];
+      r = grtoph_c( g->Setin, &subset, coordin, coordout );
+      mode = 0;
+      if (g->hmsconvert)
+      {
+         hmsC( coordout[0], hmsdmsstr, 3 );
+      }
+      else
+      {
+         dmsC( coordout[0], hmsdmsstr, 1 );
+      }
+      sprintf( mes1, "Center X     : %8.2f (grids) = %12.7f (%s) = %s",
+               g->outpar[XO], coordout[0], g->cunit[0], hmsdmsstr );
+      gui_textline( mes1, FIRSTLINE );
+      dmsC( coordout[1], hmsdmsstr, 2 );
+      sprintf( mes2, "Center Y     : %8.2f (grids) = %12.7f (%s) = %s",
+               g->outpar[YO], coordout[1], g->cunit[1], hmsdmsstr );
+      gui_textline( mes2, SECONDLINE );
+
+      /* Display the values of major, minor axis and angle, in the */
+      /* physical system.                                          */
+      {
+         double pa, major, minor;
+         convert_to_astronomical( g->outpar[PA], g->counterclockwise, g->crota,
+                                  g->outpar[AXIS_X],
+                                  g->outpar[AXIS_Y],
+                                  &major, &minor, &pa );
+         sprintf( mes1, "Major axis   : %.2f'', Minor axis: %.2f'', Position angle: %.1f (deg)",
+                  major, minor, pa );
+         gui_textline( mes1, THIRDLINE );
+      }
+   }
+   /*---------------------------------------------------*/
+   /* Calculate and display volume under 2d-gauss       */
+   /* Vol. V = 2.A.hwx.hwy.PI.Erf(Inf).Erf(Inf)/Ln(256) */
+   /* Erf(Inf) = 1 -> V = 1.13309.A.hwx.hwy             */   
+   /*---------------------------------------------------*/   
+   {
+      double hwx = g->outpar[AXIS_X];
+      double hwy = g->outpar[AXIS_Y];
+      double amp = g->outpar[AMPL];
+      double area;
+      double vol;
+     
+      area = hwx * hwy; 
+      if (g->allowconv)
+         area /= g->grid2arcsec[0]*g->grid2arcsec[1];
+      vol = 1.13309 * amp * area;                             /* All in grids */
+      sprintf( mes1, "Volume gauss :  %g in units of the amplitude", vol );
+      gui_textline( mes1, FIFTHLINE );
+   }
+}
+
+
+
+static void getdouble( ident id,
+                       char  *key,
+                       int   code,
+                       void  *arg )
+/*------------------------------------------------------------*/
+/* PURPOSE: Input routines for Tolerance and Lambda.          */
+/*------------------------------------------------------------*/
+{
+    double     *userval = (double *) arg;
+    fint       nitems = 1;
+    fint       dfault = HIDDEN;
+
+    (void) userdble_c( userval,
+                       &nitems,
+                       &dfault,
+                       tofchar(key),
+                       tofchar(" ") );
+}
+
+
+
+static void getclip(  ident id,
+                      char  *key,
+                      int   code,
+                      void  *arg )
+/*------------------------------------------------------------*/
+/* PURPOSE: Response to CLIP= input field. A blank field must */
+/*          result in the lowest possible clip.               */
+/*------------------------------------------------------------*/
+{
+   globaltype *g = (globaltype *) arg;
+   float       userval;
+   fint        nitems  = 1;
+   fint        dfault  = HIDDEN;
+   fint        r;
+
+
+   r = userreal_c( &userval,
+                   &nitems,
+                   &dfault,
+                   tofchar(key),
+                   tofchar(" ") );
+
+   if (r)
+      g->clip = userval;
+   else
+      g->clip = -FLT_MAX/2.0;
+}
+
+
+
+static void getint( ident id,
+                    char  *key,
+                    int   code,
+                    void  *arg )
+/*------------------------------------------------------------*/
+/* PURPOSE: Simple function to enter an integer.              */
+/*------------------------------------------------------------*/
+{
+    int       *userval = (int  *) arg;
+    fint       fintval;
+    fint       nitems  = 1;
+    fint       dfault  = HIDDEN;
+
+    fintval = (fint) *userval;
+    (void) userint_c( &fintval,
+                      &nitems,
+                      &dfault,
+                      tofchar(key),
+                      tofchar(" ") );
+    *userval = (int) fintval;
+}
+
+
+
+static int initplot( fint  *GIDSblo,
+                     fint  *GIDSbhi,
+                     float *GIDSflo,
+                     float *GIDSfhi )
+/*------------------------------------------------------------------*/
+/* PURPOSE: Initialize plot software. Set viewport and output       */
+/*          dimensions.                                             */
+/* INPUT:   GIDSblo, GIDSbhi, GIDSflo, GIDSfhi                      */
+/* Start PGPLOT, open output device. A return value of 1 indicates  */
+/* successful completion. There are 4 arguments for PGBEG:          */
+/* UNIT, this argument is ignored by PGBEG (use zero).              */
+/* FILE, If this argument is a question mark PGBEG will prompt the  */
+/*       user to supply a string.                                   */
+/* NXSUB,the number of subdivisions of the view surface in X.       */
+/* NYSUB,the number of subdivisions of the view surface in Y.       */
+/*------------------------------------------------------------------*/
+{
+   fint   unit;                  /* Ignored by pgbeg, use unit=0. */
+   fchar  Devspec;               /* Device specification. */
+   fint   nxysub[2];             /* Number of subdivisions on 1 page. */
+   fint   r1;
+   int    i;
+   bool   pageoff;               /* Disable PGPLOT's NEXTPAGE keyword. */
+   float  xl, xr, yb, yt;        /* Edges of the viewport. */
+   float  Gblo[2], Gbhi[2];
+
+
+   nxysub[1] = nxysub[0] = 1;    /* Default no subdivisions in plot.*/
+   unit      = 0;
+   Devspec   = tofchar("gids//append");
+   r1        = pgbeg_c( &unit, Devspec, &nxysub[0], &nxysub[1] );
+   if (r1 != 1)
+   {
+      error_status( "Cannot open output device", "", "" );
+      return( NO );
+   }
+
+   /* No PGPLOT's NEXTPAGE= keyword */
+   pageoff = toflog( NO );
+   pgask_c( &pageoff );
+
+   /*--------------------------------------------------------------*/
+   /* If a displayed set is zoomed, the box will keep              */
+   /* its original values and the frame is adjusted. To keep a box */
+   /* within the frame, adjust the box values.                     */
+   /*--------------------------------------------------------------*/
+   for (i = 0; i < 2; i++)
+   {
+      Gblo[i] = (float) GIDSblo[i];
+      Gbhi[i] = (float) GIDSbhi[i];
+
+      if (Gblo[i] < GIDSflo[i])
+         Gblo[i] = (float) ( (int) GIDSflo[i] );
+      if (Gbhi[i] > GIDSfhi[i])
+         Gbhi[i] = (float) ( (int) GIDSfhi[i] );
+   }
+
+   xl = (Gblo[0] - GIDSflo[0]) / (GIDSfhi[0] - GIDSflo[0]);
+   xr = (Gbhi[0] - GIDSflo[0]) / (GIDSfhi[0] - GIDSflo[0]);
+   yb = (Gblo[1] - GIDSflo[1]) / (GIDSfhi[1] - GIDSflo[1]);
+   yt = (Gbhi[1] - GIDSflo[1]) / (GIDSfhi[1] - GIDSflo[1]);
+   pgsvp_c( &xl, &xr, &yb, &yt );                       /* Set viewport */
+   pgswin_c( &Gblo[0], &Gbhi[0], &Gblo[1], &Gbhi[1]);   /* Set the window */
+   return( YES );
+}
+
+
+
+static fint getGIDSinfo( fchar Setin,
+                         fint  *GIDSblo,
+                         fint  *GIDSbhi,
+                         float *GIDSflo,
+                         float *GIDSfhi )
+/*------------------------------------------------------------*/
+/* INPUT:   Setin                                             */
+/* OUTPUT:  GIDSblo, GIDSbhi, GIDSflo, GIDSfhi                */
+/* PURPOSE: Check whether an overlay in GIDS can be made. I.e.*/
+/*          1) Gids must be started, 2) An image must be load-*/
+/*          ed and 3) The name of the displayed set must match*/
+/*          'Setin'. If so, return 1 and the sizes of the     */
+/*          displayed box and the GIDS frame, Otherwise return*/
+/*          0 as result of the function.                      */
+/*------------------------------------------------------------*/
+{
+   fint         display_stat;                   /* display operation status */
+   fint         r1;
+   fint         GIDSdisplay_id = -1;            /* id of display */
+   fchar        GIDSset;
+   char         setbuf[STRLEN];
+   fint         GIDSsubset;
+   char         message[STRLEN];
+
+   /* If not available, do NOT start GIDS */
+   GIDSdisplay_id = gdi_open_c( tofchar(" ") );
+
+   if (GIDSdisplay_id < 0)                      /* error opening display */
+   {
+      error_status( "GIDS not started!", "Try to start GIDS with VIEW", "" );
+      return( 0 );
+   }
+   GIDSset.a = setbuf; GIDSset.l = STRLEN-1; clearstr( GIDSset );
+   display_stat = gdi_iinfo_c( &GIDSdisplay_id, /* id of display */
+                               GIDSset,         /* name of set */
+                               &GIDSsubset,     /* subset level */
+                               GIDSblo,         /* lower left frame boundary */
+                               GIDSbhi );       /* upper right frame boundary */
+
+   if (display_stat < 0)                        /* error obtaining info */
+   {
+      anyoutf( DEBUG,  "No image loaded!");
+      return( 0 );
+   }
+
+   if (gdsc_ndims_c( GIDSset, &GIDSsubset ) != 2)
+   {
+      anyoutf( DEBUG,  "Wrong dimension of set in GIDS!");
+      return( 0 );
+   }
+
+   r1 = gdi_frame_c( &GIDSdisplay_id ,          /* id of display */
+                     GIDSflo,                   /* lower left frame boundary */
+                     GIDSfhi );                 /* .. in (floating) grids */
+
+   if (r1 != 0)
+   {
+      (void) sprintf( message,
+                     "Cannot obtain info about frame currently on display! (err=%d)", r1 );
+      error_status( message, "", "" );
+      return( 0 );
+   }
+   display_stat = gdi_close_c( &GIDSdisplay_id );   /* close display */
+
+   (void) sprintf( message,
+                  "Displayed set has box: [%d %d %d %d]",
+                   GIDSblo[0], GIDSblo[1], GIDSbhi[0], GIDSbhi[1] );
+   anyoutf( DEBUG,  message );
+   (void) sprintf( message,
+                  "Gids frame: [%g %g %g %g]",
+                   GIDSflo[0], GIDSflo[1], GIDSfhi[0], GIDSfhi[1] );
+   anyoutf( DEBUG,  message );
+   return( 1 );
+}
+
+
+
+static void plotellipse( globaltype *g )
+/*------------------------------------------------------------*/
+/* PURPOSE: Draw an ellipse with the fitted parameters on     */
+/*          GIDS                                              */
+/*------------------------------------------------------------*/
+{
+   float     GIDSflo[2], GIDSfhi[2];                            /* GIDS frame */
+   fint      GIDSblo[2], GIDSbhi[2];                              /* GIDS box */
+
+   if (!getGIDSinfo(g->Setin, GIDSblo, GIDSbhi, GIDSflo, GIDSfhi))
+   {
+      error_status( "Cannot connect to GIDS!", "Start GIDS with task VIEW", "");
+      return;
+   }
+   if ( !initplot(GIDSblo, GIDSbhi, GIDSflo, GIDSfhi) )
+   {
+      error_status( "Cannot open (PG)PLOT device!", "", "" );
+      return;
+   }
+   else
+   {
+      float      x0 = g->pltpar[XO];
+      float      y0 = g->pltpar[YO];
+      float      axisX = g->pltpar[AXIS_X]/2.0;      /* FWHM -> semi axes */
+      float      axisY = g->pltpar[AXIS_Y]/2.0;
+      float      pa  = g->pltpar[PA];
+      float      x, y;
+      float      xmark[4], ymark[4];
+      fint       linewidth;
+      fint       color;
+      float      ch, oldch;
+
+
+      /* Plot box borders first */
+      linewidth = 2; color = YELLOW;
+      pgslw_c( &linewidth );
+      pgsci_c( &color );      
+      x = g->blo[0]; y = g->blo[1];
+      pgmove_c( &x, &y );
+      x = g->bhi[0]; y = g->blo[1];
+      pgdraw_c( &x, &y );
+      x = g->bhi[0]; y = g->bhi[1];
+      pgdraw_c( &x, &y );
+      x = g->blo[0]; y = g->bhi[1];
+      pgdraw_c( &x, &y );
+      x = g->blo[0]; y = g->blo[1];
+      pgdraw_c( &x, &y );
+      pgdraw_c( &x, &y );      
+
+      /* Symbol for the center position */
+      pgqch_c( &oldch );
+      ch = 2.5;
+      pgsch_c( &ch );
+      linewidth = 7; color = BACKGROUND;
+      pgslw_c( &linewidth );
+      pgsci_c( &color );
+      setmarker( x0, y0, PLUS );
+      linewidth = 2; color = RED;
+      pgslw_c( &linewidth );
+      pgsci_c( &color );
+      setmarker( x0, y0, PLUS );
+
+      /* Ellipse */
+      linewidth = 7; color = BACKGROUND;
+      pgslw_c( &linewidth );
+      pgsci_c( &color );
+      ellipse( x0, y0, axisX, axisY, pa, xmark, ymark );
+      linewidth = 2; color = YELLOW;
+      pgslw_c( &linewidth );
+      pgsci_c( &color );
+      ellipse( x0, y0, axisX, axisY, pa, xmark, ymark );
+
+#ifdef  DEBUG1      
+      {
+         float x = -10.0;
+         float y;
+         y = color = RED;
+         pgsci_c( &color );
+         x = 10 * cos(RAD(pa));
+         y = 10 * sin(RAD(pa));
+         x += x0;
+         y += y0;
+         pgmove_c( &x, &y );
+         x = -10 * cos(RAD(pa));
+         y = -10 * sin(RAD(pa));
+         x += x0;
+         y += y0;
+         pgdraw_c( &x, &y );
+         anyoutf( 1, "Pa red = %f", pa );
+      }
+
+      if (g->allowconv)
+      {
+         fint   r;
+         fint   subset = g->subin[g->subsetindx];
+         fint   spatial = 1;
+         double centre[2];
+         double maj, min;
+         double pa     = DEG(g->fitpar[PA]);
+         fint   lines = 0;
+         double slope = 0.0;
+         fint   shape = 1;
+         
+         if (g->fitpar[AXIS_X] > g->fitpar[AXIS_Y])
+            pa += 90.0;
+            
+         centre[0] = g->pltpar[XO];
+         centre[1] = g->pltpar[YO];
+         maj = MYMAX( g->fitpar[AXIS_X], g->fitpar[AXIS_Y] );
+         min = MYMIN( g->fitpar[AXIS_X], g->fitpar[AXIS_Y] );
+         maj /= 3600.0;
+         min /= 3600.0;
+         anyoutf(1, "x0=%f y0=%f maj=%f min=%f, pa=%f", centre[0],centre[1],maj,min,pa );  
+         color = GREEN;         
+         pgsci_c( &color );
+         linewidth = 2;
+         pgslw_c( &linewidth );
+         r = beam_c( g->Setin, &subset, &spatial, g->cdelt,          
+                     centre, &maj, &min, &pa, &lines, &slope, &shape );
+      }
+#endif
+      
+   
+      pgsch_c( &oldch );
+      /*--------------------------------------------------*/
+      /* Plot major and minor axes.                       */
+      /*--------------------------------------------------*/
+      {
+         int        start;
+
+         for (start = 0; start < 2; start++)
+         {
+            linewidth = 5; color = BACKGROUND;
+            pgslw_c( &linewidth ); pgsci_c( &color );
+            pgmove_c( &xmark[start], &ymark[start] );
+            pgdraw_c( &xmark[start+2], &ymark[start+2] );
+            linewidth = 2; color = YELLOW;
+            pgslw_c( &linewidth ); pgsci_c( &color );
+            pgmove_c( &xmark[start], &ymark[start] );
+            pgdraw_c( &xmark[start+2], &ymark[start+2] );
+         }
+      }
+
+   }
+}
+
+
+
+static void showresidue( ident id,
+                         char  *key,
+                         int   code,
+                         void  *arg )
+/*------------------------------------------------------------*/
+/* PURPOSE: If a fit is made a residue field can be calculated*/
+/*          and displayed.                                    */
+/*------------------------------------------------------------*/
+{
+   globaltype *g = (globaltype *) arg;
+   bool       value;
+   fint       nitems  = 1;
+   fint       dfault  = HIDDEN;
+
+   /*gui_status( "" );*/
+   value = toflog( FALSE );
+   (void) userlog_c( &value, &nitems, &dfault, tofchar(key), tofchar(" "));
+   value = tobool( value );
+   if (value)
+   {
+      float    **outmatrix;
+      int      i, j;
+      fint     r;
+      fint     len;
+      double   avalue;
+      fint     cwloO, cwhiO;
+      fint     outsize, pixelswrite, tidO= 0;
+      fchar    Setout;
+      char     setoutbuf[STRLEN];
+
+
+      Setout.a = setoutbuf; Setout.l = STRLEN - 1; clearstr( Setout );
+      strcpy( setoutbuf, TMPSETNAME );
+      outmatrix = fmatrix( g->blo[0], g->blo[1], g->bhi[0], g->bhi[1] );
+      if (!outmatrix)
+      {
+         error_status( "Cannot allocate memory for output set with residual!",
+                       "", "" );
+         return;
+      }
+      for (j = g->blo[1]; j <= g->bhi[1]; j++)
+      {
+         for (i = g->blo[0]; i <= g->bhi[0]; i++)
+         {
+            double    xdat[2];
+            float     val = g->image[j][i];
+            fint      fopt = 0;
+            fint      npar = MAXPAR;
+
+            xdat[0] = g->grid2arcsec[0] * (double) i;
+            xdat[1] = g->grid2arcsec[1] * (double) j;
+            if (val != blank)
+               outmatrix[j][i] = val - (float) funcd_c( xdat, g->fitpar, &npar, &fopt );
+            else
+               outmatrix[j][i] = blank;
+         }
+      }
+      r = 0;
+      if ( gds_exist_c(Setout, &r) )
+      {
+         r = 0; gds_delete_c( Setout, &r );
+      }
+      r = 0; gds_create_c( Setout, &r );
+      len = g->bhi[0] - g->blo[0] + 1;
+      avalue = (double) -(g->blo[0] - 1);
+      r = 0; gds_extend_c( Setout, tofchar("PARAM-1"), &avalue, &len, &r );
+      len = g->bhi[1] - g->blo[1] + 1;
+      avalue = (double) -(g->blo[1] - 1);
+      r = 0; gds_extend_c( Setout, tofchar("PARAM-2"), &avalue, &len, &r );
+      avalue = 0.0;
+      r = 0; gdsd_wdble_c( Setout, tofchar("CROTA2"), &setlevel, &avalue, &r );
+      r = 0; gdsd_wchar_c( Setout, tofchar("INSTRUME"), &setlevel, tofchar("GIPSY"), &r );
+      r = 0; gds_close_c( Setout, &r );
+
+
+      cwloO   = gdsc_fill_c( Setout, &setlevel, g->blo );
+      cwhiO   = gdsc_fill_c( Setout, &setlevel, g->bhi );
+      outsize = g->imagesize;
+      gdsi_write_c( Setout,
+                    &cwloO, &cwhiO,
+                    &(outmatrix[g->blo[1]][g->blo[0]]),
+                    &outsize,
+                    &pixelswrite,
+                    &tidO );
+      /* Free memory */
+      freefmatrix( outmatrix, g->blo[0], g->blo[1] );
+      outmatrix = NULL;
+      /* Prepare keywords for VIEW deputy */
+      {
+         char mes[STRLEN];
+         fint status;
+         fint hermesold, hermesnew;;
+         sprintf( mes, "V_INSET=%.*s", nelc_c(Setout), Setout.a );
+         wkey_c( tofchar(mes) );
+         wkey_c( tofchar("V_BOX=") );
+         wkey_c( tofchar("V_CLIP=") );
+         hermesnew = 0;
+         hermesold = listctrl_c( &hermesnew );
+         deputy_c( tofchar("VIEW"), &status );
+         (void) listctrl_c( &hermesold );
+         if (status != 1)
+             error_status( "Could not start task VIEW",
+                           "Abort a task or wait until a task is finished", "" );
+      }
+      wkey_c( tofchar(key) );
+      r = 0; gds_delete_c( Setout, &r );
+   }
+}
+
+
+static void dofit( ident id,
+                   char  *key,
+                   int   code,
+                   void  *arg )
+/*------------------------------------------------------------*/
+/* PURPOSE: Do fit, display results and plot ellipse.         */
+/*------------------------------------------------------------*/
+{
+   globaltype *g = (globaltype *) arg;
+   bool       value;
+   fint       nitems  = 1;
+   fint       dfault  = HIDDEN;
+
+   /*gui_status( "" );*/
+   value = toflog( FALSE );
+   (void) userlog_c( &value, &nitems, &dfault, tofchar(key), tofchar(" "));
+   value = tobool( value );
+   if (value || !id)                               /* Could be a pseudo event */
+   {
+      if (g->imagesize == 0)
+      {
+          wkey_c( tofchar(key) );
+          return;
+      }
+      /* fit this data */
+      fit( g );
+      if (g->its < 0 || !g->viewfit)
+         gui_residue(FALSE);
+      else
+         gui_residue(TRUE);
+
+      /* Output */
+      displayresults( g );
+      if (g->setdisplayed)
+         plotellipse( g );
+      if (id)
+         wkey_c( tofchar(key) );
+   }
+}
+
+
+
+
+static void getdata( globaltype *g )
+/*------------------------------------------------------------*/
+/* PURPOSE:  Read all values in between blo and bhi in'image' */
+/*           Note that one subset is entered.                 */
+/*------------------------------------------------------------*/
+{
+   fint  pixelsread;
+   fint  cwlo, cwhi;
+   fint  tid = 0;
+   fint  subset = g->subin[g->subsetindx];
+   int   x = g->blo[0];
+   int   y = g->blo[1];
+
+
+   g->imagesize = (g->bhi[0] - g->blo[0] + 1) * (g->bhi[1] - g->blo[1] + 1);
+   cwlo   = gdsc_fill_c( g->Setin, &subset, g->blo );
+   cwhi   = gdsc_fill_c( g->Setin, &subset, g->bhi );
+   gdsi_read_c( g->Setin,
+                &cwlo, &cwhi,
+                &(g->image[y][x]),
+                &(g->imagesize),
+                &pixelsread,
+                &tid );
+
+   if (tid != 0 || pixelsread != g->imagesize)
+   {
+      /* PROBLEMS!!! PROBLEMS!!! PROBLEMS!!! PROBLEMS!!! */
+      g->imagesize = 0;
+   }
+   else
+   /*--------------------------------------------------*/
+   /* We can do something with this data.              */
+   /*--------------------------------------------------*/
+   {
+      getestimates( g );
+      if (!g->has_estimates)
+      {
+         int  i;
+         reject_c( KEY_BOX, tofchar("No estimates for this box!") );
+         error_status( "No estimates for this data.", "Try another box", "" );
+         for (i = 0; i < MAXPAR; i++)
+         {
+            /* erase the estimates fields */
+            char message[STRLEN];
+            sprintf( message, "%s%s", g->keys[i], "" );
+            wkey_c( tofchar(message) );
+         }
+      }
+      else
+      {
+         gui_results( NULL, NULL );
+/*         dofit( NULL, "FIT=", KEYCHANGE, g ); */ /*pseudo event */
+      }
+   }
+   return;
+}
+
+
+
+static void getbox( ident id,
+                    char  *key,
+                    int   code,
+                    void  *arg )
+/*------------------------------------------------------------*/
+/* PURPOSE: BOX= Process user input for a box.                */
+/*------------------------------------------------------------*/
+{
+   fint        boxopt = 0;
+   fint        dfault = HIDDEN;
+   fint        showdev = (fint) odev;
+   fint        r;
+   char        dummytxt[STRLEN+1];
+   fchar       Dummytxt;
+   globaltype *g=(globaltype*)arg;
+
+
+   if (!g->setexist)
+   {
+      reject_c( KEY_BOX, tofchar("You cannot define a box without a set!") );
+      g->imagesize = 0;
+      g->boxexist = NO;
+      return;                     /* Nothing changed so return old image data */
+   }
+
+   /* Check on empty strings */
+   Dummytxt.l = STRLEN;
+   Dummytxt.a = dummytxt;
+   r = usertext_c( Dummytxt, &dfault, tofchar(key), tofchar(" ") );
+   if (!r)
+   {
+      reject_c( tofchar(key), tofchar("You have to enter numbers!") );
+      g->imagesize = 0;
+      g->boxexist = NO;
+      return;
+   }
+
+   if (g->image != NULL)
+   /*--------------------------------------------------*/
+   /* Space was allocated in a previous call. Release  */
+   /* memory first before allocating new space. The    */
+   /* blo and bhi are the values of the previous call. */
+   /*--------------------------------------------------*/
+   {
+      freefmatrix( g->image, g->blo[0], g->blo[1] );
+      g->image = NULL;                        /* Is not reset by 'freefmatrix' */
+   }
+   dfault = REQUEST;
+   boxopt = 16;
+   gdsbox_c( g->blo, g->bhi,
+             g->Setin, g->subin,
+             &dfault,
+             tofchar(key),
+             tofchar(" "),
+             &showdev,
+             &boxopt );
+
+   if (boxopt == -1)
+   {
+      /* 'gdsbox' detected an error */
+      fchar   Errtxt;
+      char    errtxt[STRLEN];
+      fint    l;
+      fint    dfault = -1;
+
+      Errtxt.a = errtxt; Errtxt.l = STRLEN-1; clearstr(Errtxt);
+      cancel_c(tofchar("UCAMESSAGE="));
+      l = usertext_c( Errtxt, &dfault, tofchar("UCAMESSAGE="), tofchar("") );
+      Errtxt.a[l] = '\0';
+
+      error_status( Errtxt.a, "Enter another box.", "" );
+
+      g->imagesize = 0;
+      g->boxexist = NO;
+      return;
+   }
+   /*--------------------------------------------------*/
+   /* Allocate memory for a 2-dim array, big enough to */
+   /* store (sub)set data between blo and bhi.         */
+   /*--------------------------------------------------*/
+   {
+      int len = (g->bhi[0]-g->blo[0]+1) * (g->bhi[1]-g->blo[1]+1);
+      anyoutf( DEBUG, "Try to allocate %d bytes? (box=%d %d %d %d)", len,
+              g->blo[0], g->blo[1], g->bhi[0], g->bhi[1] );
+   }
+   g->image = fmatrix( g->blo[0], g->blo[1], g->bhi[0], g->bhi[1] );
+   if (!g->image)
+   {
+      error_status( "Cannot allocate memory for box!",
+                    "Try a smaller box or restart program.", "" );
+      reject_c( tofchar(key), tofchar("Cannot allocate memory for box!") );
+      g->imagesize = 0;
+      g->boxexist = NO;
+      return;
+   }
+   else
+   /*--------------------------------------------------*/
+   /* There is a 2-dim array now, so we can initialize */
+   /* the program by already reading the first subset. */
+   /*--------------------------------------------------*/
+   {
+      getdata( g );
+      if (g->imagesize == 0)
+      {
+         error_status( "Cannot read data from disk!", "", "" );
+         reject_c( tofchar(key), tofchar("Cannot read data from disk!") );
+         g->boxexist = NO;
+         return;                 /* Image is now a pointer to an empty buffer */
+      }
+   }
+
+   /*--------------------------------------------------*/
+   /* Are we here, then we have a set, we have a box,  */
+   /* and a 2-dim buffer filled with data from the box.*/
+   /*--------------------------------------------------*/
+   g->boxexist = YES;
+   return;
+}
+
+
+
+
+
+
+static void getconversioninfo( globaltype *g )
+/*------------------------------------------------------------*/
+/* PURPOSE:  The 2-d gaussian that we want to fit have either */
+/*           their axes (FWHM) in pixels or in arcsec. This   */
+/*           function determines conversion factors and       */
+/*           returns units.                                   */
+/*------------------------------------------------------------*/
+{
+   int       i;
+   fint      result;
+   char      message[STRLEN];
+   fchar     Cunit[2];
+   char      ctype[2][FITSLEN];
+   fchar     Ctype[2];
+   char      bunit[FITSLEN];
+   fchar     Bunit;
+   double    cdelt[2];
+   double    crpix[2];
+   fint      axistype[2];
+   fint      r1;
+
+   /* Get grid spacings from header */
+
+   g->hmsconvert = YES;
+   for (i = 0; i < 2; i++)                           /* Append number to name */
+   {
+      fint  r1;
+      result = sprintf( message, "CDELT%d", g->axnum[i] );
+      r1 = 0;
+      /* Get the pixel separation of the axes */
+      gdsd_rdble_c( g->Setin, tofchar(message), &setlevel, &cdelt[i], &r1 );
+      if (r1 < 0)
+      {
+         cdelt[i] = 1.0;
+         anyoutf( DEBUG, "No grid spacings in header of this set!" );
+      }
+      else
+      {
+         g->cdelt[i] = cdelt[i];
+      }
+      result = sprintf( message, "CRPIX%d", g->axnum[i] );
+      r1 = 0;
+      /* Get the pixel origin of the axes */
+      gdsd_rdble_c( g->Setin, tofchar(message), &setlevel, &crpix[i], &r1 );
+      if (r1 < 0)
+      {
+         crpix[i] = 1.0;
+         anyoutf( DEBUG, "No origin in header of this set!" );
+      }
+      g->crpix[i] = crpix[i];
+      result = sprintf( message, "CUNIT%d", g->axnum[i] );
+      r1 = 0;
+      /* Get the units of the axes */
+      Cunit[i].a = g->cunit[i]; Cunit[i].l = FITSLEN; clearstr( Cunit[i] );
+      gdsd_rchar_c( g->Setin, tofchar(message), &setlevel, Cunit[i], &r1 );
+      Cunit[i].a[nelc_c(Cunit[i])] = '\0';
+      if (r1 < 0)
+         strcpy( Cunit[i].a, "?" );
+
+      r1 = 0;
+      Ctype[i].a = ctype[i]; Ctype[i].l = FITSLEN; clearstr( Ctype[i] );
+      (void) sprintf( message, "CTYPE%d", g->axnum[i] );
+      gdsd_rchar_c( g->Setin, tofchar(message), &setlevel, Ctype[i], &r1 );
+      Ctype[i].a[nelc_c(Ctype[i])] = '\0';
+      if (r1 < 0)
+      {
+         (void) strcpy( Ctype[i].a, "PIXELS" );
+         axistype[i] = 0;
+      }
+      else
+      {
+         /* All these variables are dummies. We are only */
+         /* interested in the axis types.                */
+
+         fint   skysys, prosys, velsys;
+         fchar  Dunit, Nunit;
+         char   dunit[FITSLEN], nunit[FITSLEN];
+
+         Dunit.a = dunit; Dunit.l = FITSLEN; clearstr( Dunit );
+         Nunit.a = nunit; Nunit.l = FITSLEN; clearstr( Nunit );
+         axistype[i] = axtype_c( Ctype[i],
+                                 Nunit,                      /* Natural units */
+                                 Dunit,
+                                 &skysys,
+                                 &prosys,
+                                 &velsys );
+         if (axistype[i] == 1 && skysys == 1)
+         {
+            /* We have a spatial axis longitude in an equatorial system */
+            g->hmsconvert = YES;
+         }
+      }
+   }
+
+
+   r1 = 0;
+   Bunit.a = bunit; Bunit.l = FITSLEN-1; clearstr( Bunit );
+   gdsd_rchar_c( g->Setin, tofchar("BUNIT"), &setlevel, Bunit, &r1 );
+   Bunit.a[nelc_c(Bunit)] = '\0';
+   if (r1 < 0)
+   {
+      strcpy( Bunit.a, "units ?" );
+      Bunit.l = 7;
+   }
+   anyoutf( DEBUG, "Bunit from header: [%s] len = %d", Bunit.a, nelc_c(Bunit) );
+   strcpy( g->units[AMPL], Bunit.a );
+
+
+   /* Get rotation angle */
+   r1 = skyrot_c( g->Setin, &(g->crota) );
+   if (r1 != 0)
+      g->crota = 0.0;
+
+   if (cdelt[1] < 0.0)
+   /*--------------------------------------------------*/
+   /* Header item CROTA stores the map rotation.       */
+   /* CROTA is the angle in degrees between the +y     */
+   /* axis and the +m axis (latitude axis) at the      */
+   /* position of the PC. The angle is counter-clock-  */
+   /* wise if the grid separation (CDELT) in longitude */
+   /* is < 0.0.                                        */
+   /*--------------------------------------------------*/
+   {
+      g->counterclockwise = YES;
+   }
+   else
+   {
+      g->counterclockwise = NO;
+   }
+
+
+   if (!g->forcegrids && axistype[0] == 1 && axistype[1] == 2 )
+   /*--------------------------------------------------*/
+   /* Axis is spatial longitude axis. Perhaps we can   */
+   /* work in arcsec. Then the second axis must be an  */
+   /* spatial axis latitude.                           */
+   /*--------------------------------------------------*/
+   {
+      double    cfact;
+      int       i;
+
+      g->allowconv = YES;
+      for (i = 0; i < 2; i++)
+      {
+         r1 = factor_c( Cunit[i], tofchar("ARCSEC"), &cfact );
+         if (r1 == 0)
+         {
+            g->grid2arcsec[i] = fabs(cdelt[i]) * cfact;
+            strcpy( g->units[AXIS_X], "ARCSEC" );
+            strcpy( g->units[AXIS_Y], "ARCSEC" );
+         }
+         else
+         {
+            /* Do not allow conversions to arcsec for ANY axis! */
+            g->allowconv = NO;
+         }
+      }
+      if (!g->allowconv)
+      {
+         g->grid2arcsec[0] = g->grid2arcsec[1] = 1.0;
+         strcpy( g->units[AXIS_X], "GRIDS" );
+         strcpy( g->units[AXIS_Y], "GRIDS" );
+      }
+      strcpy( g->units[XO], "GRIDS" );
+      strcpy( g->units[YO], "GRIDS" );
+   }
+   else
+   {
+      g->allowconv = NO;
+      strcpy( Ctype[0].a, "GRIDS" );
+      strcpy( Ctype[1].a, "GRIDS" );
+      g->grid2arcsec[0] = 1.0;
+      g->grid2arcsec[1] = 1.0;
+      strcpy( g->units[AXIS_X], "GRIDS" );
+      strcpy( g->units[AXIS_Y], "GRIDS" );
+      strcpy( g->units[XO], "GRIDS" );
+      strcpy( g->units[YO], "GRIDS" );
+   }
+   strcpy( g->units[PA], "DEGREE" );
+   strcpy( g->units[ZERO], Bunit.a );
+
+   /*----------------------------------------*/
+   /* Give user always a hint about the grid */
+   /* spacings in header units               */
+   /*----------------------------------------*/
+   if (g->allowconv)
+   {
+      sprintf( message, "Grid spacing : %.3f x %.3f arcsec,  rotation map: %.2f",
+               g->grid2arcsec[0], g->grid2arcsec[1], g->crota );
+
+   }
+   else
+   {
+      /* Note that buffer Cunit.a is already zero terminated */
+      sprintf( message, "Grid spacing :%g x %g (%s, %s)",
+               cdelt[0], cdelt[1], Cunit[0].a, Cunit[1].a );
+   }
+   gui_textline( message, FOURTHLINE );
+
+   /*----------------------------------------*/
+   /* Display units on gui. The display      */
+   /* function is part of the gui and needs  */
+   /* an array of pointers to characters.    */
+   /*----------------------------------------*/
+   {
+      int  i;
+      char *u[MAXPAR];
+      for (i = 0; i < MAXPAR; i++)
+      {
+         u[i] = g->units[i];
+      }
+      gui_units( u );
+   }
+
+}
+
+
+
+static void updatesubsetstr( globaltype *g )
+/*------------------------------------------------------------*/
+/* PURPOSE: Update field that shows current subset.           */
+/*------------------------------------------------------------*/
+{
+   char    mes1[STRLEN];
+   char    mes2[STRLEN];
+
+
+/*   gui_subsets( YES );      */
+   subsetcw2str( g->Setin, g->subin[g->subsetindx], g->axnum, mes1 );
+   sprintf( mes2, "SUBSET=%s", mes1 );
+   wkey_c( tofchar(mes2) );
+}
+
+
+
+static void getset( ident  id,
+                    char  *key,
+                    int    code,
+                    void  *arg )
+/*------------------------------------------------------------*/
+/* PURPOSE: Get the input set. Documentation can be found in  */
+/*          $gip_sub/gdsinp.dc2                               */
+/*------------------------------------------------------------*/
+{
+   fint     axcount[MAXAXES];
+   fint     subdim;                     /* Dimensionality of the subsets for class 1 applications */
+   fint     maxsubs = MAXSUBSETS;
+   fint     maxaxes = MAXAXES;          /* Max num. of axes the program can deal with.*/
+   fint     class   = 1;                /* Class 1 is for applications which repeat */
+   fint     showdev = (fint) odev;
+   fint     r;
+   fint     dfault;
+   char     dummytxt[STRLEN+1];
+   fchar    Dummytxt;
+
+   globaltype *g=(globaltype*)arg;
+
+
+   gui_error("");
+   dfault  = HIDDEN+100;              /* Return immedeately when error occurs */
+   subdim  = 2;                       /* Allow only 2-dim structures */
+   clearstr( g->Setin );
+
+   g->nsubs = gdsinp_c( g->Setin,
+                        g->subin,
+                        &maxsubs,
+                        &dfault,
+                        tofchar( key ),
+                        tofchar(" "),
+                        &showdev,        /* Device number (as in ANYOUT). */
+                        g->axnum,
+                        axcount,         /* Number of grids on axes in 'axnum' */
+                        &maxaxes,
+                        &class,          /* Class 1 is for applications which repeat */
+                        &subdim );       /* Dimensionality of the subsets for class 1 */
+
+   if (g->nsubs <= 0)
+   {
+      fchar   Errtxt;
+      char    errtxt[STRLEN];
+      fint    dfault = -1;
+      fint    l;
+      int     k;
+      Errtxt.a = errtxt; Errtxt.l = STRLEN-1; clearstr(Errtxt);
+      g->setexist = NO;
+      g->imagesize = 0;
+      gui_results( NULL, NULL );
+      l = usertext_c( Errtxt, &dfault, tofchar("UCAMESSAGE="), tofchar("") );
+      Errtxt.a[l] = '\0';
+      error_status( Errtxt.a, "Check existence of set and check (sub)set dimension", "" );
+      gui_units( NULL );
+      for (k = 0; k < MAXPAR; k++)                   /* Reset estimate fields */
+      {
+         char    message[FITSLEN];
+         sprintf( message, "%s", g->keys[k] );
+         wkey_c( tofchar(message) );
+      }
+      gui_residue(FALSE);
+      wkey_c( tofchar("VIEW=NO") );
+      return;
+   }
+
+
+   g->Setin.a[nelc_c(g->Setin)] = '\0';
+   g->subsetindx = 0;                  /* Reset subset number to first subset */
+   wkey_c( tofchar("SUBSET=") );                        /* Clear subset field */
+   if (g->nsubs > 1)
+   {
+      gui_subsets( YES );
+      updatesubsetstr( g );
+   }
+   else
+   {
+      gui_subsets( NO );
+   }
+
+
+   getconversioninfo( g );
+   {
+      int i;
+      for (i = 0; i < MAXPAR; i++)
+         anyoutf( DEBUG, "unit %d = [%s]", i, g->units[i] );
+
+      anyoutf( DEBUG, "conversion grid x to arcsec = %f", g->grid2arcsec[0] );
+      anyoutf( DEBUG, "conversion grid y to arcsec = %f", g->grid2arcsec[1] );
+   }
+
+   
+   g->subsetindx = 0;
+   g->setexist   = YES;
+
+
+   dfault     = HIDDEN;
+   Dummytxt.l = STRLEN;
+   Dummytxt.a = dummytxt;
+   r = usertext_c( Dummytxt, &dfault, tofchar("BOX="), tofchar(" ") );
+   if (r)
+   /*--------------------------------------------------*/
+   /* A box is specified before a set. Now the set is  */
+   /* known and we can get the box + data.             */
+   /*--------------------------------------------------*/
+   {
+      getbox( NULL, "BOX=", KEYCHANGE, g );     /* pseudo event */
+   }
+   
+   if (g->setdisplayed)         /* Old set was displayed. Display now new set */
+      displayset( g );
+   
+}
+
+
+static void togglegrids( ident id,
+                         char  *key,
+                         int   code,
+                         void  *arg )
+/*------------------------------------------------------------*/
+/* PURPOSE: Work either in a grid- or arcsec system.          */
+/*------------------------------------------------------------*/
+{
+   globaltype  *g = (globaltype *) arg;
+   bool        value;
+   fint        nitems = 1;
+   fint        dfault = HIDDEN;
+
+
+   value = toflog( FALSE );
+   (void) userlog_c( &value, &nitems, &dfault, tofchar(key), tofchar(" "));
+   value = tobool( value );
+   if (value)
+   {
+      g->forcegrids = YES;
+      gui_textline( "", FIRSTLINE );
+      gui_textline( "", SECONDLINE );
+      gui_textline( "", THIRDLINE );
+   }
+   else
+   {
+      g->forcegrids = NO;
+   }
+   getset( NULL, "INSET=", KEYCHANGE, g );                    /* pseudo event */
+}
+
+
+
+static void resetgids( ident id,
+                       char  *key,
+                       int   code,
+                       void  *arg )
+/*------------------------------------------------------------*/
+/* PURPOSE: Remove plot in GIDS by reloading image.           */
+/*------------------------------------------------------------*/
+{
+   globaltype   *g = (globaltype *) arg;
+   bool         value;
+   fint         nitems = 1;
+   fint         dfault = HIDDEN;
+  
+ 
+   value = toflog( FALSE );
+   (void) userlog_c( &value, &nitems, &dfault, tofchar(key), tofchar(" "));
+   value = tobool( value );
+   if (value)
+   {
+      if (g->viewfit)
+      {
+         if ( displayset(g) )
+         {
+            g->setdisplayed = YES;
+         }
+         else
+         {
+            g->setdisplayed = NO;
+         }
+      }        
+      {
+         char  message[STRLEN];
+         sprintf( message, "%sNO", key );
+         wkey_c( tofchar(message) );                                                                   
+      }
+   }
+}
+
+
+
+static void changesubset( ident id,
+                          char  *key,
+                          int   code,
+                          void  *arg )
+/*------------------------------------------------------------*/
+/* PURPOSE: User changed subset. Prepare fit and update image.*/
+/*------------------------------------------------------------*/
+{
+   globaltype *g = (globaltype *) arg;
+   char            subsetstr[STRLEN];
+   fchar           Subsetstr;
+   fint            dfault = HIDDEN;
+   fint            newsubset;
+   char            setstr[STRLEN];
+
+   Subsetstr.a = subsetstr; Subsetstr.l = STRLEN-1; clearstr( Subsetstr );
+   if (!usertext_c( Subsetstr,
+                    &dfault,
+                    tofchar(key),
+                    tofchar(" ") ) )
+   {
+      return;
+   }
+   Subsetstr.a[nelc_c(Subsetstr)] = '\0';
+   sprintf( setstr, "%.*s %s", nelc_c(g->Setin), g->Setin.a, subsetstr );
+
+
+   {
+      fint nsubs;
+      fint maxsubs = 1;
+      fint showdev = 1;
+      fint axnum[MAXAXES];
+      fint axcount[MAXAXES];
+      fint maxaxes = MAXAXES;
+      fint class   = 1;
+      fint subdim = 2;
+      dfault = HIDDEN + 100;
+      nsubs = gdsinp_c( tofchar(setstr),
+                        &newsubset,
+                        &maxsubs,
+                        &dfault,
+                        tofchar("GF_INSET="),
+                        tofchar(" "),
+                        &showdev,        /* Device number (as in ANYOUT). */
+                        axnum,
+                        axcount,         /* Number of grids on axes in 'axnum' */
+                        &maxaxes,
+                        &class,          /* Class 1 is for applications which repeat */
+                        &subdim );       /* Dimensionality of the subsets for class 1 */
+   }
+   /*--------------------------------------------------*/
+   /* If this is a valid subset, then try to find the  */
+   /* subset coordinate word in the array of subsets   */
+   /* of INSET=                                        */
+   /*--------------------------------------------------*/
+   {
+      int   i;
+      int   found;
+
+      i = 0;
+      do
+      {
+         found = (newsubset == g->subin[i]);
+         if (!found) i++;
+      }
+      while (!found && i < g->nsubs);
+      if (found)
+      {
+         anyoutf( DEBUG, "Subset in range. Index = %d", i );
+         g->subsetindx = i;
+         {
+            fint     r, dfault = HIDDEN;
+            char     dummytxt[STRLEN+1];
+            fchar    Dummytxt;
+            Dummytxt.l = STRLEN;
+            Dummytxt.a = dummytxt;
+            clearstr( Dummytxt );
+            r = usertext_c( Dummytxt, &dfault, tofchar("BOX="), tofchar(" ") );
+            if (r)
+            {
+               /* pseudo event */
+               getbox(NULL, "BOX=", KEYCHANGE, g );
+            }
+         }
+         if (g->viewfit)
+         {
+            if (displayset(g) )
+            {
+               g->setdisplayed = YES;
+            }
+         }
+      }
+      else
+      {
+         error_status( "Subset NOT in range!", "", "" );
+         reject_c( tofchar("SUBSET="), tofchar("") );
+         updatesubsetstr( g );
+      }
+   }
+}
+
+
+
+
+static void fitnextsubset( ident id,
+                           char  *key,
+                           int   code,
+                           void  *arg )
+/*------------------------------------------------------------*/
+/* PURPOSE: User pressed > button for next subset.            */
+/*------------------------------------------------------------*/
+{
+   globaltype *g = (globaltype *) arg;
+   bool        value;
+
+   value = UserLog( key );
+   if (value)
+   {
+      g->subsetindx++;
+      if (g->subsetindx == g->nsubs)
+      {
+         g->subsetindx--;                       /* undo increase of subset index */
+         gui_error( "No more subsets to fit" );
+      }
+      else
+      {
+         updatesubsetstr( g );
+      }
+      wkey_c( tofchar(key) );
+   }
+}
+
+
+static void fitprevsubset( ident id,
+                           char  *key,
+                           int   code,
+                           void  *arg )
+/*------------------------------------------------------------*/
+/* PURPOSE: User pressed < button for previous subset.        */
+/*------------------------------------------------------------*/
+{
+   globaltype *g = (globaltype *) arg;
+   bool        value;
+
+   value = UserLog( key );
+   if (value)
+   {
+      g->subsetindx--;
+      if (g->subsetindx < 0)
+      {
+         g->subsetindx++;                    /* undo increase of subset index */
+         gui_error( "No more subsets to fit" );
+      }
+      else
+      {
+         updatesubsetstr( g );
+      }
+      wkey_c( tofchar(key) );
+   }
+}
+
+
+static void infotologfile( globaltype *g )
+/*------------------------------------------------------------*/
+/* PURPOSE: Write all available data to the GIPSY log file    */
+/*          after pressing the LOG button.                    */
+/*------------------------------------------------------------*/
+{
+   int   dev = 3;
+   int   i;
+   char  message[STRLEN];
+   struct tm   *ptr;
+   time_t      lt;
+
+
+
+   if (g->its < 0)
+   {
+      lsqerr( g->its, message );
+      anyoutf( dev, "ERROR: %s", message );
+      return;
+   }
+
+
+   anyoutf( dev, " " );
+   anyoutf( dev, "===================================== GAUFIT2D ================================" );
+   lt    = time(NULL);                         /* Get the coded calendar time */
+   ptr   = localtime(&lt);
+   strftime( message, STRLEN, "%d-%b-%Y (%H:%M:%S)", ptr );
+   anyoutf( dev, "Date of fit        : %s", message );
+   anyoutf( dev, "Name of set        : [%s]", g->Setin.a );
+   anyoutf( dev, "Fit box            : [%d %d %d %d]", g->blo[0], g->blo[1], g->bhi[0], g->bhi[1] );
+   anyoutf( dev, "Iterations         : %d", g->its );
+   anyoutf( dev, "Variance of fit    : %g", g->redchi2 );
+   anyoutf( dev, "Points in box      : %d", g->imagesize );
+   anyoutf( dev, "# excluded by clip : %d", g->excluded );
+   anyoutf( dev, "Number of blanks   : %d", g->nblanks );
+   /*---------------------------------------------------*/
+   /* Calculate and display volume under 2d-gauss       */
+   /* Vol. V = 2.A.hwx.hwy.PI.Erf(Inf).Erf(Inf)/Ln(256) */
+   /* Erf(Inf) = 1 -> V = 1.13309.A.hwx.hwy             */   
+   /*---------------------------------------------------*/   
+   {
+      double hwx = g->outpar[AXIS_X];
+      double hwy = g->outpar[AXIS_Y];
+      double amp = g->outpar[AMPL];
+      double area;
+      double vol;
+     
+      area = hwx * hwy; 
+      if (g->allowconv)
+         area /= g->grid2arcsec[0]*g->grid2arcsec[1];
+      vol = 1.13309 * amp * area;                             /* All in grids */
+      anyoutf( dev, "Volume under gauss : %g in units of the amplitude", vol );
+   }
+  
+   if (g->allowconv)
+   {
+   anyoutf( dev, "Coordinate system  : Arcsec" );
+   anyoutf( dev, "Size of 1 grid     : %g x %g arcsec",
+            g->grid2arcsec[0], g->grid2arcsec[1] );
+   }
+   else
+   {
+      anyoutf( dev, "Coordinate system  : Grids" );
+   }
+   anyoutf( dev, " " );
+   
+   if (g->allowconv)
+   {
+      double    coordin[2], coordout[2];
+      fint      subset = g->subin[g->subsetindx];
+      fint      r;
+      fint      mode;
+      char      hmsdmsstr[STRLEN];
+
+      coordin[0] = g->outpar[XO];
+      coordin[1] = g->outpar[YO];
+      r = grtoph_c( g->Setin, &subset, coordin, coordout );
+      mode = 0;
+      if (g->hmsconvert)
+      {
+         hmsC( coordout[0], hmsdmsstr, 3 );
+      }
+      else
+      {
+         dmsC( coordout[0], hmsdmsstr, 2 );
+      }
+      anyoutf( dev, "Center X: %8.2f (grids) = %12.7f (%s) = %s",
+               g->outpar[XO], coordout[0], g->cunit[0], hmsdmsstr );
+      dmsC( coordout[1], hmsdmsstr, 2 );
+      anyoutf( dev, "Center Y: %8.2f (grids) = %12.7f (%s) = %s",
+               g->outpar[YO], coordout[1], g->cunit[1], hmsdmsstr );
+
+      /*--------------------------------------------------*/
+      /* Display the values of major, minor axis and      */
+      /* angle, in the astronomical system, i.e. define   */
+      /* the angle as an angle wrt. the NORTH.            */
+      /*--------------------------------------------------*/
+      {
+         double pa, major, minor;
+         convert_to_astronomical( g->outpar[PA], g->counterclockwise, g->crota,
+                                  g->outpar[AXIS_X],
+                                  g->outpar[AXIS_Y],
+                                  &major, &minor, &pa );
+         anyoutf( dev, "Major axis: %.2f'', Minor axis: %.2f'', Position angle: %.1f (deg)",
+                  major, minor, pa );
+      }
+      anyoutf( dev, "");
+      anyoutf( dev, "Summary:");      
+      anyoutf( dev, "Parameter                 Estimate  FIX/FREE    Fit            Error   units" );
+      for (i = 0; i < MAXPAR; i++)
+      {
+         char    mes1[STRLEN];
+         char    mes2[STRLEN];
+         double  dblank;
+
+         setdblank_c( &dblank );
+         if (g->mpar[i] == FREE)
+            strcpy( mes1, "FREE" );
+         else
+            strcpy( mes1, "FIXED" );
+
+         if (g->outerr[i] == dblank)
+            strcpy( mes2, "" );
+         else
+            sprintf( mes2, "%12f", g->outerr[i] );
+
+         anyoutf( dev, "%-15s: %12f  (%6s)  %12f +- %12s (%s)",
+                  g->items[i],
+                  g->usrpar[i],
+                  mes1,
+                  g->outpar[i],
+                  mes2,
+                  g->units[i] );
+      }      
+   }
+   else
+   {
+      anyoutf( dev, "Fitted parameters for ellipse in grid system:" );
+      anyoutf( dev, "Parameter                 Estimate  FIX/FREE    Fit            Error   units" );
+      for (i = 0; i < MAXPAR; i++)
+      {
+         char    mes1[STRLEN];
+         char    mes2[STRLEN];
+         double  dblank;
+
+         setdblank_c( &dblank );
+         if (g->mpar[i] == FREE)
+            strcpy( mes1, "FREE" );
+         else
+            strcpy( mes1, "FIXED" );
+
+         if (g->outerr[i] == dblank)
+            strcpy( mes2, "" );
+         else
+            sprintf( mes2, "%12f", g->outerr[i] );
+
+         anyoutf( dev, "%-15s: %12f  (%6s)  %12f +- %12s (%s)",
+                  g->items[i],
+                  g->usrpar[i],
+                  mes1,
+                  g->outpar[i],
+                  mes2,
+                  g->units[i] );
+      }
+   }
+
+
+   anyoutf( dev, "===============================================================================" );
+   anyoutf( dev, " " );
+}
+
+
+
+static void logstatus( ident id,
+                       char  *key,
+                       int   code,
+                       void  *arg)
+/*------------------------------------------------------------*/
+/* PURPOSE: Toggle between output to screen and logfile and   */
+/*          output to screen if Hermes is in test mode.       */
+/*------------------------------------------------------------*/
+{
+   bool value;
+   fint nitems   = 1;
+   fint dfault   = HIDDEN;
+   globaltype *g = (globaltype*) arg;
+
+   value = toflog( FALSE );
+   (void) userlog_c( &value, &nitems, &dfault, tofchar(key), tofchar(" "));
+   value = tobool( value );
+   if (value)
+   {
+      char message[STRLEN];
+      odev = 3;
+      infotologfile( g );
+      sprintf( message, "%sNO", key );
+      wkey_c( tofchar(message) );
+   }
+   else
+   {
+      odev = 16;
+   }
+}
+
+
+
+
+static void fixedfree( ident id,
+                       char  *key,
+                       int   code,
+                       void  *arg)
+/*------------------------------------------------------------*/
+/* PURPOSE: Set estimate parameters to fixed or free. The     */
+/*          keyword functions as a toggle.                    */
+/*------------------------------------------------------------*/
+{
+   bool value;
+   fint nitems  = 1;
+   fint dfault  = HIDDEN;
+   fint *mpar = (fint*) arg;
+
+   value = toflog( FALSE );
+   (void)userlog_c( &value, &nitems, &dfault, tofchar(key), tofchar(" "));
+   value = tobool( value );
+   if (1)
+   {
+      if (*mpar == FREE)
+         *mpar = FIXED;
+      else
+         *mpar = FREE;
+   }
+}
+
+
+
+static void quit( ident id,
+                  char  *key,
+                  int   code,
+                  void  *arg)
+/*------------------------------------------------------------*/
+/* PURPOSE: QUIT= keyword handler.                            */
+/*------------------------------------------------------------*/
+{
+   globaltype  *g = (globaltype*) arg;
+   int          i;
+   char         oldkey[20];    
+
+   bool quit = UserLog(key);
+   if (quit)
+   {
+      if (g->image != NULL)
+      /*--------------------------------------------------*/
+      /* Space was allocated in a previous call. Release  */
+      /* memory first before allocating new space. The    */
+      /* blo and bhi are the values of the previous call. */
+      /*--------------------------------------------------*/
+      {
+         freefmatrix( g->image, g->blo[0], g->blo[1] );
+         g->image = NULL;                        /* Is not reset by 'freematrix' */
+      }
+
+      cancel_c(tofchar(key));                         /* remove QUIT= keyword */
+
+      /* Cancel some keywords from Hermes keyword buffer */
+      for (i = 0; i < MAXPAR; i++)
+      {
+         cancel_c( tofchar(g->keys[i]) );
+         strcpy( oldkey, "F_" );
+         strcat( oldkey, g->keys[i] );
+         cancel_c( tofchar(oldkey) );
+         strcpy( oldkey, "R_" );
+         strcat( oldkey, g->keys[i] );
+         cancel_c( tofchar(oldkey) );
+      }
+      cancel_c( tofchar("V_CLIP=") );
+      cancel_c( tofchar("V_INSET=") );
+      cancel_c( tofchar("V_BOX=") );
+      cancel_c( tofchar("VIEW=") );
+      /*--------------------------------------------------*/
+      /* If the example button was pressed, delete the    */
+      /* temp. set.                                       */
+      /*--------------------------------------------------*/   
+      {
+         fint  r = 0;
+         if ( gds_exist_c(tofchar(EXAMPLESET), &r) )
+         {
+            r = 0;
+            gds_delete_c( tofchar(EXAMPLESET), &r );
+         }
+      }      
+      finis_c();                                            /* terminate task */
+   }
+}
+
+
+
+static void example( ident id,
+                     char  *key,
+                     int   code,
+                     void  *arg ) 
+/*------------------------------------------------------------*/
+/* PURPOSE: EXAMPLE= keyword generates an ellipse, starts     */
+/*          VIEW and fits.                                    */
+/*------------------------------------------------------------*/
+{
+   bool value;
+   fint nitems   = 1;
+   fint dfault   = HIDDEN;
+   globaltype *g = (globaltype*) arg;
+
+   value = toflog( FALSE );
+   (void) userlog_c( &value, &nitems, &dfault, tofchar(key), tofchar(" "));
+   value = tobool( value );
+   if (value)   
+   {
+      fint    status;
+      char    mes[STRLEN];      
+      wkey_c( tofchar("BUNIT= WU") );
+      wkey_c( tofchar("CDELT1= -0.01") );
+      wkey_c( tofchar("CDELT2= 0.01") );
+      wkey_c( tofchar("CDELT3= 2") );
+      wkey_c( tofchar("CROTA2=") );
+      wkey_c( tofchar("CRPIX1= 50") );
+      wkey_c( tofchar("CRPIX2= 50") );
+      wkey_c( tofchar("CRPIX3= 3") );
+      wkey_c( tofchar("CRVAL1= 45") );
+      wkey_c( tofchar("CRVAL2= 45") );
+      wkey_c( tofchar("CTYPE1= RA-NCP") );
+      wkey_c( tofchar("CTYPE2= DEC-NCP") );
+      wkey_c( tofchar("CTYPE3=") );
+      wkey_c( tofchar("CUNIT1=") );
+      wkey_c( tofchar("CUNIT2=") );
+      wkey_c( tofchar("FUNCTION=2.0+10*exp(-RA*RA/(2*8**2/(2.35**2))-DEC*DEC/(2*4.0**2/(2.35**2)))") );
+      wkey_c( tofchar("INSTRUME=WSRT") );
+      wkey_c( tofchar("NAXIS1= 100") );
+      wkey_c( tofchar("NAXIS2= 100") );
+      {
+         sprintf( mes, "OUTSET=%s", EXAMPLESET );
+         wkey_c( tofchar(mes) );
+      }
+      /*--------------------------------------------------*/
+      /* If the example button was pressed, delete the    */
+      /* temp. set.                                       */
+      /*--------------------------------------------------*/   
+      {
+         fint  r = 0;
+         if ( gds_exist_c(tofchar(EXAMPLESET), &r) )
+         {
+            r = 0;
+            gds_delete_c( tofchar(EXAMPLESET), &r );
+         }
+      }      
+      deputy_c( tofchar("CREATE"), &status );
+
+      /*--------------------------------------------------*/
+      /* Here we have a problem. We want to change the    */
+      /* set and a box, but the INSET= event is scheduled */
+      /* first and tries to display the new set with      */
+      /* an old box if viewing is on. Therefore viewing   */
+      /* is disabled first. Then a box is set and then    */
+      /* the set is displayed. However this does not work */
+      /* if we trigger the VIEW= event with the same      */
+      /* keyword because only the last keyword status is  */
+      /* known to the routine. The solution is to connect */
+      /* a second keyword to the view routine e.g. VIEW2= */
+      /* which forces two events for the view actions.    */
+      /*--------------------------------------------------*/
+      wkey_c( tofchar("VIEW2=N") );      
+      {
+         sprintf( mes, "INSET=%s", EXAMPLESET );
+         wkey_c( tofchar(mes) );
+      }           
+      wkey_c( tofchar("BOX=-10 -10 10 10") );
+                  
+      wkey_c( tofchar("VIEW=Y") );
+      wkey_c( tofchar("FIT=Y") );
+      cancel_c( tofchar(key) );                    /* remove EXAMPLE= keyword */
+   }   
+}
+
+
+
+static void initializestruct( globaltype *g )
+/*------------------------------------------------------------*/
+/* PURPOSE: Initialize values for current status.             */
+/*------------------------------------------------------------*/
+{
+   int   i;
+   g->image = NULL;              /* 2-dim matrix with floats */
+   g->Setin.a = g->setbuf;
+   g->Setin.l = STRLEN - 1;
+   g->setexist = NO;
+   g->boxexist = NO;
+   g->blo[0] = g->blo[1] = 0;    /* Low  edge of box in grids */
+   g->bhi[0] = g->bhi[1] = 0;    /* High edge of box in grids */
+   g->nsubs = 0;                 /* Number of input subsets */
+   g->imagesize = 0;
+   g->subsetindx = 0;            /* Current subset number */
+   g->allowconv = YES;           /* Allow conversion to arcsec */
+   g->forcegrids = NO;
+   g->viewfit = NO;              /* Is VIEW button pressed? */
+   g->setdisplayed = NO;         /* Decide to view current subset */
+   g->has_estimates = NO;
+   for (i = 0; i < MAXPAR; i++)
+   {
+      g->mompar[i] = 0;          /* Grid estimates z0,x0,y0,a,b,c,o */
+      g->respar[i] = 0;          /* Storage for converted est. z0,maj,min,x0,y0,o */
+      g->usrpar[i] = 0;          /* Estimates changed by user */
+      g->fitpar[i] = 0;          /* In- and output pars. for lsqfit */
+      g->outpar[i] = 0;
+      g->pltpar[i] = 0;          /* Ellipse pars. for plot */
+      g->fiterr[i] = 0;
+      g->outerr[i] = 0;          /* Output errors for lsqfit */
+      g->mpar[i] = FREE;
+   }
+   g->itemnr = 0;                /* For scheduling purpose only */
+   g->crota = 0.0;               /* rotation angle of map */
+   g->counterclockwise = NO;
+   g->grid2arcsec[0] = 0.0;
+   g->grid2arcsec[1] = 0.0;
+   g->crpix[0] = 0.0;
+   g->crpix[1] = 0.0;
+   g->clip = -FLT_MAX/2.0;       /* defined in float.h */
+   g->redchi2 = 0.0;             /* Reduced chi2 */
+   g->tol          = 0.0;        /* Lsqfit tolerance set to maximum accuracy */
+   g->maxits       = 100;        /* Lsqfit max. iterartions allowed */
+   g->lab          = 0.01;       /* Lsqfit mixing factor */
+   g->setdisplayed = NO;         /* Current set displayed in GIDS? */
+   g->gids_id      = -1;         /* Connection with GIDS */
+   g->its          = 0;          /* Iterations needed in fit */
+   g->excluded     = 0;          /* Pixels in box excluded by clip */
+   g->nblanks      = 0;          /* Number of blanks in box */
+   g->hmsconvert   = YES;        /* Format for output center */
+   g->gids_id      = -1;         /* Identification for connection with GIDS */
+   g->first_is_major = NO;       /* Store which axis is major */
+}
+
+
+
+MAIN_PROGRAM_ENTRY
+/*-------------------------------------------------------------------------*/
+/* The macro MAIN_PROGRAM_ENTRY replaces the C-call main() to start the    */
+/* main body of your GIPSY application. Variables defined as 'fchar' start */
+/* with a capital.                                                         */
+/*-------------------------------------------------------------------------*/
+{
+   globaltype   glob;
+
+   init_c();                                                /* contact Hermes */
+   gui();
+
+   setfblank_c( &blank );
+   initializestruct( &glob );               /* Initialize the struct. members */
+
+   strcpy( glob.items[0], "Amplitude" );
+   strcpy( glob.items[1], "Major axis" );
+   strcpy( glob.items[2], "Minor axis" );
+   strcpy( glob.items[3], "Center X" );
+   strcpy( glob.items[4], "Center Y" );
+   strcpy( glob.items[5], "Position angle" );
+   strcpy( glob.items[6], "Zero level" );
+
+   strcpy( glob.keys[0], "AMPLITUDE=" );
+   strcpy( glob.keys[1], "MAJOR=" );
+   strcpy( glob.keys[2], "MINOR=" );
+   strcpy( glob.keys[3], "CENTERX0=" );
+   strcpy( glob.keys[4], "CENTERY0=" );
+   strcpy( glob.keys[5], "ANGLE=" );
+   strcpy( glob.keys[6], "ZEROLEVEL=" );
+
+
+   (void) ScheduleKeyevent( quit,          "QUIT=",   KEYCHANGE, &glob );
+   (void) ScheduleKeyevent( getset,        "INSET=",  KEYCHANGE, &glob );
+   (void) ScheduleKeyevent( getbox,        "BOX=",    KEYCHANGE, &glob );
+   (void) ScheduleKeyevent( dofit,         "FIT=",    KEYCHANGE, &glob );
+   (void) ScheduleKeyevent( fitnextsubset, "NEXT=",   KEYCHANGE, &glob );
+   (void) ScheduleKeyevent( fitprevsubset, "PREV=",   KEYCHANGE, &glob );
+   (void) ScheduleKeyevent( getdouble,     "TOL=",    KEYCHANGE, &(glob.tol) );
+   (void) ScheduleKeyevent( getdouble,     "LAB=",    KEYCHANGE, &(glob.lab) );
+   (void) ScheduleKeyevent( getclip,       "CLIP=",   KEYCHANGE, &glob );
+   (void) ScheduleKeyevent( getint,        "MAXITS=", KEYCHANGE, &(glob.maxits) );
+   (void) ScheduleKeyevent( togglegrids,   "GRIDS=",  KEYCHANGE, &glob );
+   (void) ScheduleKeyevent( viewfit,       "VIEW=",   KEYCHANGE, &glob );
+   (void) ScheduleKeyevent( viewfit,       "VIEW2=",   KEYCHANGE, &glob );   
+   (void) ScheduleKeyevent( changesubset,  "SUBSET=", KEYCHANGE, &glob );
+   (void) ScheduleKeyevent( showresidue,   "RESIDUE=",KEYCHANGE, &glob );
+   (void) ScheduleKeyevent( resetgids,     "ERASE=",  KEYCHANGE, &glob );   
+   (void) ScheduleKeyevent( example,       "EXAMPLE=",KEYCHANGE, &glob );   
+
+   odev = 16;                                  /* Start without output to log */
+   (void) ScheduleKeyevent( logstatus, "LOG=", KEYCHANGE, &glob );
+
+   /*--------------------------------------------------*/
+   /* The estimates for a least squares fit can be     */
+   /* fixed or free parameters. For each estimate we   */
+   /* defined one keyword and an event. The routine    */
+   /* functions as a toggle (0 or 1).                  */
+   /* Schedule also the 'change estimates' events and  */
+   /* the 'restore estimates' events in a loop.        */
+   /*--------------------------------------------------*/
+   {
+      int          i;
+      char         key[20];
+
+      for (i = 0; i < MAXPAR; i++)
+      {
+         (void) ScheduleKeyevent( getdouble,
+                                  glob.keys[i],
+                                  KEYCHANGE,
+                                  &(glob.usrpar[i]) );
+
+         glob.mpar[i] = FREE;         /* Initialize free/fixed status to free */
+         strcpy( key, "F_" );
+         strcat( key, glob.keys[i] );
+         (void) ScheduleKeyevent( fixedfree,
+                                  key,
+                                  KEYCHANGE,
+                                  &(glob.mpar[i]));
+
+         /*--------------------------------------------------*/
+         /* The estimates generated by the program can be    */
+         /* changed by the user. There is also a possibility */
+         /* to restore a changed value. The function that    */
+         /* restores needs the global struct 'glob' but also */
+         /* the index of the keyword. This cannot be passed  */
+         /* in one call. Therefore for each restore action   */
+         /* there is a separate function.                    */
+         /*--------------------------------------------------*/
+         strcpy( key, "R_" );
+         strcat( key, glob.keys[i] );
+         if (i == 0)
+            (void) ScheduleKeyevent( restore_amp,  key, KEYCHANGE, &glob );
+         else if (i == 1)
+            (void) ScheduleKeyevent( restore_maj,  key, KEYCHANGE, &glob );
+         else if (i == 2)
+            (void) ScheduleKeyevent( restore_min,  key, KEYCHANGE, &glob );
+         else if (i == 3)
+            (void) ScheduleKeyevent( restore_x0,   key, KEYCHANGE, &glob );
+         else if (i == 4)
+            (void) ScheduleKeyevent( restore_y0,   key, KEYCHANGE, &glob );
+         else if (i == 5)
+            (void) ScheduleKeyevent( restore_pa,   key, KEYCHANGE, &glob );
+         else if (i == 6)
+            (void) ScheduleKeyevent( restore_zero, key, KEYCHANGE, &glob );
+      }
+   }
+   /* Initialize some input fields */
+   {
+      char message[STRLEN];
+
+      sprintf( message, "TOL=%f", glob.tol );
+      wkey_c( tofchar(message) );
+      sprintf( message, "LAB=%f", glob.lab );
+      wkey_c( tofchar(message) );
+      sprintf( message, "MAXITS=%d", glob.maxits );
+      wkey_c( tofchar(message) );
+   }
+   /* Prepare keywords for VIEW deputy */
+   {
+      fint   r;
+
+      subst_c( tofchar("CLIP=V_CLIP="), &r );
+      subst_c( tofchar("INSET=V_INSET="), &r );
+      subst_c( tofchar("BOX=V_BOX="), &r );
+   }
+
+
+   /* Some events are forced with the trigger_key routine */
+   /* Order is important! */
+
+   trigger_key("INSET=");                      /* BOX= is triggered by INSET= */
+   trigger_key("TOL=");
+   trigger_key("LAB=");
+   trigger_key("MAXITS=");
+   trigger_key("CLIP=");
+   trigger_key("VIEW=");
+   trigger_key("GRIDS=");
+
+   gui_residue(FALSE);
+
+   MainLoop();
+
+
+   return( EXIT_SUCCESS );
+}
+#<
+
+#>            gui.c
+/* gui.c -X -Xt
+                              COPYRIGHT (c) 1998
+                        Kapteyn Astronomical Institute
+         University of Groningen  -  9700 AV Groningen, The Netherlands
+
+Author: J.P. Terlouw
+*/
+
+#define LABSIZE    80
+#define NPARS       7
+#define NUMSIZE   100
+#define TEXTLINES   5
+#define STATUSLINES 2
+
+#include "stddef.h"
+#include "stdio.h"
+#include "stdlib.h"
+#include "string.h"
+#include "gipsyc.h"
+#include "usertext.h"
+#include "userlog.h"
+#include "wkey.h"
+#include "status.h"
+#include "dblank.h"
+#include "ggi.h"               /* "GIPSY graphical user interface" */
+#include "gui.h"               /* own prototypes */
+
+#define New(type) ((type *)calloc(1,sizeof(type)))
+#define NNew(n,type) ((type *)calloc(n,sizeof(type)))
+#define Delete(x)  {free(x); x=NULL;}
+
+typedef struct {
+   char   *key;
+   char   *label;
+   char   *helptext;
+   ident  unit;
+   ident  estimate;
+   bool   status;
+   ident  fit;
+   ident  error;
+} _parameter, *parameter;
+
+static _parameter parameters[NPARS]={
+      {"AMPLITUDE=", "Amplitude",  "Height of 2d-gauss in units of the set", NULL, NULL, FALSE, NULL, NULL},
+      {"MAJOR="    , "FWHM X",     "Full width at half maximum along an axis rotated\n'Angle' degrees wrt. the X-axis", NULL, NULL, FALSE, NULL, NULL},
+      {"MINOR="    , "FWHM Y",     "Perpendicular to FWHM X", NULL, NULL, FALSE, NULL, NULL},
+      {"CENTERX0=" , "Center X0",  "Center X coordinate of 2d-gauss in grids", NULL, NULL, FALSE, NULL, NULL},
+      {"CENTERY0=",  "Center Y0",  "Center Y coordinate of 2d-gauss in grids", NULL, NULL, FALSE, NULL, NULL},
+      {"ANGLE=",     "Angle",      "Angle (degrees) between image X-axis and\nFWHM X axis of 2d-gauss", NULL, NULL, FALSE, NULL, NULL},
+      {"ZEROLEVEL=", "Zero level", "Offset of 2d-gauss in units of the set", NULL, NULL, FALSE, NULL, NULL}
+   };
+
+
+/* ------------------ GUI components: buttons, labels etc.  ----------------- */
+static ident b_quit, b_fit, b_log, b_view, b_erase, b_residue, b_hide,
+             b_example, b_help;
+static ident l_top;
+static ident f_inset;
+static ident f_box;
+static ident l_par, l_est, l_fit, l_err, l_unit;
+static ident l_trule, l_mrule, l_brule;
+static ident b_next, f_subset, b_prev;
+static ident l_text[TEXTLINES];
+static ident l_status[STATUSLINES], l_error, l_gipsy;
+
+static fint  fint1=1, fint2=2;
+
+/* -------------------------------------------------------------------------- */
+/*                                 showdoc                                    */
+/* -------------------------------------------------------------------------- */
+/*  Key handler for SHOWDOC button.
+ */ 
+static void showdoc(ident id, char *key, int mask, void *arg)
+{  
+   static bool on=toflog(FALSE);
+ 
+   (void)userlog_c(&on, &fint1, &fint2, tofchar(key), tofchar(" "));
+   if (tobool(on)) {
+      char filename[128];
+      sprintf(filename, "%s/gaufit2d.dc1", getenv("gip_tsk"));
+      GgiShowDoc(filename);
+   } else {
+      GgiShowDoc(NULL);
+   }
+}  
+
+/* -------------------------------------------------------------------------- */
+/*                                 toggle_fixed                               */
+/* -------------------------------------------------------------------------- */
+/*  Keyword handler for FIXED=. Adjusts button's appearance to reflect
+ *  its state.
+ */
+static void toggle_fixed(ident id, char *key, int code, void *arg)
+{
+   bool result=toflog(FALSE);
+   ident button=(ident)arg;
+   
+   (void)userlog_c(&result, &fint1, &fint2, tofchar(key), tofchar(" "));
+   if (tobool(result)) {
+      GgiSetLabel(button,"Fixed",40);
+      GgiHelpText(button,"Press to free parameter");
+   } else {
+      GgiSetLabel(button,"Free",40);
+      GgiHelpText(button,"Press to fix parameter");
+   }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 toggle_view                                */
+/* -------------------------------------------------------------------------- */
+/*  Keyword handler for VIEW=. Changes Erase button's sensitivity.
+ */
+static void toggle_view(ident id, char *key, int code, void *arg)
+{
+   bool result=toflog(FALSE);
+    
+   (void)userlog_c(&result, &fint1, &fint2, tofchar(key), tofchar(" "));
+   if (tobool(result)) {
+      GgiActivate(b_erase);
+   } else {
+      GgiDeactivate(b_erase);
+   }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 toggle_hidden                              */
+/* -------------------------------------------------------------------------- */
+/*  Keyword handler for UNHIDE=. Pops hidden keyword fields up or down.
+ */
+static void toggle_hidden(ident id, char *key, int code, void *arg)
+{
+   ident button=(ident)arg;
+   bool result=toflog(FALSE);
+   static ident tol, cvt, lab, clip, mxit;
+    
+   (void)userlog_c(&result, &fint1, &fint2, tofchar(key), tofchar(" "));
+   if (tobool(result)) {
+      tol  = GgiSetLabel(GgiTextField("TOL=", "Convergence criterion", 9),
+                         "Tolerance",0);
+      cvt  = GgiSetLabel(GgiButton("GRIDS=", "Force calculations in grids"),
+                         "Grids",0);
+      lab  = GgiSetLabel(GgiTextField("LAB=", "Mixing parameter", 9),
+                         "Lambda", 0);
+      clip = GgiSetLabel(GgiTextField("CLIP=","Minimum allowed value in data",
+                         9),"Clip",0);
+      mxit = GgiSetLabel(GgiTextField("MAXITS=",
+                                      "Max. number of iterations in lsq. fit",
+                         5),"Max. Its.",0);
+      GgiSetPosition(l_top, 0, NULL, 35, NULL); /* make room */
+      GgiSetPosition(tol,   0, NULL,  0, b_quit);
+      GgiSetPosition(lab,   0, tol,   0, b_quit);
+      GgiSetPosition(clip,  0, lab,   0, b_quit);
+      GgiSetPosition(mxit,  0, clip,  0, b_quit);
+      GgiSetPosition(cvt,  40, mxit,  0, b_quit);
+      GgiSetPosition(l_gipsy, -45, b_help, 0, l_brule);
+      GgiHelpText(button, "Hide extra keywords");
+      GgiSetLabel(button, "Hide keywords", 0);
+   } else {
+      GgiDelete(&tol);
+      GgiDelete(&lab);
+      GgiDelete(&clip);
+      GgiDelete(&cvt);
+      GgiDelete(&mxit);
+      GgiSetPosition(l_top, 0, NULL, 20, NULL); /* take room */
+      GgiSetPosition(l_gipsy, -45, b_help, 0, l_error);
+      GgiHelpText(button, "Reveal extra keywords");
+      GgiSetLabel(button, "Extra keywords", 0);
+   }
+}
+
+/* ========================================================================== */
+/*                                 gui_subsets                                */
+/* -------------------------------------------------------------------------- */
+void gui_subsets(bool sensitive)
+{
+   if (sensitive) {
+      GgiActivate(f_subset);
+      GgiActivate(b_prev);
+      GgiActivate(b_next);
+      GgiSetLabel(f_subset,"Subset",50);
+   } else {
+      GgiDeactivate(f_subset);
+      GgiDeactivate(b_prev);
+      GgiDeactivate(b_next);
+      GgiSetLabel(f_subset," ",50);
+   }
+}
+
+/* ========================================================================== */
+/*                                 gui_units                                  */
+/* -------------------------------------------------------------------------- */
+/*  Interface routine to display the parameter units.
+ *  If the first argument is specified as a NULL pointer, the units
+ *  column is cleared. 
+ */
+void gui_units(char *units[])
+{
+   int i;
+
+   if (units) {
+      for (i=0; i<NPARS; i++) GgiSetLabel(parameters[i].unit, units[i], 0);
+   } else {
+      for (i=0; i<NPARS; i++) GgiSetLabel(parameters[i].unit,  "",      0);
+   }
+}
+
+/* ========================================================================== */
+/*                                 gui_results                                */
+/* -------------------------------------------------------------------------- */
+/*  Interface routine to display the fit result.
+ *  The first argument is an array containing the fit, the second is an
+ *  array containing the errors.
+ *  If the first argument is specified as a NULL pointer, the fit and
+ *  error columns are cleared.
+ */
+void gui_results(double fit[], double errors[])
+{
+   int i;
+   char label[80];
+   parameter current;
+
+   if (!fit) {
+      /* clear output fields */
+      for (i=0; i<NPARS; i++) {
+         current = parameters+i;
+         GgiSetLabel(current->fit, " ", 100);    
+         GgiSetLabel(current->error, " ", 100);
+      }
+      GgiDeactivate(b_log);
+   } else {
+      /* display results */
+      for (i=0; i<NPARS; i++) {
+         current = parameters+i;
+         sprintf(label, "%12f", fit[i]);
+         GgiSetLabel(current->fit, label, 100);
+         sprintf(label, tobool(dblank_c(&errors[i]))?"":"%12f", errors[i]);
+         GgiSetLabel(current->error, label, 100);
+      }
+      GgiActivate(b_log);
+   }
+}
+
+/* ========================================================================== */
+/*                                 gui_textline                               */
+/* -------------------------------------------------------------------------- */
+/*  Interface routine to display a text line.
+ */
+void gui_textline(char *text, int lineno)
+{
+    if (lineno>=0 && lineno<TEXTLINES) GgiSetLabel(l_text[lineno], text, 0);
+}
+
+/* ========================================================================== */
+/*                                 gui_status                                 */
+/* -------------------------------------------------------------------------- */
+/*  Interface routine to display a status message.
+ */
+void gui_status(char *message, int lineno)
+{
+   char buffer[512];
+    
+   sprintf(buffer,(lineno%STATUSLINES)?"            %s":"Status: %s",message);
+   GgiSetLabel(l_status[lineno%STATUSLINES], buffer, 0);
+}
+
+/* ========================================================================== */
+/*                                 gui_error                                  */
+/* -------------------------------------------------------------------------- */
+/*  Interface routine to display an error message.
+ */
+void gui_error(char *message)
+{
+   char buffer[512];
+    
+   if (*message) {
+      sprintf(buffer,"Error: %s",message);
+      GgiSetLabel(l_error, buffer, 0);
+   } else {
+      GgiSetLabel(l_error, " ", 0);
+   }
+}
+
+/* ========================================================================== */
+/*                                 gui_residue                                */
+/* -------------------------------------------------------------------------- */
+/*  gui_residue() sets residue sensitive or insensitive.
+ */
+void gui_residue(bool state)
+{
+   if (state) GgiActivate(b_residue); else GgiDeactivate(b_residue);
+}
+
+
+/* ========================================================================== */
+/*                                 trigger_key                                */
+/* -------------------------------------------------------------------------- */
+/*  trigger_key() checks whether a keyword exists and if this is true,
+ *  it re-sends it to Hermes, in this way causing a KEYCHANGE event.
+ */
+void trigger_key(char *key)
+{
+   fchar value;
+   char  value_c[512];
+   char  buffer[532];
+   fint  nread;
+    
+   value.l = 512; value.a = value_c;
+   nread = usertext_c(value, &fint2, tofchar(key), tofchar(" "));
+   if (nread && (nread<512)) {
+      value_c[nread] = '\0';
+      strcpy(buffer, key);
+      strcat(buffer, value_c);
+      wkey_c(tofchar(buffer));
+   }
+}
+
+/* ========================================================================== */
+/*                                 gui                                        */
+/* -------------------------------------------------------------------------- */
+/*  Interface routine to initialize the graphical user interface.
+ */
+void gui(void)
+{
+static char *my_resources[] = {
+   "*helptext.background: yellow",
+   "*errortext.background: red",
+   "*errortext.foreground: white",
+   "*helptext.font: *helvetica*bold-r*20*",
+   "*MenuButton.background: cyan",
+   "*SmeBSB.font: *helvetica*bold-r*20*",
+   "*Toggle.background: lightgray",
+   "*Box.background: lightgray",
+   "*Form.background: lightgray",
+   "*Label.background: lightgray",
+   "*Text.background: wheat1",
+   "*AsciiSink.font: *courier*bold-r*12*",
+   "*AsciiSink.background: wheat1",
+   "*TextField.background: wheat1",
+   "*Scrollbar.shown: 1.0",
+   "*gauge.foreground: wheat1",
+   "*gauge.background: blue",
+   "*Toggle.font: *helvetica*bold-r*20*",
+   "*MenuButton.font: *helvetica*bold-r*20*",
+   "*Label.font: *helvetica*bold-r*20*",
+   "*error.foreground: red",
+   "*error.font: *helvetica*bold-r*14*",
+   "*fit.font: *courier*bold-r*12*",
+   "*fiterror.font: *courier*bold-r*12*",
+   "*logo.foreground: gray",
+   "*logotext.background: yellow",
+   "*text0.font: *courier*bold-r*12*",
+   "*text1.font: *courier*bold-r*12*",
+   "*text2.font: *courier*bold-r*12*",
+   "*text3.font: *courier*bold-r*12*",
+   NULL
+};
+
+   ident estimate, reset, status, fit, fiterror, unit;
+   
+   ident top;
+   int   i;
+   
+  
+   wkey_c(tofchar("HELP="));        /* Document window initially not shown */
+   wkey_c(tofchar("UNHIDE="));      /* Initially hide keywords */
+
+   GgiAutoLayout(FALSE);
+   GgiPostponeRealize(TRUE);
+   GgiSetResources(my_resources);
+
+   b_quit = GgiSetLabel(GgiButton("QUIT=", "Terminate program"), "Quit", 0);
+   b_fit = GgiSetLabel(GgiButton("FIT=", NULL), "Make fit", 0);
+   l_gipsy = GgiLogo(NULL, 0, 0);
+   b_log  = GgiSetLabel(GgiButton("LOG=", "Write results to log file"),
+                        "Log", 0);
+   GgiDeactivate(b_log);
+   b_view = GgiSetLabel(GgiButton("VIEW=", "Display set and fit"), "View", 0);
+   (void)ScheduleKeyevent(toggle_view, "VIEW=", KEYCHANGE, NULL);
+   b_erase = GgiSetLabel(GgiButton("ERASE=", "Erase plot"), "Erase", 0);
+   GgiDeactivate(b_erase);
+   b_residue = GgiSetLabel(GgiButton("RESIDUE=", "Display residue"),
+                          "Residue", 0);
+   GgiDeactivate(b_residue);
+   b_hide = GgiSetLabel(GgiButton("UNHIDE=", "Reveal extra keywords"),
+                        "Extra keywords", 0);
+   (void)ScheduleKeyevent(toggle_hidden, "UNHIDE=", KEYCHANGE, b_hide);
+   b_example = GgiSetLabel(GgiButton("EXAMPLE=", "Run example"), "Example", 0);
+   b_help = GgiSetLabel(GgiButton("HELP=", "Show document"), "Help", 0);
+   l_top  = GgiLabel(" ");
+   GgiSetPosition(b_quit,    0, NULL,   0, NULL);
+   GgiSetPosition(b_fit,    20, b_quit, 0, f_inset);
+   GgiSetPosition(b_log,    20, b_fit,  0, NULL);
+   GgiSetPosition(b_view,   20, b_log,  0, NULL);
+   GgiSetPosition(b_erase,   0, b_view, 0, NULL);
+   GgiSetPosition(b_residue, 0, b_erase,0, NULL);
+   GgiSetPosition(b_hide,   20, b_residue, 0, NULL);
+   GgiSetPosition(b_example,20, b_hide, 0, NULL);
+   GgiSetPosition(b_help,    0, b_example, 0, NULL);
+   GgiSetPosition(l_top,     0, NULL,  20, NULL);
+
+   f_inset = GgiSetLabel(GgiTextField("INSET=", "Input set and subset(s)", 30),
+                        "Set", 50);
+   f_subset = GgiSetLabel(GgiTextField("SUBSET=","Current subset",30),
+                          "Subset",50);
+   b_prev = GgiSetLabel(GgiButton("PREV=", "Previous subset"), "<", 0);
+   b_next = GgiSetLabel(GgiButton("NEXT=", "Next subset"), ">", 0);
+   f_box = GgiSetLabel(GgiTextField("BOX=", "Frame for input subset(s)", 30),
+                       "Box", 50);
+   GgiSetPosition(f_inset, 0, NULL,    0, l_top);
+   GgiSetPosition(f_subset,0, f_inset, 0, l_top);
+   GgiSetPosition(b_prev,  0, f_subset,0, l_top);
+   GgiSetPosition(b_next,  0, b_prev,  0, l_top);
+   GgiSetPosition(f_box, 0, NULL, 0, f_inset);
+
+#if 0
+   f_outfile = GgiSetLabel(GgiTextField("FILENAME=",
+                           "ASCII file receiving fit results", 50),
+                           "Outfile", 50);
+   b_save = GgiSetLabel(GgiButton("SAVE=", NULL), "Save fit", 0);
+   GgiSetPosition(f_outfile, 0, NULL,      0, f_box);
+   GgiSetPosition(b_save,    0, f_outfile, 0, f_box);
+#endif
+
+   l_par  = GgiLabel("Parameters");
+   l_est  = GgiLabel("Estimates");
+   l_trule = GgiLabel("____________________________________________________________________________________");
+   GgiSetPosition(l_par,  0, NULL, 15, f_box);
+   GgiSetPosition(l_est,  LABSIZE, NULL, 15, f_box);
+   GgiSetPosition(l_trule, 0, NULL, -5, l_par);
+
+   top = l_trule;
+   for (i=0; i<NPARS; i++) {
+      parameter current=parameters+i;
+      char      key[21];
+       
+      estimate = GgiAlignLabel(
+                    GgiSetLabel(
+                       GgiTextField(current->key, current->helptext, 15),
+                       current->label, LABSIZE),
+                    ggiLeft
+                 );
+      strcpy(key,"R_"), strcat(key,current->key);
+      reset    = GgiSetLabel(GgiButton(key, "Restore calculated estimate"),
+                             "Reset", 0);
+      strcpy(key,"F_"), strcat(key,current->key);
+      status   = GgiSetLabel(GgiButton(key, NULL),"Free   ", 0);
+      (void)ScheduleKeyevent(toggle_fixed, key, KEYCHANGE, status);
+      toggle_fixed(NULL, key, KEYCHANGE, status);
+      fit   = GgiSetLabel(GgiLabel("fit"), " ", NUMSIZE);
+      fiterror = GgiSetLabel(GgiLabel("fiterror"), " ", NUMSIZE);
+      unit     = GgiLabel(" ");
+                            
+      GgiSetPosition(estimate,  0, NULL,     0, top);
+      GgiSetPosition(reset,     0, estimate, 0, top);
+      GgiSetPosition(status,   10, reset,    0, top);
+      GgiSetPosition(fit,       0, status,   0, top);
+      GgiSetPosition(fiterror,  0, fit,      0, top);
+      GgiSetPosition(unit,      0, fiterror, 0, top);
+      current->estimate = estimate;
+      current->fit = fit;
+      current->error = fiterror;
+      current->unit = unit;
+      top = estimate;
+   }
+   l_fit  = GgiLabel("Fit");
+   l_err  = GgiLabel("Errors +/-");
+   l_unit = GgiLabel("Units");
+   l_mrule = GgiLabel("____________________________________________________________________________________");
+   GgiSetPosition(l_fit, 50, status,   15, f_box);
+   GgiSetPosition(l_err, 30, fit,      15, f_box);
+   GgiSetPosition(l_unit, 0, fiterror, 15, f_box);
+   GgiSetPosition(l_mrule, 0, NULL, 0, top);
+   top = l_mrule; 
+   for (i=0; i<TEXTLINES; i++) {
+      char labid[10];
+      sprintf(labid,"text%d",i);
+      l_text[i] = GgiSetLabel(GgiLabel(labid), " ", 0);
+      GgiSetPosition(l_text[i], 0, NULL, i?0:15, top);
+      top = l_text[i];
+   }
+   l_brule = GgiLabel("____________________________________________________________________________________");
+   l_error  = GgiSetLabel(GgiLabel("error"), " ", 0);
+   GgiSetPosition(l_brule,   0, NULL, 0, top);
+   GgiSetPosition(l_error,   0, NULL, 0, l_brule);
+   GgiSetPosition(l_gipsy, -45, b_help, 0, l_error);
+   top = l_error;
+   for (i=0; i<STATUSLINES; i++) {
+      l_status[i] = GgiLabel(" ");
+      GgiSetPosition(l_status[i], 0, NULL, i?0:0, top);
+      top = l_status[i];
+   }
+   gui_status(" ", 0);
+   GgiSetPosition(GgiLabel(" "), 0, NULL, 0, top);
+   GgiRealize();
+   trigger_key("UNHIDE=");
+   (void)ScheduleKeyevent(showdoc, "HELP=", KEYCHANGE, status);
+   gui_subsets(FALSE);
+   status_c(tofchar("Fit 2D Gauss to data in box"));
+}
+
+#if defined(TESTBED)
+#include "init.h"
+#include "finis.h"
+#include "cmain.h"
+
+static void setunits(ident id, void *arg)
+{
+   char *units[]={"W.U.","arcsec","arcsec","grids","grids","degrees","W.U."};
+   gui_units(units);
+   Deschedule(&id);
+}
+
+static void setresults(ident id, void *arg)
+{
+   int i;
+   
+   static double fit[]={1.0,2.0,3.0,4.0,5.0,6.0,7.0};
+   static double err[]={0.1,0.2,0.3,0.4,0.5,0.6,0.7};
+   gui_results(fit,err);
+   for (i=0; i<7; i++) {
+      if (!tobool(dblank_c(&err[i]))) {
+         fit[i] += 3*err[i];
+         err[i] *= 1.005;
+         if (err[i]>1.0) setdblank_c(&err[i]);
+      }
+   }
+}
+
+static void settext(ident id, void *arg)
+{
+   static int mesno=0;
+   char message[80];
+    
+   sprintf(message,"Text line %d", mesno);
+   gui_textline(message,mesno%TEXTLINES);
+   mesno++;
+}
+
+static void setmessage(ident id, void *arg)
+{
+   static int mesno=0;
+   char message[80];
+   
+   sprintf(message,"Status message %d (%o Oct, %X Hex)", mesno, mesno, mesno);
+   gui_status(message,mesno);
+   mesno++;
+}
+
+static void seterror(ident id, void *arg)
+{
+   static int mesno=1;
+   char message[80];
+   
+   sprintf(message,"Error message %d (%o Oct, %X Hex)", mesno, mesno, mesno);
+   mesno++;
+   if (mesno%2) gui_error(message); else gui_error("");
+   gui_subsets(mesno%2);
+}
+
+static void quit(ident id, char *key, int code, void *arg)
+{
+   wkey_c(tofchar(key));
+   finis_c();
+}
+
+static void fit(ident id, char *key, int code, void *arg)
+{
+   bool pressed=toflog(FALSE);
+   (void)userlog_c(&pressed, &fint1, &fint2, tofchar(key), tofchar(" "));
+   if (tobool(pressed)) {
+      sleep(3);
+      wkey_c(tofchar(key));
+   }
+}
+
+static void residu(ident id, void *arg)
+{
+   static bool active=FALSE;
+    
+   active = !active;
+   gui_residue(active);
+}
+
+MAIN_PROGRAM_ENTRY
+{
+   init_c();
+   gui();
+   (void)ScheduleKeyevent(quit, "QUIT=", KEYCHANGE, NULL);
+   (void)ScheduleKeyevent(fit,  "FIT=",  KEYCHANGE, NULL);
+   (void)ScheduleTimer(setunits,   5 SECONDS, NULL);
+   (void)ScheduleTimer(setresults, 7 SECONDS, NULL);
+   (void)ScheduleTimer(setmessage, 3 SECONDS, NULL);
+   (void)ScheduleTimer(seterror,   4 SECONDS, NULL);
+   (void)ScheduleTimer(settext,    1 SECOND,  NULL);
+   (void)ScheduleTimer(residu,    11 SECONDS, NULL);
+   MainLoop();
+}
+#endif
+#<
+
+#>            gaufit2d.dc1
+
+Program:       gaufit2d
+
+Purpose:       Find position or major-, minor axis and position angle of 
+               sources by fitting 2 dim. gauss function parameters to 
+               data in a box..
+
+Category:      MODELS, FITTING
+
+File:          gaufit2d.c
+
+Author:        M.G.R. Vogelaar (GUI: J.P. Terlouw)
+
+Description:   CONTENTS:
+      
+               -PURPOSE         
+               -GRAPHICAL USER INTERFACE
+               -DESCRIPTION OF THE MODEL
+               -FIT PROCEDURE
+               -WARNING GRID CONVERSIONS
+               -LIST OF KEYWORDS/BUTTONS AND INPUT FIELDS
+               -APPENDIX I
+               -EXAMPLE OF OUTPUT IN LOG FILE
+
+
+               PURPOSE:
+
+               Program GAUFIT2d is a tool for finding the exact position of 
+               the maximum in a source or to find major & minor axes and 
+               position angle of a source by fitting a two dimensional gauss 
+               function to the data. Also the volume under the 2d-gauss is
+               returned in units of the amplitude (see appendix 2).
+               Output is a list of fitted parameters on screen or in the
+               GIPSY Log file. The program works either in a coordinate system
+               of grids or in a system of seconds of arc.
+               If you press the <EXAMPLE> button, an example run is shown.
+
+
+
+               GRAPHICAL USER INTERFACE:
+               
+               The graphical interface is closely related to Hermes, i.e.
+               you are still able to run the program from within Hermes
+               and specify keywords on the command line. The GUI is a
+               nicer way to present keywords and an easier way to enter 
+               values for these keywords. Keyword values entered on the 
+               command line will have an effect on the status of the GUI
+               immediately. As an example start the program with something 
+               like this:
+               
+               gaufit2d inset=test f 0 box=-192 337 -182 346
+               
+               Then the GUI starts with filled input fields for SET and BOX.
+               Note that for input fields the same input rules apply as for 
+               keywords in Hermes 
+              
+             
+
+               DESCRIPTION OF THE MODEL:
+
+               The function that this program uses to find model parameters
+               is:
+
+               F(x,y) = A * EXP[ -4*Ln(2)*( (xr/HW1)^2+(yr/HW2)^2 ) + Z0
+
+               where: xr =  -x1 * sin(phi) - y1 * cos(phi)
+                      yr =   x1 * cos(phi) - y1 * sin(phi)
+
+               and:   x1 = x - x0
+                      y1 = y - y0
+
+
+               The parameters are fitted either in a grid system
+               or an system in which both axis units are arcsec.
+               The parameters are:
+             
+               
+               A,   amplitude in units of the image data.
+               x0,  center in X in grids.
+               y0,  center in Y in grids.
+               HW1, first Full Width at Half Maximum in arcsec or grids
+               HW1, second Full Width at Half Maximum in arcsec or grids
+               phi, angle between X axis and first axis of ellipse,
+                    angle always between -45 to 45 degrees.
+                    Note that angles in the grid system can differ from
+                    angles in the arcsec system if the length of a
+                    grid in X is unequal to the length in Y.
+               Z0   Offset of the data (zero level) in units of the image 
+                    data. 
+                  
+              
+               FIT PROCEDURE:
+               
+               The method used to fit these parameters is a least squares
+               method. This method needs initial estimates. The fit can be
+               very sensitive to these estimates, therefore you are able
+               to overrule the default estimates set by the program and
+               you are also able to fix one or more initial estimates to
+               decrease the degrees of freedom and to improve the results.
+               Estimates are calculated with first and second moments of
+               the data. The parameters of a 2-dim gauss function can be
+               expressed in these moments. For the calculations of
+               initial estimates, a cutoff value is introduced. This
+               value includes only data if the image value of a pixel
+               is more than 5% of the maximum value in a given box.
+               This maximum is in fact the average of the four pixels
+               with the highest value.
+
+               The least squares fit stops when successive iterations fail
+               to produce a decrement in reduced chi-squared less than
+               a certain value called the relative tolerance. Maximum
+               accuracy can be obtained by setting this value to 0 which
+               is the default in this program. If a fit needs more iterations
+               than the maximum number, you can set the tolerance to e.g.
+               0.05 (or increase the maximum number of iterations).
+
+               GAUFIT2D can do its calculations in either a (square)
+               grid system or a sky system where both units are seconds 
+               of arc (from now on called the arcsec system). 
+               
+               In the arcsec system a position is calculated by multi-
+               plying the grid position with the grid spacing (which
+               can be different in the x- and y direction) and both
+               estimates- and fit routines do their calculations
+               in the arcsec system. If the header information from a
+               set allows grids converted to arcsec then the calculations
+               are default in the arcsec system. This can be overruled 
+               by pressing the <GRIDS> button (appears in: EXTRA KEYWORDS).
+
+
+               WARNING GRID CONVERSIONS:
+               
+               The fit results (an ellipse with major, minor axis and 
+               position angle) are plotted if the <VIEW> button is on.
+               The image data is always displayed in grids and therefore
+               the fit is also in grids. This can result
+               in confusing results because if the grid spacings in
+               both x and y are not equal, the position angle is 
+               different in the arcsec and grid system.
+               
+
+
+               LIST OF KEYWORDS/BUTTONS AND INPUT FIELDS:
+
+Keywords:      Each keyword corresponds to a button or input field!
+
+
+   EXAMPLE=    (Button: <EXAMPLE>) 
+               Run an example. It creates a simple set called 
+               "GAUFIT2Dexampleset". It fits parameters and shows the result 
+               in GIDS.
+
+
+   INSET=      (Input field: SET) 
+               Input set and optionally  subsets. The subset must be 
+               two dimensional.
+               Model parameters are converted to arcsec if the input is a
+               spatial map, i.e. the first axis is a spatial longitude axis
+               and the second is a spatial latitude axis. If you want the
+               results in grids in any case use the <Grids> button under
+               'Extra keywords'.
+               Maximum number of subsets is 1024. You can change the current
+               subset level by pressing one of the '<' or '>' buttons or
+               specify a new level in the 'subset' input field.
+               Examples: INSET=AURORA FREQ 10:20
+                         INSET=AURORA FREQ
+                         INSET=AURORA FREQ 8 10 15:18
+
+
+   BOX=        (Input field: BOX) 
+               Enter the limits in grid coordinates of
+               the box from which you want to extract data for the fit.
+               Examples: BOX=-20 -10 20 10
+                         BOX=0 0 D 10 10       center at 0,0 size: 10x10
+
+
+   SUBSET=     (Input field: SUBSET) 
+               NOTE: This field can only be used AFTER you specified 
+               subsets in the SET input field. Then you can change
+               the value in this field to force reading data from another
+               subset. Subsets can also be changed with the ">" and "<"
+               buttons to the right of the input field.
+
+
+   AMPLITUDE=  (Input field: AMPLITUDE) 
+               Estimate for the value of the central value in least 
+               squares fit. Units are the same as the units of your data.
+
+               This parameter can be adjusted to be a better estimate
+               in your opinion or can be fixed with the <FREE>/<FIXED> 
+               button. A fixed value will always re-appear in the column 
+               with fitted parameters.
+
+
+   MAJOR=      (Input field: FWHM X) 
+               Estimate for the value of the major axis in grids or in 
+               arcsec. The value is in arcsec if a conversion from 
+               grids to arcsec is possible and the <GRIDS> button is 
+               off. Otherwise the input must be in grids.
+
+               
+   MINOR=      (Input field: FWHM Y) 
+               Estimate for the value of the minor axis in grids or 
+               in arcsec.
+
+
+   CENTERX0=   (Input field: CENTER X0) 
+               Estimate in grids for the X-position of the maximum of 
+               the source.
+
+
+   CENTERY0=   (Input field: CENTER Y0) 
+               Estimate in grids for the Y-position of the maximum of the 
+               source.
+
+
+   ANGLE=      (Input field: ANGLE) 
+               Call the axes of an unrotated frame the X and Y axis,
+               and the main axes of a rotated ellipse X' and Y'. Then
+               ANGLE= is an estimate for the smallest angle (positive 
+               or negative) between the X and X' (or Y and Y') axis.
+               The range is always from -45 deg to 45 deg.
+
+               For the arcsec system this angle is converted to a
+               real position angle, i.e. an angle between the major
+               axis and the direction of the North.
+              
+
+   ZEROLEVEL=  (Input field: ZERO LEVEL) 
+               Estimate for the offset of the
+               two dimensional gauss. In some cases (e.g. antenna patterns)
+               this parameter can be set to zero and fixed.
+
+               All these parameter keywords also have prefixes F_ for the
+               corresponding fixed/free toggle used in the lsq.fit and
+               R_ to restore the previously calculated moments estimate.
+               
+
+   QUIT=       (Button: <QUIT>) 
+               Terminate program.
+
+
+   FIT=        (Button: <MAKE FIT>) 
+               Start a least squares fit using the estimates 
+               that were defined before pressing this button.
+
+
+   NEXT=       (Button: >) 
+               Go to the next subset in the sequence.
+               Works only if more than one subset was entered.
+
+
+   PREV=       (Button: <) 
+               Go to the previous subset in the sequence.
+
+
+   LOG=        (Button: <LOG>) 
+               Send all fit information to the Hermes Log and
+               Screen file.  The button is only active if there is
+               a fit result.
+
+
+
+               Some buttons/input fields appear when you press the
+               <EXTRA KEYWORDS> button:
+
+   TOL=        (Input field: <TOLERANCE>) 
+               Fractional tolerance for the chi square (chi2) default 
+               set to 0.0.
+               Fitting is stopped when successive iterations fail
+               to produce a decrement in reduced chi-squared less
+               than TOL=   The value cannot be less than a
+               certain minimum as set by the system. This means that
+               maximum accuracy can be obtained with TOL=0.0
+
+   LAB=        (Input field: <LAMBDA>) 
+               Value for mixing parameter default set to
+               0.001. Mixing parameter in the least squares fit function.
+               LAB= determines the initial weight of steepest descent
+               method relative to the Taylor method. LAB= should be
+               a small value (e.g. 0.001).
+
+
+   CLIP=       (Input field: CLIP) 
+               Value below which data is excluded in
+               the least squares fit. Default the clip is not set, meaning
+               that all data contributes to the fit. If you image data is
+               very noisy then a better fit could be made if you set a
+               clip near the value of the zero level that you expect.
+
+
+   MAXITS=     (Input field: MAXITS) 
+               Maximum number of iterations allowed in the least squares 
+               fit routine. The default is 100.
+
+
+   GRIDS=      (Button: <GRIDS>)
+               If On: All calculations are in grids.
+               If off: If header information allows conversion from
+               grids to arcsec, then calculations are in arcsec. 
+
+
+               Display:
+               
+   VIEW=       (Button: <VIEW>) 
+               If necessary start GIDS. Display current
+               subset and ellipse representing the major,minor axis
+               with position angle.
+
+               
+   ERASE=      (Button: <ERASE>)              
+               Erase current plotted ellipse in GIDS and restore image.
+
+
+   RESIDUE=    (Button: <RESIDUE>) 
+               Calculate difference between data and
+               model and display the result in GIDS. The button is only
+               active if a set is viewed and a fit is made.
+               The residue is stored in a set on disk. The name of the
+               set is "XXXXresidualXXXX". The set is removed after the
+               program has finished. Note that the program only
+               shows the residual in the current box.
+
+
+
+Notes:         APPENDIX 1:  
+
+               A note about chi2. The quantity chi-squared is defined as:
+
+                       chi2 = Sum[ (Y_i-Ymodel_i)^2/sigma_i^2 ]
+
+               and the reduced chi-squared is:
+
+                           reduced-chi2 = chi2 / (N-n-1)
+
+               where N is the number of data pints in the fit and n the
+               number of parameters.
+               However, the values of sigma_i (sigma per pixel) is not
+               known and set to 1. Then the reduced chi2 is equal to
+               the variance of the fit (Bevington, Data Reduction and
+               Error Analysis for the Physical Sciences, p 188) and
+               chi2 is not a measure of the goodness of fit anymore.
+               So we prefer to list only the variance of the fit.
+               If you assume the fit is a good approximation of the model
+               then reduced-chi2 ~ 1 and because
+
+                     reduced-chi2 = variance / sigma_av
+
+               you have an approximate value for sigma_av, the
+               weighted average of the individual variances.
+
+
+               APPENDIX 2:
+
+               F(x,y) = A * EXP[ -4*Ln(2)*( (xr/HW1)^2+(yr/HW2)^2 ) + Z0
+
+               The volume V under a 2d-gauss limited by the offset ZO
+               is given by: V = 2.A.HW1.HW2.PI.Erf(Inf).Erf(Inf)/Ln(256)
+                              = 1.13309.A.HW1.HW2
+               
+               This volume is expressed in units of the amplitude, therefore
+               it will be the same number while working in grids or 
+               physical coordinates.
+               
+
+Example:       EXAMPLE OF OUTPUT IN LOG FILE:
+
+===================================== GAUFIT2D ================================
+Date of fit        : 03-Mar-1998 (17:06:38)
+Name of set        : [test]
+Fit box            : [-192 337 -182 346]
+Iterations         : 8
+Variance of fit    : 0.192932
+Points in box      : 110
+# excluded by clip : 0 
+Number of blanks   : 0
+Volume under gauss : 568.882 in units of the amplitude
+Coordinate system  : Arcsec
+Size of 1 grid     : 4.32 x 5.38978 arcsec
+
+Center X:  -187.34 (grids) =  179.1631786 (DEGREE) = 11h56m 39.1s
+Center Y:   341.41 (grids) =   54.1635537 (DEGREE) = 54d 9m48.79s
+Major axis: 19.54'', Minor axis: 15.66'', Position angle: 155.3 (deg)
+===============================================================================
+
+Updates:       Feb 26, 1998: VOG, Document created.
+               Jul 13, 2005: VOG, Repaired bug in QUIT= keyword handler
+                                  (avoid use of freefmatrix with null pointer)
+               Apr 14, 2009: VOG, Removed unused macro for NINT()
+               Apr 17, 2010: VOG, Extra fit information in LOG
+#<

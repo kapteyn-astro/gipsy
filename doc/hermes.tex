@@ -1,0 +1,1289 @@
+\documentstyle[12pt]{report}
+\def\H{{Hermes}}
+\def\tH{{tHermes}}
+\def\xH{{xHermes}}
+\def\nH{{nHermes}}
+\def\G{{\sc gipsy}}
+\def\COA{{\sc coa}}
+\def\UCA{{\sc uca}}
+\def\TSA{{\sc tsa}}
+\parskip=3mm
+\parindent=0mm
+\makeindex
+\evensidemargin=0cm
+\oddsidemargin=0cm
+\textwidth=16cm
+\textheight=21cm
+\begin{document}
+%\pagestyle{heading}
+\thispagestyle{empty}
+\begin{titlepage}
+\null
+\begin{center}
+{\bf\huge Hermes User's Guide\\}
+\vskip 2.0 truecm
+{\large by J.~P.~Terlouw\\}
+\vskip 1.0 truecm
+Version of\\
+April $10^{\rm th}$, 2006
+\end{center}
+%\vskip 10.0truecm
+\vfill
+\begin{quote}
+\it
+\hspace{3mm}``Hermes was de god, die de wegen en het verkeer daarlangs be\-scherm\-de.
+Hij was dan ook de god van de reizigers en de handel, zelfs van de dieven, die
+immers ook hun geluk langs de wegen zoeken.
+Hij was de bode der goden, toegerust met vleugelschoenen en
+heraut\-staf, die op
+bevel van Zeus boodschappen overbracht en mensen veilig naar hun doel voerde;
+ook geleidde hij de doden naar de onder\-wereld.''
+\begin{flushright}
+\rm
+Uit: Ernst Hoffmann:\\
+``Goden- en Heldensagen''\\
+bewerkt door Dr.~J.~H.~Croon\\
+\end{flushright}
+\end{quote}
+\vfill
+This guide describes the user interface of the
+Groningen Image Processing SYstem (\hbox{\G}).
+It is meant as both an introduction for new users and
+a reference document for more experienced users.
+
+\end{titlepage}
+\thispagestyle{empty}\strut\newpage
+\thispagestyle{empty}
+\pagenumbering{roman}
+\tableofcontents
+\newpage
+\pagenumbering{arabic}
+\chapter{Introduction}
+\section*{What is \H}
+\H\ is the user interface of \G.
+It enables users to do multi-tasking in an organised fashion.
+Users have direct control over the application programs ({\em tasks\/}) they run:
+a running task can be suspended or aborted with a simple command; various
+settings can be changed while a task is running.
+
+Parameters for a task can be specified at any time; if a task needs information
+that has not been specified yet, the user is prompted.
+
+Context-sensitive help about tasks is provided at a single keystroke.
+
+Tasks keep the user informed in two ways: they write in a log file
+in which the user can page and search and they can provide a one-line status
+message, which can be frequently updated.
+
+Two versions of \H\ exist:
+\begin{itemize}
+\item \tH, which runs on standard character display terminals.
+This version is used for interactive work.
+\item \nH, a non-interactive version intended for batch work.
+\end{itemize}
+Normally \H\ is not started directly by the user, but rather by a shell script
+which prepares a number of settings before starting \H. Refer to the
+\G\ users guide.
+\section*{Conventions in this document}
+
+Text that appears literally on the terminal or workstation  screen such as
+names of programs and commands is presented in {\tt typewriter} font.
+Text which designates variable information is presented in $italic$ font.
+
+\begin{quote}
+\small Text, presented like this (smaller type and indented margins), contains
+detailed information and may be skipped at first reading.
+\end{quote}
+\chapter{Tasks}
+
+\section{Introduction}
+Tasks in \G\ are the application programs which do useful work for the user.
+They consist of one or more processes (usually one) which communicate with
+the user through a formalized collection of interface routines.
+Because of the use of these interface routines, tasks can be run from any
+version of \H.
+
+\begin{quote}
+\small Though tasks can be run from all versions of \H, not all tasks
+can be run {\em successfully} from all versions because a version of \H\ might
+not implement all interface functions.
+For instance the {\tt EDITFILE} function is not
+implemented by \nH.
+
+{\tt COLA}-scripts can be started as tasks. For information
+about the use of {\tt COLA} refer to the document {\tt cola.dc1}.
+\end{quote}
+
+\section{User input}
+\subsection*{Introduction}
+Parameters for a task are passed to it via keywords.
+A keyword is a character string followed by an equal sign, e.g.\ {\tt INSET=}.
+Keyword names are case-insensitive, i.e.\ uppercase and lowercase letters
+have the same meaning.
+Parameters for a task can be specified in the command that starts the task and
+thereafter at any moment while the task is active.
+A task requiring input from the user causes \H\ to find out whether it has
+already been specified and if not, prompt the user.
+Before a parameter value is passed to a task, \H\ first checks whether it
+meets the task's request and if not, \H\ rejects that value and prompts again.
+
+As the execution of the task
+proceeds, \H\ builds up a table of the task's keywords and associated
+values.
+At task termination this table is saved in order to allow the user to
+run the task again with (partly) the same parameters.
+
+Three classes of keywords are recognized:
+\begin{enumerate}
+\item
+{\em Forced\/}, which are keywords for which no task default is allowed.
+The user must respond to the prompt with a correct value.
+\item
+{\em Defaulted\/},
+which are keywords which have a default value defined by the
+task. If the keyword has not already been specified then the user
+will be prompted.
+If on this occasion the user types only a {\tt RETURN}, this
+signifies that the task default is acceptable and should be used. Any
+other input will override the default.
+\item
+{\em Hidden\/},
+which are keywords for which the user is not prompted and
+which have a default value defined by the task.
+They can be specified by unprompted input by the user.
+The documentation of a task must be read to find out if it uses
+hidden keywords.
+\begin{quote}
+\small The user can set a parameter in the task context to change requests
+for hidden keywords into requests for defaulted keywords. (``Unhide'' hidden
+keywords.)
+
+Hidden keywords are sometimes used to control looping in a task.
+Each cycle round the loop, the task requests the value of a hidden keyword.
+If it has not been specified, the task takes the default and looping continues.
+If the user defines the keyword then that value is sent to the task which
+could cause the task to terminate the loop.
+\end{quote}
+\end{enumerate}
+
+\subsection*{Parameter syntax}
+Basically \H\ is capable of providing tasks with the following types of
+parameters:
+integer numbers, real numbers, double precision reals, logicals and
+character strings.
+Tasks may however request input in the form of character strings and perform
+their own decoding to obtain numerical information.
+One parameter value can contain one or more elements.
+
+\subsubsection*{Character input}
+Depending on what the task specifies, character input can be given in two ways:
+as {\em text\/} or as an {\em array\/}. When text is requested, all characters
+belonging to the keyword, including blanks and comma's, are treated as a single
+element.
+In the case of an array, the elements must be separated by blanks or comma's.
+If the input should contain special characters like (leading) blanks or
+equals signs, it can be quoted using back-quotes ({\tt `}).
+
+Normally character input is case-sensitive,
+i.e.\ uppercase and lowercase letters have different meanings,
+but individual tasks can deviate
+from this or convert to either uppercase or lowercase.
+
+\subsubsection*{Number input}
+Floating point or integer numbers can be typed as numbers and/or
+expressions (see also section ``Number input -- operators,
+constants and functions'').
+They must be separated by blanks or comma's.
+
+Lists of numbers can be specified using the
+`$start${\tt :}$end${\tt :}$increment$'
+notation, where the `{\tt :}$increment$' part is optional and defaults to one.
+A list of {\it n} identical values can be specified as
+`{\it value\/}{\tt ::}{\it n}.'
+A list can also be used as an operand in an expression.
+In this case the list must be enclosed by square brackets {\tt [ ]} or
+parentheses {\tt ( )}.
+The expression is then evaluated for each element of the list.
+
+The operator {\tt ?} can be used to select one or more items from a list.
+See example below.
+
+Examples:
+
+{\tt
+\begin{tabular}{lll}
+1 2 3/3  sin(pi)&{\rm yields}&       1.0 2.0 1.0 0.0\\
+log(10)::4&{\rm yields}&       1.0 1.0 1.0 1.0\\
+log(10):log(100):2/4&  {\rm yields}&       1.0 1.5 2.0\\
+10**[0 1 5]     &      {\rm yields}&      1 10 100000\\
+{}[1:3]+[90:70:-10]  &     {\rm yields}&       91 82 73\\
+{}[20:30]?[3 4 5] & {\rm yields}& 22 23 24\\
+\end{tabular}
+}
+
+Suppose an inclination at keyword {\tt INCL=} must be given in
+degrees, but you want to give the input in axis ratio.
+
+{\tt INCL= deg(acos(0.3 0.5))}
+
+The argument for {\tt acos} is a list consisting of the elements 0.3 and 0.5.
+The expression evaluates these two values for {\tt acos} and converts
+the resulting values to degrees. In this way the values 0.3 and 0.5
+are converted to the angles $72.5424^\circ$ and $60.0^\circ$.
+
+\subsubsection*{Logical input}
+Logicals are decoded in the following way: {\tt YES}, {\tt JA} and {\tt TRUE}
+result
+in a logical which is true; {\tt NO}, {\tt NEE} and {\tt FALSE}
+give a logical which
+is false. It is sufficient to give the first letter of the possible
+affirmative and negative replies. Any other answer will result in
+a syntax error.
+
+Examples:
+\begin{flushleft}
+{\tt
+PLOTGRIDS= N\\
+OK= YES\\
+}
+\end{flushleft}
+%For logicals the inputs {\tt YES}, {\tt JA} or {\tt TRUE}
+%are affirmative (the first letter is sufficient). Other inputs result in
+%{\tt NO}.
+
+\begin{quote}
+\small
+{\bf Input Lists and Recall Files}
+
+If a task requests a keyword repeatedly, the user can pre-specify inputs in
+two ways. The first method is separating the inputs with semicolons,
+e.g.
+
+{\tt POS= 10 20; 15 25; 30 30}
+
+Note that a trailing semicolon
+designates an empty input for which a default is to be taken.
+The second method consists of specifying a file
+(``{\em recall file\/}'') as input to the keyword.
+This must be a text file  with a name like ``{\it name\/}{\tt .rcl}''.
+Every line in this file is a separate input. Lines must not be longer than 500
+characters.
+Either the whole file or a part of it can be specified:
+
+\begin{tabular}{ll}
+{\tt <}$name$&use the whole file;\\
+{\tt <}$name$ $n${\tt:}$m$&use line numbers $n$ to $m$;\\
+{\tt <}$name$ {\tt:}$n$&use line numbers 1 to $n$;\\
+{\tt <}$name$ $n${\tt:}&use line numbers $n$ to the end of the file;\\
+{\tt <}$name$ $n$ &use only line number $n$.\\
+\end{tabular}
+
+Here the $n${\tt:}$m$ range specifier should not be confused with a list of
+numbers as described above.
+
+It is possible to specify a recall file in a semicolon-separated list, but
+within a recall file semicolons cannot be used. Recall files cannot be used
+recursively, i.e.\ a recall file can not contain a reference to an other
+recall file.
+
+When the task has ``consumed'' all pre-specified input on a keyword, the next
+request for that keyword will cause the user to be prompted in the normal way.
+Inputs given on repeatedly requested keywords are stored in a
+semicolon-separated list, so if a task is re-run with the previous set of
+parameters, {\em all\/} inputs are available again.
+
+If unprompted input is given on a keyword of which all pre-specified input has
+not been consumed yet, the new input will supersede the {\em complete\/}
+previous set of inputs.
+
+\newpage
+{\bf Default files}
+
+Keywords can be prespecified in a text file with a name like
+``{\it name\/}{\tt .def}''. This {\em default file\/} can contain any
+number of {\it keyword\/}{\tt =}{\it value}\/ pairs.
+Any user supplied parameters will supersede those obtained from a default file.
+
+The name of the {\em task} determines which default file will be read, not the
+name of the executable. This has consequences (and possibilities) for tasks
+which are run under an alias name.
+
+It is also possible to specify defaults to be used by every task. For this
+purpose the file {\tt tasks.def} us used. Such global defaults have
+a limited use. The keyword {\tt GGIOPT=}, used by tasks with a graphical user
+interface, is an example.
+
+Default files can reside in both the current working directory and the
+directory {\tt .gipsy} under the user's
+login directory. Keywords from default files in the working directory supersede
+identical keywords from {\tt .gipsy}. And keywords from task-specific
+default files supersede identical global keywords.
+
+\end{quote}
+
+\clearpage
+\subsubsection*{Number input -- operators, constants and functions}
+In numerical expressions the following operators are available:
+
+{\small
+\begin{tabular}{ll}
+{\tt +}&addition \\
+{\tt -}&subtraction \\
+{\tt *}&multiplication \\
+{\tt /}&division \\
+{\tt **}&exponentiation \\
+\end{tabular}
+}
+
+The following predefined constants are available:
+
+{\small
+\begin{tabular}{ll}
+{\tt PI}&$\pi$ (3.14159....) \\
+{\tt C}&speed of light (SI) \\
+{\tt H}&Planck (SI) \\
+{\tt K}&Boltzmann (SI) \\
+{\tt G}&gravitation (SI) \\
+{\tt S}&Stefan-Boltzmann (SI) \\
+{\tt M}&mass of Sun (SI) \\
+{\tt P}&parsec (SI) \\
+{\tt BLANK}&universal undefined value \\
+\end{tabular}
+}
+
+The following mathematical functions can be used:
+
+{\small
+\begin{tabular}{ll}
+{\tt abs({\it x})}&absolute value of {\it x}\\
+{\tt sqrt({\it x})}&square root of {\it x}  \\
+{\tt sin({\it x})}&sine of {\it x}\\
+{\tt asin({\it x})}&inverse sine of {\it x}\\
+{\tt cos({\it x})}&cosine of {\it x}\\
+{\tt acos({\it x})}&inverse cosine of {\it x}\\
+{\tt tan({\it x})}&tangent of {\it x}\\
+{\tt atan({\it x})}&inverse tan of {\it x}\\
+{\tt atan2({\it x},{\it y})}&inverse tan (mod 2$\pi$)\\
+ &{\it x} = sin, {\it y} = cos\\
+{\tt exp({\it x})}&exponential of {\it x} ($e^x$)\\
+{\tt ln({\it x})}&natural log of {\it x}\\
+{\tt log({\it x})}&log (base 10) of {\it x}\\
+{\tt sinh({\it x})}&hyperbolic sine of {\it x}\\
+{\tt cosh({\it x})}&hyperbolic cosine of {\it x}\\
+{\tt tanh({\it x})}&hyperbolic tangent of {\it x}\\
+{\tt rad({\it x})}&convert {\it x} to radians\\
+{\tt deg({\it x})}&convert {\it x} to degrees\\
+{\tt erf({\it x})}&error function of {\it x}\\
+{\tt erfc({\it x})}&1-error function\\
+\end{tabular}
+\begin{tabular}{ll}
+{\tt max({\it x},{\it y})}&maximum of {\it x} and {\it y}\\
+{\tt min({\it x},{\it y})}&minimum of {\it x} and {\it y}\\
+{\tt sinc({\it x})}&sin({\it x})/{\it x} (sinc function)\\
+{\tt sign({\it x})}&sign of {\it x} ($-1$, 0, 1)\\
+{\tt mod({\it x},{\it y})}&remainder of {\it x}/{\it y}\\
+{\tt int({\it x})}&truncates to integer\\
+{\tt nint({\it x})}&nearest integer\\
+{\tt ranu({\it x},{\it y})}&generates uniform noise between\\
+&{\it x} and {\it y}\\
+{\tt rang({\it x},{\it y})}&generates gaussian noise with\\
+&mean {\it x} and dispersion {\it y}\\
+{\tt ranp({\it x})}&generates poisson noise with mean {\it x}\\
+\\
+{\tt ifeq({\it x},{\it y},{\it a},{\it b})}&
+{\it a} if $x=y$, else {\it b} \\
+{\tt ifne({\it x},{\it y},{\it a},{\it b})}&
+{\it a} if $x \neq y$, else {\it b} \\
+{\tt ifgt({\it x},{\it y},{\it a},{\it b})}&
+{\it a} if $x > y$, else {\it b} \\
+{\tt ifge({\it x},{\it y},{\it a},{\it b})}&
+{\it a} if $x \geq y$, else {\it b} \\
+{\tt iflt({\it x},{\it y},{\it a},{\it b})}&
+{\it a} if $x<y$, else {\it b} \\
+{\tt ifle({\it x},{\it y},{\it a},{\it b})}&
+{\it a} if $x\leq y$, else {\it b} \\
+\end{tabular}
+}
+
+The following functions can be used to obtain data from \G -sets and files:
+
+{\small
+\begin{tabular}{ll}
+{\tt descr({\it set}, {\it name})}&descriptor item {\it name}\/ from
+(sub)set(s) {\it set}.\\
+{\tt table({\it set}, {\it tab}, {\it col}, {\it rows})}&
+cell(s) from column {\it col}\/ of table {\it tab} in (sub)set {\it set}.\\
+{\tt image({\it set}, {\it box})}&  pixel(s) from (sub)set {\it set}.\\
+{\tt file({\it name}, {\it cols}, {\it rows})}&number(s) from a column in 
+a text file.\\
+\end{tabular}
+}
+
+The {\it set}- and {\it box}\/ arguments have the same syntax as described
+in {\tt input.doc}.
+The argument {\it rows} has the same syntax as is used for recall files
+($n${\tt:}$m$, {\tt:}$n$, $n${\tt:} and  $n$).
+Lines in the file to be read by the {\tt file}-function must not be longer than
+500 characters.
+Comments can be included in the file by prefixing it by one the characters
+{\tt !} or {\tt \#}.
+All items in the file should be numbers.
+If an item cannot be recognized, the value {\tt BLANK} will result.
+In this way {\tt BLANK}s can also be specified explicitly, e.g. by using
+the word ``BLANK''. Empty columns at the end of a line will also yield
+{\tt BLANK}s. But a completely empty or blank line is treated as a comment.
+
+The following functions can be used on lists:
+
+{\small
+\begin{tabular}{ll}
+{\tt count($x$)}&number of elements in $x$\\
+{\tt mean($x$)}&the average of the elements in $x$\\
+{\tt sum($x$)}&the sum of the elements in $x$\\
+\end{tabular}
+}
+
+\H\ also supports named variables.
+To these variables numbers and lists of numbers can be assigned. 
+Variable names can be up to 20 characters long; they are not case-sensitive.
+The maximum number of variables is 40.
+A variable can be deleted by assigning the value {\tt BLANK} to it.
+Assignment to a variable is accomplished by issuing a special \H\ command:
+
+{\it variable}{\tt =}{ \it value}
+
+or, in \tH, doing the assignment in the \tH\ calculator window (see page
+\pageref{calculator}).
+
+\section{Task context}
+Tasks all run in a {\em context\/}. This context consists of a number of
+user-settable parameters:
+\begin{itemize}
+\item
+Error level. If a task generates an error at or above the current error level,
+\H\ will abort the task. Default: 4.
+\item
+Message level. If a task generates an error at or above the current message
+level,
+\H\ will display the associated error message. Default: 1.
+\item
+Output mode. This parameter determines whether test messages from tasks will be
+displayed and whether messages unnecessary for experienced users will be
+suppressed. Default: ``{\tt NORMAL}''.
+\item
+Device status. Two parameters indicating whether messages sent to either the
+screen or the log file will actually be written.
+Default: screen ``{\tt ON}'' and log file ``{\tt ON}''.
+\item
+Hide status. This parameter determines whether ``hidden'' user input requests
+from the task will cause the user to be prompted anyway. Default: ``{\tt ON}'',
+i.e.\ the user will not be prompted for hidden keywords.
+\item
+Working directory. Default: the directory from which \H\ was started.
+The directory of running tasks cannot be changed.
+\item
+Finally there are four parameters which determine what kind of status messages
+will be logged.
+\end{itemize}
+Tasks normally inherit their context from a template context. If a task is
+started by an other task, it inherits the context of that task.
+Both the template context and the context of any running task can be changed by
+the user. The way in which this can be done depends on the specific
+implementation of \H.
+When \H\ is started, the template context contains the sensible defaults
+listed above, possibly modified by parameters from the \H\ defaults file
+(see below).
+
+\section{\H\ defaults file}
+The template task context and some other parameters can be defined in a
+defaults file which will be read when \H\ is started.
+This file must have the name {\tt hermes.def} and reside in the directory
+from which \H\ is started or in the directory {\tt .gipsy} under the user's
+login directory. (Parameters
+from the file in the start-up directory have precedence.)
+Its format is a text file which may contain any number of the keyword-value
+pairs from the table below.
+
+\begin{tabular}{ll}
+{\tt DIRECTORY=}&working directory for tasks.\\
+{\tt TASKPATH=}&search path for tasks.\\
+{\tt NTASK=}&number of task entries; must be $>0$.\\
+{\tt HIDE=}&hide status for keywords; must be {\tt ON} or {\tt OFF}.\\
+{\tt ERRORLEVEL=}&error level; must be in the range 1 to 4.\\
+{\tt MESSAGELEVEL=}&message level; must be in the range 1 to 4.\\
+{\tt OUTPUTMODE=}&
+output mode; must be {\tt NORMAL}, {\tt EXPERT} or {\tt TEST}.\\
+{\tt SCREEN=}&screen output status; must be {\tt ON} or {\tt OFF}.\\
+{\tt LOGFILE=}&log file output status; must be {\tt ON} or {\tt OFF}.\\
+{\tt PRINTER=}&printer number for screen hardcopies.\\
+{\tt MATCH=}&minimal matching; must be {\tt ON} or {\tt OFF}.\\
+{\tt TEKDEVICE=}&Tektronix terminal type (\tH\ only).\\
+{\tt BEEP=}&terminal bell; must be {\tt ON} or {\tt OFF} (\tH\ only).\\
+{\tt KEYHELP=}&
+add keyword help to standard help; must be {\tt ON} or {\tt OFF}.\\
+{\tt WEB\_BROWSER=}&full-path location of Hypertext browser and optional
+command line arguments.\\
+{\tt STARTBROWSER=}&start Hypertext browser automatically.\\
+\end{tabular}
+
+\vspace{1cm}
+Example of a typical {\tt hermes.def} file:
+
+\begin{quote}
+\begin{verbatim}
+taskpath=. $HOME/owntasks/$gip_arch
+directory=/dj3/users/cia/gipsy
+outputmode=expert
+match=on keyhelp=off
+printer=3
+\end{verbatim}
+\end{quote}
+
+\chapter{\tH}
+\section{Introduction}
+\tH\ is the version of \H\ which communicates with the user through standard
+character display terminals, including X11 terminal windows.
+It organises the terminal screen in a special window-like way.
+The most important permanent components (windows) of the screen lay-out are:
+\begin{itemize}
+\item
+User Command Area (\UCA ). This occupies the lower two lines of the terminal
+screen and is the focus of user-to-task communication.
+\item
+Task Status Area (\TSA ). This normally consists of four lines above the {\UCA}
+which each can contain information reflecting the current status of a task.
+\item
+Common Output Area (\COA ), the remaining top part of the screen which
+shows a part of the log file.
+Here user commands are logged and tasks can write text.
+\end{itemize}
+Other permanent components are a clock display and numbers which indicate
+which part of the log file is mapped to the \COA .
+
+Components of the screen lay-out which are not permanent are called transient
+windows.
+These overlay the permanent screen components or other transient windows.
+For example the context-sensitive help display overlays (part of) the \COA .
+Other examples of transient windows are
+a menu window allowing the user to change specific task settings, prompter
+windows in which for instance a search string can be specified, a Unix shell
+window, etc.
+
+Many functions of \tH\ can be invoked by typing a control key (designated
+as {\tt CTRL-}{\it c}, where {\it c} is a letter), or by typing an escape
+sequence (the {\tt ESC} character followed by another character).
+These are summarized in the tables on pages \pageref{escseqs} and
+\pageref{ctrlkeys}.
+Important control keys are: {\tt CTRL-C} to abort
+a task or to break out of a transient window, {\tt CTRL-O}\label{ctrlo}
+to switch the
+``keyboard focus'' between terminal windows waiting for keyboard input,
+{\tt CTRL-L}\label{ctrll} to repair a damaged screen lay-out
+and {\tt CTRL-Q}\label{ctrlq} to quit from \H.
+\H\ can also be terminated by typing {\tt CTRL-X CTRL-C}\label{ctrlxctrlc} or
+{\tt ESC Z}\label{escz} or by typing {\tt QUIT}, {\tt STOP}, {\tt END} or
+{\tt EXIT} in the \UCA.
+
+It is not possible to run more than one \G\ session in the same directory.
+If \tH\ is started in a directory where \G\ already runs, it exits
+immediately with an error message.
+(But \nH\ will wait until the other session is finished.)
+
+\section{User Command Area}
+The User Command Area (\UCA ) consists of the bottom two lines of the terminal
+screen where most interaction with the tasks takes place.
+The user can type task-related commands in the \UCA\ and \H\ can put there
+task-related prompts.
+An important aspect of the prompts is that they
+are treated in exactly the same way as information typed by the user, i.e.\ the
+user can erase or modify a prompt supplied by \H\ as if he typed it himself.
+Prompts in the \UCA\ are always in the form of a legal complete or partial
+command.
+
+The information in the \UCA\ is used as the context for a number of functions of
+\H.
+E.g.\ {\tt TAB} (or {\tt CTRL-I}) causes the user document of any taskname
+present in the
+\UCA\ to be displayed and {\tt CTRL-C} aborts the task if it is active.
+
+The two lines of the \UCA\ are one logical long line which can be edited using
+the following control keys of which most are {\sc emacs}-compatible.
+
+\label{ctrla}\label{ctrlb}\label{ctrld}\label{ctrle}\label{ctrlf}
+\label{ctrlk}\label{ctrlt}\label{ctrlu}
+\begin{tabular}{ll}
+{\tt CTRL-A}&move to start of line\\
+{\tt CTRL-B}&move one position back\\
+{\tt CTRL-D}&forward delete one character\\
+{\tt CTRL-E}&move to end of line\\
+{\tt CTRL-F}&move one position forward\\
+{\tt CTRL-H}&backward delete one character\\
+{\tt CTRL-K}&forward delete rest of line\\
+{\tt CTRL-T}&replace complete line with next active task name (see below)\\
+{\tt CTRL-U}&delete complete line\\
+{\tt DEL}&backward delete one character\\
+{\tt space}&replace complete line with next prompt for user input (see below)\\
+\end{tabular}
+
+\begin{quote}
+\small
+\parskip=0mm
+Characters {\tt CTRL-T} and {\tt space} are somewhat special.
+{\tt CTRL-T} erases the \UCA\ and then prompts with the name of an active task.
+It does this in a circular fashion so if more than one task is active,
+another taskname is displayed when {\tt CTRL-T} is pressed again.
+
+If the \UCA\ is ``free'' (a subtle concept explained below), pressing the space
+bar does a similar thing for tasks waiting for input. This makes it easier for
+the user to do something else before he supplies the requested input, e.g.
+run another task which supplies information that helps to give the input.
+
+The \UCA\ is ``free'' when it is empty, or when it only contains an unmodified
+prompt supplied by \H.
+\end{quote}
+
+\H\ can provide `minimal matching' for task names and user input keywords
+typed in the \UCA.
+This facility can be switched on and off by typing {\tt ESC M}.\label{escm}
+It can also be switched on using the statement {\tt MATCH=ON} in the
+\H\ defaults file.
+If it is on, task names will be completed when a blank
+or {\tt RETURN} is typed on a command line that only
+contains an abbreviated task name.
+Keywords will be completed when `{\tt =}' is
+typed. If the keyword is ambiguous, \H\ will beep and refuse to accept the
+keyword; if it is not known, \H\ will also beep but will accept the
+keyword.\newline
+\H\ obtains the taskname and
+keyword information from the {\tt .dc1} documents in {\tt \$gip\_tsk}.
+For this reason minimal matching does not work for tasks which are not
+installed.
+
+Previously entered commands can be brought back to the \UCA\ by using the
+\label{uparrow}\label{downarrow} ANSI up-arrow and down-arrow keys.
+If the user has typed some text in the
+\UCA, only commands which match this text will be brought back.
+The commands are saved in the text file {\tt HERMES.cmd}, so that they
+are preserved between sessions.
+
+\section{Task Status Area}
+The Task Status Area (\TSA ) is the middle section of the terminal screen.
+It normally consists of four lines which each can contain status information
+of an active task.
+\begin{quote}
+\small
+\parskip=0mm
+The number of these status lines can be specified using the keyword
+{\tt NTASK=} in {\tt hermes.def}.
+\end{quote}
+The format of a task status entry is one of the following:
+\begin{itemize}
+\item When a task has been activated, but is not running yet:\\
+{\it taskname \hspace{5mm} \tt WAITING TO BE RUN}
+\item When a task is running:\\
+{\it taskname \hspace{5mm} \tt RUNNING}\\
+or\\
+{\it taskname \hspace{5mm}  status message supplied by  task}
+\item When a task is prompting for user input:\\
+{\it taskname \hspace{5mm}  prompt message supplied by  task}
+\item When a task is waiting for a file to be edited by the user:\\
+{\it taskname \hspace{5mm}  message supplied by  task}
+\item When a task is suspended:\\
+{\it taskname \hspace{5mm} \tt PAUSING }\\
+or\\
+{\it taskname \hspace{5mm} \tt PAUSING \it message supplied by  task}
+\item When a task is waiting for an other task to finish:\\
+{\it taskname \hspace{5mm} \tt WAITING FOR \it other taskname}
+\item When a task has finished processing normally:\\
+{\it taskname \hspace{5mm} \tt +++ FINISHED +++}
+\item When a task has been aborted by the user:\\
+{\it taskname \hspace{5mm} \tt USER ABORT}
+\item When a task has encountered an error fatal to execution:\\
+{\it taskname \hspace{5mm} error message \tt -FATAL}
+\item When a task has crashed (i.e.\ exited without notification to \H):\\
+{\it taskname \hspace{5mm} \tt CRASHED}
+\item When a task cannot be started (incorrect executable,
+e.g.\ compiled for a different architecture):\\
+{\it taskname \hspace{5mm} \tt COULD NOT BE STARTED}
+\end{itemize}
+
+\section{Common Output Area and Log File}
+The Common Output Area (\COA ) on the terminal screen is the remaining top area
+of the terminal screen not used for the \UCA\ or \TSA .
+It is a viewport on the log file.
+\H\ treats the log file as a ``book'' with numbered pages.
+Normally \H\ shows the current page of the book, that is the page on
+which output is currently being written.
+
+The \COA\ has two modes of operation: page mode and non-page mode.
+In non-page mode the page on the screen is always the current page.
+If necessary, \H\ will flip the page. The current page number is displayed at
+the extreme right of the Task Status Area.
+In page mode the information on the screen will stay there until the user
+instructs \H\ to change the page.
+Though the user does not see it, output can still be written to the log file.
+In page mode the number of the displayed
+page is shown to the left of the current page number.
+Page mode can be switched on and off by pressing {\tt CTRL-P}.\label{ctrlp}
+
+When in non-page mode, \H\ can also scroll the \COA\ instead of flipping
+pages. This scroll mode can be switched on and off by typing \label{ctrlxs}
+{\tt CTRL-X S}.
+In scroll mode output is much slower than in `flip mode'. Therefore this
+mode is not recommended for use with slow terminals.
+
+The log file can be traversed in backwards direction by pressing
+the {\tt CTRL-Z}\label{ctrlz} key (or on ANSI keyboards the
+{\tt PageUp} key).
+Paging forward is done with the {\tt CTRL-V}\label{ctrlv}\label{ctrlj} key
+(or ANSI {\tt PageDown}).
+
+Text search in the log file is done by pressing {\tt CTRL-R}\label{ctrlr}
+(reverse) or
+{\tt CTRL-S}\label{ctrls}
+(forward). \H\ then prompts the user for a search string.
+Searching in \H\ is case-insensitive.
+
+A specific page number can be brought to the screen by typing {\tt ESC G},
+\label{escg} whereafter \H\ prompts for a page number.
+Signed numbers are treated as relative page numbers.
+
+Sections of the log file can be printed by typing the {\tt ESC H}\label{esch}
+sequence.
+\H\ then prompts for a range of pages to be printed.
+The range can be specified as a single number, in which case only that page
+will be printed, or using the format `{\it start\/}{\tt :}{\it end\/}'.
+Either {\it start\/} or {\it end\/} may be omitted, in which case the number
+of the currently displayed page will be used instead.
+The default range is the page currently displayed and the preceding two pages.
+The printer can be selected by typing {\tt ESC P}, \label{escp} which causes
+a menu to be presented from wich a printer can be chosen.
+Instead of a printer, output can also be written to a file. To achieve this,
+choose option {\tt F} from the printer selection menu. This redirection
+can be cancelled by specifying an empty string.
+
+\begin{quote}
+\small
+The statement that the \COA\ is a viewport on the log file is not quite true.
+In fact the log file and the \COA\ are different output streams to which tasks
+can send information selectively.
+Most tasks however send the same information to both the log file and the \COA .
+\end{quote}
+
+\subsection*{COA command summary}
+
+\begin{tabular}{ll}
+{\tt CTRL-P}&enter or leave page mode\\
+{\tt CTRL-Z}&display previous page and enter page mode\\
+{\tt CTRL-V}&display next page\\
+{\tt CTRL-R}&search forward for text string\\
+{\tt CTRL-S}&search backwards for text string\\
+{\tt CTRL-X S}&toggle scroll mode\\
+{\tt ESC G}&go to specified page number\\
+{\tt ESC H}&make hardcopy of specified page numbers\\
+{\tt ESC P}&select a printer for the hardcopy print command\\
+{\tt ESC <}&go to first page\\
+{\tt ESC >}&go to last page\\
+\end{tabular}
+
+\section{Running Tasks}
+\subsection*{Starting tasks and supplying parameters}
+Tasks can be started with or without specifying parameters.
+To start a task without parameters, the name of the task must be typed in the
+\UCA , followed by a {\tt RETURN}:
+
+{\it taskname}
+
+To specify parameters, any number of keyword-value pairs separated
+by blanks can be added to the taskname:
+
+{\it taskname
+keyword\/${}_1${\tt =}value\/${}_1$
+keyword\/${}_2${\tt =}value\/${}_2$ $\ldots$}
+
+This format is also used to supply parameters to an already running task.
+
+If there is something wrong with the command, an error message is displayed
+in the lower right corner of the screen.
+
+\begin{quote}
+\small
+Tasknames may be preceded by an explicit directory. In this case, the task must
+be present in the specified directory; the task path is not searched.
+The directory may contain one or more environment variables
+(indicated by a leading {\tt \$}-character).
+
+Tasks can be run again with (partly) the same parameters by prefixing the
+task start command with an exclamation mark ({\tt !}).
+Any explicitly specified parameters will supersede the corresponding old
+parameters. In this case the default file is not used.
+For historical reasons the previous parameters of a task are called the
+task's {\em macro\/}.
+
+Tasks can be run under a different name (``alias''). The command to do this is:
+
+{\it aliasname\tt (\it filename\tt ) $\ldots$}
+
+{\it Aliasname} is the taskname under which the task will run and
+{\it filename\/} is the name of the task's executable file, specified in the
+correct case (lowercase for standard \G\ tasks).
+\end{quote}
+
+\subsection*{Inspecting and saving input parameters}
+The current set of keyword-value pairs of a task can be inspected by
+typing {\tt ESC K}\label{esck} while the name of the task
+is present in the \UCA.
+This causes (part of) the \COA\ to be overlaid with a display containing the
+current user input parameters of the task.
+Whenever there is a change in one of the parameters, the display will
+be adjusted.
+If the amount of space on the screen is not sufficient to show all parameters,
+the user can page through the display just like paging through the log file.
+{\tt CTRL-V}\label{ctrlvv} pages forward; {\tt CTRL-Z}\label{ctrlzz} pages
+backwards.
+To inspect its keywords, the task need not be active.
+Typing {\tt ESC K} again will remove the overlay screen.
+
+The displayed set of parameters can be saved in a file which can later be used
+as a default file. This can be achieved by typing {\tt ESC W},
+\label{escw} which causes
+the user to be prompted for a filename (default: {\it taskname\/}{\tt .def}).
+
+The contents of a single keyword from the displayed set of parameters
+can be saved in a file which can later be
+used as a recall file. Type {\tt ESC R}.
+\label{escr}The user is first prompted for the
+keyword, then for the filename.
+
+The parameters of a task can be edited using a standard editor.
+The editor used is the one defined by the {\tt EDITOR} environment variable
+and it is invoked by typing {\tt ESC E}.\label{esce}
+If there is currently a set of parameters displayed on the screen (as the
+result of typing {\tt ESC K}), these parameters will be edited;
+otherwise the name of the task is derived from the \UCA\ contents.
+`Behind the scenes' \H\ will remain active, but user communication with \H\
+is not possible because all typing goes into the editor.
+Using this editor is the only way in \tH\ to change input parameters for
+a task that is not active.\newline
+If \H\ cannot derive a name from either the parameter display or the \UCA,
+it will prompt for a file name as if {\tt CTRL-X E} was typed.
+
+\subsection*{Aborting, suspending and resuming}
+Tasks can be aborted by typing {\tt CTRL-C}\label{ctrlc}.
+They can be suspended and resumed by typing {\tt CTRL-W}\label{ctrlw} or
+{\tt CTRL-G}\label{ctrlg}.
+If more than one task is active, the target task's name must be present in
+the \UCA .
+
+\subsection*{Changing the task context}
+The context of a task can be changed using a pop-up menu that can be activated
+with the sequence {\tt ESC S}.\label{escs}
+The following context parameters can be changed with this menu:
+\begin{verse}
+- error level: 1--4\\
+- message level: 1--4\\
+- output mode: normal, expert or test\\
+- screen output: on or off\\
+- log file output: on or off\\
+- hide ``hidden'' keywords: on or off\\
+\end{verse}
+To change the context of a running task, its name must be present in the \UCA.
+If the \UCA\ is empty, the template context will be changed.
+
+\subsection*{Directories and paths}
+The working directory can be changed by typing {\tt ESC D}.\label{escd}
+\H\ then prompts the user for a new directory.
+This directory will then be used for tasks started after the change.
+Running tasks and \H\ itself are not affected.
+
+The task path can be changed with {\tt ESC T}.\label{esct}
+Upon the prompt that follows one or more directories
+separated by blanks can be specified.
+A directory may contain (or consist of) one or more environment variables
+(indicated by a leading {\tt \$}-character).
+Whenever a task start command without an explicit path is given,
+this list is scanned to find the task.
+If it is not in one of the specified directories, \H\ tries to find the task in
+{\tt \$gip\_exe}.
+The default path is `{\tt .}' (the current working directory).
+
+\subsection*{Getting help}
+To obtain help information about a task or about \H, {\tt TAB} (or {\tt CTRL-I})
+\label{ctrli} can be pressed.
+This causes (part of) the \COA\ to be overlaid with a display containing the
+user document of the task of which the name is present in the \UCA .
+If there is also a keyword present (e.g.\ as the result of a prompt),
+\H\ positions the document at the first occurrence of the keyword.
+In this case \H\ will also provide a keyword help window which partially
+overlays the task documentation. For more information see the section
+``Keyword help'' below. This feature can be switched off by putting the
+statement {\tt KEYHELP=OFF} in the \H\ defaults file ({\tt hermes.def}).
+
+The help display will `follow' the task execution; if other prompts appear,
+the display will be repositioned.
+If the amount of space on the screen is not sufficient to show the whole
+document,
+the user can page through the display just like paging through the log file.
+{\tt CTRL-V}\label{ctrlvvv}  pages forward; {\tt CTRL-Z}\label{ctrlzzz}
+pages backwards.
+If the \UCA\ is empty, pressing {\tt TAB} will display
+a summary of \H' commands.
+
+It is possible to search for a text string in the document. Pressing
+{\tt CTRL-S}\label{ctrlss} or {\tt CTRL-R}\label{ctrlrr} will cause the
+user to be prompted for a search string.
+
+Pressing {\tt TAB} again will remove the overlay screen(s).
+
+\subsubsection*{Hypertext help}
+Typing {\tt ESC X}\label{escx} will cause Hermes to start a WWW browser.
+The \G\ start-up script attempts to determine which browser can be used.
+This choice can be overridden by defining the environment variable
+{\tt WEB\_BROWSER} before starting \G\ or by defining the variable
+{\tt WEB\_BROWSER} in the \H\ defaults file ({\tt hermes.def}).
+Any command line options to the browser can also be specified in the
+defaults file (but {\em not\/} in the environment variable).
+When the defaults file variable {\tt STARTBROWSER} is set to ``{\tt ON}'',
+the browser will be started automatically. 
+
+Initially the home page of the new-style \G\ documentation in hypertext
+will appear. When the browser is either NCSA Mosaic, Netscape or Firefox,
+pressing {\tt TAB} will display the task document in the browser instead 
+of overlaying the \COA.
+
+When {\tt ESC X} is typed again, the browser will be terminated and \H\ will
+revert to normal operation.
+
+\subsection*{Keyword help}
+\H\ can provide specific help about user input keyword prompts.
+This can be switched on and off independently of task-related help
+by typing {\tt ESC TAB}.
+When it is active, the available options are displayed in the bottom line of
+the window. The possible options are:
+
+\begin{tabular}{ll}
+{\tt PageUp}&page back in window\\
+{\tt PageDown}&page forward in window\\
+{\tt ESC $i$}&go to reference $i$ ($i=1\ldots 9$)\\
+{\tt ESC -}&go back one reference\\
+{\tt ESC 0}&go back to ``root text''\\
+\end{tabular}
+
+The window can be temporarily removed by removing the associated prompt by
+typing {\tt CTRL-U}. When the prompt is brought back by typing a space, the
+window will re-appear.
+
+\subsection*{Task control summary}
+\begin{tabular}{ll}
+{\it taskname}&start a task\\
+{\it taskname
+keyword\/{\tt =}value\/ $\ldots$}&start a task and/or supply parameters\\
+{\tt !}{\it taskname}&start a task with the previous set of input parameters\\
+{\tt !}{\it taskname
+keyword\/{\tt =}value\/ $\ldots$}&like {\tt !}{\it taskname\/}, but given
+parameters replace previous\\
+{\it taskname}{\tt (}{\it filename\/}{\tt )} $\ldots$&
+run executable {\it filename\/} as task {\it taskname}\\
+\end{tabular}
+
+\begin{tabular}{ll}
+{\tt CTRL-C}&abort task\\
+{\tt CTRL-G}&suspend or resume task (synonym of {\tt  CTRL-W})\\
+{\tt CTRL-I}&(={\tt TAB}) activate or deactivate help display\\
+{\tt CTRL-W}&suspend or resume task (synonym of {\tt  CTRL-G})\\
+\\
+{\tt ESC D}&change working directory\\
+{\tt ESC K}&activate and deactivate user input parameter display\\
+{\tt ESC E}&edit parameters or user-specified file\\
+{\tt ESC W}&save displayed parameters in (default) file\\
+{\tt ESC R}&save contents of keyword in (recall) file\\
+{\tt ESC S}&activate menu to modify task context\\
+{\tt ESC T}&change task path\\
+{\tt ESC TAB}&switch user input keyword help display on or off\\
+\end{tabular}
+\section{Unix shell and text editor}
+\subsection*{Integrated shell}
+Typing {\tt ESC U}\label{escu} causes the \COA\ to be overlaid by a Unix
+shell window or,
+if the Unix shell is already present, causes the window to be popped down.
+The shell used is {\tt /bin/csh}.
+Because the shell is not connected to
+a real terminal, functionality is somewhat limited: e.g.\ a screen editor
+would not work.
+Also some commands behave differently, e.g.\ {\tt ls} produces a one-column
+list. (A multi-column list can be obtained with {\tt ls -C}.)
+
+By default information displayed in the Unix shell window is not logged.
+Logging to the \COA\ and log file can be enabled (and disabled) by typing
+{\tt ESC L}.\label{escl}
+
+This shell can be completely terminated by typing {\tt exit} in the shell
+window.
+\subsection*{Overlay shell}
+Typing {\tt CTRL-X U}\label{ctrlxu} causes a Unix shell to be started which
+overlays the whole terminal screen.
+`Behind the scenes' \H\ will remain active, but because all typing goes into
+the shell, user communication with \H\ is not possible.
+The shell used is the one defined by the {\tt SHELL} environment variable or,
+if this is not defined, {\tt /bin/csh}.
+
+This shell can be terminated by typing {\tt CTRL-D} or {\tt exit}.
+\subsection*{Text editor}
+Typing {\tt CTRL-X E}\label{ctrlxe} causes the user to be prompted for the name
+of a file to be edited by a text editor which will overlay the whole terminal
+screen.
+`Behind the scenes' \H\ will remain active, but because all typing goes into
+the editor, user communication with \H\ is not possible.
+The editor is the one defined
+by the environment variable {\tt EDITOR};
+if this is not defined, the \G\ start-up script will attempt to find a
+one of the editors {\tt mem}, {\tt vi} or {\tt emacs} in the user's path.
+If no editor can be found, an error message is displayed.
+
+Tasks can also request that a text editor be started. In this case \H\ prompts
+the user to allow the editor to be started. To start the editor,
+type {\tt RETURN}; to cancel the edit, {\tt CTRL-C} can be typed and the
+edit can be postponed by shifting the keyboard focus away from the prompt
+window by typing {\tt CTRL-O}.
+
+\section{Tektronix graphics}
+If the terminal at which \H\ runs is capable of emulating a Tektronix
+graphics terminal, {\tt CTRL-X T}\label{ctrlxt} can be typed to switch on
+the graphics mode.
+This mode can be used in connection with tasks for which the
+plot device {\tt THERTEK} was selected.
+If the terminal type has not been defined yet, the user will be prompted.
+This information can also be specified in the \H\ defaults file
+{\tt hermes.def}. In this case use: {\tt TEKDEVICE=}{\it terminaltype\/}.
+Allowable terminal types are listed in the table below.
+
+In Tektronix mode, \H\ continues to operate normally,
+but user interaction is somewhat limited. To protect the
+graphics image, characters typed are not echoed and the overlay Unix shell
+and editors cannot be started.
+
+Typing {\tt CTRL-X T} again will switch Tektronix mode off.
+If possible, \H\ then switches back to normal terminal mode, but some
+terminals do not support this; these terminals must be switched back
+manually by the user.
+
+\H\ `remembers' the contents of the graphics image, so if Tektronix mode is
+switched on again, the image is restored.
+
+\vspace{5mm}
+\begin{center}
+\begin{tabular}{|l|l|l|}
+\hline
+Type&&switch back\\
+\hline
+{\tt LADA}&KGB's LAT terminal emulator&automatic\\
+{\tt NCSA}&NCSA Telnet&manual\\
+{\tt XTERM}&X Window terminal emulator&automatic\\
+\hline
+\end{tabular}
+\end{center}
+
+\section{Calculator}
+\label{calculator}
+Typing {\tt ESC C} causes a calculator window to be popped up.
+In this window, the user can type any numerical expression that would also
+be acceptable as user input. The resulting value is displayed in the bottom
+line of the window; for lists only the first and last value are shown.
+It is also possible to assign a value to a variable.
+
+The calculator window can be removed by typing {\tt ESC C} again.
+
+\chapter{\nH}
+\section{Introduction}
+\nH\ (non-interactive Hermes) is the version of \H\ for a
+non interactive (i.e.\ batch-)  environment.
+It is derived from the interactive \tH.
+
+Because the user is not available to be consulted,
+default values for unspecified keywords will be taken if available.
+If there is no default available, an error message will be written to the log
+file and \nH\ will stop with the current command.
+When a command is finished, \nH\ will start the next command if given.
+
+If the timeout option is set, a timeout will occur after the user supplied
+number of minutes and \nH\ will terminate the command it is
+dealing with at that time.
+The timeout works separately for each user command.
+
+\nH\ maintains a log file to which a history of all operations is written.
+This file can be inspected or printed afterwards.
+
+\section{Using \nH}
+The syntax for starting \nH\ is:
+\begin{flushleft}
+{\tt nhermes -l{\it logfile} -t{\it minutes} {\it command ... command}}
+\end{flushleft}
+
+The options may appear in any order and may be intermixed with the
+commands. The {\tt -l} and {\tt -t} flags are optional.
+
+The log file will always have the extension {\tt .LOG}
+and it contains a history of all operations done and the information
+generated by the tasks which have been run.
+The default log file name is {\tt GIPSY.LOG}.
+
+The purpose of the timeout option is to terminate the user command when it
+uses more time than is thought to be reasonable, e.g.\ if it is executing an
+endless loop due to a program or user error.
+
+{\it command} can be a {\tt COLA} script or a name of a  task with their
+parameters.
+The name of the  task or the {\tt COLA} script with the
+parameters must be suitably quoted to keep it together,
+e.g.\ between double quotes. If this is not done,
+\nH\ will handle them as if they were separate user commands.
+
+Example:
+
+{\tt nhermes -lMylog "FLUX INSET=cg1517 v"}
+
+This command causes \nH\ to start task {\tt FLUX} on all subsets of set
+{\tt cg1517} and put the results in file {\tt Mylog.LOG}.
+
+Status return:
+
+If the last command executed by \nH\ was successful, \nH\ exits with status
+code 0; when the last command failed, the value 1 is returned. 
+\appendix
+\chapter{tHermes key definitions}
+\subsection*{Escape sequences}
+\label{escseqs}
+\begin{tabular}{ll}
+{\tt ESC B}&switch beep associated with prompts on or off\\
+{\tt ESC C}&pop up and down calculator window (\pageref{calculator})\\
+{\tt ESC D}&change working directory (\pageref{escd})\\
+{\tt ESC E}&edit a task's input parameters or a user-specified file
+(\pageref{esce})\\
+{\tt ESC G}&go to specified page number in \COA\ (\pageref{escg})\\
+{\tt ESC H}&make hard copy of \COA\ (\pageref{esch})\\
+{\tt ESC K}&pop up and down keyword display (\pageref{esck})\\
+{\tt ESC L}&switch logging of integrated Unix shell on or off (\pageref{escl})\\
+{\tt ESC M}&switch \UCA\ minimal matching on or off (\pageref{escm})\\
+{\tt ESC P}&select printer for the {\tt ESC H} command (\pageref{escp})\\
+{\tt ESC R}&(if keyword display active) write single task input parameter to
+file (\pageref{escr})\\
+{\tt ESC S}&change task or template context (\pageref{escs})\\
+{\tt ESC T}&change task path (\pageref{esct})\\
+{\tt ESC U}&pop up and down integrated Unix shell (\pageref{escu})\\
+{\tt ESC W}&(if keyword display active) write all task's input parameters to
+file (\pageref{escw})\\
+{\tt ESC X}&activate or deactivate hypertext help (\pageref{escx})\\ 
+{\tt ESC Z}&quit \tH\ (\pageref{escz})\\
+{\tt ESC <}&go to first page of \COA \\
+{\tt ESC >}&go to last page of \COA \\
+{\tt ESC ESC}&circulate through task names in \UCA \\
+{\tt ESC TAB}&switch user input keyword help display on or off\\
+\end{tabular}
+
+\begin{tabular}{ll}
+{\bf ANSI keys}&\\
+&\\
+{$\uparrow$}&bring back previous commands to \UCA\ (backward direction)
+(\pageref{uparrow})\\
+{$\downarrow$}&bring back previous commands to \UCA\ (forward direction)
+(\pageref{downarrow})\\
+{$\leftarrow$}&move one position back in input line (={\tt CTRL-B})\\
+{$\rightarrow$}&move one position forward in input line (={\tt CTRL-F})\\
+{\tt PageUp}&page back in \COA, help display or keyword display
+(={\tt CTRL-Z})\\
+{\tt PageDown}&page forward in \COA, help display or keyword display
+(={\tt CTRL-V})\\
+\end{tabular}
+
+\subsection*{Control characters}
+\label{ctrlkeys}
+\begin{tabular}{ll}
+{\tt CTRL-A}&move to start of input line (\pageref{ctrla})\\
+{\tt CTRL-B}&move one position back in input line (\pageref{ctrlb})\\
+{\tt CTRL-C}&in \UCA : abort task; in transient window:
+break out of window (\pageref{ctrlc})\\
+{\tt CTRL-D}&forward delete character in input line (\pageref{ctrld})\\
+{\tt CTRL-E}&move to end of input line (\pageref{ctrle})\\
+{\tt CTRL-F}&move one position forward in input line (\pageref{ctrlf})\\
+{\tt CTRL-G}&resume or suspend task (\pageref{ctrlg})\\
+{\tt CTRL-H}&back delete one character\\
+{\tt CTRL-I}&(={\tt TAB}) pop help screen up or down (\pageref{ctrli})\\
+{\tt CTRL-J}&enter input line\\
+{\tt CTRL-K}&forward delete rest of input line (\pageref{ctrlk})\\
+{\tt CTRL-L}&rewrite terminal screen (\pageref{ctrll})\\
+{\tt CTRL-M}&(={\tt RETURN}) enter input line\\
+{\tt CTRL-N}&(undefined)\\
+{\tt CTRL-O}&switch between windows accepting keyboard input (\pageref{ctrlo})\\
+{\tt CTRL-P}&enter or leave \COA\ page mode (\pageref{ctrlp})\\
+{\tt CTRL-Q}&quit \tH\ (\pageref{ctrlq})\\
+{\tt CTRL-R}&reverse search in \COA\ or help display
+(\pageref{ctrlr}, \pageref{ctrlrr})\\
+{\tt CTRL-S}&forward search in \COA\ or help display
+(\pageref{ctrls}, \pageref{ctrlss})\\
+{\tt CTRL-T}&circulate through task names in \UCA\ (\pageref{ctrlt})\\
+{\tt CTRL-U}&clear input line (\pageref{ctrlu})\\
+{\tt CTRL-V}&page forward in \COA, help display or keyword display
+(\pageref{ctrlv}, \pageref{ctrlvv}, \pageref{ctrlvvv})\\
+{\tt CTRL-W}&suspend or resume task (\pageref{ctrlw})\\
+{\tt CTRL-X}&initial character for special special combinations\\
+{\tt CTRL-Y}&(undefined)\\
+{\tt CTRL-Z}&page back in \COA, help display or keyword display
+(\pageref{ctrlz}, \pageref{ctrlzz}, \pageref{ctrlzzz})\\
+&\\
+{\tt CTRL-X E}&edit user-specified file (\pageref{ctrlxe})\\
+{\tt CTRL-X S}&switch \COA\ scroll mode on or off (\pageref{ctrlxs})\\
+{\tt CTRL-X T}&switch Tektronix emulation on or off (\pageref{ctrlxt})\\
+{\tt CTRL-X U}&overlay \H\ with shell (\pageref{ctrlxu})\\
+{\tt CTRL-X CTRL-C}&quit \tH\ (\pageref{ctrlxctrlc})\\
+\end{tabular}
+
+(Numbers in parentheses refer to pages in this document.)
+\chapter{Files used by tHermes}
+\begin{tabular}{lll}
+\hline
+{\bf File name}&{\bf Usage}&{\bf Format}\\
+\hline
+{\tt GIPSY.LOG}&log file&text file\\
+{\tt SCREEN.LOG}&terminal screen pages&internal\\
+{\tt HERMES.keywd}&user input parameters (``macro'')&text file\\
+{\tt HERMES.cmd}&previous commands (for command recall)&text file\\
+{\tt *.def}&default file&text file\\
+{\tt *.rcl}&recall file&text file\\
+{\tt \$TEKNAME}&Tektronix graphics file (env. variable)&
+{\tt PGPLOT} (``{\tt THERTEK}'')\\
+{\it taskname\/\tt .key}&scratch file&\\
+{\tt screen.prt}&scratch file&\\
+{\tt keys.tmp}&scratch file&\\
+\hline
+\end{tabular}
+
+The file {\tt GIPSY.LOG} contains the log of any number of \G\ sessions and
+can be edited and printed. If the information contained by it is not necessary
+anymore, it can be deleted.
+
+{\tt SCREEN.LOG} contains the screen pages of any number of \G\
+sessions. It cannot be edited or printed. Any modification of this file can
+cause \tH\ to fail. If the information contained by it is not necessary
+anymore, it can be deleted.
+
+{\tt HERMES.keywd} contains all current user input parameters of
+previously run tasks. This file can be edited, provided its format is
+maintained. It would however be very seldomly necessary to edit this file.
+
+{\tt HERMES.cmd} contains the last 1000 commands which were typed into
+the \UCA. It is used for \tH' command recall feature.
+This file can be edited, but this would be very seldomly necessary.
+
+The files with the extension {\tt .def} are the user-defined default files.
+
+The files with the extension {\tt .rcl} are the user-defined recall files.
+
+The file to which the environment variable {\tt TEKNAME} points, contains
+information to be displayed on a Tektronix~4010 compatible graphics
+terminal. It can only be written by the {\tt PGPLOT} driver for the
+``{\tt THERTEK}'' device.
+
+The scratch files have normally all been cleaned up when \tH\ exits. If such
+a file is present anyway, it can be deleted without any problem.
+
+\end{document}

@@ -1,0 +1,645 @@
+irscan.src
+
+        Copyright (c) Kapteyn Laboratorium Groningen 1992
+        All Rights Reserved.
+
+Name:         irscan.src
+Creator:      do
+Host:         spica
+Date:         June 20, 1995
+Contents:     irim_checkbphf.c irim_flagmask.c irim_flags.c irim_rdsnip.c irscan.h
+
+#>            irim_checkbphf.c
+/* irim_checkbphf.c
+
+           Copyright (c) 1991
+  Laboratory for Space Research Groningen 
+       Kapteyn Laboratory Groningen 
+           All Rights Reserved.
+
+#>            irim_checkbphf.dc2
+
+Function:     irim_checkbphf
+
+Purpose:      check whether the BPHF is present and wanted
+
+Category:     IRAS, private to program: IMAGE
+
+Author:       Do Kester
+
+Use:  
+int irim_checkbphf( 
+	fchar	irds,
+	fint	snipnr ) 
+
+returns:      	1 : bphf is present
+		-1: bphf is not present but the snip should be processed
+		0 : bphf is not present and do not process this snip
+
+Description:
+	It is checked whether the SRLON keyword is present for the 
+	first tick at the snip level. If so the function returns a 1.
+	If not the user is asked whether to use intended positions;
+	the answer is accordingly.
+
+Comment:	This routine is NOT callable in FORTRAN.
+
+Updates:      	03 Dec 1991: DK, Creation date
+		18 Jun 1992: DK, search only at local level.
+		10 Aug 1992: DK, annoying non-error suppressed.
+#<
+*/
+
+#include "gipsyc.h"
+#include "irscan.h"
+#include "userfio.h"
+#include "gdsd_grdble.h"
+#include "gds_tune.h"
+
+#define	BPHF		1		/* bphf present */
+#define USE_INTENDED	-1		/* use intended positions */
+#define DONT_USE	0		/* do not use this snip */
+#define INTENDED_KEY	"INTENDED="
+#define INTENDED_MES	"No BPHF present. Use intended positions? [no]"
+
+int irim_checkbphf( 
+	fchar	irds,
+	fint	snipnr ) 
+{
+	fint	axes[2] = { 2, 4 }, n = 2, err = 0 ;
+	fint	level[2] = { 1, 1 }, yes = TRUE, no = FALSE ;
+	fint	intended = FALSE ;
+	double	srlon ;
+
+	gdst_abslevel_c( &yes ) ;
+	level[1] = snipnr ;
+	gdsd_grdble_c( irds, tofchar( "SRLON" ), axes, level, &n, 
+		&srlon, &err ) ;
+	gdst_abslevel_c( &no ) ;
+	if ( err > 0 ) return ( BPHF ) ;
+
+	if ( err == 0 ) {
+/*		errorf( WARNING, "Level at which srlon is found is 0."
+		" srlon = %f", srlon ) ;
+*/
+		return( BPHF ) ;
+	}
+
+	n = userflog( &intended, 1, DFLT_DEF, INTENDED_KEY, INTENDED_MES ) ;
+	if ( intended ) return ( USE_INTENDED ) ;
+
+	return ( DONT_USE ) ;
+}
+
+#undef BPHF
+#undef USE_INTENDED
+#undef DONT_USE
+#undef INTENDED_KEY
+#undef INTENDED_MES
+
+#<
+
+#>            irim_flagmask.c
+/* irim_flagmask.c
+
+           Copyright (c) 1992
+  Laboratory for Space Research Groningen 
+       Kapteyn Laboratory Groningen 
+           All Rights Reserved.
+
+#>            irim_flagmask.dc2
+
+
+Function:     irim_flagmask
+
+Purpose:      finds the flags to be taken along in the coadd
+
+Category:     IRAS
+
+Author:       Do Kester
+
+Use:  
+int irim_flagmask( 
+	int	default_flag )
+
+returns: 	flags to coadd (besides the OKFLAG)
+
+Description:
+	The user is asked via the hidden keyword "FLAGS=" which
+	flags are considered OK. Options are Source, Tail and/or Glitch.
+	The first letter suffices.
+
+Comment:	This routine is not callable in FORTRAN	
+
+Updates:      	23 Jan 1992: DK, Creation date
+		04 Aug 1992: DK, into the system
+#<
+*/
+
+#include "gipsyc.h"
+#include "irscan.h"
+#include "userfio.h"
+
+#define FLAG_KEY        "FLAGS="
+#define FLAG_MES        "Take along in coadd: Source Tail Glitch [S,T]"
+
+int irim_flagmask( 
+	int	default_flag )
+{
+	fint		nitem, k, fm, kk, err, def = DFLT_HIDD ;
+	static char	list[81] ;
+	static fchar	fl = { list, 20 } ;
+
+	while ( TRUE ) {
+	  nitem = userfcharu( fl, 4, def, FLAG_KEY, FLAG_MES ) ;
+	  if ( ! nitem ) return( default_flag ) ;
+	  err = fm = k = 0 ;
+	  while ( nitem-- && ! err ) {
+	    switch ( fl.a[k] ) {
+	      case 'S' :
+	      case 'P' : fm |= SOURCEFLAG ;
+			 break ;
+	      case 'T' : fm |= TAILFLAG ;
+			 break ;
+	      case 'G' : fm |= SPIKEFLAG ;
+			 break ;
+	      case '0' : case '1' : case '2' : case '3' : case '4' :
+	      case '5' : case '6' : case '7' : case '8' : case '9' :
+	        if ( k == 0 && nitem == 0 ) { 	/* 1 and only 1 item */
+		  kk = userfint( &fm, 1, DFLT_HIDD, FLAG_KEY, FLAG_MES ) ;
+		} else err = 1 ;
+		break ;
+	      default  : err = 1 ;
+			 break ;
+	    }
+	    k += 20 ;
+	  }
+	  if ( ! err ) return( fm ) ;
+/* error detected; try again but upgrade the default from hidden to default */
+	  anyoutf( ANYOUT_DEF, 
+		"Unknown answer; use PointSource, Tail and/or Glitch" ) ;
+	  def = DFLT_DEF ;
+	  cancel( FLAG_KEY ) ;
+	}
+	return( default_flag ) ;
+}
+
+#undef FLAG_KEY
+#undef FLAG_MES
+#<
+
+#>            irim_flags.c
+/* irim_flags.c
+
+           Copyright (c) 1991
+  Laboratory for Space Research Groningen 
+       Kapteyn Laboratory Groningen 
+           All Rights Reserved.
+
+#>            irim_flags.dc2
+
+Function:     irim_flags
+
+Purpose:      set flags for point sources and tails
+
+Category:     IRAS
+
+Author:       Do Kester
+
+Use:  
+void irim_flags( 
+	fchar		instrument,
+	scan_type	*scan )
+
+Description: 
+	Two circular buffers are applied to the scan data, one for
+	determining glitches and for for point sources. Selected
+	points are flagged as either point source, tail or glitch.
+
+Comment:	This routine is NOT callable in FORTRAN
+
+Updates:      	20 Aug 1991: DK, Creation date
+		04 Aug 1992: DK, into the system.
+		20 Jun 1995: DK, reorder of algoritm to avoid division by 0
+#<
+
+Original:     IMFLAG
+	Structured and translated by ASSISTANT II Plus, v1.2
+*/
+
+#include "math.h"
+#include "gipsyc.h"
+#include "irscan.h"
+#include "userfio.h"
+#include "ircc_bandnr.h"
+#include "ircc_obsmode.h"
+#include "setfblank.h"
+
+static float apply_filter( int*, int, int, float*, int ) ;
+
+#define SUMF		12	/* sum of the absolute filter */
+#define MAXPS   	80.0	/* maximum of pointsource for tailflag */
+#define MAXBAND   	5	/* maximum number of bands: 4 + LRS */
+#define MG   		3	/* length of glitch filter */
+#define MP   		9	/* length of point source filter */
+#define SLOW_KEY        "SLOW="
+#define SLOW_MES        "Point source exclusion factor [%.1f]"
+#define MAX( a, b )	( ( (a) > (b) ) ? (a) : (b) )
+#define MIN( a, b )	( ( (a) < (b) ) ? (a) : (b) )
+
+void irim_flags( 
+	fchar		instrument,
+	scan_type	*scan )
+{
+	float 		slow, pstail, tau, btail, psdec, gl, ps, thold, sn ; 
+	int		i, j, k, n = 0, last, iGliCur, iPntCur ; 
+	fint		band ;
+	float		blank, sum = 0.0, average, bps ;
+
+	static float thres[MAXBAND+1] = { 0.0, 5.0, 5.0, 5.0, 5.0, 5.0 } ; 
+	static float ftail[MAXBAND+1] = { 0.0, 0.04, 0.04, 0.0, 0.0, 0.0 } ; 
+	static float decay[MAXBAND+1] = { 0.0, 0.4, 0.5, 0.0, 0.0, 0.0 } ; 
+	static int	fiGli[MG] = { -3, 6, -3 } ; 
+	static int	fiPnt[MP] = { -1, -1, -1, 2, 2, 2, -1, -1, -1 } ; 
+
+/*  set initial flags and check for valid data */
+	setfblank_c( &blank ) ;
+	for ( k = 0 ; k < scan->id.datlen ; k++ ){
+	    if ( scan->sample.dat[k] == blank ) 
+		scan->sample.flag[k] = OUTAGEFLAG ;
+	    else { 
+		scan->sample.flag[k] = OKFLAG ;
+		sum += scan->sample.dat[k] ;
+		n++ ;
+	    }
+	}
+	if ( ! n ) return ;			/* only blank data */
+
+/*  set the outages temporarily to the average values of the snip */
+	average = sum / n ;
+	for ( k = 0 ; k < scan->id.datlen ; k++ )
+	    if ( scan->sample.flag[k] ) scan->sample.dat[k] = average ;
+
+	band = ircc_bandnr_c( instrument ) ;
+	slow = 1 / scan->id.speed ;
+	k = userfreal( &slow, 1, DFLT_HIDD, SLOW_KEY, SLOW_MES, slow ) ;
+	
+/*  flag for point sources */
+	sn = scan->sample.noise * SUMF ; 
+	psdec = decay[band] * MAX( scan->id.speed, 1.0 ) ; 
+	btail = ftail[band] / sn ; 
+	thold = thres[band] * sn ; 
+	pstail =  - 1.0 ; 
+	tau = (float)pow( 0.1, 1.0 / MAX( slow, 1.0 ) ) ; 
+	last = scan->id.datlen - 1 ;
+	iGliCur = scan->id.datlen - MG / 2 ;
+	iPntCur = scan->id.datlen - MP / 2 ;
+
+/*  determine the other flags */
+	for ( k = 0 ; k < scan->id.datlen ; k++ ) {
+/*  apply glitch filter  */
+	    gl = apply_filter( fiGli, MG, iGliCur, scan->sample.dat, 
+			scan->id.datlen ) ;
+	    if ( ++iGliCur == scan->id.datlen ) iGliCur = 0 ;
+/*  apply source filter  */
+	    ps = apply_filter( fiPnt, MP, iPntCur, scan->sample.dat, 
+			scan->id.datlen ) ;
+	    if ( ++iPntCur == scan->id.datlen ) iPntCur = 0 ;
+/*  set flag for pointsource  */
+	    if ( ps > thold && ps > gl ) {
+	      scan->sample.flag[k] |= SOURCEFLAG ; 
+/*  set pointsource flag on exponential sides of a ps  */
+	      bps = btail * ps ;
+	      bps = MIN( bps, MAXPS ) ;
+	      pstail = MAX( pstail, bps ) - psdec ; 
+	      j = i = k ; 
+	      ps *= tau ; 
+	      while ( ps > thold ) {
+	        j = ( j > 0 ) ? j - 1 : 0 ;
+	        scan->sample.flag[j] |= SOURCEFLAG ; 
+	        i = ( i < last ) ? i + 1 : last ;
+	        scan->sample.flag[i] |= SOURCEFLAG ; 
+	        ps *= tau ; 
+	      }
+/*  set flag for pointsource tail  */
+	    } else if ( pstail > 0 ) {
+	      pstail -= psdec ; 
+	      scan->sample.flag[k] |= TAILFLAG ; 
+	    } else if ( gl > thold ) {
+/*  not a point source  */
+		scan->sample.flag[k] |= SPIKEFLAG ; 
+	    }
+	}
+/*  restore the outages to blanks */
+	for ( k = 0 ; k < scan->id.datlen ; k++ )
+	    if ( scan->sample.flag[k] & OUTAGEFLAG ) 
+		scan->sample.dat[k] = blank ;
+
+}
+
+/************************************************************************/
+
+/* apply filter to circularized data buffer */
+
+static float apply_filter( 
+	int 	*filter,
+	int 	length,		/* length of the filter */
+	int 	index,		/* position pointer in data */
+	float	*data,
+	int	ndat )		/* length of data */
+{
+	float	gl = 0.0, *p ;
+
+	p = data + index ;
+	while ( length-- ) {
+	    gl += (*filter++) * (*p++) ;
+	    if ( ++index == ndat ) p = data ;	/* circularize */
+	}
+	return( gl ) ;
+}
+
+#undef SUMF
+#undef MAXPS
+#undef MG
+#undef MP
+#undef SLOW_KEY
+#undef SLOW_MES
+#undef MIN
+#undef MAX
+#<
+
+#>            irim_rdsnip.c
+/* irim_rdsnip.c
+
+           Copyright (c) 1991
+  Laboratory for Space Research Groningen 
+       Kapteyn Laboratory Groningen 
+           All Rights Reserved.
+
+#>            irim_rdsnip.dc2
+
+Function:     irim_rdsnip
+
+Purpose:      read a detector snip into a scan_type variable
+
+Category:     IRAS
+
+Author:       Do Kester
+
+Use:  
+int irim_rdsnip( 
+	fchar		irds,		IN name of irds
+	fint		snipnr,		IN sequential snip number
+	fint		sdet,		IN sequential detector number
+	fint		coornr,		IN number of plate coord system
+	fint		prid,		IN requested projection type
+	scan_type	*scan )		OUT scan data
+
+Returns:	0 : OK
+		error originating from irds_rd_bphf or irds_rd_samples.
+
+Description:
+	The intensity data of `snipnr,sdet' is read from `irds'.
+	The bphfinfo is also read and trnsformed into projected
+	coordinates in the plate system. The coordinates are in degrees
+	with the x-axis inverted (increasing to the left: looking inside-out).
+	The sine and cosine of the twist angle is calculated.
+	
+Comment: 	This routine is not callable in FORTRAN
+
+Updates:      	20 Aug 1991: DK, Creation date
+		05 Aug 1992: DK, into the system
+#<
+
+*/
+
+#include "stdlib.h"
+#include "math.h"
+#include "gipsyc.h"
+#include "irscan.h"
+#include "userfio.h"
+#include "gdsd_grreal.h"
+#include "irds_rd_samples.h"
+#include "irds_rd_detpos.h"
+#include "irco.h"
+#include "nelc.h"
+
+#define	R2D	57.29577951
+
+int irim_rdsnip(
+	fchar		irds,
+	fint		snipnr,
+	fint		sdet,
+	fint		coornr,
+	fint		prid,
+	scan_type	*scan )
+{
+	fint		tick, length, axis[2], grid[2], nr, error = 0 ;
+	int		i ;
+	double		*pt, *px, *py ;
+	float		*ps, *pc ;
+	static fint	oldsnip = 0, twistMax = 0 ;
+	static double	*twist = NULL ;
+
+/* determine first tick and length of the snip */
+	tick = 1 ;
+	length = scan->id.datlen ;
+	if ( length > twistMax ) {
+	    free( twist ) ;
+	    if ( !( twist = malloc( length*sizeof(double) ) ) ) errorf( FATAL,
+	        "irim_rdsnip: out of memory: request %d", length ) ;
+	    twistMax = length ;
+	}
+/* read intensities of the samples */
+	irds_rd_samples_c( irds, &snipnr, &sdet, &tick, scan->sample.dat,
+			&length, &error ) ;
+	if ( error < 0 ) {
+	    errorf( SERIOUS, "Reading data of snip %d, seq.det %d, error %d",
+		snipnr, sdet, error ) ;
+	    return( error ) ;
+	}
+/* get the noise estimate from snip-det level */
+	axis[0] = 4 ; grid[0] = snipnr ;
+	axis[1] = 3 ; grid[1] = sdet ;
+	nr = 2 ;
+	gdsd_grreal_c( irds, tofchar( "NOISE" ), axis, grid, &nr, 
+			&(scan->sample.noise), &error ) ;
+	if ( error < 0 ) {
+	    errorf( SERIOUS, "Error reading NOISE for snip %d, seq.det %d, error %d",
+		snipnr, sdet, error ) ;
+	    error = 0 ;
+	}
+	irds_rd_detpos_c( irds, &snipnr, &sdet, &tick, &coornr,
+			&prid, scan->sample.x, scan->sample.y,
+			twist, &length, &error ) ;
+/*	anyoutf( ANYOUT_TST, "%d positions read for snip/det/tick %d %d %d", 
+		length, snipnr, sdet, tick ) ; */
+	if ( error < 0 ) {
+	    errorf( SERIOUS, "Reading bphf of snip %d, sdet %d, error %d",
+		snipnr, sdet, error ) ;
+	    return( error ) ;
+	} else if ( error == 1 && snipnr != oldsnip ) {
+	    anyoutf( ANYOUT_TST, "No bphf; intended positions only "
+			"for snip no %d", snipnr ) ;
+	}
+	oldsnip = snipnr ;
+/* convert twist angles to sines and cosines */
+	px = scan->sample.x ;
+	py = scan->sample.y ;
+	ps = scan->sample.se ;
+	pc = scan->sample.ce ;
+	pt = twist ;
+	i = length ;
+	while ( i-- ) {
+/* looking inside-out, x changes sign */
+	    *px++ *= -R2D ;
+	    *py++ *= R2D ;
+	    *ps++ = sin( *pt ) ;
+	    *pc++ = cos( *pt++ ) ;
+	}
+
+	return( 0 ) ;
+}
+#<
+
+#>            irscan.h
+/*   irscan.h
+
+           Copyright (c) 1992
+  Laboratory for Space Research Groningen 
+       Kapteyn Laboratory Groningen 
+           All Rights Reserved.
+
+#>            irscan.dc2
+Include:      irscan.h
+
+Purpose:      typedef of scantype; declarations of functions
+
+Category:     IRAS
+
+Author:       Do Kester
+
+Description:  
+	A scan_type is a struct of 3 structs:
+	  scan_id_type	identification of the scan
+	  stripe_type	destripe parameters
+	  sample_type	sample values
+
+	Functions are present to read a particular scan into a scan_type.
+
+	See also irim_pars.dc2
+
+Updates:      04 Aug 1992: DK, Creation date
+#<
+
+*/
+
+#define SCAN_TYPE	1		/* signal scan_type has been defined */
+
+#define	MAXCAL		3		/* maximum stripe power */
+/* flags on the data samples */
+#define OKFLAG          0               /* data is ok */
+#define OUTAGEFLAG      1               /* outage or overflow: blank data */
+#define SOURCEFLAG      2               /* point source */
+#define TAILFLAG        4               /* tail of point source */
+#define SPIKEFLAG       8               /* glitch */
+
+/* get memory for arrays which is initialized to zero */
+#define FLOAT_INIT( f, n ) \
+	f = (float*)calloc( ( n ), sizeof( float ) ) ; assert( f )
+#define INT_INIT( f, n ) \
+	f = (int*)calloc( ( n ), sizeof( int ) ) ; assert( f )
+#define DOUBLE_INIT( f, n ) \
+	f = (double*)calloc( ( n ), sizeof( double ) ) ; assert( f )
+
+/* free memory of the arrays above */
+#define FREE( p )		free( p ) ; p = NULL 
+
+typedef struct {
+  fint		scannr ;	/* sequential number of this detector-snip */
+  fint		sop ;		/* sop number of the scan */
+  fint		att ; 		/* attitude block number */
+  fint		leg ;		/* leg counter (AOs only; 0 otherwise) */
+  float		speed ;		/* scan speed (AOs only; 1.0 otherwise) */
+  fint		ndets ;		/* number of detectors */
+  fint	 	rate ;	 	/* sample rate */
+  fint		datlen ;	/* length of dat .. se */
+} scan_id_type ; 
+
+#define SCAN_ID_INIT( id ) \
+	id = (scan_id_type*)malloc( sizeof( scan_id_type ) ) ; \
+	assert( id ) 
+#define SCAN_ID_FREE( id )	FREE( id )
+
+typedef struct {
+  fint		det ; 		/* IRAS detector number */
+  float		cal[MAXCAL] ;	/* parameters of the stripe fit */
+  int		ncal ;		/* power of the stripe */
+  float 	timref ; 	/* zeropoint of slope in stripe */
+  float 	scale ; 	/* standard deviation of fit */
+} stripe_type ;
+
+#define STRIPE_INIT( stripe ) \
+	stripe = (stripe_type*)malloc( sizeof( stripe_type ) ) ; \
+	assert( stripe )
+#define STRIPE_FREE( stripe )	FREE( stripe )
+
+typedef struct {
+  float		*dat ;		/* intensities of the sample */
+  float		noise ;		/* noise level in this detector snip */
+  int		*flag ;		/* flag: OK=0, SOURCE=1, TAIL=2, SPIKE=4 */
+  double	*x ;		/* projected x-position (horizontal) */
+  double	*y ;		/* projected y-position (vertical) */
+  float		*ce ;		/* cosine of projected twist angle */
+  float		*se ;		/* sine of projected twist angle */
+} sample_type ;
+
+#define SAMPLE_INIT( sample, n ) \
+		FLOAT_INIT( sample.dat, n ) ;\
+		INT_INIT(  sample.flag, n ) ;\
+		DOUBLE_INIT( sample.x, n ) ;\
+		DOUBLE_INIT( sample.y, n ) ;\
+		FLOAT_INIT( sample.ce, n ) ;\
+		FLOAT_INIT( sample.se, n ) 
+#define SAMPLE_FREE( sample )	\
+		FREE( sample.dat ) ;\
+		FREE( sample.flag) ;\
+		FREE( sample.x   ) ;\
+		FREE( sample.y   ) ;\
+		FREE( sample.ce  ) ;\
+		FREE( sample.se  )
+
+typedef struct {
+  scan_id_type	id ;		/* identification */
+  stripe_type	stripe ;	/* destripe parameters */
+  sample_type	sample ;	/* array of samples */
+} scan_type ;
+
+#define SCAN_INIT( scan ) \
+	scan = (scan_type*)malloc( sizeof( scan_type ) ) ;\
+	assert( scan )
+#define SCAN_FREE( scan)	SAMPLE_FREE( scan->sample ) ;\
+				STRIPE_FREE( scan->stripe ) ;\
+				SCAN_ID_FREE( scan->id ) ; FREE( scan )
+
+#undef FLOAT_INIT
+#undef INT_INIT
+#undef DOUBLE_INIT
+#undef FREE
+
+int irim_checkbphf(
+        fchar   ,			/* irds */
+        fint    ) ;			/* snipnr */
+int irim_flagmask( 
+	int ) ;				/* default flagmask */
+void irim_flags(
+	fchar,				/* instrument */
+	scan_type* );			/* scan 	*/
+int irim_rdsnip(			/* succes ? 	*/
+	fchar,				/* irds name	*/
+	fint,				/* snip number	*/
+	fint,				/* seq det number 	*/
+	fint,				/* coor nr of plate system */
+	fint,				/* projection type */
+	scan_type * );			/* scan		*/
+#<

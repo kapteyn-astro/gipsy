@@ -1,0 +1,21 @@
+
+Script:       archreset
+
+Purpose:      Reset a specified architecture in the bookkeeper file
+              so that all sources will be rebuild.
+
+Category:     SYSTEM MANAGEMENT
+
+File:         archreset.csh
+
+Author:       K.G. Begeman
+
+Use:          $gip_sys/archreset.csh architecture ( for csh )
+              $gip_sys/archreset.sh  architecture ( for sh )
+
+Description:  A modified bookkeeper file (bookkeeper.new) will be
+              created.
+
+Updates:      Jun 20, 1992: KGB Document created.
+              Mar 23, 1993: KGB also for sh.
+

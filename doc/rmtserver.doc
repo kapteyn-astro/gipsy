@@ -1,0 +1,62 @@
+
+Program:      rmtserver
+
+Purpose:      Allows access to remote tape units.
+
+Category:     TAPES
+
+File:         rmtserver.c
+
+Author:       K.G. Begeman
+
+Use:          rmtserver can be used in two modes: the server mode
+              and the local mode. In server mode rmtserver acts as
+              a daemon and has to be started on the hosts which have
+              tape devices attached. It has to be started only once
+              with the following command line:
+
+              rmtserver -daemon <directory>
+
+              The directory is the directory where the file mtdevices
+              resides (normaly $gip_loc). rmtserver will examine this
+              file whether there are any tape devices associated with
+              the current host (field #3), and if so it will run in
+              daemon mode.
+              rmtserver can best be started by crontab every hour. You
+              can use the rmtserver.csh script (in $gip_sys) for this.
+              rmtserver can also be started via the /etc/rc.local or
+              /etc/localrc scripts. You have to ask the system mananger
+              to add the following lines:
+
+              # Start remote tape server
+              if [ -f $gip_exe/rmtserver ]; then
+                      $gip_exe/rmtserver -daemon $gip_loc
+                      echo -n ' GIPSY Remote Tape Server'
+              fi
+
+              Note: the $gip_exe and the $gip_loc symbols will probably
+              be undefined, so you will have to replace them with the
+              real path names.
+
+              The internet portnumber should be specified in field #7
+              of the $gip_loc/mtdevices setup file, or the system
+              manager must also edit the /etc/services file
+              to add the port for the rmtserver in the following way:
+
+              # GIPSY functions
+              GIPSYRTS        3198/tcp        # GIPSY Remote Tape Service
+
+              It does not matter which portnumber you specify (here 3198),
+              as long as all hosts which run GIPSY and which have tape
+              devices use the same portnumber.
+
+              The other mode of operation of rmtserver is the local mode.
+              In this mode rmtserver is started by the mtopen routine.
+              It can only work properly if the user has access to
+              the remote host. On the remote host the local host must be
+              added to the .rhosts file in the users home directory. Also
+              the .cshrc on the remote system must properly setup the
+              GIPSY environment.
+
+Updates:      Oct 11, 1991: KGB Document created.
+

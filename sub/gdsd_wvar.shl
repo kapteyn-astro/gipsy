@@ -1,0 +1,121 @@
+	SUBROUTINE GDSD_WVAR(FILNAM,KEY,LEVEL,RECORD,ERROR)
+*@subroutine gdsd_wvar(character,character,integer,character,integer)
+*#>gdsd_wvar.dc2
+*Name:         GDSD_WVAR
+*
+*Purpose:      Write variable length record to descriptor item.
+*
+*Category:     GDS
+*
+*File:         gdsd_wvar.shl
+*
+*Author:       J.P. Terlouw
+*
+*Use:	       CALL GDSD_WVAR ( SET ,                Input   CHARACTER*(*) 
+*                               NAME ,               Input   CHARACTER*20
+*                               LEVEL ,              Input   INTEGER
+*                               RECORD ,             Output  CHARACTER*(*)
+*                               ERROR )              Output  INTEGER
+*
+*              SET     =  Name or handle of set.
+*              NAME    =  Name of item.
+*              LEVEL   =  Coordinate word specifying the substructure 
+*                         to which the record will be written.
+*              RECORD  =  Variable containing the data. It must not be
+*                         larger than 150 characters.
+*              ERROR   =  Error return code.
+*
+*             This routine writes at the end of the descriptor item.
+*             The primary purpose of this routine is writing comment
+*             or history data.
+*
+*See also:    gdsd_rvar.dc2
+*
+*Updates:      25-May-87   original document
+*              14-Dec-89   converted to GPS
+*              25-Mar-94   modified for GDS server
+*#<
+	PARAMETER         (MAXSIZ=150)
+
+	CHARACTER*(*)      FILNAM
+	CHARACTER*(*)      KEY
+	INTEGER            LEVEL
+	CHARACTER*(*)      RECORD
+	INTEGER            ERROR,ERROR_I
+
+	INTEGER            RECLEN
+	CHARACTER*(MAXSIZ) RECORD_I
+        CHARACTER*4        LENIND
+	LOGICAL            BOOLER
+
+
+	RECLEN=LEN(RECORD)
+	CALL GDS___CHECKL(RECLEN.LE.MAXSIZ,-1,ERROR,*RETURN)
+        WRITE(LENIND,'(I4)') RECLEN
+	CALL GDSD_WRITEC(FILNAM,KEY,LEVEL,LENIND,4,0,ND,ERROR)
+	CALL GDSD_WRITEC(FILNAM,KEY,LEVEL,RECORD,RECLEN,0,ND,ERROR)
+	RETURN
+
+
+	ENTRY GDSD_RVAR(FILNAM,KEY,LEVEL,RECORD,ERROR)
+*@subroutine gdsd_rvar(character,character,integer,character,integer)
+*#>gdsd_rvar.dc2
+*Name:         GDSD_RVAR
+*
+*Purpose:      Read variable length record from descriptor item.
+*              
+*Category:     GDS
+*
+*File:         gdsd_wvar.shl
+*
+*Author:       J.P. Terlouw
+*
+*Use:          CALL GDSD_RVAR ( SET ,                Input   CHARACTER*(*)
+*                               NAME ,               Input   CHARACTER*20
+*                               LEVEL ,              Input   INTEGER
+*                               RECORD ,             Output  CHARACTER*(*)
+*                               ERROR )              Output  INTEGER
+*
+*              SET     =  Name or handle of set.
+*              NAME    =  Name of item.
+*              LEVEL   =  Coordinate word specifying the substructure
+*                         to which the record it to be obtained. If it is not
+*                         present at this level, higher levels are inspected
+*                         until the item is found or proven to be absent.
+*              RECORD  =  Variable receiving the data.
+*                         larger than 150 characters.
+*              ERROR   =  Error return code.
+*
+*              This routine reads at the current read position.
+*
+*See also:     gdsd_wvar.dc2
+*
+*Updates:      25-May-87   original document
+*              14-Dec-89   converted to GPS
+*              25-Mar-94   modified for GDS server
+*#<
+
+
+	RECORD_I=' '
+	ERROR_I=0
+	CALL GDSD_READC(FILNAM,KEY,LEVEL,LENIND,4,0,ND,ERROR_I)
+	CALL GDS___CHECKL(ERROR_I.GE.0,ERROR_I,ERROR,*RETURN)
+	BOOLER= ND.EQ.4
+        IF BOOLER
+        THEN
+        READ(LENIND,'(I4)',ERR=SETERR) RECLEN
+        BOOLER = BOOLER .AND. RECLEN.GT.0 .AND. RECLEN.LE.MAXSIZ
+        CIF
+	CALL GDS___CHECKL(BOOLER,-26,ERROR,*RETURN)
+	CALL GDSD_READC(FILNAM,KEY,LEVEL,
+     -                  RECORD_I,RECLEN,0,ND,ERROR_I)
+	CALL GDS___CHECKL(ERROR_I.GE.0,ERROR_I,ERROR,*RETURN)
+	RECORD=RECORD_I
+	CALL GDS___CHECKL(RECLEN.LE.LEN(RECORD),-25,ERROR,*RETURN)
+	RETURN
+
+        PROC SETERR
+        BOOLER=.FALSE.
+        CPROC
+
+	END

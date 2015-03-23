@@ -1,0 +1,560 @@
+       SUBROUTINE GDSD_WFITS(FILNAM,KEY,LEVEL,FREC,ERROR)
+*@subroutine gdsd_wfits(character,character,integer,character,integer)
+*#>gdsd_wfits.dc2
+*Subroutine:          GDSD_WFITS
+*
+*Purpose:       Write FITS-type descriptor item
+*
+*File:          gdsd_wfits.shl
+*
+*Category:      GDS
+*
+*Author:        J.P. Terlouw
+*
+*Use:           CALL GDSD_WFITS ( file_id, *name, level, record, *error )
+*
+*               file_id  =     file identifier,                    CHARACTER
+*             * name     =     name of FITS item. If omitted, the keyword
+*                              found in `record' is used.          CHARACTER*8
+*               level    =     coordinate word specifying the
+*                              substructure to which the FITS
+*                              item belongs.                       INTEGER
+*               record   =     FITS record, consisting of keyword,
+*                              data and comment. The keyword need
+*                              not be present if `name' is specified.
+*                                                                  CHARACTER*80
+*             * error    =     error return code                   INTEGER
+*
+*Other entries: GDSD_RFITS, GDSD_RINT, GDSD_WINT, GDSD_RREAL, GDSD_WREAL,
+*               GDSD_RDBLE, GDSD_WDBLE, GDSD_RLOG, GDSD_WLOG, 
+*               GDSD_RCHAR, GDSD_WCHAR.
+*
+*Updates:      25-May-87   original document
+*              14-Dec-89   brought under GPS
+*#<
+
+CCC	PARAMETER (IS_INT=-45,IS_REAL=-46,IS_DBLE=-47)
+
+	CHARACTER*(*)     FILNAM
+	CHARACTER*(*)     KEY
+        CHARACTER*8       KEY_I
+	INTEGER           LEVEL,ERROR,ERROR_I
+	CHARACTER*80      FREC,FREC_I
+
+        LOGICAL           PRESENTN,PRESENTC,BOOLER
+
+	INTEGER           INTVAL,INT_I
+	REAL              REALVAL,REAL_I
+	DOUBLE PRECISION  DBLEVAL,DBLE_I
+	LOGICAL           LOGVAL
+	CHARACTER*(*)     CHARVAL
+        CHARACTER*5       FTSD_TYPE
+	CHARACTER*68      CHARVAL_I
+
+	PERFORM CHKARG
+
+	IF PRESENTC(KEY)
+	THEN
+	KEY_I=KEY
+	ELSE
+	KEY_I=FREC(1:8)
+	CIF
+
+	FREC_I='FITS '//FTSD_TYPE(FREC)//FREC(11:80)
+	CALL GDSD_WRITEC(FILNAM,KEY_I,LEVEL,FREC_I,80,1,ND,ERROR)
+	RETURN
+
+N
+N
+N  >>>  GDSD_RFITS  <<<
+	ENTRY GDSD_RFITS(FILNAM,KEY,LEVEL,FREC,ERROR)
+*@subroutine gdsd_rfits(character,character,integer,character,integer)
+*#>gdsd_rfits.dc2
+*Subroutine:    GDSD_RFITS
+*
+*Purpose:       Read FITS descriptor item
+*
+*File:          gdsd_wfits.shl
+*
+*Category:      GDS
+*
+*Author:        J.P. Terlouw
+*
+*Use:           CALL GDSD_RFITS ( file_id, *name, level, record, *error )
+*
+*               file_id  =     file identifier,                    CHARACTER
+*             * name     =     name of FITS item. If omitted, the keyword
+*                              found in `record' is used.          CHARACTER*8
+*               level    =     coordinate word specifying the
+*                              substructure from which the FITS
+*                              item is to be obtained. If it is not
+*                              present at this level, higher levels are
+*                              inspected until the item is found or proven
+*                              to be not present.                  INTEGER
+*               record   =     FITS record, consisting of keyword,
+*                              data and comment.                   CHARACTER*80
+*             * error    =     error return code,                  INTEGER
+*
+*Updates:      25-May-87   original document
+*              14-Dec-89   brought under GPS
+*#<
+
+	PERFORM CHKARG
+	KEY_I=KEY
+
+	CALL GDSD_READC(FILNAM,KEY_I,LEVEL,FREC_I,80,1,ND,ERROR_I)
+	CALL GDS___CHECK(FREC_I(1:4).EQ.'FITS',-18,ERROR,*RETURN)
+	FREC=KEY_I//'= '//FREC_I(11:ND)
+	BOOLER=ERROR_I.GE.0.OR.ERROR_I.EQ.-4
+	CALL GDS___CHECK(BOOLER,ERROR_I,ERROR,*RETURN)
+	IF PRESENTN(ERROR)
+	THEN
+	ERROR = ERROR_I
+	CIF
+	RETURN
+
+
+*#>gdsd_wxxx.dc2
+*Name:          GDSD_Wxxx
+*
+*Purpose:       Write FITS data field
+*
+*File:          gdsd_wfits.shl
+*
+*Category:      GDS
+*
+*Author:        J.P. Terlouw
+*
+*Use:           CALL GDSD_Wxxx ( file_id, name, level, value, *error )
+*
+*               xxx      can be REAL, DBLE, INT, LOG or CHAR, depending
+*                        upon type of `value'.
+*
+*               file_id  =     file identifier,                    CHARACTER
+*               name     =     name of FITS item.                  CHARACTER*8
+*               level    =     coordinate word specifying the
+*                              substructure at which the FITS
+*                              item is to be written.              INTEGER
+*               value    =     variable containing the data for the
+*                              FITS record. Depending on `xxx', the type
+*                              can be REAL, DOUBLE, INTEGER,
+*                              LOGICAL or CHARACTER*(*).
+*             * error    =     error return code,                  INTEGER
+*
+*              If this routine writes to an existing FITS item, only
+*              the value field is changed; the comment field is not
+*              affected.
+*
+*Updates:      25-May-87   original document
+*              14-Dec-89   adjusted to GPS
+*              Feb 24, 2010: JPT, support up to 68 characters in GDSD_WCHAR
+*#<
+*#>gdsd_rxxx.dc2
+*Name:          GDSD_Rxxx
+*
+*Purpose:       Read FITS data field
+*
+*File:          gdsd_wfits.shl
+*
+*Category:      GDS
+*
+*Author:        J.P. Terlouw
+*
+*Use:           CALL GDSD_Rxxx ( file_id, name, level, value, *error )
+*
+*               xxx      can be REAL, DBLE, INT, LOG or CHAR, depending
+*                        upon type of `value'.
+*
+*               file_id  =     file identifier,                    CHARACTER
+*               name     =     name of FITS item.                  CHARACTER*8
+*               level    =     coordinate word specifying the
+*                              substructure from which the FITS
+*                              item is to be obtained. If it is not
+*                              present at this level, higher levels are
+*                              inspected until the item is found or proven
+*                              to be not present.                  INTEGER
+*               value    =     variable receiving the data from the
+*                              FITS record. Depending on `xxx', the type
+*                              can be REAL, DOUBLE, INTEGER, 
+*                              LOGICAL or CHARACTER*(*).
+*                              If a number was requested in a different
+*                              format than has been stored in the file,
+*                              it is converted to the requested type 
+*                              (integers are rounded) and an error code 
+*                              is returned.
+*             * error    =     error return code,                  INTEGER
+*                              -21 :  number conversion error
+*                              -22 :  incompatible type
+*                              or level where item was found if call
+*                              was succesful.
+*                              
+*
+*Updates:      25-May-87   original document
+*              14-Dec-89   changed to GPS
+*              03-Jan-01   eliminated error codes -45, -46 and -47
+*              Feb 24, 2010: JPT, support up to 68 characters in GDSD_RCHAR
+*#<
+
+N
+N  >>>  GDSD_WINT  <<<
+N
+	ENTRY GDSD_WINT(FILNAM,KEY,LEVEL,INTVAL,ERROR)
+*@subroutine gdsd_wint(character,character,integer,integer,integer)
+
+*#>gdsd_wint.dc2
+*Name:      GDSD_WINT
+*
+*Purpose:   See GDSD_Wxxx
+*
+*File:          gdsd_wfits.shl
+*
+*Category:      GDS
+*
+*Author:        J.P. Terlouw
+*#<
+
+	PERFORM CHKARG
+	KEY_I=KEY
+
+	WRITE(FREC_I,'(''FITS INT  '',I20)',ERR=FMTERR) INTVAL
+	CALL GDSD_WRITEC(FILNAM,KEY_I,LEVEL,FREC_I,30,1,ND,ERROR_I)
+	CALL GDS___CHECK(ERROR_I.GE.0,ERROR_I,ERROR,*RETURN)
+
+	RETURN
+
+N
+N  >>>  GDSD_RINT  <<<
+	ENTRY GDSD_RINT(FILNAM,KEY,LEVEL,INTVAL,ERROR)
+*@subroutine gdsd_rint(character,character,integer,integer,integer)
+
+*#>gdsd_rint.dc2
+*Name:      GDSD_RINT
+*
+*Purpose:   See GDSD_Rxxx
+*
+*File:          gdsd_wfits.shl
+*
+*Category:      GDS
+*
+*Author:        J.P. Terlouw
+*#<
+
+	PERFORM GETREC
+	IF FREC_I(1:10).EQ.'FITS INT  '
+     -	       .OR.FREC_I(1:10).EQ.'FITS      '
+	THEN
+	PERFORM DCINT
+	ELSE
+	PERFORM GETNUM
+	CIF
+	INTVAL=INT_I
+	PERFORM CLNUP
+
+	RETURN
+
+N
+N  >>>> GDSD_WREAL  <<<<
+	ENTRY GDSD_WREAL(FILNAM,KEY,LEVEL,REALVAL,ERROR)
+*@subroutine gdsd_wreal(character,character,integer,real,integer)
+
+*#>gdsd_wreal.dc2
+*Name:      GDSD_WREAL
+*
+*Purpose:   See GDSD_Wxxx
+*
+*File:          gdsd_wfits.shl
+*
+*Category:      GDS
+*
+*Author:        J.P. Terlouw
+*#<
+
+	PERFORM CHKARG
+	KEY_I=KEY
+
+	WRITE(FREC_I,'(''FITS REAL '',G20.8)',ERR=FMTERR) REALVAL
+	CALL GDSD_WRITEC(FILNAM,KEY_I,LEVEL,FREC_I,30,1,ND,ERROR_I)
+	CALL GDS___CHECK(ERROR_I.GE.0,ERROR_I,ERROR,*RETURN)
+
+	RETURN
+
+N
+N  >>>> GDSD_RREAL
+N
+	ENTRY GDSD_RREAL(FILNAM,KEY,LEVEL,REALVAL,ERROR)
+*@subroutine gdsd_rreal(character,character,integer,real,integer)
+
+*#>gdsd_rreal.dc2
+*Name:      GDSD_RREAL
+*
+*Purpose:   See GDSD_Rxxx
+*
+*File:          gdsd_wfits.shl
+*
+*Category:      GDS
+*
+*Author:        J.P. Terlouw
+*#<
+
+	PERFORM GETREC
+	IF FREC_I(1:10).EQ.'FITS REAL '
+     -	       .OR.FREC_I(1:10).EQ.'FITS      '
+	THEN
+	PERFORM DCREAL
+	ELSE
+	PERFORM GETNUM
+	CIF
+	REALVAL=REAL_I
+	PERFORM CLNUP
+
+	RETURN
+N
+N >>>> GDSD_WDBLE <<<<
+N
+	ENTRY GDSD_WDBLE(FILNAM,KEY,LEVEL,DBLEVAL,ERROR)
+*@subroutine gdsd_wdble(character,character,integer,double precision,integer)
+
+*#>gdsd_wdble.dc2
+*Name:      GDSD_WDBLE
+*
+*Purpose:   See GDSD_Wxxx
+*
+*File:          gdsd_wfits.shl
+*
+*Category:      GDS
+*
+*Author:        J.P. Terlouw
+*#<
+
+	PERFORM CHKARG
+	KEY_I=KEY
+
+	WRITE(FREC_I,'(''FITS DBLE '',D20.14)',ERR=FMTERR) DBLEVAL
+	CALL GDSD_WRITEC(FILNAM,KEY_I,LEVEL,FREC_I,30,1,ND,ERROR_I)
+	CALL GDS___CHECK(ERROR_I.GE.0,ERROR_I,ERROR,*RETURN)
+
+	RETURN
+N
+N >>>> GDSD_RDBLE <<<<
+N
+	ENTRY GDSD_RDBLE(FILNAM,KEY,LEVEL,DBLEVAL,ERROR)
+*@subroutine gdsd_rdble(character,character,integer,double precision,integer)
+
+*#>gdsd_rdble.dc2
+*Name:      GDSD_RDBLE
+*
+*Purpose:   See GDSD_Rxxx
+*
+*File:          gdsd_wfits.shl
+*
+*Category:      GDS
+*
+*Author:        J.P. Terlouw
+*#<
+
+	PERFORM GETREC
+	IF FREC_I(1:10).EQ.'FITS DBLE '
+     -	       .OR.FREC_I(1:10).EQ.'FITS      '
+	THEN
+	PERFORM DCDBLE
+	ELSE
+	PERFORM GETNUM
+	CIF
+	DBLEVAL=DBLE_I
+	PERFORM CLNUP
+
+	RETURN
+
+N
+N >>>> GDSD_WLOG <<<<
+N
+	ENTRY GDSD_WLOG(FILNAM,KEY,LEVEL,LOGVAL,ERROR)
+*@subroutine gdsd_wlog(character,character,integer,logical,integer)
+
+*#>gdsd_wlog.dc2
+*Name:      GDSD_WLOG
+*
+*Purpose:   See GDSD_Wxxx
+*
+*File:          gdsd_wfits.shl
+*
+*Category:      GDS
+*
+*Author:        J.P. Terlouw
+*#<
+
+	PERFORM CHKARG
+	KEY_I=KEY
+
+	WRITE(FREC_I,'(''FITS LOG  '',L20)',ERR=FMTERR) LOGVAL
+	CALL GDSD_WRITEC(FILNAM,KEY_I,LEVEL,FREC_I,30,1,ND,ERROR_I)
+	CALL GDS___CHECK(ERROR_I.GE.0,ERROR_I,ERROR,*RETURN)
+
+	RETURN
+
+N
+N  >>>> GDSD_RLOG <<<<
+N
+	ENTRY GDSD_RLOG(FILNAM,KEY,LEVEL,LOGVAL,ERROR)
+*@subroutine gdsd_rlog(character,character,integer,logical,integer)
+
+*#>gdsd_rlog.dc2
+*Name:      GDSD_RLOG
+*
+*Purpose:   See GDSD_Rxxx
+*
+*File:          gdsd_wfits.shl
+*
+*Category:      GDS
+*
+*Author:        J.P. Terlouw
+*#<
+
+	PERFORM CHKARG
+	KEY_I=KEY
+
+	CALL GDSD_READC(FILNAM,KEY_I,LEVEL,FREC_I,30,1,ND,ERROR_I)
+	BOOLER=ERROR_I.GE.0.OR.ERROR_I.EQ.-4
+	CALL GDS___CHECK(BOOLER,ERROR_I,ERROR,*RETURN)
+	BOOLER=FREC_I(1:10).EQ.'FITS LOG  '
+     -	       .OR.FREC_I(1:10).EQ.'FITS      '
+	CALL GDS___CHECK(BOOLER,-22,ERROR,*RETURN)
+	READ(FREC_I(11:30),'(L20)',ERR=FMTERR) LOGVAL
+	CALL GDS___CHECK(ERROR_I.GE.0,ERROR_I,ERROR,*RETURN)
+	IF PRESENTN(ERROR)
+	THEN
+	ERROR = ERROR_I
+	CIF
+
+
+	RETURN
+
+N
+N >>>> GDSD_WCHAR <<<<
+N
+	ENTRY GDSD_WCHAR(FILNAM,KEY,LEVEL,CHARVAL,ERROR)
+*@subroutine gdsd_wchar(character,character,integer,character,integer)
+
+*#>gdsd_wchar.dc2
+*Name:      GDSD_WCHAR
+*
+*Purpose:   See GDSD_Wxxx
+*
+*File:          gdsd_wfits.shl
+*
+*Category:      GDS
+*
+*Author:        J.P. Terlouw
+*#<
+
+	PERFORM CHKARG
+	KEY_I=KEY
+	CHARVAL_I=CHARVAL
+
+	WRITE(FREC_I,ERR=FMTERR,
+     -  FMT='(''FITS CHAR '''''',A,'''''''')')
+     -  CHARVAL_I(1:MIN(MAX(NELC(CHARVAL),18),68))
+	CALL GDSD_WRITEC(FILNAM,KEY_I,LEVEL,FREC_I,80,1,ND,ERROR_I)
+	CALL GDS___CHECK(ERROR_I.GE.0,ERROR_I,ERROR,*RETURN)
+
+	RETURN
+
+N
+N >>>> GDSD_RCHAR <<<<
+N
+	ENTRY GDSD_RCHAR(FILNAM,KEY,LEVEL,CHARVAL,ERROR)
+*@subroutine gdsd_rchar(character,character,integer,character,integer)
+
+*#>gdsd_rchar.dc2
+*Name:      GDSD_RCHAR
+*
+*Purpose:   See GDSD_Rxxx
+*
+*File:          gdsd_wfits.shl
+*
+*Category:      GDS
+*
+*Author:        J.P. Terlouw
+*#<
+
+	PERFORM CHKARG
+	KEY_I=KEY
+
+	CALL GDSD_READC(FILNAM,KEY_I,LEVEL,FREC_I,80,1,ND,ERROR_I)
+	BOOLER=ERROR_I.GE.0.OR.ERROR_I.EQ.-4
+	CALL GDS___CHECK(BOOLER,ERROR_I,ERROR,*RETURN)
+	BOOLER=FREC_I(1:10).EQ.'FITS CHAR'
+     -	       .OR.FREC_I(1:10).EQ.'FITS      '
+	CALL GDS___CHECK(BOOLER,-22,ERROR,*RETURN)
+	KEND=INDEX(FREC_I(20:80),'''')+18
+	READ(FREC_I(12:KEND),'(A)',ERR=FMTERR) CHARVAL_I
+	CHARVAL=CHARVAL_I
+	CALL GDS___CHECK(ERROR_I.GE.0,ERROR_I,ERROR,*RETURN)
+	IF PRESENTN(ERROR)
+	THEN
+	ERROR = ERROR_I
+	CIF
+
+	RETURN
+
+        PROC GETREC
+	PERFORM CHKARG
+	KEY_I=KEY
+	CALL GDSD_READC(FILNAM,KEY_I,LEVEL,FREC_I,30,1,ND,ERROR_I)
+N  Short record (-4) allowed
+	BOOLER = ERROR_I.GE.0.OR.ERROR_I.EQ.-4
+	CALL GDS___CHECK(BOOLER,ERROR_I,ERROR,*RETURN)
+        CPROC
+
+	PROC GETNUM
+	IF      FREC_I(1:10).EQ.'FITS INT  '
+	THEN
+CCC	ERROR_I=IS_INT
+	PERFORM DCINT
+	REAL_I=INT_I
+	DBLE_I=INT_I
+	ELSEIF FREC_I(1:10).EQ.'FITS REAL '
+	THEN
+CCC	ERROR_I=IS_REAL
+	PERFORM DCREAL
+	INT_I=NINT(REAL_I)
+	DBLE_I=REAL_I
+	ELSEIF FREC_I(1:10).EQ.'FITS DBLE '
+	THEN
+CCC	ERROR_I=IS_DBLE
+	PERFORM DCDBLE
+	INT_I=NINT(DBLE_I)
+	REAL_I=DBLE_I
+	ELSE
+	ERROR_I=-22
+	CIF
+	CPROC
+
+	PROC CHKARG
+	ERROR_I=0
+	CPROC
+
+	PROC CLNUP
+	CALL GDS___CHECK(ERROR_I.GE.0,ERROR_I,ERROR,*RETURN)
+	IF PRESENTN(ERROR)
+	THEN
+	ERROR = ERROR_I
+	CIF
+	CPROC
+
+	PROC DCINT
+	READ(FREC_I(11:30),'(BN,I20)',ERR=FMTERR) INT_I
+	CPROC
+	PROC DCREAL
+	READ(FREC_I(11:30),'(BN,F20.0)',ERR=FMTERR) REAL_I
+	CPROC
+	PROC DCDBLE
+	READ(FREC_I(11:30),'(BN,D20.0)',ERR=FMTERR) DBLE_I
+	CPROC
+
+	PROC FMTERR
+	ERROR_I=-21
+	CPROC
+
+	END
+

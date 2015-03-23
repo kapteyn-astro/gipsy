@@ -1,0 +1,92 @@
+extract-qrc.src
+
+        Copyright (c) Kapteyn Astronomical Institute, Groningen 2014
+        All Rights Reserved.
+
+Name:         extract-qrc.src
+Creator:      vogelaar
+Host:         albirumi
+Date:         Feb 6, 2014
+Contents:     extract-qrc.make extract-qrc.dc1 extract-qrc.py
+
+#>            extract-qrc.make
+#----------------------------------------------------------------------
+# Makefile for task EXTRACT-QRC (extract-qrc.make)
+#
+# Pack sources into extract-qrc.src with: > make -f extract-qrc.make pack
+# Unpack source files with:               > $gip_exe/xfile extract-qrc.src
+# Install source file with:               > p -reserve extract-qrc.src
+#                                         > p -install extract-qrc.src
+#
+#----------------------------------------------------------------------
+
+SHELL   = /bin/sh
+
+DOCUMENTS = extract-qrc.dc1
+
+SOURCES   = extract-qrc.py
+
+default:: extract-qrc
+
+extract-qrc : extract-qrc.py
+	cp extract-qrc.py extract-qrc
+	chmod +x extract-qrc
+
+pack::
+	$$gip_sys/pack.csh extract-qrc.src extract-qrc.make \
+	$(DOCUMENTS) $(SOURCES)
+
+#<
+
+#>            extract-qrc.dc1
+Program:       EXTRACT-QRC
+
+Purpose:       Program to extract resources from a QT resource file.
+               This tool is useful to developpers only
+
+Category:      UTILITY
+
+File:          extract-qrc.src
+
+Author:        M.G.R. Vogelaar
+
+Keywords:
+
+Description:   Example. Task VISIONS uses import res_viewer.py as its
+               resource file with icons and internal html documentation.
+               If you need to  modify these resources, you can extract tham 
+               with $gip_exe/extract-qrc res_viewer.py on the Unix command line.
+               The utility is comparable to $gip_exe/xfile
+
+Updates:       VOG: Feb 06, 2014: VOG document created.
+
+
+#<
+
+#>            extract-qrc.py
+#!/usr/bin/env python
+
+import sys
+from PyQt4.QtCore import QDir, QFile
+try:
+   filename = sys.argv[1]
+except:
+   print('Usage: argv[0] <resource module file>')
+   sys.exit(1)
+try:
+   modulename = filename.split('.')[0]
+   exec('import %s' % modulename)
+except:
+   print('Cannot import %s as module' % filename)
+
+d = QDir(':')
+
+for name in d.entryList():
+   f = QFile(':'+name)
+   if f.copy(name):
+      print('+ %s' % name)
+   else:
+      print('- %s' % name)
+   f.close()
+
+#<

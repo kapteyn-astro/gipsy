@@ -1,0 +1,117 @@
+      INTEGER FUNCTION CONVPARS( oldbeam, newbeam, phiold, phinew, 
+     #                           conbeam, phicon )
+C----------------------------------------------------------------------
+C#>            convpars.dc2
+C
+CFunction:     CONPVARS
+C
+CPurpose:      Determine parameters of 2d-gaussian needed to convolve
+C              'oldbeam' to 'newbeam'
+C
+CFiles:        convpars.shl
+C
+CAuthor:       M. Vogelaar
+C
+CCategory:     CONVOLUTION
+C
+CUse:          INTEGER CONVPARS( oldbeam, I     REAL ARRAY
+C                                newbeam, I     REAL ARRAY
+C                                phiold,  I     REAL
+C                                phinew,  I     REAL
+C                                conbeam, O     REAL ARRAY 
+C                                phicon   O     REAL )
+C
+CDescription:  Note that all angles are in DEGREES and wrt. pos. X-axis!
+C              Conv. beam values can be calculated with formulas given by 
+C              J. P. Wild in Aust. J. Phys.,1970,23,113-115
+C              A distribution (F2) is convolved with a gaussian (F1) and the 
+C              result is a new distribution (F0). For the distributions we can 
+C              write: F0 = F1*F2 (where * denotes a 2-dim convolution).
+C              This function finds the beam and angle of F1.
+C              In what follows a and b denote the major and minor SEMI-axes 
+C              and 'th' is the angle of the major axis with the positive 
+C              X-axis. 
+C
+CNotes:        All angles are in DEGREES and wrt. pos. X-axis! 
+C
+CUpdates:      Sep 10, MV, Document created
+C
+C#<
+C
+C@ integer function convpars( real, real, real, real, real, real )
+C----------------------------------------------------------------------  
+
+      REAL               oldbeam(2), newbeam(2), conbeam(2)
+      REAL               phiold, phinew, phicon
+      REAL               a0, a1, a2
+N     Minor axes    
+      REAL               b0, b1, b2
+N     Position angles 
+      REAL               th0, th1, th2, twoth1
+N     Help variables
+      REAL               D0, D1, D2
+N     Nominator and denominator for ATAN2 fie.
+      REAL               nom, denom
+N     Convert degrees to radians
+      REAL               degtorad
+N     Convert radians to degrees
+      REAL               radtodeg
+N     Used to control argument of functions      
+      REAL               argument     
+
+      degtorad = ATAN(1.0) / 45.0 
+N     Convert radians to degrees
+      radtodeg = 45.0 / ATAN(1.0) 
+
+      a2 = oldbeam(1) / 2.0
+      b2 = oldbeam(2) / 2.0
+      a0 = newbeam(1) / 2.0
+      b0 = newbeam(2) / 2.0
+      D0 = a0*a0 - b0*b0
+      D2 = a2*a2 - b2*b2
+N     Convert Wild's angles to radians        
+      th2 = phiold * degtorad
+      th0 = phinew * degtorad
+N     Apply the quoted formulas
+      D1 = SQRT( D0*D0 + D2*D2 - 2.0*D0*D2*COS( 2.0*(th0-th2) )  )	
+      argument = 0.5 * ( a0*a0 + b0*b0 - a2*a2 - b2*b2 + D1 ) 
+      IF ( argument .LT. 0.0 )
+      THEN
+        CALL ANYOUT( 8, 'Unsuitable new beam parameters!' )
+        CONVPARS = -1
+        RETURN
+      ELSE
+        a1 = SQRT( argument )
+      CIF
+      argument = 0.5 * ( a0*a0 + b0*b0 - a2*a2 - b2*b2 - D1 ) 
+      IF ( argument .LT. 0.0 )
+      THEN
+        CALL ANYOUT( 8, 'Unsuitable new beam parameters!' )
+        CONVPARS = -1
+        RETURN
+      ELSE
+        b1 = SQRT( argument )
+      CIF
+      nom   = D0*SIN(2.0*th0) - D2*SIN(2.0*th2) 
+      denom = D0*COS(2.0*th0) - D2*COS(2.0*th2) 
+      IF ( (denom .EQ. 0.0) .AND. (nom .EQ. 0.0) )
+      THEN
+N       Result is undefined, set result to 0.0        
+        th1 = 0.0 * degtorad
+      ELSE
+N       Keep th1 in radians 
+        twoth1 = ATAN2( nom, denom )
+        th1    = twoth1 / 2.0          
+      CIF
+      conbeam(1)  = 2.0 * a1
+      conbeam(2)  = 2.0 * b1
+      phicon = th1*radtodeg
+      
+      CONVPARS = 1
+      RETURN
+      END
+
+
+
+
+

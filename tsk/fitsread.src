@@ -1,0 +1,163 @@
+fitsread.src
+
+        Copyright (c) Kapteyn Astronomical Institute, Groningen 2014
+        All Rights Reserved.
+
+Name:         fitsread.src
+Creator:      vogelaar
+Host:         albirumi
+Date:         Sep 16, 2014
+Contents:     fitsread.make fitsread.py fitsread.dc1
+
+#>            fitsread.make
+#----------------------------------------------------------------------
+# Makefile for task FITSREAD (fitsread.make)
+#
+# Pack sources into fitsread.src with:     > make -f fitsread.make pack
+# Unpack source files with:                > $gip_exe/xfile fitsread.src
+# Install source file with:                > p -reserve fitsread.src
+#                                          > p -install fitsread.src
+#
+#----------------------------------------------------------------------
+#
+# fitsread.make
+#
+
+SHELL   = /bin/sh
+
+default:: fitsread
+
+fitsread : fitsread.py
+	cp fitsread.py fitsread
+	chmod +x fitsread
+
+pack::
+	$$gip_sys/pack.csh fitsread.src fitsread.make fitsread.py \
+	fitsread.dc1
+#<
+
+#>            fitsread.py
+#!/usr/bin/env python
+
+from gipsy import *
+import sys, pyfits, string, numpy
+
+init()
+
+while True:
+   try:
+      hdulist = pyfits.open(usertext('FITSFILE=', 'Name or URL of FITS file'),
+                            memmap=True)
+      break
+   except:
+      reject('FITSFILE=', 'Cannot open FITS file')
+
+hdulist.info()
+sys.stdout.flush()
+
+nhdu = len(hdulist)
+if nhdu>1:
+   while True:
+      index = userint('HDU=', 'Give HDU number 0-%d [0]'%(nhdu-1), 1, 0)
+      if index>=0 and index<nhdu:
+         break
+      else:
+         reject('HDU=', 'Wrong HDU number')
+else:
+   index = 0
+   
+hdu = hdulist[index]
+header = hdu.header
+
+while True:
+   try:
+      outname = usertext('OUTSET=', 'Give output set')
+      outset = Set(outname, create=True)
+      break;
+   except:
+      reject('OUTSET=', 'Cannot create set')
+
+done = ['NAXIS']                         # keywords not to be modified later
+for axis in range(1,header['NAXIS']+1):
+   ctypei = 'CTYPE%d' % axis
+   crpixi = 'CRPIX%d' % axis
+   naxisi = 'NAXIS%d' % axis
+   try:
+      ctype = header[ctypei]
+      if ctype==' ':
+         raise Exception
+   except:
+      ctype = 'X%d' % axis
+   try:
+      crpix = header[crpixi]
+   except:
+      crpix = 0.0
+   outset.extend(ctype, crpix, header[naxisi])
+   done.append(ctypei)
+   done.append(crpixi)
+   done.append(naxisi)
+   outset['CRVAL%d' % axis] = 0.0
+   outset['CDELT%d' % axis] = 1.0
+
+#for card in header.ascard:
+for card in header.cards:
+   try:
+      key = card.keyword
+      if key not in done:
+         if key=='HISTORY':
+            outset.whistory(card.value)
+         elif key=='COMMENT':
+            outset.wcomment(card.value)
+         else:
+            outset[key] = header[key]
+   except:
+      anyout(' ')
+      card.verify()
+      sys.stdout.flush()
+      anyout('%s\n' % str(card))
+   
+outset.image[:] = numpy.where(numpy.isfinite(hdu.data), hdu.data, outset.blank)
+
+finis()
+#<
+
+#>            fitsread.dc1
+Program:      FITSREAD
+
+Purpose:      Load FITS images from file or URL into a GIPSY set.
+
+Category:     FITS, UTILITY
+
+File:         fitsread.src
+
+Author:       J.P. Terlouw
+
+Description:  Simple FITS reader for images. It has been written in Python
+              and is based on PyFITS.
+
+Keywords:
+
+   FITSFILE=  Filename or URL of the FITS file.
+
+   HDU=       If the FITS file contains more than one HDU, the HDU number.
+
+   OUTSET=    Name of the output set.
+
+
+Example:      
+
+   <USER> fitsread
+   <USER> FITSREAD FITSFILE=aurora.fits
+   Filename: aurora.fits
+   No.    Name         Type      Cards   Dimensions   Format
+   0    PRIMARY     PrimaryHDU     125  (530, 530)    int16
+   1    PHOTOMETRIC CALTABLE  BinTableHDU     39  16R x 4C      [1D, 1D, 1D, 1J]
+   <USER> FITSREAD HDU=0
+   <USER> FITSREAD OUTSET=aurora
+   <STATUS>  FITSREAD   +++ FINISHED +++
+
+Updates:      Feb  3, 2009: JPT, Document created.
+              Aug 24, 2010: JPT, Set non-finite pixel values to GIPSY BLANK.
+              Sep 16. 2014: VOG, Changed attributes key and ascard to
+                                 keyword and cards (deprecation warnings)
+#<

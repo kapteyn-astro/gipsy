@@ -1,0 +1,1629 @@
+zodycal.src
+
+        Copyright (c) Kapteyn Laboratorium Groningen 1992
+        All Rights Reserved.
+
+Name:         zodycal.src
+Creator:      do
+Host:         gaia
+Date:         Oct 29, 1992
+Contents:     zodycal.dc1 irzc_zody.shl irzc_irds.shl irzc_rdcalf.shl irzc_gain.shl
+              irzc_zem.shl irzc_intsky.shl irzc_detmodel.shl irzc_data.shl irzc_subzem.shl
+              zodycal.make
+
+#>            zodycal.dc1
+Program:	ZODYCAL
+
+Purpose:	zodiacal emission calibration program
+
+Category:	IRAS
+
+File:		zody.shl
+ 
+Author:         Do Kester
+
+Keywords: 
+ 	IRSETIN=	Give set to be calibrated
+ 
+ 	IRSETOUT=	Give output set [IRSETIN]
+ 
+	OKAY=		overwrite in case IRSETOUT already exists [yes]
+
+ ***	CALIB=		Give calibration fits file [standard]
+ 			the file is on a standard location, 
+ 			known to the system
+
+ ***	MAPS=		Give interpolating map [standard]
+			Only for band 3 and 4; to intepolate the
+			galactic contribution to the flux dependent
+			gain model.
+
+ ***	MAPSKIP= 	Give files to skip on maps [band-3]
+			maps for band 3 and 4 are stored as 
+			files 1 and 2 on the standard location.
+ 
+ 	ZODY=		subtraction of the zodiacal emission model? [YES]
+ 
+	UNITS=		specify the units of output irds [MJy/sr]
+			choices are: MJy/sr, Jy, W/m2, DN-02
+ 
+Description: 
+   The data on IRSETIN are calibrated with the data on CALIB, provided
+	that they are raw data. When the data are already calibrated
+	this program can be used to change the units and/or to subtract
+	the zodiacal emission model.
+ 
+	In place replacement of the IRDS is allowed.
+
+ Externals:
+ 	FTS_SKIP, MTOPEN, USERLOG, USERINT, USERCHAR, ERROR, ANYOUT,
+ 	IRZC_SNIP
+
+ References:
+ 	Former routine name: cenla2.
+
+Updates:
+	 9 Oct 90 Sjag Steensma; Adapted for GIPSY.
+	 7 Nov 91 Albrecht de Jonge: repair bugs
+	21 Jan 92 DK: change of output; repaired bug on HP
+        19 Mar 92 HB: new interface to irds_enquire_snip
+	29 Oct 92 DK: DIGNOISE added on the snip,sdet level	
+	26 aug 96 DK: error in reading of calibration file, corrected
+#<
+
+#>            irzc_zody.shl
+c	 irzc_zody.shl
+c
+c           Copyright (c) 1991
+c  Laboratory for Space Research Groningen 
+c       Kapteyn Laboratory Groningen 
+c           All Rights Reserved.
+c
+c Function:     irzc_zody.shl
+c
+c Purpose:      For documentation see zodycal.dc1
+c
+c Category:     IRAS, calibration program
+c
+c Author:       Do Kester
+c
+c 	*** Note: change also the date under call init ***
+c Updates:      
+c		24 Oct 1991: DK, Creation date
+c		21 Jan 1992: DK
+c 		29 Oct 1992: DK DIGNOISE added to the header 
+c				on snip,sdet level
+
+         program ZODYCAL
+
+        integer         calfile, logfile, ok, crash
+        parameter       ( logfile = 0, crash = 4, ok = 0 )
+        integer         ierr, k, NELC, USERCHAR, USERCHARU, USERLOG
+        character*80    irdsin, irdsout, calib, units, bu, cfile, root
+	integer		MTOPEN, IRDS_EXIST, IRC_CHUNIT, rl, IRAS_ROOT
+        logical         zodysub
+
+	data	cfile	/ 'zodycal/CALNL.GIP' /
+	data	zodysub / .true. /
+	data	units	/ 'MJY/SR' /
+
+c Get in touch with HERMES: 
+	call init
+c print the version and compilation date
+	call anyout( 8, ' ZODYCAL Version 1.3 of 29 Oct 1992' )	
+
+	while .TRUE.
+          k = USERCHAR( irdsin, 1, 0, 'IRSETIN=',
+     #			 'Give set to be calibrated' )
+	  ierr = 0
+	  if IRDS_EXIST( irdsin, ierr ) .eq. 0
+	  then
+	    xwhile
+	  else
+	    call ANYOUT( 0, 'the irds does not exist' )
+	    call cancel( 'IRSETIN=' )
+	  cif
+	cwhile
+
+        call ANYOUT( logfile, 'The calibration program ZODYCAL ')
+        call ANYOUT( logfile, 'The input set is ' // 
+     #			irdsin(:NELC( irdsin )) )
+        k = USERCHAR( irdsout, 1, 1, 'IRSETOUT=', 
+     #		'Give output set [' // irdsin(:nelc(irdsin)) // ']' )
+	ierr = 0
+	if k .eq. 1
+	then
+c copy irdsin to irdsout and change names
+	  ierr = 0
+	  call WKEY( 'INSET=' // irdsin )
+	  call WKEY( 'OUTSET=' // irdsout )
+	  call WKEY(  'BOX=' )
+	  call DEPUTY( 'copy', ierr )
+	  irdsin = irdsout
+	cif
+        call ANYOUT( logfile, 'The output set is ' // 
+     #			irdsin(:NELC( irdsin )) )
+
+c Check if irdsin is uncalibrated:
+	ierr = 0
+	call GDSD_RCHAR( irdsin, 'BUNIT', 0, bu, ierr )
+	calfile = -1
+	if bu(:NELC( bu )) .eq. 'DN'
+        then
+c it is raw data
+	  rl = IRAS_ROOT( root )
+	  calib = root(:rl) // cfile
+          k = USERCHAR( calib, 1, 2, 'CALIB=', 
+     #			'Give calibration fits file [standard]' )
+	  calfile = MTOPEN( calib )
+	  if calfile .lt. 0
+	  then
+	    call ERROR( crash, 'Cannot open calibration file: ' //
+     #			calib(:NELC( calib )) )
+	  cif
+        cif
+
+        k = USERLOG( zodysub, 1, 1, 'ZODY=', 
+     #			'Subtraction of zody model? [YES]' )
+
+	k = USERCHARU( units, 1, 1, 'UNITS=', 
+     #			'Specify units of output irds [MJy/sr]' )
+
+c check validity of units-request; use dummys for the first 3 variables
+	if IRC_CHUNIT( 0, 0.0, 0, units, units ) .lt. 0 
+	then
+	  call ERROR( crash, 'Unknown unit specification: ' // 
+     #			units(:NELC( units )) )
+	cif
+
+c write some message to administration file
+        if calfile .ge. 0
+        then
+          call ANYOUT( logfile, 'The set will be calibrated in ' //
+     #			'units of ' // units(:NELC( units )) )
+          call ANYOUT( logfile, 
+     #		' the calibration values are taken from '
+     #          // calib(:NELC( calib )) )
+        cif
+        if zodysub
+        then
+          call ANYOUT( logfile, 'The zodical emission model is ' //
+     $           'subtracted.' )
+        cif
+
+        call ANYOUT( logfile,
+     $      '*******************************************************' )
+
+c calibrate the irds
+        call IRZC_IRDS( irdsin, calfile, zodysub, units, logfile )
+
+c write proper units in irds
+c	if zodysub
+c	then
+c	  units(NELC( UNITS )+2:) = '(ZEM subtracted)'
+c	cif
+	ierr = 0
+	call GDSD_WCHAR( irdsin, 'BUNIT', 0, units, ierr )
+
+c	Say goodbye to HERMES:
+	call finis
+	
+        stop
+        end
+#<
+
+#>            irzc_irds.shl
+c Subroutine:	IRZC_IRDS
+c
+c Purpose:	calibrate an irds
+c
+c Category:	IRAS
+c
+c File:		zodycal.shl
+c
+c
+c Author:	Do Kester
+c		do@guspace.rug.nl
+c
+c Use:
+c      call IRZC_IRDS(
+c	irds,		I/O	character*(*)
+c	calfile,	I	integer
+c	zodysub,	I	logical
+c	units,		I	character*(*)
+c	logfile	)	I	integer
+c
+c       irds		name of the irds to be calibrated
+c	calfile		>=0 : calibration fits file
+c			< 0 : no calibration
+c       zodysub		subtract zody model or not
+c	units		units of the final calibrated irds
+c	logfile		device number of ANYOUT
+c
+c Description:
+c
+c
+c
+c Externals:
+c   	IRDS_ENQUIRE IRDS_ENQUIRE_SNIP IRZC_RDCALF IRZC_DATA IRZC_WRHED, 
+c   	IRC_NONLIN ERROR ANYOUT
+c
+c References:
+c       Former routine name: cefil2.
+c
+c Updates:
+c	90 Oct  8 Sjag Steensma; Adapted for GIPSY,
+
+        subroutine IRZC_IRDS( irds, calfile, zodysub, units, logfile )
+
+        character*(*)	irds, units
+        integer         calfile, logfile
+        logical         zodysub
+        integer         NDATA, MDET, MCAL, SURVEY
+	real		D2R, OVERF
+        parameter       ( NDATA = 48000, MDET = 16, MCAL = 5 )
+	parameter	( SURVEY = 1 )
+	parameter	( D2R = 0.01745329252, OVERF = 65534.9 )
+	real		data(NDATA), gain(ndata)
+        real            psdot, ps, psi0
+        real            fine(MCAL,MDET), psi, psirat, theta, rblank
+        integer         length, ndets, satcal, det, IRC_CHUNIT
+        real            psm, psimid, epsil, cdelt, offpsi, fps, fpsi
+        character*80    bunit, dnunits, bu, mess
+        character*27    snipname
+        character*20    object, instrument, coor, calsub, scantype
+	integer		ierr, naxis, axes(4), obsmode, IRCC_OBSMODE
+	integer		snips, rate, ksnip, sop, obs , att
+	integer		scandur, snipdur
+	integer		snipcal, nsamples, level, nlevel, GDSC_WORD
+	doubleprecision center(2), size(2)
+	real		epoch, noise, dignoise
+        integer         crash, ok, kdet, satsec, kdo, kdone
+        parameter       ( crash = 4, ok = 0, epsil = 1.0e-6 )
+        logical         okblok, okdata, DEAD, overflow, nocaldata
+        integer         kstart, kuntil, i, NELC, first, nocals
+
+	data	dnunits / 'DN-02' /
+
+	DEAD( det ) = ( det .eq. 17 ) .or. ( det .eq. 20 ) .or.
+     #		      ( det .eq. 36 )
+
+	call setfblank( rblank )
+	ierr = 0
+	call GDSD_RCHAR( irds, 'BUNIT', 0, bunit, ierr )
+	call IRDS_ENQUIRE( irds, object, instrument, naxis, axes, 
+     #			center, size, coor, epoch, ierr )
+	obsmode = IRCC_OBSMODE( instrument )
+	snips = axes(4)
+	ndets = axes(3)
+	length = axes(2)
+	rate = axes(1)
+	cdelt = 1.0 / rate
+	nsamples = length * rate
+	nocals = 0
+	ksnip = 0
+	while ksnip .lt. snips
+	  ksnip = ksnip + 1
+	  level = GDSC_WORD( irds, 4, ksnip, 0, ierr )
+
+	  call IRDS_ENQUIRE_SNIP( irds, ksnip, sop, obs, att,
+     #		scantype, satcal, scandur, snipcal, snipdur, 
+     #		psi, psirat, theta, ierr )
+	  write( snipname, '(a,i4,a,2i4)' ) 'snip ', ksnip, 
+     #			' sop/att ', sop, att
+
+c  read the matching calibration data
+          call IRZC_RDCALF( calfile, instrument, sop, att, psimid, 
+     #			fine, ndets, ierr )
+
+	  nocaldata = ierr .eq. 5
+          if nocaldata
+          then
+            call ANYOUT( 16, snipname // ': no calibration data' )
+	    nocals = nocals + 1
+            ierr = 0
+          cif
+
+	  if ierr .eq. 0
+          then
+
+c calculate first psi for the baseline
+	    offpsi = snipcal + 0.5
+            psdot = psirat / 90.0
+            ps = ( psi - psimid ) / 90.0
+	    fps = ps + offpsi * psdot
+            psdot = psdot * cdelt
+c ... and psi at begin of original snip for the gain
+	    psi0 = psi * d2r
+	    psirat = psirat * d2r
+c ... and first psi for zodiacal emission model
+	    fpsi = psi0 + offpsi * psirat
+	    theta = theta * d2r
+            for kdet = 1, ndets
+c find the detector number from the irds
+	      ierr = 0
+	      call gdsd_grint( irds, 'DETNO', 3, kdet, 1, det, ierr )
+c find the noise in this detector snip 
+	      ierr = 0
+	      nlevel = GDSC_WORD( irds, 3, kdet, level, ierr )
+	      call GDSD_RREAL( irds, 'NOISE', nlevel, noise, ierr )
+	      if ierr .ge. 0
+	      then
+	        first = 1
+	      else
+	        first = 0
+	      cif
+	      ierr = 0
+              kdone = 0
+	      psm = fps
+              psi = fpsi
+              okdata = .true.
+	      overflow = .false.
+c read block of data
+              call IRDS_RD_SAMPLES( irds, ksnip, kdet, 1, data, 
+     #			nsamples, ierr )
+c set dead detectors at blank
+	      if DEAD( det ) .or. nocaldata
+	      then
+	        for i = 1, nsamples
+		  data(i) = rblank
+		cfor
+		okdata = .false.
+	      cif
+
+              kuntil = 0
+              while kuntil .lt. nsamples
+		kdo = nsamples - kdone
+                kstart = kuntil + 1
+c form groups of consecutive normal data or consecutive blanks
+                okblok = okdata
+                while kuntil .lt. nsamples .and. ( okdata .eqv. okblok )
+                  kuntil = kuntil + 1
+                  okdata = data(kuntil) .ne. rblank 
+		  if okdata 
+		  then
+		  	if data(kuntil) .gt. OVERF 
+			then
+		  		overflow = .true.
+				okdata = .false.
+		    		data(kuntil) = rblank
+			cif
+		  cif
+                cwhile
+                kdo = kuntil - kstart
+                if okblok .eqv. okdata
+                then
+                  kdo = kdo + 1
+                else
+                  kuntil = kuntil - 1
+                cif
+	        calsub = ' '
+c take action only for normal data
+                if okblok
+                then
+                  bu = bunit
+		  if calfile .ge. 0
+                  then
+c carry out the non-linearity correction for survey
+                    if obsmode .eq. SURVEY
+                    then
+                      satsec = mod( satcal + snipcal + kdone, 100 )
+                      call IRC_NONLIN( det, data(kstart), kdo, satsec,
+     #			fine(5,kdet) )
+		    cif
+
+c  calibrate the data per detector
+		    call IRZC_GAIN( det, psi0, psirat, theta, satcal,
+     #			snipcal, cdelt, gain, kdo )
+
+		    if first .eq. 1
+		    then
+		      dignoise = 1.0 / ( gain(1) * fine(3,kdet) )
+		      noise  = noise / ( gain(1) * fine(3,kdet) )
+		      first = 2
+		    cif
+
+		    call IRZC_DATA( data(kstart), kdo, psm, psdot,
+     #			fine(1,kdet), gain )
+		    calsub = ' calibrated'
+		    bu = dnunits
+                  cif
+
+c subtract zodiacal emission
+                  if zodysub
+                  then
+		    ierr = IRC_CHUNIT( det, data(kstart), kdo, 
+     #			bu, dnunits )
+                    call IRZC_SUBZEM( instrument, det, psi, psirat, 
+     #			theta, satcal, data(kstart), kdo )
+		    calsub = calsub(:NELC( calsub )) // ' sub zody'
+		    bu = dnunits
+                  cif
+
+c change units to final value
+		  ierr = IRC_CHUNIT( det, data(kstart), kdo, 
+     #			bu, units )
+
+                else
+		  calsub = ' blank: skipped'
+		cif
+		write( mess, '(a,i2,2(a,i5),a)') snipname // ' sdet ',
+     #			kdet, ' data from', kstart, ' to', kuntil,
+     #			calsub
+		call anyout( 16, mess )
+
+                kdone = kdone + kdo
+		psm = psm + kdo * psdot
+	        psi = psi + kdo * psirat / rate
+              cwhile
+	      if first .eq. 2
+	      then
+	        ierr = IRC_CHUNIT( det, noise, 1, bu, units )
+		call GDSD_WREAL( irds, 'NOISE', nlevel, noise, ierr )
+	        ierr = IRC_CHUNIT( det, dignoise, 1, bu, units )
+		call GDSD_WREAL( irds, 'DIGNOISE', nlevel, 
+     #					dignoise, ierr )
+	      cif
+              call IRDS_WR_SAMPLES( irds, ksnip, kdet, 1, data, 
+     #			nsamples, ierr )
+	      if overflow
+	      then
+	        write( mess, '(a,i2)' ) 'Overflow in '// snipname //
+     #			' sdet ', kdet
+		call ERROR( 1, mess(:NELC( mess )) )
+	      cif
+            cfor
+          cif
+
+	  if ierr .ne. 0
+          then
+            call ERROR( 3, 'IRZC_IRDS: in the calibration of ' 
+     #			// snipname )
+          else if nocaldata
+	  then
+            call STATUS( snipname //
+     $            ' is blanked and written' )
+	  else
+            call STATUS( snipname //
+     $            ' is calibrated and written' )
+          cif
+
+c for test purposes only
+c	  k = userint( i, 1, 1, 'NEXT=', 'next snip?' )
+c	  call cancel( 'NEXT=' ) 
+	cwhile
+
+	write( mess, '(i4,a)' ) snips - nocals, ' snips calibrated.'
+	call ANYOUT( logfile, mess )
+	if nocals .gt. 0
+	then
+	  write( mess, '(i4,a)' ) nocals, 
+     #			' snips had no calibration data.'
+	  call ANYOUT( logfile, mess )
+	cif
+
+        return
+        end
+#<
+
+#>            irzc_rdcalf.shl
+c Subroutine:	IRZC_RDCALF
+c
+c Purpose:	reads calibration file.
+c
+c Category:	IRAS
+c
+c File:		zodycal.shl
+c
+c Author:	Do Kester
+c 
+c Use: 
+c     call IRZC_RDCALF(
+c	unitc, 		I	integer
+c	instrument, 	I	character*(*)
+c	sop,		I	integer
+c	att,		I	integer
+c	psimid,		O	real
+c       fine, 		O	real(5,ndet)
+c	ndet, 		I	integer
+c	ierr )		I/O	integer
+c 
+c       unitc   	unitnumber of the calibration file
+c       instrument	the requested band of the calibration file
+c       ndet    	number of detectors
+c       sop, att	identification of the snip
+c       ierr    	if nonzero upon entry nothing happens
+c       		out     0     ok
+c                       	
+c                       	5     calibration values not found
+c       psimid  	reference value for the baseline drift
+c       fine		calibration values
+c 
+c Description: 
+c   For the scan whose sop and att are encoded in OBJECT '(2i4)'
+c       the calibration group is sought in the calibration file on
+c       UNITC. 
+c       
+c       It is assumed that the groups of the calibration file are
+c       ordered to sop, att.
+c       Although no order in the scans is assumed this subroutine
+c       works most efficient when they have the same ordering.
+c 
+c       To select a new wavelength band call CERDCI. It initializes
+c       a header and buffer for the requested band.
+c 
+c Externals:
+c     
+c 
+c References:
+c 	Former routine name:          CERDCF
+c
+c Updates:
+c 	90 Jul 02  Do Kester, bundle calibration parameters
+c 	88 May 19  Do Kester, change to call by ref in fikrgp
+c       88 May 09  Do Kester, exclude negative gains: ierr = 5
+c       88 Apr 28  Peter Arendz adapted to new fiselb
+c       88 Mar 02  Do Kester, read file with requested band
+c       87 Mar 25  Do Kester
+c	90 Oct  8 Sjag Steensma; Adapted for GIPSY.
+c       96 Aug 26  DK, obnoxious error due to .lt. in stead of .le.
+
+        subroutine IRZC_RDCALF( unitc, instrument, sop, att, psimid,
+     $             fine, ndet, ierr )
+
+        integer         unitc, sop, att, ndet, ierr
+        real            fine(5,ndet), psimid
+	character*(*)	instrument
+	integer		band, pars(3), npars, np, naxis1, naxis2
+        integer         i, gone, sopatt, nd, tid, fband, iskip
+	integer		IRCC_BANDNR
+	integer		FTSD_GETH, FTSD_RCHAR, FTS_SKIPFIL
+	integer		FTSI_GETI, FTSI_GETR, DEBUG, FTSD_RINT
+	parameter	( DEBUG = 16 )
+        character  	head*2880, finst*20, mess*80
+	logical		first
+        save            first, head, gone, npars, tid, nd
+        
+        data    npars 	/ 3 /
+	data	first	/ .true. /
+
+        if unitc .lt. 0 .or. ierr .ne. 0
+        then
+          return
+        cif
+
+	band = IRCC_BANDNR( instrument )
+c find the proper file and read header, only the first time
+	while first
+	  tid = 0
+          if FTSD_GETH( unitc, head, tid ) .lt. 0
+	  then
+	    call ERROR( 3, 'IRZC_RDCALF: Cannot read header' )
+	  else if FTSD_RCHAR( head, 'INSTRUME', finst ) .lt. 0
+	  then
+	    call ERROR( 3, 'IRZC_RDCALF: Cannot find INSTRUME' )
+	  else
+	    fband = IRCC_BANDNR( finst )
+	  cif
+	  if band .eq. fband
+	  then
+	    first = .false.
+            gone = 0
+	    i = FTSD_RINT( head, 'NAXIS2', naxis1 )
+	    i = FTSD_RINT( head, 'NAXIS3', naxis2 )
+            nd = naxis1 * naxis2
+	  elseif FTS_SKIPFIL( unitc, 1 ) .ne. 1
+	  then
+	    call ERROR( 3, 'IRZC_RDCALF: Cannot find proper file' )
+	    first = .false.
+	    return
+	  cif
+	cwhile
+
+c define sopatt and nd
+        sopatt = 1000 * sop + att
+
+c reset the file if already too far
+        if sopatt .le. gone
+        then
+c skip to beginning of current file.
+          np = FTS_SKIPFIL( unitc, 0 )
+	  tid = 0
+          np = FTSD_GETH( unitc, head, tid )
+          gone = 0
+        cif
+
+c search sequentially from present position for the object in the file
+	iskip = 0
+        while sopatt .gt. gone .and. tid .gt. 0
+          np = FTSI_GETI( unitc, pars, npars, tid )
+          np = FTSI_GETR( unitc, fine, nd, tid )
+          if tid .gt. 0
+          then
+            gone = 1000 * pars(1) + pars(2)
+          cif
+	  iskip = iskip + 1
+        cwhile
+
+	write( mess, '(a,i7,a,i4,a,2i4)' ) 'searching sopatt', sopatt, 
+     #	  ': skipped ', iskip, ', found sop att', pars(1), pars(2)
+	call anyout( DEBUG, mess )
+
+c the group with cal. values is not found
+        if sopatt .lt. gone
+        then
+          ierr = 5
+        cif
+
+c succes, read the calibration values
+        if ierr .eq. 0
+        then
+c ***** psimid and negative gain have to be checked in the cal. file *****
+          psimid = int( pars(3) / 10 ) * 10
+          for i = 1, ndet
+	    if fine(3,i) .lt. 0
+            then
+              ierr = 5
+	      call ERROR( 3, 'IRZC_RDCALF: negative gain ' )
+              xfor
+            cif
+          cfor
+        cif
+
+        return
+        end
+#<
+
+#>            irzc_gain.shl
+c Subroutine:	IRZC_GAIN.
+c
+c Purpose:	the gain calculation.
+c
+c Category:	IRAS.
+c
+c File:		zodycal.shl
+c 
+c Author:	Do Kester
+c 
+c Use: call IRZC_GAIN(
+c	det, 		I	integer
+c	psi, 		I	real
+c	psirate, 	I	real
+c	theta, 		I	real
+c	satcal,		I	integer
+c 	crval, 		I	real
+c	cdelt, 		I	real
+c	gain, 		O	real(ng)
+c	ng )		I/O	integer
+c 
+c Description: 
+c
+c 
+c Externals:    ircc_bandet irzc_detmodel userchar userint mtopen
+c		fts_skipfil ftsd_geth ftsi_getr error irco_sunlong
+c 		ircc_mask irzc_zem irzc_intsky
+c References:
+c 	Former routine name: CEGAIN.
+c
+c Updates:
+c	90 Oct  8 Sjag Steensma; Adapted for GIPSY.
+
+	subroutine IRZC_GAIN( det, psi, psirate, theta, satcal, 
+     #			   crval, cdelt, gain, ng )
+
+c	implicit	none
+
+	integer		det, satcal, ng
+	real		psi, psirate, theta
+	real		crval, cdelt, gain(ng)
+	integer		band, nz, i, k, ks, ksp, skip
+	integer		MX, MY, MSIZE, OK, TIMESTEP, MZ, unit
+	parameter	( MX = 361, MY = 181, MSIZE = MX * MY )
+	parameter	( OK = 0, TIMESTEP = 15, MZ = 200 )
+	real		dpsi, dth, x, y, M2R, D2R
+	parameter	( D2R = 0.01745329252, M2R = D2R / 60 )
+	real		lambda, th0, ps0, psdot
+	doubleprecision	IRCO_SUNLONG
+	integer		IRCC_BANDET, USERCHAR, USERINT, nitem, ierr
+	integer		MTOPEN, FTS_SKIPFIL, FTSD_GETH, FTSI_GETR, tid
+	real		ps(mz), th(mz), start
+	character*2880	head
+	character*80	name, mess, root, file
+	integer		IRAS_ROOT, rl, NELC
+	real		g(mz), zem(mz), sky(mz), map(msize)
+	logical		first
+	save		first, map
+
+	data 	first	/ .true. /
+	data	file	/ 'zodycal/MAPS' /
+
+c determine band
+	band = IRCC_BANDET( det )
+
+	if band .le. 2
+	then
+c write the gain directly into gain; 
+c note that the first parameter in IRZC_DETMODEL is a dummy in case of bands 1 or 2
+	  call IRZC_DETMODEL( gain, det, gain, ng )
+	  return
+	cif
+
+c first read the map
+	if first
+	then
+	  rl = IRAS_ROOT( root )
+	  name = root(:rl) // file
+	  nitem = USERCHAR( name, 1, 2, 'MAPS=', 
+     #			'Give `tape'' of interpolating map' )
+	  skip = band - 3
+	  nitem = USERINT( skip, 1, 2, 'MAPSKIP=', 
+     #			'Give skipcount on `tape''' )
+
+	  unit = MTOPEN( name )
+	  if unit .lt. 0
+	  then
+	    call ERROR( 3, 'IRZC_GAIN: Cannot open interpolating map' )
+c	    write( mess, '(i5,a)' ) unit, name(:NELC(name))
+c	    call ERROR( 4, mess )
+	  else if FTS_SKIPFIL( unit, skip ) .ne. abs( skip )
+	  then
+	    call ERROR( 3, 'IRZC_GAIN: Not enough files to skip' )
+	  else 
+	  ierr = FTSD_GETH( unit, head, tid )
+	  if ierr  .lt. 0
+	  then
+	    write( mess, '(a,i5)' )
+     #			'IRZC_GAIN: Problems reading the header', ierr
+	    call ERROR( 3, mess )
+	  else if FTSI_GETR( unit, map, msize, tid ) .lt. 0
+	  then
+	    call ERROR( 3, 'IRZC_GAIN: Problems reading the data' )
+	  cif
+	  cif
+	  
+	  first = .false.
+	cif
+
+c calculate the 'compressed' positions for this scan
+	lambda = real( IRCO_SUNLONG( satcal ) )
+	call IRCC_MASK( det, dpsi, dth, x, y )
+	th0 = theta - dth * m2r
+	ps0 = psi + dpsi * m2r / sin( th0 )
+
+	nz = nint( crval + cdelt * ng ) / timestep + 1
+	psdot = psirate * timestep
+	ps0 = ps0 + 7 * psirate
+c	print '(2i10,3f10.4)', ng, nz, ps0/d2r, psdot/d2r, theta/d2r
+	for i = 1, nz
+	  ps(i) = ps0
+	  th(i) = th0
+	  ps0 = ps0 + psdot
+	cfor
+c determine the zem and the sky contibutions i.e. the stimulus of the gain
+	call IRZC_ZEM( ps, th, lambda, band, zem, nz )
+	call IRZC_INTSKY( ps, th, lambda, map, msize, sky, nz )
+
+	for i = 1, nz
+	  sky(i) = zem(i) + sky(i)
+	cfor
+
+	call IRZC_DETMODEL( sky, det, g, nz )
+
+c	print '(4f10.4)', (ps(i)/d2r, sky(i), g(i), zem(i), i=1,nz)
+
+c calculate the interpolated gain
+	start = ( crval - 7 ) / timestep
+c	print '(2f10.4)', start, start + ng * cdelt / timestep
+	for k = 1, ng
+	  if start .lt. 1.0
+	  then
+	    gain(k) = g(1)
+	  else
+	    ks = int( start )
+	    ksp = ks + 1
+	    gain(k) = ( ksp - start ) * g(ks) + ( start - ks ) * g(ksp)
+	  cif
+	  start = start + cdelt / timestep
+	cfor
+
+	return
+	end
+
+#<
+
+#>            irzc_zem.shl
+c Subroutine:	IRZC_ZEM.
+c
+c Purpose:	make zem values ( 1/r**p model ).
+c
+c Category:	IRAS.
+c
+c File:		irzc_zem.shl.
+c
+c Author:	Do Kester.
+c 
+c Use: 
+c	call IRZC_ZEM(	psi, 	input	REAL
+c			theta, 	input	REAL
+c			lambda, input	REAL
+c			band, 	input	INTEGER
+c			zem, 	output	REAL
+c			nz )	input	INTEGER
+c       psi	Psi positions of samples,
+c 	theta	Solar aspect angle of samples,
+c 	lambda	Solar elongation,
+c 	band	Band for which the zem is  requested,
+c 	nz	Dimension of ps, zem and dzem,
+c       zem	Zem values at ps.
+c 
+c Description: 
+c	For all positions in psi the zodical emission model is
+c 	calculated. ZEM is an ellipsoidal model where the effective
+c 	emissivity decreases as r**(-p); r is the size of the ellipse
+c 	and p is the power index ( par(1) )
+c 	The results are stored in zem. 
+c 	The parameters in par are:
+c 	par(1) : power index
+c       par(2) : ratio of major to minor axis
+c       par(3) : offset angle between ecliptic and ellipsoid
+c       par(4) : rising node
+c 	par(5) : scale factor
+c 
+c Externals:
+c 
+c References:
+c 	Former routine name: CEZEMP.
+c	This file also contains IRZC_QROMO IRZC_MIDINF IRZC_POLINT.
+c
+c Updates:
+c	90 Oct  8 Sjag Steensma; Adapted for GIPSY,
+c	90 Jun 27 Do Kester; Doc. created, derived from cyzemp.
+
+	subroutine IRZC_ZEM( psi, theta, lambda, band, zem, nz )
+
+	integer		band, nz
+	real		psi(nz), theta(nz), zem(nz), lambda
+
+	real		e, alfa, sunode
+	real		sinp, cosp, sinth, costh, sinsn, cossn
+	real		orb2, st2, ct2, e2, cp2, sp2, cprot
+	real		emin, aest, ssct, csst, orct, snor, aestsn
+	real            fpar(5)
+	integer         i
+	real		R2D
+	parameter	( R2D = 57.29577951 )
+	integer		mzp, mbands
+	parameter	( mzp = 5, mbands = 4 )
+	real		zpar(mzp,mbands), ecsun, perige, orbit
+	parameter	( ecsun = 0.016722, perige = -1.374975 )
+	save		zpar
+
+	data	zpar	/ 1.779, 3.073, -0.03112, 1.184, 100.0,
+     2			  1.300, 3.198, -0.02939, 1.296, 100.0,
+     3			  1.046, 3.950, -0.02996, 1.275, 81.81,
+     4			  1.000, 4.500, -0.01380, 0.994, 54.36 /
+
+c	print '(a)', 'IRZC_ZEM'
+
+c rename the parameters
+	fpar(1) = zpar(1,band)
+	e = zpar(2,band)
+	alfa = zpar(3,band)
+	sunode = lambda - zpar(4,band)
+	fpar(5) = zpar(5,band)
+c make compound variables
+	orbit = 1.0 / ( 1 + ecsun * cos( lambda - perige ) )
+	orb2 = orbit * orbit
+	e2 = e * e
+	emin = 1 - e2
+	sinsn = sin( sunode )
+	cossn = cos( sunode )
+	snor = sinsn * orbit
+
+	for i = 1, nz
+	  sinth = sin( theta(i) )
+	  costh = cos( theta(i) )
+	  st2 = sinth * sinth
+	  ct2 = 1 - st2
+	  aest = alfa * emin * sinth
+	  ssct = sinsn * costh
+	  csst = cossn * sinth
+	  orct = orbit * costh
+	  aestsn = aest * snor
+
+	  sinp = sin( psi(i) )
+	  cosp = cos( psi(i) )
+	  cp2 = cosp * cosp
+	  sp2 = 1 - cp2
+c rotation term of the offset angle
+	  cprot = 2 * cosp * ( sinp * csst - ssct )
+	  fpar(2) = ct2 + st2 * ( sp2 + e2 * cp2 ) + aest * cprot
+	  fpar(3) = orct - aestsn * cosp
+	  fpar(4) = orb2
+c shift integration boundary from (0,inf) to (1,inf)
+	  fpar(4) = fpar(2) + 2 * fpar(3) + fpar(4)
+	  fpar(3) = 2 * ( fpar(2) + fpar(3) )
+c	  write( mess, '(i5,7f10.4)') i, psi(i)*R2D, theta(i)*R2D, fpar
+c	  call anyout( 16, mess )
+c integrate numerically ( Romberg integration )
+	  call IRZC_QROMO( fpar, zem(i) )
+
+	cfor  
+
+	return
+	end
+
+c
+c Subroutine:	IRZC_QROMO.
+c
+c File: 	irzc_zem.shl
+c
+c derived from qromo.f of Numerical Recipes cptr 4.4
+c
+        subroutine IRZC_QROMO( fpar, SS )
+
+        real		fpar(5), ss, EPS
+        integer		j, JMAX, JMAXP, KMAX, KMAXP
+        parameter 	( EPS = 1.E-4, JMAX = 14, JMAXP = JMAX + 1 )
+	parameter 	( KMAX = 3, KMAXP = KMAX + 1 )
+        real		dss, S(JMAXP), H(JMAXP)
+	character	mess*80
+
+        H(1) = 1.
+        for J = 1, JMAX
+          CALL IRZC_MIDINF( fpar, s(j), j )
+          if j .ge. KMAXP
+	  then
+            call IRZC_POLINT( h(j-KMAX), s(j-KMAX), KMAXP, 0.0, 
+     #			ss, dss )
+            if abs( dss ) .lt. EPS * abs( ss )
+	    then
+	      return
+	    cif
+          cif
+
+          s(j+1) = s(j)
+          h(j+1) = h(j)/9.
+        cfor
+        call error( 2, 'IRZC_QROMO: too many steps' )
+
+        return
+        end
+
+c
+c Subroutine: IRZC_MIDINF.
+c
+c Description: 
+c	The function representing the integrand has been inlined.  The
+c	integrand to be calculated is:
+c	
+c		f(x) = SCALE / ( a x^2 - b x + c )^p
+c	
+c	where p=fp(1); a=fp(2); b=fp(3); c=fp(4) and SCALE=fp(5).  It is to
+c	be integrated from 0 to inf.  The integration boundaries are already
+c	shifted from (0,inf) to (1,inf) in IRZC_ZEM itself. 
+c	
+c	The upper boundary at inf is transformed in 0 by :
+c	
+c	 	t := 1/x; dx = -dt / t^2.
+c
+c	f(t) = SCALE t^2 / ( a t^2 - b t + c )^p
+c
+c	This subroutine is derived from midinf.f of Numerical Recipes 
+c	cptr 4.4. 
+c
+
+        subroutine IRZC_MIDINF( fp, S, N )
+
+        integer	n
+        real	fp(5), s
+	real	x, sum, t, sqr, quad, func
+        integer	j, it
+        real	del, ddel
+        save	it
+
+	sqr( t ) = t * t
+	quad( t ) = fp(2) * sqr( t ) - fp(3) * t + fp(4)
+	func( t ) = fp(5) * sqr( t ) / ( quad( t ) ** fp(1) )
+
+        if n .eq. 1 
+	then
+c calcluate the function for x = 0.5 
+c then  t (= 1.0 / x) = 2.0
+	  s = func( 2.0 )
+          IT=1
+        else
+          del = 1.0 / ( 3.0 * it )
+          ddel = del + del
+          x = 0.5 * del
+          SUM = 0.0
+          for J = 1, IT
+c inline the integrand calculation twice.
+	    t = 1.0 / x
+	    sum = sum + func( t )
+            X = X + DDEL
+	    t = 1.0 / x
+	    sum = sum + func( t )
+            X = X + DEL
+	  cfor
+          S = ( S + SUM / IT ) / 3.0
+          IT = 3 * IT
+        cif
+
+        return
+        end
+
+c
+c Subroutine:	IRZC_POLINT.
+c
+c Purpose:	polynomial interpolation
+c
+c File:		irzc_zem.shl
+c
+c Author:	Do Kester
+c
+c Use:		call IRZC_POLINT(XA,YA,N,X,Y,DY)
+c
+c Description:
+c	This subroutine is derived from polint.f of Numerical Recipes 
+c	cptr 3.1. 
+c	
+c Updates:
+c	Oct  8, 1990: Sjag; Adapted for GIPSY and translated to shelltran,
+c	Sep  6, 1990: Do; Document created.
+c
+
+
+      subroutine irzc_polint( xa, ya, n, x, y, dy )
+      integer	n
+      real	xa(n), ya(n), x, y, dy
+      
+      integer	nmax
+      parameter (nmax=10) 
+      real	c(nmax), d(nmax), w, den, dif, dift, ho, hp
+      integer	i, ns, m
+
+c     Parameter for error code:
+      integer	WARNING
+      parameter ( WARNING = 1 )
+      
+      ns = 1
+      dif = abs( x - xa(1) )
+      for i = 1, n 
+        dift = abs( x - xa(i) )
+        if ( dift .lt. dif ) 
+        then
+          ns = i
+          dif = dift
+        cif
+        c(i) = ya(i)
+        d(i) = ya(i)
+      cfor
+      y = ya(ns)
+      ns = ns - 1
+      for m = 1, n - 1
+        for i = 1, n - m
+          ho = xa(i) - x
+          hp = xa(i+m) - x
+          w = c(i+1) - d(i)
+          den = ho - hp
+          if ( den .eq. 0.0 )
+          then	
+              call ERROR( WARNING, 
+     #			'Multiple points in interpolation.' )
+              y = xa(i)
+              return
+          cif
+          den = w / den
+          d(i) = hp * den
+          c(i) = ho * den
+	cfor 
+        if ( 2 * ns .lt. n - m )
+        then
+          dy = c(ns+1)
+        else
+          dy = d(ns)
+          ns = ns - 1
+        cif
+        y = y + dy
+      cfor
+
+      return
+
+      end
+#<
+
+#>            irzc_intsky.shl
+c Subroutine:	IRZC_INTSKY.
+c
+c Purpose:	interpolate sky positions.
+c
+c Category:	IRAS.
+c
+c File:		zodycal.shl
+c
+c 
+c Author:	Do Kester
+c 
+c 
+c Use: call IRZC_INTSKY(
+c	ps, 		I	real(np)
+c	th, 		I	real(np)
+c	lambda, 	I	real
+c	map, 		I	real(ms)
+c	ms, 		I	integer
+c	sky, 		O	real(np)
+c	np )		I	integer
+c 
+c       ps	array of psi positions 
+c 	th	solar aspect angle for the detector
+c 	lambda	solar elongation
+c 	map	map of the sky in ecliptic/sinusoidal 
+c 	ms	map size
+c 	np	number of points
+c 	sky	interpolated sky intensities
+c 
+c Description: 
+c	For np consecutive points on the positions ps, th and lambda
+c 	the interpolated intensities in map are calculated.
+c 	ps and th are in radians;
+c 	
+c Externals:
+c  	
+c 
+c References:
+c 	Former routine name:		CEISKY
+c
+c Updates:
+c	90 Oct  8 Sjag Steensma; Adapted for GIPSY.
+
+	subroutine IRZC_INTSKY( ps, th, lambda, map, ms, sky, np )
+
+c	implicit 	none
+
+	integer		ms, np
+	real		ps(np), th(np), lambda, sky(np), map(ms)
+	integer		i, pix
+	integer		NK, MX, MY, HMX, HMY, SUNREF, ECLIP
+	parameter	( NK = 200, MX = 361, MY = 181 )
+	parameter	( HMX = MX / 2 + 1, HMY = MY / 2 + 1 )
+	real		D2R, FF, R2D
+	parameter	( D2R = 0.01745329252, R2D = 1.0 / D2R )
+	parameter	( FF = 180.0, SUNREF = 5, ECLIP = 3 )
+	real		eclon, eclat, xint, lonf(MY)
+	double precision xyz(3,NK)
+	integer		k, ib, il
+	real		bb, ll, lval(2), wt, left, right, undefin
+	logical		first
+	save 		lonf, first, undefin
+
+	data 	first	/ .true. /
+
+
+	if first
+	then
+c fill longitude factor
+	  for i = 1, MY
+	    lonf(i) = nint( cos( ( i - HMY ) * D2R ) * FF ) / FF
+	  cfor
+	  call SETFBLANK( undefin )
+	  first = .false.
+	cif
+
+	for i = 1, np
+	  xyz(1,i) = dble( sin( th(i) ) * cos( ps(i) ) )
+	  xyz(2,i) = dble( sin( th(i) ) * sin( ps(i) ) )
+	  xyz(3,i) = dble( cos( th(i) ) )
+	cfor
+c transform to ecliptic coordinates
+	call IRCO_SUNREF( dble( lambda ) )
+	call IRCO_TRANSFORM( xyz, SUNREF, xyz, ECLIP, np )
+
+c convert to degrees and project in sinusiodal projection
+	for i = 1, np
+	  eclon = atan2( xyz(2,i), xyz(1,i) ) * R2D
+	  eclat = asin( xyz(3,i) ) * R2D
+c find pixel latitude lower/nearest to lat
+	  bb = HMY + eclat
+	  ib = int( bb )
+	  for k = 1, 2
+c find pixel longitude lower/nearest to lon
+	    ll = HMX - eclon * lonf(ib)
+	    il = int( ll )
+	    pix = ( ib - 1 ) * mx + il
+	    left = map(pix)
+	    right = map(pix+1)
+	    if left .eq. undefin
+	    then
+	      left = right
+	    else if right .eq. undefin
+	    then
+	      right = left
+	    cif
+c interpolate in longitude
+	    wt = ll - il
+	    lval(k) = ( 1 - wt ) * left + wt * right
+	    ib = ib + 1
+	  cfor
+c check if one of the lval's is undefined; (both is not possible)
+	  if lval(1) .eq. undefin
+	  then
+	    lval(1) = lval(2)
+	  else if lval(2) .eq. undefin
+	  then
+	    lval(2) = lval(1)
+	  cif
+c interpolate in latitude
+	  wt = ib - bb - 1
+	  xint = wt * lval(1) + ( 1 - wt ) * lval(2)
+	  sky(i) = max( 0.0, xint )
+
+	cfor
+	
+	return
+	end
+
+#<
+
+#>            irzc_detmodel.shl
+c Subroutine:	IRZC_DETMODEL.
+c
+c Purpose:	calculate detector gain model.
+c
+c Category:	IRAS.
+c
+c File:		zodycal.shl
+c
+c Author:	Do Kester
+c 
+c Use: 
+c        	call IRZC_DETMODEL(
+c		 stim, det, gain, ns )
+c               integer ns, det
+c               real    stim(ns), gain(ns)
+c 
+c       input   stim  	the input values to the detector model
+c  		ns	number of input/output values
+c 		det	the detector number
+c 	output  gain    the gain factor
+c 
+c Description: 
+c   The parameters are resp.
+c       par(1) = minimum value of G, Gmin
+c       par(2) = exp(-timestep/tau), decay of the gain G
+c       par(3) = increment on G
+c 	
+c Externals:
+c 
+c References:
+c 	Former routine name:          CEDMOD
+c
+c Updates:
+c	90 Oct  8 Sjag Steensma; Adapted for GIPSY.
+
+
+	subroutine IRZC_DETMODEL( stim, det, gain, ns )
+
+c	implicit 	none
+
+	integer 	ns, det
+	real		stim(ns), gain(ns)
+	integer		k, IRCC_BANDET
+	real    	gmin, b, t, g, bug
+	integer		MDP, MDETS
+	parameter	( MDP = 3, MDETS = 62 )
+	real		par(MDP,MDETS)
+	save		par
+
+	data	((par(i,j),i=1,MDP),j=1,31) /
+     4    0.4437, 0.9900, 0.2612E-03,  0.4670, 0.9900, 0.2537E-03,
+     4    0.9713, 0.9900, 0.2779E-03,  0.4256, 0.9900, 0.2443E-03,
+     4    0.4950, 0.9900, 0.2055E-03,  0.6701, 0.9900, 0.2593E-03,
+     4    0.7070, 0.9900, 0.3548E-03,
+     3    1.024,  0.8824, 0.4553E-03,  0.8665, 0.8484, 0.2587E-03,
+     3    0.8497, 0.9102, 0.5356E-03,  0.2923, 0.8785, 0.1057E-03,
+     3    0.7586, 0.9149, 0.5371E-03,  0.9753, 0.8749, 0.5750E-03,
+     3    0.9756, 0.9084, 0.5819E-03,  1.757,  0.9101, 0.8486E-03,
+     2    3.158,  0.0,    0.0,         1.000,  0.0,    0.0,
+     2    3.309,  0.0,    0.0,         3.480,  0.0,    0.0,
+     2    1.000,  0.0,    0.0,         3.220,  0.0,    0.0,
+     2    2.827,  0.0,    0.0,
+     1    1.128,  0.0,    0.0,         1.331,  0.0,    0.0,
+     1    1.224,  0.0,    0.0,         0.3352, 0.0,    0.0,
+     1    0.8626, 0.0,    0.0,         0.7178, 0.0,    0.0,
+     1    1.180,  0.0,    0.0,         1.294,  0.0,    0.0,
+     3    0.3372, 0.9011, 0.1554E-03 /
+	data	((par(i,j),i=1,MDP),j=32,MDETS) /
+     3    1.061,  0.9003, 0.7980E-03,
+     3    1.037,  0.9006, 0.5888E-03,  1.072,  0.9338, 0.5256E-03,
+     3    1.226,  0.9020, 0.7758E-03,  1.000,  0.9000, 0.000,
+     3    0.9921, 0.9060, 0.7272E-03,  0.6422, 0.9254, 0.3214E-03,
+     2    2.155,  0.0,    0.0,         3.870,  0.0,    0.0,
+     2    3.914,  0.0,    0.0,         4.050,  0.0,    0.0,
+     2    3.915,  0.0,    0.0,         3.686,  0.0,    0.0,
+     2    4.025,  0.0,    0.0,         2.075,  0.0,    0.0,
+     1    0.4628, 0.0,    0.0,         1.736,  0.0,    0.0,
+     1    1.845,  0.0,    0.0,         1.880,  0.0,    0.0,
+     1    1.625,  0.0,    0.0,         1.708,  0.0,    0.0,
+     1    1.769,  0.0,    0.0,         1.306,  0.0,    0.0,
+     4    0.2225, 0.9900, 0.1004E-03,  0.4359, 0.9900, 0.2634E-03,
+     4    0.4347, 0.9900, 0.1921E-03,  0.4376, 0.9900, 0.2426E-03,
+     4    0.4123, 0.9900, 0.1893E-03,  0.3103, 0.9900, 0.1357E-03,
+     4    0.4356, 0.9900, 0.2461E-03,  0.2744, 0.9900, 0.1572E-03 /
+
+	gmin = par(1,det)
+
+	if IRCC_BANDET( det ) .le. 2
+	then
+	  for k = 1, ns
+c	    gain(k) = gmin
+	    gain(k) = 1.0
+	  cfor
+	  return
+	cif
+
+	t = par(2,det)
+	b = par(3,det)
+	g = gmin + b * stim(1)
+
+	for k = 1, ns
+	  bug = b * stim(k) + gmin
+	  g = bug + ( g - bug ) * t
+c output gain
+	  gain(k) = g
+	cfor
+
+	return
+	end
+#<
+
+#>            irzc_data.shl
+c Subroutine:	IRZC_DATA.
+c
+c Purpose:	calibrate data with A02-DK.
+c
+c Category:	IRAS.
+c
+c File:		zodycal.shl
+c
+c Author:	Do Kester
+c 
+c Use: 
+c     call IRZC_DATA(
+c	data, 		I/O	real(nd)
+c	nd, 		I	integer
+c	ps, 		I	real
+c	psdot, 		I	real
+c       fine, 		I	real(3)
+c	gain )		I	real(nd)
+c 
+c       data    in uncalibrated, out calibrated data
+c       nd      number of data points
+c       ps      psi of the first data point (see below)
+c       psdot   rate in psi per point
+c       fine	calibration constants
+c       gain    gain
+c 
+c Description: 
+c	ps and psdot are with respect to psimid and 
+c	in degrees divided by 90.
+c 
+c Externals:
+c
+c 
+c References:
+c 	Former routine name:          CEDAT2
+c
+c Updates:
+c	90 Oct  8 Sjag Steensma; Adapted for GIPSY,
+c	90 Jul 02 Do Kester, adapted for band 3 and 4
+c 	89 Aug 29 Do Kester, document created.
+
+	subroutine IRZC_DATA( data, nd, ps, psdot, fine, gain )
+
+	integer         nd
+	real            data(nd), fine(3), gain(nd), ps, psdot
+	real            baseln
+	integer         i
+
+	for i = 1, nd
+	    baseln = fine(1) + fine(2) * ( ps + ( i - 1 ) * psdot )
+	    data(i) = ( data(i) - baseln ) / ( gain(i) * fine(3) )
+	cfor
+
+	return
+	end
+#<
+
+#>            irzc_subzem.shl
+c Subroutine:	IRZC_SUBZEM.
+c
+c Purpose:	subtract zodiacal emission and side band models.
+c
+c Category:	IRAS.
+c
+c File:		zodycal.shl
+c
+c Author:	Do Kester
+c 
+c Use: 
+c	call IRZC_SUBZEM( 
+c			instrument,	input	character*(*)
+c			det,		input	integer
+c			psi,		input	REAL
+c			psirate,	input	REAL
+c			theta,		input	REAL
+c			satcal,		input	INTEGER
+c 			data, 		I/O	REAL	
+c			nd )		input	INTEGER	
+c	instrument	instrument identification
+c	det		Detector number,
+c	psi		Begin of snip,
+c	psirate		Rate per second,
+c	theta		Solar aspect angle,
+c	satcal		midsnip satcal
+c 	data 		Datapoints,
+c	nd )		Number of data points.
+c 
+c Description: 
+c
+c 
+c Externals:
+c
+c 
+c References:
+c 	Former routine name:		CESUBZ
+c
+c Updates:
+c	90 Oct  8 Sjag Steensma; Adapted for GIPSY.
+
+	subroutine IRZC_SUBZEM( instrument, det, psi, psirat, theta, 
+     #			   satcal, data, nd)
+
+c	implicit	none
+
+	character*(*)	instrument
+	integer		det, satcal, nd
+	real		psi, psirat, theta, data(*)
+	integer		IRCC_BANDNR, IRCC_RATE
+	integer		i, ks, ksp, nz, band, MZ, rate
+	real		D2R, M2R, cd, psidot, start, IRCC_TIMES
+	parameter	( MZ = 3000, D2R = 0.01745329252 )
+	parameter	( M2R = D2R / 60 )
+	real		ps(mz), th(mz), zem(mz), side(mz)
+	real		lambda, dpsi, dth, x, y, th0, ps0
+	doubleprecision IRCO_SUNLONG
+
+	if ( nd .eq. 0 )
+	then
+	  return
+	cif
+
+c determine band
+	band = IRCC_BANDNR( instrument )
+	rate = IRCC_RATE( instrument )
+
+c calculate the positions for this scan
+	lambda = real( IRCO_SUNLONG( satcal ) )
+	call IRCC_MASK( det, dpsi, dth, x, y )
+	th0 = theta - dth * M2R
+	ps0 = psi + dpsi * M2R / sin( th0 ) + 
+     #			psirat * IRCC_TIMES( instrument )
+
+	if rate .gt. 1
+	then
+	  nz = ( nd / rate ) + 1
+	  cd = 1.0 / rate
+	  psidot = psirat
+	else
+	  nz = nd
+	  cd = 1.0
+	  psidot = psirat / rate 
+	cif
+
+	for i = 1, nz
+	  ps(i) = ps0
+	  th(i) = th0
+	  ps0 = ps0 + psidot
+	cfor
+
+c determine the zem 
+	call IRZC_ZEM( ps, th, lambda, band, zem, nz )
+
+c determine side band model
+c	call IRZC_SIDE( ps, th, lambda, band, side, nz )
+
+	start = 1.0
+	for i = 1, nd
+	  ks = int( start )
+	  ksp = ks + 1
+	  data(i) = data(i) - 
+     #	    ( ( ksp - start ) * zem(ks) + ( start - ks ) * zem(ksp) )
+	  start = start + cd
+	cfor
+
+	return
+	end
+
+#<
+
+#>            zodycal.make
+SHELL = /bin/sh
+# makefile for gipsy tasks, written in sheltran
+# fill in 
+#   PROG : the file name that contains the program-statement
+#   SUBS : the file names containing the subroutines belonging to PROG
+#   EXE  : the name to be assigned to the task; 
+#	   it should be different from PROG
+#
+# for the program `zodycal'
+PROG =	irzc_zody.shl
+SUBS = 	irzc_irds.shl irzc_rdcalf.shl irzc_gain.shl \
+	irzc_zem.shl irzc_intsky.shl irzc_detmodel.shl irzc_data.shl \
+	irzc_subzem.shl 
+HEDR =
+EXE  =  zodycal
+OBJ  =	irzc_zody.o \
+	irzc_irds.o irzc_rdcalf.o irzc_gain.o \
+	irzc_zem.o irzc_intsky.o irzc_detmodel.o irzc_data.o \
+	irzc_subzem.o 
+FOR  =	irzc_zody.f \
+	irzc_irds.f irzc_rdcalf.f irzc_gain.f \
+	irzc_zem.f irzc_intsky.f irzc_detmodel.f irzc_data.f \
+	irzc_subzem.f 
+
+# define the object files
+# OBJ1 =  $(PROG:.shl=.o)
+# OBJ2 =  $(SUBS:.shl=.o)
+# OBJ  =  $(OBJ1) $(OBJ2)
+# if (temporarily, for debugging) more objectfiles have to be linked,
+#   fill them in here. Otherwise leave empty.
+MOREOBJ = 
+
+# define name of executable
+MAK  =  $(EXE).make
+#define documentation file
+DOC  =  $(EXE).dc1
+# define the source files to be bundled 
+SRC  =  $(DOC) $(PROG) $(SUBS) $(HEDR) $(MAK)
+# define the name of the bundle
+TASK =  $(EXE).src
+
+# Compiler, Options and Libraries for Fortran (Sheltran)
+COMP =	$(FC_COMP)
+OPTS =  $(FC_OPTS)
+LIBS =  $(FC_LIBS)
+# Compiler, Options and Libraries for C
+# COMP =	$(CC_COMP)
+# OPTS =  	$(CC_OPTS)
+# LIBS =  	$(CC_LIBS)
+
+# rules to make .o files
+.SUFFIXES	:
+.SUFFIXES	: .o .shl .c
+.shl.o		: 
+	$$gip_exe/sheltran $*.shl
+	$(FC_COMP) -c $(FC_OPTS) $*.f
+.c.o		:
+	$(CC_COMP) -c $(CC_OPTS) $<
+
+# make a local task with the name EXE
+$(EXE)		: $(OBJ) $(MOREOBJ)
+	$(COMP) -o $(EXE) $(OBJ) $(MOREOBJ) $(LIBS)
+	@echo -n  
+
+# bundle the sources and the makefile
+$(TASK)		: $(SRC) 
+	-rm $(TASK).bak
+	$$gip_sys/pack.csh $(TASK) $(SRC)
+
+# clean up the files created in compilation
+clean		: 
+	-rmchild -f $(SRC) 2> /dev/null
+	-rm -i $(SRC) 
+
+# print the source files on the laserjet
+print		: $(SRC)
+	qmsprint $?
+	@touch print
+#<

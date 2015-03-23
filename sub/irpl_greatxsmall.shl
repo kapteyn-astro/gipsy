@@ -1,0 +1,146 @@
+c#>             irpl_greatxsmall.dc2
+c
+c subroutine	IRPL_GREATXSMALL
+c
+c Purpose       intersections between a great circle and a small circle
+c
+c File		irpl_greatxsmall.shl
+c
+c Class		IRAS, Math
+c
+c Author        850712 Uwe Peppel
+c
+c Use  subroutine IRPL_GREATXSMALL(
+c	polegc, 	I	doubleprecision(3)
+c	theta, 		I	real
+c	pint, 		O	real(3,2)
+c	nrint )         O	integer
+c 	polegc  	coordinates of one pole of the great circle
+c       theta   	polar angle of the small circle (in rad)
+c       pint    	intersection points
+c       nrint    	number of intersection points found
+c
+c Description	The input parameters have to be given in a rectangular
+c            coordinate system with the z-axis pointing to the
+c            center of the small circle. The great circle has to
+c            be specified by the coordinates of one of its
+c            poles, the small circle by its polar angle.
+c            If intersection points are found, they are given by the
+c            array PINT. nrint can be 0, 1, or 2. nrint =1 means that
+c            the two circles have one common point. For the trivial case
+c            of THETA = 90 and POLEGC = (0,0,1) where the two circles
+c            are identical, nrint is given the value -1.
+c
+c Update	900911	DK, all real variables to doubleprecision
+c#<
+c@ subroutine irpl_greatxsmall( double precision, real, real, integer )
+
+      	subroutine IRPL_GREATXSMALL( polegc, theta, pint, nrint )
+
+      	doubleprecision polegc(3)
+	real		theta, pint(3,2)
+      	integer         nrint
+
+      	real		PI, EPSILON
+      	parameter     ( PI = 3.14159265358979, EPSILON = 1.0e-7 )
+      	integer         icase
+      	real		p, phalf, q, s, t, u, u1, u2
+      	real		v, vv, v1, v2, w, ww, z
+      	logical		equalzero
+      	integer izzzse
+
+	equalzero( s ) = abs( s ) .lt. EPSILON
+
+c***********************************************************************
+c transformation of the original x,y,z coordinates to u,v,w coordinates
+        if abs( polegc(2) ) .ge. abs( polegc(1) )
+        then
+c x-axis --> u-axis , y-axis --> v-axis
+          u = real( polegc(1) )
+          v = real( polegc(2) )
+          icase = 1
+        else
+c x-axis --> v-axis , y-axis --> u-axis
+          v = real( polegc(1) )
+          u = real( polegc(2) )
+          icase = 2
+        cif
+
+        if equalzero( v )
+        then
+c special case u = v = 0.
+          if equalzero( theta - pi / 2. )
+          then
+c overlapping circles
+            nrint = -1
+            pint(1,1)= -1.0
+            pint(1,2)= 1.0
+            pint(2,1)= 0.0
+            pint(2,2)= 0.0
+            pint(3,1)= 0.0
+            pint(3,2)= 0.0
+          else
+c no intersection point
+            nrint = 0
+            pint(1,1)= -1000.0
+            pint(1,2)= -1000.0
+            pint(2,1)= -1000.0
+            pint(2,2)= -1000.0
+            pint(3,1)= -1000.0
+            pint(3,2)= -1000.0
+          cif
+
+          return
+	cif
+
+	z = real( polegc(3) )
+c z-axis --> w-axis
+        w = cos( theta )
+        ww = w * w
+c calculation of the intersection points
+c   by solving the second order equation
+        vv = v * v
+        t = u * u / vv  +  1
+        q = ( ww * z * z / vv - ( 1 - ww)) / t
+        p = 2 * u * z * w / vv / t
+        phalf = p / 2
+        s = phalf * phalf - q
+        if s .lt. 0.0
+        then
+c no intersection point
+          nrint = 0
+        else
+          if equalzero( s )
+          then
+c one intersection point
+            nrint = 1
+          else
+c two intersection points
+            nrint = 2
+          cif
+          s = sqrt(s)
+c solutions in u,v,w coordinates
+          u1 = - phalf + s
+          u2 = - phalf - s
+          v1 = - ( u1 * u + w * z ) / v
+          v2 = - ( u2 * u + w * z ) / v
+c transformation back to x,y,z coordinates
+          select icase
+          case 1
+            pint(1,1) = u1
+            pint(2,1) = v1
+            pint(1,2) = u2
+            pint(2,2) = v2
+          case 2
+            pint(1,1) = v1
+            pint(2,1) = u1
+            pint(1,2) = v2
+            pint(2,2) = u2
+          other
+          cselect
+          pint(3,1) = w
+          pint(3,2) = w
+        cif
+
+        return
+        end

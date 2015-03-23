@@ -1,0 +1,15 @@
+
+Script:       unlock
+
+Purpose:      Unlocks compile by GIPSY manager.
+
+Category:     MANAGEMENT
+
+File:         unlock.csh
+
+Author:       K.G. Begeman
+
+Use:          $gip_sys/unlock.csh
+
+Updates:      Dec  9, 1991: KGB, document created.
+

@@ -1,0 +1,521 @@
+E     PROGRAM SCALE (copyright notice)
+C scale.shl
+C                           COPYRIGHT (c) 1990
+C         Kapteyn Astronomical Institute - University of Groningen
+C            P.O. box 800,  9700 AV Groningen, The Netherlands
+C
+E     PROGRAM SCALE (scale.dc1)
+C#>            scale.dc1
+C
+CProgram:      SCALE
+C
+CPurpose:      Program to scale the data in subsets by a factor and an
+C              offset.
+C
+CCategory:     MANIPULATION, UTILITY
+C
+CFile:         scale.shl
+C
+CAuthor:       K.G. Begeman
+C
+CKeywords:
+C
+C   INSET=     Set (and subset(s)) to scale. Maximum number of input
+C              and output subsets is 2048.
+C
+C   BOX=       Frame in subsets to scale [entire subset].
+C
+C   OUTSET=    Set and subset(s) where to store the scaled data.
+C              [input set].
+C
+C** A=         Enter scaling factor(s) [1.0]. If you need different
+C              scaling factors for each subset, you should use this
+C              keyword.
+C
+C** B=         Enter offset(s) [0.0]. Only asked if different scaling
+C              factors are wanted.
+C
+C   AB=        Give scaling factor and offset [1.0,0.0]. Output
+C              subsets will be: A * input subset + B.
+C
+C** OPTION=    Option which determines what to do with the data outside
+C              BOX [0]. The different options are:
+C              0  Scale inside BOX and set to blank outside BOX.
+C              1  Scale outside BOX and set BOX to blank.
+C              2  Scale BOX and transfer unscaled outside BOX.
+C              3  Scale outside BOX and transfer BOX unscaled.
+C
+CExample:      <USER  >SCALE
+C              <USER  >SCALE    ,INSET=AURORA FREQ
+C              Set AURORA has 3 axes
+C              RA-NCP             from    -7 to     8
+C              DEC-NCP            from    -7 to     8
+C              FREQ-OHEL          from     1 to    59
+C              <USER  >SCALE    ,BOX=PC D 8 8
+C              BOX range for set AURORA :
+C              RA-NCP             from    -3 to     4
+C              DEC-NCP            from    -3 to     4
+C              <USER  >SCALE    ,OUTSET=
+C              <USER  >SCALE    ,OKAY=
+C              Set AURORA has 3 axes
+C              RA-NCP             from    -7 to     8
+C              DEC-NCP            from    -7 to     8
+C              FREQ-OHEL          from     1 to    59
+C              <USER  >SCALE    ,AB=1.1 -0.1 OPTION=2
+C              Data inside BOX will be scaled
+C              Data outside BOX will be transferred unscaled
+C              <STATUS>  SCALE   +++ FINISHED +++
+C
+CUpdates:      Jan 31, 1990: KGB Document created.
+C              Dec 11, 1991: KGB Cancel replaced by reject.
+C              Jul 12, 1994: KGB Allow for different scaling factors.
+C
+C#<
+E     PROGRAM SCALE (code)
+      program scale
+C
+C     Parameters:
+C
+N     Change version number on this line
+      character*(*) ident
+      parameter (ident = ' SCALE  Version 1.1  Jul 12, 1994 ')
+N     Maximum number of axes in GDS set
+      integer maxaxes
+      parameter (maxaxes = 10)
+N     Maximum number of subsets
+      integer maxsubs
+      parameter (maxsubs = 2048)
+N     Size of data buffer
+      integer maxdat
+      parameter (maxdat = 4096)
+C
+C     Declarations for input set
+C
+N     Name of input set
+      character*80 set1
+N     Array with axis numbers
+      integer      axperm1(maxaxes)
+N     Array with axis sizes
+      integer      axsize1(maxaxes)
+N     Coordinate words
+      integer      cwlo1, cwhi1
+N     Dimension of input set
+      integer      setdim1
+N     Array containing input subsets coordinate words
+      integer      subset1(maxsubs)
+N     Transfer id input data
+      integer      tid1
+C
+C     Declarations for output set
+C
+N     Name of output set
+      character*80 set2
+N     Array with axis numbers
+      integer      axperm2(maxaxes)
+N     Array with axis sizes
+      integer      axsize2(maxaxes)
+N     Coordinate words
+      integer      cwlo2, cwhi2
+N     Dimension of output set
+      integer      setdim2
+N     Array containing output subset coordinate words
+      integer      subset2(maxsubs)
+N     Transfer id output data
+      integer      tid2
+C
+C     Local variables:
+C
+N     Messages
+      character*80 message
+N     Arrays for frame grids of subset
+      integer      blo(maxaxes), bhi(maxaxes)
+N     Default mode for keyword 'OPTION='
+      integer      dmode
+N     Arrays for border grids of subset
+      integer      flo(maxaxes), fhi(maxaxes)
+N     Error returns for various GDSx_xxx routines
+      integer      gerror
+N     Counter for initptr
+      integer      icount
+N     inpuyt mode
+      integer      imode
+N     Pointer returned by ptr functions
+      integer      ip
+N     Counter for minmax3
+      integer      mcount
+N     Counters
+      integer      n, na, nb
+N     Number of blanks in subset
+      integer      nblank(maxsubs)
+N     Number of pixels currently in buffer
+      integer      ncur
+N     Dummy for userint and userreal
+      integer      ndum
+N     Length of area pointed to by ip
+      integer      np
+N     Counter for subset loop
+      integer      ns
+N     Number of subsets
+      integer      nsubs
+N     Total number of pixels in subset
+      integer      ntotal
+N     Option wanted by user
+      integer      option
+N     Dimension of subsets
+      integer      subdim
+N     Scale inside frame
+      logical      scin
+N     Set rest to BLANK
+      logical      blou
+N     Scaling factors
+      real         ab(2), a(maxsubs), b(maxsubs)
+N     Running minimum and maximum
+      real         datamin(maxsubs), datamax(maxsubs)
+N     Data array
+      real         buf(maxdat)
+C
+C     Functions:
+C
+N     Extracts grid from coordinate word
+      integer      gdsc_grid
+N     Returns dimension of (sub)set
+      integer      gdsc_ndims
+N     Gets input set and subsets from user
+      integer      gdsinp
+N     Gets output set and subsets from user
+      integer      gdsout
+N     Returns the number of characters in string
+      integer      nelc
+N     Gets integers from user
+      integer      userint
+N     Gets real from user
+      integer      userreal
+N     Inside pointer routine
+      logical      insideptr
+N     Outside pointer routine
+      logical      outsideptr
+C
+C     Data statements:
+C
+N     Default scaling factors
+      data ab     / 1.0, 0.0 /
+N     Default mode for keyword 'OPTION='
+      data dmode  / 2 /
+N     Initialize GDS error codes
+      data gerror / 0 /
+N     Total number of pixels in subset
+      data ntotal / 1 /
+N     Subset dimension
+      data subdim / 0 /
+C
+C     Executable statements:
+C
+N     Get in touch with HERMES
+      call init
+N     Show user who we are
+      call anyout( 8, ident )
+N     Get input set and subsets from user
+      nsubs = gdsinp( set1,
+     #                subset1,
+     #                maxsubs,
+     #                0,
+     #                'INSET=',
+     #                'Give set (and subsets) to scale',
+     #                11,
+     #                axperm1,
+     #                axsize1,
+     #                maxaxes,
+     #                1,
+     #                subdim )
+N     Get dimension of set
+      setdim1 = gdsc_ndims( set1, 0 )
+N     Get coordinate words of borders of subsets
+      call gdsc_range( set1, subset1, cwlo1, cwhi1, gerror )
+N     Get grid coordinates of borders of subsets
+      for n = 1, subdim
+N        Number of grids along nth axis
+         ntotal = ntotal * axsize1(n)
+N        Get lower grid coordinate of nth axis
+         flo(n) = gdsc_grid( set1, axperm1(n), cwlo1, gerror )
+N        Get upper grid coordinate of nth axis
+         fhi(n) = gdsc_grid( set1, axperm1(n), cwhi1, gerror )
+      cfor
+N     Now get frame to work on
+      call gdsbox( blo,
+     #             bhi,
+     #             set1,
+     #             subset1,
+     #             1,
+     #             'BOX=',
+     #             ' ',
+     #             11,
+     #             0 )
+N     Prepare default set name
+      set2 = set1
+N     Default shape of output set
+      call gdsasn( 'INSET=', 'OUTSET=', 1 )
+N     Get output set and subsets
+      nsubs = gdsout( set2,
+     #                subset2,
+     #                nsubs,
+     #                1,
+     #                'OUTSET=',
+     #                'Output set (subsets) ['//set1(:nelc(set1))//']',
+     #                11,
+     #                axperm2,
+     #                axsize2,
+     #                maxaxes )
+N     Get dimension of output set
+      setdim2 = gdsc_ndims( set2, 0 )
+N     Get different scaling factors
+      na = 0
+N     Set input mode (hidden)
+      imode = 2
+      repeat
+         write( message, '(''Enter '',I4,'' factor(s) [1.0]'')' )
+     #      nsubs - na
+         ndum = userreal( a(na+1),
+     #                    nsubs - na,
+     #                    imode,
+     #                    'A=',
+     #                    message )
+         if (ndum .eq. 0 .and. na .eq. 0)
+         then
+            xrepeat
+         else if (ndum .eq. 0)
+         then
+            while (na .lt. nsubs)
+               na = na + 1
+               a(na) = 1.0
+            cwhile
+         else
+            na = na + ndum
+         cif
+         if (na .lt. nsubs)
+         then
+            call cancel( 'A=' )
+         cif
+         imode = 1
+      until (na .eq. nsubs)
+N     Get offsets from user
+      if (na .gt. 0)
+      then
+         nb = 0
+         repeat
+            write( message, '(''Enter '',I4,'' offset(s) [0.0]'')' )
+     #         nsubs - nb
+            ndum = userreal( b(nb+1),
+     #                       nsubs - nb,
+     #                       imode,
+     #                       'B=',
+     #                       'message' )
+            if (ndum .eq. 0)
+            then
+               while (nb .lt. nsubs)
+                  nb = nb + 1
+                  b(nb) = 0.0
+               cwhile
+            else
+               nb = nb + ndum
+            cif
+            if (nb .lt. nsubs)
+            then
+               call cancel( 'B=' )
+            cif
+         until (nb .eq. nsubs)
+N     Get scaling factors from user
+      else
+         ndum = userreal( ab,
+     #                    2,
+     #                    1,
+     #                    'AB=',
+     #                    'Give scaling factors [1.0,0.0]' )
+N        Put scaling factors in array
+         for ns = 1, nsubs
+            a(ns) = ab(1)
+            b(ns) = ab(2)
+         cfor
+         write( message, '(''Factor:'',G12.3,'' Offset:'',G12.3)')
+     #       ab(1), ab(2)
+         call anyout( 8, message )
+      cif
+N     Repeat loop for option
+      repeat
+N        Get option from user
+         if (userint( option,
+     #                1,
+     #                dmode,
+     #                'OPTION=',
+     #                'Give option [0]' ) .eq. 0)
+         then
+N           Default option
+            option = 0
+         cif
+N        What to do with rest
+         if ((option .eq. 2) .or. (option .eq. 3))
+         then
+N           Rest is transfered unscaled
+            blou = .false.
+N           Remove bit from option
+            option = option - 2
+         else
+N           Rest is set to BLANK
+            blou = .true.
+         cif
+N        Scale inside frame returned by GDSBOX?
+         if (option .eq. 0)
+         then
+N           Scale inside frame
+            scin = .true.
+         elseif (option .eq. 1)
+         then
+N           Scale outside frame
+            scin = .false.
+N        Else error, wrong input
+         else
+N           Reject keyword
+            call reject( 'OPTION=', 'SCALE: Illegal option!' )
+N           Change default mode
+            dmode = 1
+         cif
+      until ((option .eq. 0) .or. (option .eq. 1))
+N     Message for user
+      if (scin)
+      then
+N        Inform user
+         call anyout( 3, 'Data inside BOX will be scaled' )
+         if (blou)
+         then
+N           Inform user
+            call anyout( 3, 'Data outside BOX will be set to BLANK' )
+         else
+N           Inform user
+            call anyout( 3,
+     #         'Data outside BOX will be transferred unscaled' )
+         cif
+      else
+N        Inform user
+         call anyout( 3, 'Data outside BOX will be scaled')
+         if (blou)
+         then
+N           Inform user
+            call anyout( 3, 'Data inside BOX will be set to BLANK' )
+         else
+N           Inform user
+            call anyout( 3,
+     #         'Data inside BOX will be transferred unscaled' )
+         cif
+      cif
+N     Loop through subsets
+      for ns = 1, nsubs
+N        Show user which subsets we are working on
+         call showsub2( set1,
+     #                  subset1(ns),
+     #                  axperm1,
+     #                  set2,
+     #                  subset2(ns),
+     #                  axperm2 )
+N        Get coordinate words of input subset
+         call gdsc_range( set1, subset1(ns), cwlo1, cwhi1, gerror )
+N        Get coordinate words of output subset
+         call gdsc_range( set2, subset2(ns), cwlo2, cwhi2, gerror )
+N        Reset transfer id input data
+         tid1 = 0
+N        Reset transfer id output data
+         tid2 = 0
+N        Reset counter for initptr
+         icount = 0
+N        Reset counter for minmax3
+         mcount = 0
+N        Repeat loop through subset data
+         repeat
+N           Read input data
+            call gdsi_read( set1,
+     #                      cwlo1,
+     #                      cwhi1,
+     #                      buf,
+     #                      maxdat,
+     #                      ncur,
+     #                      tid1 )
+N           Initialize inside and outside pointers
+            call initptr( flo,
+     #                    fhi,
+     #                    blo,
+     #                    bhi,
+     #                    subdim,
+     #                    ncur,
+     #                    icount )
+N           Outside frame
+            while (outsideptr( ip, np ))
+N              Scale ?
+               if (.not. scin)
+               then
+N                 Scale !
+                  call scaler( a(ns),
+     #                         b(ns),
+     #                         buf(ip+1),
+     #                         buf(ip+1),
+     #                         np )
+N              Set to blank ?
+               else if (blou)
+               then
+N                 Set to blank !
+                  call setnfblank( buf(ip+1), np )
+               cif
+            cwhile
+N           Inside frame
+            while (insideptr( ip, np ))
+N              Scale ?
+               if (scin)
+               then
+N                 Scale !
+                  call scaler( a(ns),
+     #                         b(ns),
+     #                         buf(ip+1),
+     #                         buf(ip+1),
+     #                         np )
+N              Set to blank ?
+               else if (blou)
+               then
+N                 Set to blank !
+                  call setnfblank( buf(ip+1), np )
+               cif
+            cwhile
+N           Find minimum and maximum
+            call minmax3( buf,
+     #                    ncur,
+     #                    datamin(ns),
+     #                    datamax(ns),
+     #                    nblank(ns),
+     #                    mcount )
+N           Write modified data to output subset
+            call gdsi_write( set2,
+     #                       cwlo2,
+     #                       cwhi2,
+     #                       buf,
+     #                       ncur,
+     #                       ncur,
+     #                       tid2 )
+         until (icount .eq. ntotal)
+         if ( na .gt. 0 )
+         then
+            write( message, '(''Factor:'',G12.3,'' Offset:'',G12.3)')
+     #          a(ns), b(ns)
+            call anyout( 8, message )
+         cif
+      cfor
+N     Update number of blanks, minimum and maximum
+      call wminmax( set2,
+     #              subset2,
+     #              datamin,
+     #              datamax,
+     #              nblank,
+     #              nsubs,
+     #              1 )
+N     Tell HERMES we're done
+      call finis
+C
+C     End of program scale
+C
+      stop
+      end

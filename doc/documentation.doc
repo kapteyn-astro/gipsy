@@ -1,0 +1,184 @@
+Document:     documentation
+
+Purpose:      Describes how GIPSY software is documented.
+
+Category:     DOCUMENTATION
+
+File:         documentation.doc
+
+Author:       J.P. Terlouw
+
+Description:  This document describes how GIPSY software is documented
+              and how this documentation is structured.
+
+              In GIPSY every piece of software is required to have one or
+              more associated documents. There exist also documents which
+              are not associated with a particular source file. Such
+              documents typically describe aspects of GIPSY which have a
+              more general character. This document is an example of these.
+
+              Documentation types
+              -------------------
+              Six types of documentation exist:
+
+              dc1 - user documentation of the tasks. These documents reside
+                    in directory $gip_tsk.
+
+              dc2 - documentation of general subroutines to be used by
+                    programmers writing tasks or other subroutines.
+                    Residence: $gip_sub.
+
+              dc3 - documentation of low level, often system dependent,
+                    subroutines. Ideally, application programmers do not
+                    need to know about these routines. Residence: $gip_sub.
+
+              doc - documents describing various parts of GIPSY and its
+                    tools and utilities such as the compile utility,
+                    different server programs, etc. Residence: $gip_doc.
+
+              tex - documents in TeX or LaTeX format, such as user and
+                    programmer guides. Residence: $gip_doc.
+
+              hypertext - html documents, possibly accompanied by illustrations
+                    in e.g. GIF format. Residence: $gip_htm and subdirectories.
+
+              The required documents are always of one of the types dc1, dc2,
+              dc3 and doc. TeX and hypertext documentation is optional.
+
+
+              Document structure
+              ------------------
+              The document types dc1, dc2, dc3 and doc all have a similar
+              structure. They are ASCII text files containing a number of
+              sections of which some are required and others optional.
+              All sections begin with a keyword in the leftmost position
+              of a line, followed by a colon, followed by one or more blanks.
+
+              'name':   (required)
+                 This must be the first section of the document. It states the
+                 name of the document which must be identical to the filename
+                 of the document with the document type (.dc1 etc.) left off.
+                 For the keyword 'name' an appropriate keyword such as
+                 "Program", "Function", "Document", "Subroutine" etc. 
+                 should be chosen.
+
+              Purpose:  (required)
+                 A short, preferably one-line, description of the purpose of
+                 the documented software or of the document itself.
+
+              Category: (required)
+                 One or more categories, separated by commas, in which
+                 the document fits. Every category must be one of the
+                 categories documented in categories.doc.
+
+              File:     (required)
+                 The name of the source file in which the document is
+                 incorporated.
+
+              Author:   (required)
+                 The name of the author of the document and/or software.
+                 If someone else than the author is responsible, his/her
+                 name can be added in parentheses after the author's name.
+
+              Updates:  (required)
+                 This should be the last section of the document. It specifies
+                 the date when the document was created and any dates when
+                 the document or the documented software was modified, the
+                 initials of the person responsible for the modification,
+                 and a short description of the modification.
+
+              Keywords: (required for task documents)
+                 This section documents all user input keywords. Every
+                 keyword should start on a new line, followed by an
+                 explanation. Keywords should be written in uppercase
+                 characters and the trailing equals sign should be included.
+                 Example: "INSET=". Hidden keywords should be preceded
+                 by two asterisks and a blank. Example: "** GAIN=".
+
+              Use:      (required for subroutines and functions)
+                 A detailed specification of the calling sequence;
+                 the return value and all arguments to the routine, their
+                 types and whether they are input and/or output arguments.
+
+              Description: (optional)
+                 Everything necessary or useful to further explain what
+                 the document is about.
+
+              Example(s):  (optional)
+
+              Related Docs:(optional)
+                 A list of related document files.
+
+              Notes:       (optional)
+
+              The above list is not exhaustive. If necessary, the document
+              writer may invent other section names.
+
+
+              Document inclusion
+              ------------------
+              As said, every piece of software in GIPSY is required to
+              have one or more associated documents.
+              For tasks there is usually only one dc1 document per source
+              file, but in the case of functions it is possible that one
+              source file contains several functions. All these functions
+              are required to have a separate dc2 or dc3 document.
+
+              Documents must be included in such a way that they can be
+              extracted by the xfile utility (see xfile.doc). How this
+              can be done depends on the kind of source file, e.g. a
+              program in C or in Fortran, or a generic source file.
+              A document is usually in the form of comments for the
+              language being used. E.g. when programming in C, the
+              document section could look like this:
+
+                 /*
+                 #>       clean.dc1
+                 Program:      CLEAN
+
+                 Purpose:      This program cleans maps or lines.
+                       .
+                       .
+                       .
+                 Updates:      Apr 17, 1991: KGB Document created.
+                               Dec 11, 1991: KGB Cancel replaced by reject.
+                 #<
+                 */
+
+              For a Fortran program it could look like this:
+
+                 *#>recover.dc1
+                 *Program:      RECOVER
+                 *
+                 *Purpose:      Recover a corrupt GDS set
+                       .
+                       .
+                       .
+                 *Updates:      May  8, 1995: JPT, Document created.
+                 *#<
+                 
+
+
+              Hypertext documentation
+              -----------------------
+              At the time of the writing of this document, GIPSY's 
+              hypertext documentation was still in an experimental phase.
+              Features decribed below are tentative.
+
+              In a similar way as described for the ASCII documentation,
+              hypertext documentation can be included
+              as files with the extension '.html'. These files will then all be
+              placed in a subdirectory of $gip_htm with the same name as
+              the source file with the extension stripped off. For instance
+              if the source file srvreq.c contains the documents
+              index.html, init.html and finis.html, these three files will be
+              placed in directory $gip_htm/srvreq/.
+
+              More elaborate hypertext documents, not fitting in the simple
+              scheme above, e.g. containing GIF images, PostScript files,
+              etc., can be brought into the system as .info files which
+              can be created with the utility "infopack".
+
+Related Docs: categories.doc, xfile.doc, compile.doc
+
+Updates:      Oct  3, 1995: JPT, Document created.

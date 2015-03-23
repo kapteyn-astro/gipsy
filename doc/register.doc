@@ -1,0 +1,19 @@
+
+Script:       register
+
+Purpose:      Registers a GIPSY installation or a new GIPSY user.
+
+Category:     MANAGEMENT
+
+File:         register.sh
+
+Author:       K.G. Begeman
+
+Use:          Only from some special GIPSY scripts.
+
+Description:  The first time a user starts a GIPSY session or each time
+              the GIPSY install script is run, this script sends a mail
+              to the GIPSY server.
+
+Updates:      Apr  7, 1994: KGB, Document created
+

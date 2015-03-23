@@ -1,0 +1,1600 @@
+fitsreproj.src
+
+        Copyright (c) Kapteyn Astronomical Institute, Groningen 2014
+        All Rights Reserved.
+
+Name:         fitsreproj.src
+Creator:      vogelaar
+Host:         albirumi
+Date:         Sep 15, 2014
+Contents:     fitsreproj.make fitsreproj.dc1 fitsreproj.py
+
+#>            fitsreproj.make
+#----------------------------------------------------------------------
+# Makefile for task FITSREPROJ (fitsreproj.make)
+#
+# Pack sources into fitsreproj.src with:   > make -f fitsreproj.make pack
+# Unpack source files with:                > $gip_exe/xfile fitsreproj.src
+# Install source file with:                > p -reserve fitsreproj.src
+#                                          > p -install fitsreproj.src
+#
+#----------------------------------------------------------------------
+
+SHELL   = /bin/sh
+
+DOCUMENTS = fitsreproj.dc1
+
+SOURCES   = fitsreproj.py
+
+default:: fitsreproj
+
+fitsreproj : fitsreproj.py
+	cp fitsreproj.py fitsreproj
+	chmod +x fitsreproj
+
+pack::
+	$$gip_sys/pack.csh fitsreproj.src fitsreproj.make \
+        $(DOCUMENTS) $(SOURCES)
+
+#<
+
+#>            fitsreproj.dc1
+Program:       FITSREPROJ
+
+Purpose:       This task if a versatile tool to re-project data in a FITS
+               file to another- or a modified world coordinate system.
+               The output can be converted to a GIPSY set or a
+               legacy GIPSY set (to be used for tasks like ROTCUR,
+               ROTMOD etc.).
+
+Category:      FITS, COORDINATES, HEADER, MANIPULATION
+
+File:          fitsreproj.src
+
+Author:        M.G.R. Vogelaar
+
+Keywords:
+
+   LEGACY=     Is final goal a legacy GIPSY set? ... Y/[N]:
+
+               If the end product is a GIPSY set (FINAL=G), then a number of
+               restrictions are applied (e.g. maximum number of pixels in
+               output or the projection system). The set should be suitable
+               to be used in legacy GIPSY tasks (ROTCUR, ROTMOD etc.).
+               If you select 'F', there are no restrictions applied.
+               You still can create a GIPSY set with hidden keyword
+               MAKEGDS=Y. The header will be transferred unmodified.
+               The result is a GIPSY set with a header that describes
+               a world coordinate system that can be processed by a new
+               generation of GIPSY applications based on the library
+               WCSLIB. It can also be used in other GIPSY applications
+               but unknown projection systems are all regarded as
+               Gnomonic which is the default system if GIPSY doesn't
+               recognize the projection.
+               
+               Be warned that an imported header can cause invalid
+               spectral coordinate transformations. This task does not
+               process other axis types than spatial. RFITS does some
+               spectral axis parsing, FITSREAD not at all.
+
+
+   FITSFILE=   Enter name of FITS file ... [list files]:
+
+               Name of a FITS file or a URL. The file can be
+               a gzipped FITS file.
+               E.g.:
+               FITSFILE=
+               http://www.atnf.csiro.au/people/mcalabre/data/WCS/1904-66_ZPN.fits.gz
+               FITSFILE=/Mydata/m101.fits
+
+
+   HDUNR=      Enter number of Header Data Unit ... [0]:
+
+               Prompt will only appear if the FITS file has multiple
+               header data units (HDU's). An HDU overview is printed first.
+
+
+   OPTION=     Enter option from list above: ... [align to North]:
+
+               0. Re-project the data to the WCS of a second FITS file
+               1. Rotate data over a given angle (it has to create a
+                  'classic' header first. This re-projection removes skew.
+               2. Rotate image so that it is aligned to the north.
+                  This re-projection removes skew.
+               3. Rotate to given angle. This re-projection removes skew.
+                  The value of FITS keyword CROTAn
+                  will be the given angle.
+               4. Give a number of FITS keywords and values which are
+                  inserted in the current header and re-project the data
+                  to the modified header.
+                  You can select sky definition and projection type from a
+                  list.
+               5. Make classic header and leave the data unchanged
+                  (i.e. do NOT re-project). You lose the WCS representation
+                  of skew in the destination header.
+
+               Read the notes for more information.
+
+
+   FITSDEST=   Enter name of FITS file ... [list files]:
+
+               Only for OPTION=0
+               A second FITS file with a header with spatial information.
+               The current data will be re-projected so that it will be
+               described by the WCS of this destination header.
+               Only the axes limits can be changed.
+
+
+   HDUNRDEST=  Enter number of Header Data Unit ... [0]:
+
+               Only for OPTION=0
+               Prompt will only appear if the destination FITS file has
+               multiple header data units (HDU's).
+               An HDU overview is printed first.
+
+
+   SKYSYS=     Sky system 0=eq, 1=ecl, 2=gal, 3=sup.gal .... [current]:
+
+               Enter a sky system for the destination header.
+               If you want to change the reference system, equinox
+               or epoch, then you should enter 0 or 1. Otherwise
+               the corresponding prompts are skipped because the program
+               assumes that you want to copy the current sky system.
+
+
+   REFSYS=     Ref.sys 0=fk4, 1=fk4_no_e, 2=fk5, 3=icrs ... [current]:
+
+               Enter a reference system for the destination header.
+               Note that GIPSY doesn't support sky systems.
+
+
+   EQUINOX=    Enter equinox (e.g. J2000 or B1983.5) .... [current]:
+
+               Equatorial and ecliptic coordinates are relative to a
+               given equinox. The default value is the one found in the header.
+               If the value is not listed in the header of your data set,
+               an equinox is assumed according the FITS standard rules.
+
+               The input is an integer or floating point number prefixed by
+               one or more characters to set an epoch.
+
+               B      Besselian epoch. Example B 1950, b1950, B1983.5,
+                      -B1100
+               J      Julian epoch. Example: j2000.7, J 2000, -j100.0
+               JD     Julian date. This number of days (with decimals)
+                      that have elapsed since the initial epoch defined
+                      as noon Universal Time (UT) Monday, January 1, 4713 BC
+                      in the proleptic Julian calendar
+                      Example: JD2450123.7
+               MJD    The Modified Julian Day (MJD) is the number of days
+                      that have elapsed since midnight at the beginning of
+                      Wednesday November 17, 1858. In terms of the Julian day:
+                      MJD = JD - 2400000.5
+                      Example: mJD 24034, MJD50123.2
+               RJD    The Reduced Julian Day (RJD): Julian date counted from
+                      nearly the same day as the MJD,
+                      but lacks the additional offset of 12 hours that
+                      MJD has.
+                      It therefore starts from the previous noon UT or TT,
+                      on Tuesday November 16, 1858. It is defined as:
+                      RJD = JD - 2400000
+                      Example:  rJD50123.', Rjd 23433
+               F      1) DD/MM/YY             Old FITS format
+                                              Example: F29/11/57
+                      2) YYYY-MM-DD           FITS format
+                                              Example: F2000-01-01
+                      3) YYYY-MM-DDTHH:MM:SS  FITS format with date and time.
+                                              Example: F2002-04-04T09:42:42.1
+
+               
+
+   EPOCH=      Enter date of observation (e.g. MJD24034) .... [current]:
+
+               Date of observation. Only prompted if FK4 or FK4-NO-E
+               was selected. For the prefix, see also description at EQUINOX=
+               For GIPSY sets we remove FITS keyword EPOCH
+               (and if necessary add FITS keyword EQUINOX with a value).
+               The reason is that GIPSY handles EPOCH and EQUINOX
+               as if they were identical. Values for GIPSY keyword EPOCH=
+               will be written into the destination header with FITS
+               keyword MJD-OBS.
+
+
+   PROJID=     Projection of destination ... [copy from current]:
+
+               Identifier for the output projection system.
+               A menu is presented in a table. The first column is
+               the identifier.
+               If you required a legacy GIPSY set (LEGACY=Y), then
+               the menu displays only those systems that are compatible
+               to GIPSY's projection systems.
+
+
+   PVi_j=      Projection parameter PVi_j ... [abort parameter loop]:
+
+               Some projection systems have extra parameters.
+               You are prompted for these parameters with a
+               reasonable default.
+
+
+   WCSKEYS=    Enter wcs keys in key:val format ... []:
+
+               At this prompt you enter the FITS keywords and values
+               for the destination header. Note that this is not trivial
+               because it depends on the header which keywords one
+               can use.
+
+               Examples:
+               -Change the scaling (pixel size) with:
+               WCSKEYS=cdelt1:-0.01 cdelt2:0.01
+               -Change the projection center with:
+               WCSKEYS=crval1:45.2 crval2:-33.432442
+
+               Note that the axis numbers could be different.
+               You can find the axis numbers of the longitude
+               and latitude axis in the LOG.
+               One can also change CD or PC elements with this
+               keyword.
+
+
+   CLASSIC=    Make header 'classic' (remove CD/PC)? ... [N]:
+
+               This keyword belongs to option 4. If your header is not
+               a 'classic' header and you want to
+               set a new rotation angle with keyword CROTAn, or
+               change the values of the scaling in CDELTn,
+               then you need to use CLASSIC=Y. If you selected
+               LEGACY=Y then the destination header will always be
+               'classic'. 
+
+               For example in: 
+               WCSKEYS=crota2:30.3
+               the new value for CROTA has only effect if the
+               header is classic.
+
+
+   ROTATION=   Classic rotation over angle (deg): ... [0.0]:"
+
+               This keyword belongs to option 1. It is the angle
+               to rotate the image, not the final value for CROTA
+               (except when its original value was 0.0)
+
+
+   CROTAn=     Rotate image so that CROTAn becomes angle (deg): ... [0]:
+        
+               This keyword belongs to option 3. It gives the final
+               angle in degrees with respect to the North and stores
+               it in keyword CROTAn where n is the axis number of the
+               latitude axis.
+
+
+   LIMITS_XX=  Enter pixel limits on axis XX ... [1,max]:
+
+               Set the new pixel coordinate limits for axis
+               'XX' (e.g. LIMITS_RA=, LIMITS_DEC=). The default
+               values are 1 which is minimum value (first pixel on
+               that axis) and the upper limit 'max' which is given
+               by FITS header keyword NAXISn where
+               n represents the axis number.
+               One can enter a value smaller than 1 and bigger than 'max'
+               to extend the size of the image. This can be useful
+               if we want to preserve all the data after an image
+               rotation.
+
+
+   FITSOUT=    Enter name of sliced FITS file ... [classic_xxx]
+
+               The output if this task is a FITS file. The name is
+               entered here. A default is the input name prepended by
+               'classic_'. If the input was a URL, then the default
+               file name is 'classic_fromURL.fits'.
+
+
+   IPORDER=    nint=0, bilin.=1, quad sp=2, cubic sp=3, sp4=4, sp5=5 ... [3]:
+
+               Interpolation mode. The destination map is sampled on a
+               regular grid. These positions are transformed to an
+               equivalent position in the input map. Usually this position
+               in not an integer position so we have to decide how to find
+               the best pixel value. There are a number of options:
+
+               Assume coordinate (48.9, 2.4).
+               Order 0: Nearest integer: [nint(x), nint(y)] -> [49, 2]
+               Order 1: Bilinear interpolation in square with corners
+                        [int(x), int(y)], [int(x), int(y)+1]
+                        [int(x)+1, int(y)], [int(x)+1, int(y)+1]
+                        i.e. [48,2], [48,3], [49,2], [49,3]
+               Order 2: Quadratic spline interpolation over the 9 points
+                        derived from nint(x)-1, nint(x), nint(x)+1,
+                        and same for y. Build with piecewise polynomials
+                        f(x) = a.X^2 + b.x +c. This is a polynomial
+                        of degree 2 and order 3
+               Order 3: Cubic spline, polynomials degree 3, order 4
+               Order 4: Spline. Polynomials degree 4, order 5
+               Order 5: Spline. Polynomials degree 5, order 6
+   
+               Bilinear, is much faster than the default Cubic Spline,
+               but one can expect some unwanted effects like Moire
+               patterns for image rotations.
+
+
+   IPCVAL=     Values outside boundaries of input ... [blank]:
+
+               Value used for points outside the boundaries of the input.
+               Blanks are generated for example with rotations or
+               with destination axis sizes bigger than the original.
+
+
+   MAKEGDS=    Do you want to convert it to a GIPSY set? ... Y/[N]:
+
+               One can convert to a GIPSY set after the re-projection.
+               If FINAL=G, this prompt will not appear and RFITS is called
+               to convert the FITS file into a GIPSY set.
+               I one selected FINAL=F, and MAKEGDS=Y then task FITSREAD
+               will be called for the conversion. This is to avoid some
+               unwanted parsing that otherwise is done in RFITS.
+
+
+   GDSNAME=    Name of GDS set: ... [original without extension]:
+
+               The name of the GIPSY set. The default is copied
+               from the value in FITSOUT=. Only the .fits extension
+               is removed. 
+
+
+Notes:         Which option should I use?
+               **************************
+
+               * I want to change the sky system of my FITS image
+                 from galactic to equatorial and do not want
+                 a GIPSY set -> OPTION=4, MAKEGDS=N
+
+               * I have a very big FITS file with spatial maps and
+                 a spectral and Stokes axis which I want to rotate
+                 the image and give it another projection system
+                 and scaling
+                 -> LEGACY=N, OPTION=4, WCSKEYS=, MAKEGDS=N
+
+               * I want to import my FITS file into a GIPSY set with
+                 a fair chance that it can be used with GIPSY legacy tasks
+                 like ROTCUR and I don't mind about image skew and
+                 now that the projection system is compatible
+                 ('AIT', 'FLT', 'CYL', 'TAN', 'SIN', 'ARC', 'GLS',
+                  'NCP', 'STG', 'MER')
+                 -> LEGACY=Y, OPTION=5
+                 This option will not address the validity of the
+                 projection system.
+
+               * I want to import my FITS file into a GIPSY set with
+                 a fair chance that it can be used with GIPSY legacy tasks
+                 like ROTCUR and I want to remove image skew and want
+                 a projection system which can be processed by GIPSY
+                 -> LEGACY=N, OPTION=4, PROJID=
+
+               * I want to rotate my image so that it is aligned with
+                 the North. Skew must be removed -> OPTION=2
+
+               * I want to rotate my FITS image data but conserve the
+                 image skew -> You have to calculate a new CD matrix
+                 yourself and insert it with OPTION=4 and WCSKEYS=
+
+               * I want to decrease/increase the size of the output
+                 -> All options and LIMIT_XX= keywords.
+
+
+               -If the destination WCS comes from an second FITS file
+               then there is no check on validity of the projection system.
+
+
+               (Legacy) GIPSY projection systems
+               *********************************
+
+               GIPSY compatible projection systems are coded as:
+               AIT, FLT, CYL, TAN, SIN, ARC, GLS, NCP, STG or MER
+               From these, the following are not recognized by
+               GIPSY: FLT, CYL
+               Others (GLS and NCP) have an alias in WCSLIB
+
+               Translation:
+
+               GIPSY codes                                 WCSLIB translation
+               CYL (Equivalent cylindrical projection)     CEA
+               FLT (Flat Projection)                       CAR
+               GLS (Global Sinusoidal projection)          SFL
+               NCP (North Celestial Pole)                  SIN
+
+               WCSLIB codes:
+               CEA (Cylindrical equal area) (lambda=1, default)
+               CAR (Plate Carree)
+               SFL (Sanson-Flamsteed projection)
+               SIN (Sinusoidal with two PV elements)
+
+
+               Quality of interpolation
+               ************************
+
+               -The quality of a re-projection can be tested with WCSFLUX.
+               Create two plots. One with the original data and one with
+               the re-projected data and select a shape to compare the flux.
+               Usually you see a (small) improvement of flux conservation
+               with higher order Spline interpolations.
+
+
+               'Classic' headers
+               *****************
+
+               This GIPSY task modifies a FITS file so that it can be
+               imported in GIPSY. It creates a so called classic header
+               and removes PC or CD elements from the header. It checks
+               the size of the new data set. This size cannot exceed a maximum
+               set by GIPSY. The task does not check for the compatibility
+               of the projection type or the compatibility of the sky system.
+               It doesn't check the compatibility of spectral axes.
+
+               What is a classic FITS header?
+
+               (See also http://fits.gsfc.nasa.gov/fits_standard.html)
+               For the transformation between pixel coordinates and world
+               coordinates, FITS supports three conventions.
+               First some definitions:
+
+               An intermediate pixel coordinate Qi is calculated from a
+               pixel coordinates p with:
+
+               Qi = Sigma_j=1^N Mij*(Pj-Rj)
+
+               Rj are the pixel coordinate elements of a reference point
+               (FITS header item CRPIXj), j is an index for the pixel axis
+               and i for the world axis
+               The matrix Mij must be non-singular and its dimension is
+               NxN where N is the number of world coordinate axes (given
+               by FITS header item NAXIS).
+
+               The conversion of Qi to intermediate world coordinate Xi is
+               a scale:
+
+               Xi = Si*Qi
+
+               Formalism 1 (PC keywords)
+               -------------------------
+               Formalism 1 encodes Mij in so called PCi_j keywords
+               and scale factor Si are the values of the CDELTi keywords
+               from the FITS header.
+
+               It is obvious that the value of CDELT should not be 0.0.
+
+               Formalism 2 (CD keywords)
+               -------------------------
+               If the matrix and scaling are combined we get for the
+               intermediate WORLD COORDINATE Xi:
+
+               Xi = Sigma_j=1^N (Si*Mij)(Pj-Rj)
+
+               FITS keywords CDi_j encodes the product Si*Mij.
+               The units of xi are given by FITS keyword CTYPEi.
+
+               Formalism 3 (Classic)
+               ----------------------
+               This is the oldest but now deprecated formalism. It uses CDELTi
+               for the scaling and CROTAn for a rotation of the image plane.
+               n is associated with the latitude axis so often one sees
+               CROTA2 in the header if the latitude axis is the second axis
+               in the dataset
+
+               Following the FITS standard, a number of rules is set:
+               1) CDELT and CROTA may co-exist with the CDi_j keywords
+                  but must be ignored if an application supports the CD
+                  formalism.
+               2) CROTAn must not occur with PCi_j keywords
+               3) CRPIXj defaults to 0.0
+               4) CDELT defaults to 1.0
+               5) CROTA defaults to 0.0
+               6) PCi_j defaults to 1 if i==j and to 0 otherwise. The matrix
+                  must not be singular
+               7) CDi_j defaults to 0.0. The matrix must not be singular.
+               8) CDi_j and PCi_j must not appear together in a header.
+
+               Alternate WCS axis descriptions
+               --------------------------------
+
+               A World Coordinate System (WCS) can be described by an
+               alternative set of keywords.
+               For this keywords a character in the range [A..Z] is appended.
+               In our software we made the assumption that the primary
+               description contains all the necessary information
+               to derive a 'classic' header and therefore we will ignore
+               alternate header descriptions.
+
+
+               Conversion to a formalism 3 ('classic') header
+               ----------------------------------------------
+
+               Many FITS readers from the past are not upgraded to process
+               FITS files with headers written using formalism 1 or 2.
+               The purpose of this application is to convert a FITS file
+               to a file that can be read and interpreted by old FITS readers.
+               For GIPSY we require FITS headers to be written using formalism
+               3. If keywords are missing, they will be derived and a
+               comment will be inserted about the keyword not being an
+               original keyword.
+
+               The method that converts the header, tries to process it
+               first with WCSLIB (tools to interpret the world coordinate
+               system as described in a FITS header). If this fails, then we
+               are sure that the header is incorrect and we cannot proceed.
+               One should use a FITS tool like 'fv' (the Interactive FITS
+               File Editor from Nasa) to repair the header.
+
+               The conversion process starts with exploring the spatial part
+               of the header.
+               It knows which axes are spatial and it reads the corresponding
+               keywords (CDELTi, CROTAn, CDi_j, PCi_j and PC00i_00j (old
+               format for PC elements).
+               If there is no CD or PC matrix, then the conversion routine
+               returns the unaltered original header.
+               If it finds a PC matrix and no CD matrix then the header should
+               contain CDELT keywords. With the values of these keywords we
+               create a CD matrix:
+
+                  |cd11 cd12|  = |cdelt1      0| * |pc11 pc12|
+                  |cd21 cd22|    |0      cdelt2|   |pc21 pc22|
+
+               Note 1: We replaced notation i_j by ij so cd11 == CD1_1
+               Note 2: For the moment we restricted the problem to the 2 dim.
+                       spatial case because that is what we need to retrieve
+                       a value for CROTA, the rotation of the image.)
+               Note 3: We assumed that the PC matrix did not represent
+                       transposed axes as in:
+
+                                       | 0 1 0 |
+                                  PC = | 0 0 1 |
+                                       | 1 0 0 |
+
+
+               If cd12 == 0.0 and cd12 == 0.0 then CROTA is obviously 0.
+               There is no rotation and CDELT1 = cd11, CDELT2 = cd22
+
+               If one or both values of cd12, cd21 is not zero then we
+               expect a value for CROTA unequal to zero and/or skew.
+
+               We calculate the scaling parameters CDELT with:
+
+                              CDELT1 = sqrt(cd11*cd11+cd21*cd21)
+                              CDELT2 = sqrt(cd12*cd12+cd22*cd22)
+
+               The determinant of the matrix is:
+
+                              det = cd11*cd22 - cd12*cd21
+
+               This value cannot be 0 because we required that the matrix is
+               non-singular.
+               Further we distinguish two situations: a determinant < 0 and
+               a determinant > 0 (zero was already excluded).
+               Then we derive two rotations. If these are equal,
+               the image is not skewed.
+               If they are not equal, we derive the rotation from the
+               average of the two calculated angles. As a measure of skew,
+               we calculated the difference between the two rotation angles.
+               Here is a piece of the actual code:
+
+                              sign = 1.0
+                              if det < 0.0:
+                                 cdeltlon_cd = -cdeltlon_cd
+                                 sign = -1.0
+                              rot1_cd = atan2(-cd21, sign*cd11)
+                              rot2_cd = atan2(sign*cd12, cd22)
+                              rot_av = (rot1_cd+rot2_cd)/2.0
+                              crota_cd = degrees(rot_av)
+                              skew = degrees(abs(rot1_cd-rot2_cd))
+
+               New values of CDELT and CROTA will be inserted in the new
+               'classic' header only if they were not part of the original
+               header.
+
+               The process continues with non spatial axes. For these axes
+               we cannot derive a rotation. We only need to find a CDELTi
+               if for axis i no value could be found in the header.
+               If this value cannot be derived from the a CD matrix (usually
+               with diagonal element CDi_i) then the default 1.0 is assumed.
+               Note that there will be a warning about this in the comment
+               string for the corresponding keyword in the new 'classic' FITS
+               header.
+
+               Finally there is some cleaning up. First all CD/PC elements are
+               removed for all the axes in the data set. Second, some unwanted
+               keywords are removed. The current list is:
+               ["XTENSION", "EXTNAME", "EXTEND"]
+
+
+               Data limits
+               ***********
+
+               In GIPSY we can attach meta data to a data structure of slices
+               of a data structure. Even pixels can have their own header with
+               keywords. To be able to identify such headers, a so called
+               coordinate word is used. This coordinate word is currently a
+               32 bits integer. This implies that there is a limit to the size
+               of a data cube in GIPSY. In practice this limit is 2^31-1 pixels.
+               It does not matter what these pixels represent, i.e., the
+               value of keyword BITPIX= in the FITS header is not important.
+               So for the input data structure we prompt for axis limits.
+               This enables a user to decrease the size of original data
+               structure to meet the GIPSY requirements.
+
+
+
+Updates:       Feb 26, 2011: VOG document created.
+#<
+
+#>            fitsreproj.py
+#!/usr/bin/env python
+#----------------------------------------------------------------------
+# FILE:    fitsreproj.src
+# PURPOSE: Re-project the spatial part of a FITS data set. This a GIPSY
+#          task that has FITS files as input and output. There is no
+#          GIPSY data set format involved. This enables you to reproject
+#          data that is too big to be read into a GIPSY set.
+# AUTHOR:  M.G.R. Vogelaar, University of Groningen, The Netherlands
+# DATE:    February 25, 2011
+# UPDATE:  February 25, 2011
+#          September 15, 2014 (IOerror handler has been changed)
+__version__ = '0.1'
+#
+# (C) University of Groningen
+# Kapteyn Astronomical Institute
+# Groningen, The Netherlands
+# E: gipsy@astro.rug.nl
+#----------------------------------------------------------------------
+from os.path import isfile
+from sys import stdout                           # For flushing a buffer
+from fnmatch import fnmatch                      # Match file name against pattern
+from os import listdir, stat, path               # Used to get names of files on disk
+from string import letters
+import gipsy
+import pyfits
+from kapteyn import maputils
+from kapteyn import wcs
+from kapteyn.celestial import epochs
+from math import sqrt
+from numpy import NaN
+
+maxpixels = gipsy.Set.max_cword
+
+def get_skyout(baseproj,
+               ptypeorig,   # Original projection type
+               togds,
+               key=["SKYSYS=", "REFSYS=", "EQUINOX=", "EPOCH="],
+               mes=["Sky system 0=eq, 1=ecl, 2=gal, 3=sup.gal .... [current]:",
+                    "Ref.sys 0=fk4, 1=fk4_no_e, 2=fk5, 3=icrs ... [current]:",
+                    "Enter equinox (e.g. J2000 or B1983.5) .... [current]: ",
+                    "Enter date of observation (e.g. MJD24034) .... [current]: "],
+               default=[1,1,1,1]):
+
+#----------------------------------------------------------------------------
+# Note that the original projection types are needed to return a ctype.
+# If, for instance, the projection is NCP then WCSLIB transforms this to
+# SIN with two PV elements. If however we insert SIN in out ctypes, then
+# there is no automatic addition of these PV elements in this application
+# and we would get an unwanted projection destination.
+#
+#----------------------------------------------------------------------------
+                  
+   skyout = skysys = refsys = equinox = epoch = None
+   ctype = radesys = equinoxnumber = mjdobs = None
+
+   # Sky system
+   maxskysys = 3
+   st = gipsy.userint(key[0], mes[0], default=default[0], defval=skysys)
+   if st is None:
+      return skyout, ctype, radesys, equinoxnumber, mjdobs  # All None
+   else:
+      if st < 0:
+         st = 0
+      if st > maxskysys:
+         st = 3
+      skysys = st
+      if st == 0:
+         ctype = ["RA--", "DEC-"]
+      if st == 1:
+         ctype = ["ELON", "ELAT"]
+      if st == 2:
+         ctype = ["GLON", "GLAT"]
+      if st == 3:
+         ctype = ["SLON", "SLAT"]
+      # Add the original projection:
+      ctype[0] += "-" + ptypeorig
+      ctype[1] += "-" + ptypeorig
+
+   # Reference system
+   if skysys in [wcs.equatorial, wcs.ecliptic]:    # Equatorial or ecliptic, so ask reference system
+      if not togds:
+         maxrefsys = 5
+         if not baseproj.radesys is None:
+            prompt = mes[1]
+            defval = None
+         else:
+            prompt = "Ref.sys 0=fk4, 1=fk4_no_e, 2=fk5, 3=icrs ... [3]:"
+            defval = 3
+         st = gipsy.userint(key[1], prompt, default=default[1], defval=refsys)
+         if not st is None:
+            if st < 0:
+               st = 0
+            if st > maxrefsys:
+               st = 3
+            refsys = st + maxskysys+1  # The ref. systems start at maxskysys+1 (Dyn.J2000 was omitted)
+            if st == 0:
+               radesys = 'FK4'      # FK4 mean place, old (Bessell-Newcomb) system
+            if st == 1:
+               radesys = 'FK4-NO-E' # FK4-NO-E mean place, old system but without e-terms
+            if st == 2:
+               radesys = 'FK5'      # FK5 mean place, new (IAU 1984) system
+            if st == 3:
+               radesys = 'ICRS'     # ICRS International Celestial Reference System
+
+      # Equinox
+      if togds or refsys in [wcs.fk4, wcs.fk4_no_e, wcs.fk5]:
+         if togds:
+            radesys = "FK4"        # GIPSY works with fk4
+         unvalid = True
+         while unvalid:
+            st = gipsy.usercharu(key[2], mes[2], default=default[2], defval=equinox)
+            if not st is None:
+               try:
+                  B, J, JD = epochs(st)
+                  equinox = st
+                  unvalid = False
+                  if radesys is None:   # No sky system but a value for the equinox
+                     if baseproj.radesys is None:
+                        # The user did not enter a reference system
+                        equinoxnumber = J
+                     else:
+                        if baseproj.radesys in ["FK4", "FK4-NO-E"]:
+                           equinoxnumber = B
+                        else:
+                           equinoxnumber = J
+                  else:
+                     if radesys in ["FK4", "FK4-NO-E"]:
+                        equinoxnumber = B
+                     else:
+                        equinoxnumber = J
+               except:
+                  unvalid = True
+            else:
+               unvalid = False
+            if unvalid:
+               gipsy.reject(key[2], "Invalid Equinox!")
+         if togds:
+            radesys = None
+      # Observation epoch
+      if refsys in [wcs.fk4, wcs.fk4_no_e]:
+         unvalid = True
+         while unvalid:
+            st = gipsy.usercharu(key[3], mes[3], default=default[3], defval=epoch)
+            if not st is None:
+               try:
+                  B, J, JD = epochs(st)
+                  epoch = st
+                  mjdobs = JD - 2400000.5
+                  unvalid = False
+               except:
+                  unvalid = True
+            else:
+               unvalid = False
+            if unvalid:
+               gipsy.reject(key[3], "Invalid Epoch of observation!")
+
+   if skysys is None:
+      skyout = None
+   else:
+      skyout = []
+      skyout.append(skysys)
+      if equinox != None:
+         skyout.append(equinox)
+      if refsys != None:
+         skyout.append(refsys)
+      if epoch != None:
+         skyout.append(epoch)
+      skyout = tuple(skyout)
+
+   return skyout, ctype, radesys, equinoxnumber, mjdobs
+
+
+def get_projection(baseproj, togds, ptype,
+                   key="PROJID=",
+                   mes="Projection of destination: ... [copy from current]:",
+                   default=1):
+#-----------------------------------------------------------------
+   """
+   Prompt user to enter a projection system. First present a menu
+   with known projections. The list is smaller if a projection
+   is required for a legacy GIPSY set.
+   If a projection system requires or handles extra parameters
+   than the specification of these parameters are asked with
+   reasonable defaults.
+   See also: "Representations of celestial coordinates in FITS",
+   http://www.atnf.csiro.au/people/mcalabre/WCS/ccs.pdf
+   Calabretta M.R. and Greisen E.W.
+   """
+#-----------------------------------------------------------------
+   # Setup a dictionary with projections from WCSLIB
+   # and make a list with systems that are compatible with (legacy) GIPSY.
+   gipsyprojections = ('AIT', 'FLT', 'CYL', 'TAN', 'SIN', 'ARC', 'GLS', 'NCP', 'STG', 'MER')
+   gipsyproj = ptype in gipsyprojections
+   yesgipsy = True
+   nogipsy = False
+   lat = baseproj.lataxnum
+   projections = []   
+   projections.append(('AZP', 'Zenithal Perspective', ["PV%d_1"%lat, "PV%d_2"%lat], (30.,2.), nogipsy))
+   projections.append(('SZP', 'Slant Zenithal Perspective', ["PV%d_1"%lat, "PV%d_2"%lat, "PV%d_3"%lat], (2., 80., 60.), nogipsy))
+   projections.append(('TAN', 'Gnomonic', [], [], yesgipsy))
+   projections.append(('STG', 'Conformal: Stereographic', [], [], yesgipsy))
+   projections.append(('SIN', 'Slant Orthographic', ["PV%d_1"%lat, "PV%d_2"%lat], (-1.0/sqrt(6),1.0/sqrt(6)), yesgipsy))
+   projections.append(('ARC', 'Equidistant Zenithal equidistant', [], [], yesgipsy))
+   projections.append(('ZPN', 'Zenithal Polynomial P0 P1 P2 P3 ... P20', [], [], nogipsy))
+   projections.append(('ZEA', 'Equiareal: Zenithal Equal Area', [], [], nogipsy))
+   projections.append(('AIR', 'Airy', ["PV%d_1"%lat], [45.], nogipsy))
+   projections.append(('CYP', 'Cylindrical Perspective', ["PV%d_1"%lat, "PV%d_2"%lat], [1.0, 45.0], nogipsy))
+   projections.append(('CEA', 'Equiareal: Cylindrical Equal Area', ["PV%d_1"%lat], [1.0], nogipsy))
+   projections.append(('CAR', 'Equidistant Plate Carree', [], [], nogipsy))
+   projections.append(('MER', 'Conformal: Mercator', [], [], yesgipsy))
+   projections.append(('SFL', 'Equiareal: Sanson-Flamsteed', [], [], nogipsy))
+   projections.append(('PAR', 'Equiareal: Parabolic', [], [], nogipsy))
+   projections.append(('MOL', 'Equiareal: Mollweide', [], [], nogipsy))
+   projections.append(('AIT', 'Equiareal: Hammer-Aitof', [], [], yesgipsy))
+   projections.append(('COP', 'Conic perspective', ["PV%d_1"%lat, "PV%d_2"%lat], (45.0, 25.0), nogipsy))
+   projections.append(('COE', 'Equiareal: Conic Equal Area',   ["PV%d_1"%lat, "PV%d_2"%lat], (-45.0,25.0), nogipsy))
+   projections.append(('COD', 'Equidistant Conic equidistant', ["PV%d_1"%lat, "PV%d_2"%lat], (45.0,25.0), nogipsy))
+   projections.append(('COO', 'Conformal: Conic Orthomorphic', ["PV%d_1"%lat, "PV%d_2"%lat], (45.0,25.0), nogipsy))
+   projections.append(('BON', "Equiareal: Bonne's equal area", ["PV%d_1"%lat], [45.0], nogipsy))
+   projections.append(('PCO', 'Polyconic', [], [], nogipsy))
+   projections.append(('TSC', 'Tangential Spherical Cube', [], [], nogipsy))
+   projections.append(('CSC', 'COBE Quadrilateralized Spherical Cube', [], [], nogipsy))
+   projections.append(('QSC', 'Quadrilateralized Spherical Cube', [], [], nogipsy))
+
+   if togds:
+      projections.append(('CYL', 'Equivalent cylindrical projection (CEA)', [], [], yesgipsy))
+      projections.append(('FLT', 'Flat projection (CAR)', [], [], yesgipsy))
+      projections.append(('GLS', 'Global Sinusoidal Projection (SFL)', [], [], yesgipsy))
+      projections.append(('NCP', 'North Celestial Pole (SIN)', [], [], yesgipsy))
+      
+   # GIPSY has AIT, FLT, CYL, TAN, SIN, ARC, GLS, NCP, STG, MER
+   # From these, the following are not recognized by GIPSY: FLT, CYL, GLS
+   # Translation:
+   #
+   #     GIPSY                                            WCSLIB
+   # CYL (Equivalent cylindrical projection)       CEA (Cylindrical equal area) (lambda=1, default)
+   # FLT (Flat Projection)                         CAR (Plate Carree)
+   # GLS (Global Sinusoidal projection)            SFL (Sanson-Flamsteed projection)
+   # NCP (North Celestial Pole)                    SIN (Sinusoidal with two PV elements)
+
+   gipsy.anyout("\nProjections", dev=3)
+   header = "%-4s %-4s %-45s %-30s"%('id', 'code', 'projection', 'parameters')
+   L = len(header)
+   gipsy.anyout("-"*L)
+   gipsy.anyout(header)
+   gipsy.anyout("-"*L)
+   maxitems = 0
+   for i, p in enumerate(projections):
+      display = True
+      if togds:
+         display = p[4]  # Compatible with GIPSY or not?
+      if display:
+         if togds:   # No PV parameters
+            gipsy.anyout("%-4d %-4s %-45s"%(i, p[0], p[1]))
+         else:
+            gipsy.anyout("%-4d %-4s %-45s %-30s"%(i, p[0], p[1], str(p[2])))
+         maxitems += 1
+   gipsy.anyout("\n", dev=3)
+
+   defval = None
+   if togds and not gipsyproj:
+      defval = 2
+      mes = "Projection of destination ... [%d]:"%defval
+      
+   pr = gipsy.userint(key, mes, default=default, defval=defval)
+   if pr is None:
+      return None, None
+   if pr < 0:
+      pr = 0
+   if pr >= maxitems:
+      pr = -1  # The last entry
+   PV = {}
+   if projections[pr][0] == 'ZPN':
+      # Ask at most 21 parameters
+      for i in range(21):
+         pv = "PV%d_%d"%(lat,i)
+         s = "Projection parameter %s ... [abort parameter loop]:"%(pv)
+         pvval = gipsy.userdble(pv, s, default=1, defval=None)
+         if not pvval is None:
+            k = pv.rstrip("=")
+            PV[k] = pvval
+         else:
+            break
+   if not togds:
+      # Then one can expect some extra parameters. GIPSY cannot deal
+      # with PV elements.
+      for pv, defaultpv in zip(projections[pr][2], projections[pr][3]):
+         s = "Projection parameter %s ... [%g]:"%(pv, defaultpv)
+         pvval = gipsy.userdble(pv, s, default=1, defval=defaultpv)
+         if not pvval is None:
+            k = pv.rstrip("=")
+            PV[k] = pvval
+
+   finalproj = projections[pr][0]
+   if togds:
+      if finalproj == 'CYL':
+         finalproj = 'CEA'
+      elif finalproj == 'FLT':
+         finalproj = 'CAR'
+      # Others (GLS and NCP) are recognized by WCSLIB   
+         
+   return finalproj, PV
+   
+
+def get_dict(key, mes, defval=''):
+#-----------------------------------------------------------------
+   """
+   Ask parameters in key:val format and create dictionary.
+   """
+#-----------------------------------------------------------------
+   MAXPAR = 100    # No more than 100 keywords allowed
+   askagain = True
+   while askagain:
+      newdict = {}
+      atts = gipsy.userchar(key, mes, default=1, defval=defval, nmax=MAXPAR)
+      if len(atts):
+         for att in atts:
+            try:
+               key, val = att.split(':',1)  # i.e. at most two elements
+               try:
+                  newdict.update({key:float(val)})
+               except:
+                  newdict.update({key:val})
+               askagain = False
+            except:
+               gipsy.reject(key, "Need key:value format")
+               askagain = True
+               break
+      else:
+         askagain = False
+   return newdict
+         
+       
+
+def listfiles():
+   #-----------------------------------------------------------------------
+   """
+   List files related to GDS, FITS or zipped FITS in current directory
+   """
+   #-----------------------------------------------------------------------
+   li = []
+   filenames = listdir(".")
+   for fname in filenames:
+      if  fnmatch(fname, '*.FITS')  or\
+          fnmatch(fname, '*.fits')  or\
+          fnmatch(fname, '*.fits.gz'):
+         li.append(fname)
+
+   li.sort()
+   for fname in li:
+      size = stat(fname)[6] / 1024.0 / 1024.0
+      gipsy.anyout("%-30s %6.2f Mb" % (fname, size), dev=3)
+
+
+
+def get_fitsfile(key="FITSFILE=",
+                 mes="Enter name of FITS file ... [list files]:",
+                 default=1,
+                 hdukey="HDUNR=",
+                 hdumes="Enter number of Header Data Unit ... [0]:",
+                 hdudefault=1,
+                 altkey="ALTHEAD=",
+                 altmes="Enter char. for alternate header ... [No alt. header]:",
+                 altdefault=1):
+#-----------------------------------------------------------------
+   """
+An external helper function for the FITSimage class to
+prompt a user to open the right Header and Data Unit (hdu)
+of a FITS file.
+
+:Returns:
+   * *hnr* - FITS header number. Usually the first header, i.e. *hnr=0*
+   * *fitsname* - Name of the FITS file.
+   * *alter* - A character that corresponds to an alternate header
+     (with alternate WCS information e.g. a spectral translation).
+
+:Notes:
+   --
+
+:Examples:
+   Besides file names of files on disk, PyFITS allows url's and gzipped
+   files to retrieve FITS files e.g.::
+
+      http://www.atnf.csiro.au/people/mcalabre/data/WCS/1904-66_ZPN.fits.gz
+
+   """
+#--------------------------------------------------------------------
+   global taskname
+   localfile = True
+   askagain = True
+   while askagain:
+      fitsfilename = gipsy.usertext(key, mes, default=default, defval='')
+      if fitsfilename == '':
+         listfiles()
+         gipsy.cancel(key)
+      else:
+         s = ''
+         localfile = isfile(fitsfilename)
+         try:
+            hdulist = pyfits.open(fitsfilename)
+            caption = "Filename: %s\nNo.    Name         Type"\
+               "      Cards   Dimensions   Format\n" % fitsfilename
+            gipsy.anyout("%s: %s"%(taskname, caption))
+            for j in range(len(hdulist)):
+               gipsy.anyout("%-3d  %s\n"%(j, hdulist[j]._summary()))
+            askagain = False
+         #except IOError, (errno, strerror):
+         #   s = "I/O error(%s): %s opening [%s] ..." % (errno, strerror, fitsfilename)
+         except IOError, err:
+            s = "I/O error(%s)" % (str(err))
+            gipsy.anyout(s)
+         except:
+            s = "Cannot open file, unknown error."
+            gipsy.anyout(s)
+         else:
+            s = "Cannot find this file..."
+         if askagain:
+            gipsy.reject(key, "%s. Try again!"%s)
+
+   if localfile:
+      s = "File is a LOCAL FITS file."
+   else:
+      s = "File is a REMOTE FITS file."
+   gipsy.anyout("%s: %s"%(taskname, s))
+
+   # Note that an element of this list can be accessed either
+   # by integer number or by name of the extension.
+   hnr = 0
+   n = len(hdulist)
+   if  n > 1:
+      askagain = True
+      while askagain:
+         hnr = gipsy.userint(hdukey, hdumes, default=hdudefault, defval=0)
+         try:
+            k = hdulist[hnr]
+            askagain = False
+         except:
+            gipsy.reject("Unable to open this header data unit. Try another number!")
+
+   # If there is no character given for an alternate header
+   # but an alternate header is detected, then the user is
+   # prompted to enter a character from a list with allowed
+   # characters. Currently an alternate header is found if
+   # there is a CRPIX1 followed by a character A..Z
+
+   # For classic headers we use only the prime header!
+   alter = ''
+   """
+   alternates = []
+   hdr = hdulist[hnr].header
+   for a in letters[:26]:
+      k = "CRPIX1%c" % a.upper()  # To be sure that it is uppercase
+      if hdr.has_key(k):
+         gipsy.anyout("%s: %s has alternate header %s"%(taskname, fitsfilename, a.upper()))
+         alternates.append(a.upper())
+   if len(alternates):
+      askagain = True
+      while askagain:
+         p = gipsy.usercharu(altkey, altmes, default=altdefault, defval='')
+         if p == '':
+            alter = ''
+            askagain = False
+         else:
+            print "palter", p.upper(), alternates
+            if p in alternates:
+               alter = p
+               askagain = False
+            else:
+               gipsy.reject(altkey, "Character not in list with allowed alternates!")
+   """
+   hdulist.close()
+   return hnr, fitsfilename, alter, localfile
+
+
+
+#---------- Main program -----------------
+gipsy.init()
+taskname = gipsy.myname()
+
+key = "LEGACY="
+mes = "Is final goal a legacy GIPSY set? ... Y/[N]:"
+# The motivation of the default is the power of this application to use
+# outside the context of GIPSY sets. Then there are no restrictions on
+# size or projection type.
+togds = gipsy.userlog(key, mes, default=1, defval=False)
+
+# Get the FITS file
+hnr, fitsfilename, alter, localfile = get_fitsfile()
+
+# Create a FITSimage object. Then we have useful methods available
+Basefits = maputils.FITSimage(filespec=fitsfilename, hdunr=hnr, alter=alter)
+gipsy.anyout("\n        Axes information")
+gipsy.anyout("="*50)
+gipsy.anyout(Basefits.str_axisinfo())
+gipsy.anyout("\n        World coordinates information")
+gipsy.anyout("="*50)
+gipsy.anyout(Basefits.str_wcsinfo())
+
+if Basefits.proj.lataxnum is None or Basefits.proj.lataxnum is None:
+   gipsy.anyout("%s: This FITS header does not contain a description"%(taskname))
+   gipsy.anyout("%s: for a 2dim spatial data structure. It cannot be re-projected!"%(taskname))
+   gipsy.finis() # No use to continue
+
+gipsy.anyout("\n        Header Analysis")
+gipsy.anyout("="*50)
+
+try:
+   classicheader, skew, hdrchanged = Basefits.header2classic()
+   key = "CROTA%d"%(Basefits.proj.lataxnum)
+   if len(hdrchanged) == 0:
+      classic = True
+      gipsy.anyout("* This FITS header is a 'classic' header. There are no PC or CD elements.")
+      if key in Basefits.hdr:
+         crota = Basefits.hdr[key]
+         gipsy.anyout("* Found image rotation in %s. Angle is %g (deg)."%(key, crota))
+      else:
+         gipsy.anyout("* Cannot find a value for the image rotation; 0.0 assumed.")
+   elif len(hdrchanged) == 1 and hdrchanged[0].startswith('CROTA'):
+      classic = False
+      gipsy.anyout("* The header is a 'classic' header but a CROTA will be inserted.")
+   else:
+      classic = False
+      gipsy.anyout("* Header is not 'classic'. It has PC or CD elements.")
+      gipsy.anyout("* Program needs to modify: %s"%(str(hdrchanged)))
+      if skew != 0.0:
+         gipsy.anyout("* The image is skewed!")
+         gipsy.anyout("* The difference between the two derived rotation angles is %g."%(skew))
+      if key in classicheader:
+         crota = classicheader[key]
+         gipsy.anyout("* Found (average) image rotation angle %g (deg)."%(crota))
+except ValueError, strerror:
+   gipsy.anyout("* Something is wrong with this header!")
+   gipsy.anyout("* Reason: [%s]"%(strerror))
+   gipsy.finis()
+gipsy.anyout("\n")
+
+# At this point we need information of the user how to proceed.
+# A FITS file was given and with this FITS file, something must be
+# done. This application re-projects spatial data. So the
+# first check is that we entered a FITS data set with two spatial axes.
+# A. Does data set contains a spatial part?
+# B. Then we prompt for one of the options:
+#    1. Re-project the data to the WCS of a second FITS file
+#    2. Rotate data over a given angle (it has to create a 'classic' header first).
+#       Rotation removes skew. Even if you enter the default value
+#       0.0, the header will be made a classic header, if it contained
+#       PC or CD elements.
+#    3. Rotate image so that it is aligned to the north.
+#       Rotation removes skew.
+#    4. Rotate to given angle. Rotation removes skew.
+#       Rotation removes skew. The value of FITS keyword CROTAn will
+#       be the given angle.
+#    5. Give a number of FITS keywords and values which are inserted
+#       in the current header and re-project the data to the modified header.
+#       Ask user for sky definitions and projections.
+#    6. Change header to classic. Copy data unchanged.
+# C. Finally the user has to enter the new pixel coordinate limits for
+#    each axis.
+
+optionlist = (o_fromfits, o_rotate, o_tonorth, o_rotateto, o_changecurrent, o_classiconly) = range(6)
+
+gipsy.anyout("\n        Re-project options", dev=1)
+gipsy.anyout("="*50, dev=1)
+gipsy.anyout("0. Re-project the data to the WCS of a second FITS file", dev=1)
+gipsy.anyout("1. Rotate data over a given angle (it has to create a 'classic' header first).", dev=1)
+gipsy.anyout("   This re-projection removes skew.", dev=1)
+gipsy.anyout("2. Rotate image so that it is aligned to the north (it has to create a 'classic' header first).", dev=1)
+gipsy.anyout("   This re-projection removes skew.", dev=1)
+gipsy.anyout("3. Rotate to given angle. This re-projection removes skew.", dev=1)
+gipsy.anyout("   The value of FITS keyword CROTAn will be the given angle.", dev=1)
+gipsy.anyout("4. Give a number of FITS keywords and values which are inserted", dev=1)
+gipsy.anyout("   in the header and re-project the data to this modified header.", dev=1)
+gipsy.anyout("   You can select a sky definition and a projection type from a list.", dev=1)
+gipsy.anyout("5. Make classic header and copy the data (do NOT re-project).", dev=1)
+gipsy.anyout("   You lose the WCS representation of skew in the destination header.", dev=1)
+                  
+gipsy.anyout("\n", dev=1)
+
+defval = o_tonorth
+key = "OPTION="
+mes = "Enter option from list above: ... [%d]:"%(defval)
+option = gipsy.userint(key, mes, default=1, defval=defval)
+if option < 0:
+   option = 0
+if option >= len(optionlist):
+   option = optionlist[-1]
+
+if option == o_fromfits:
+   # We need another FITS file then.
+   hnr_dst, fitsfilename_dst, alter_dst, localfile_dst = get_fitsfile(key="FITSDEST=", hdukey="HDUNRDEST=")
+   Destfits = maputils.FITSimage(filespec=fitsfilename_dst, hdunr=hnr_dst, alter=alter_dst)
+   if Destfits.proj.lataxnum is None or Destfits.proj.lataxnum is None:
+      gipsy.anyout("%s: Destination FITS header does not contain a description"%(taskname))
+      gipsy.anyout("%s: for a 2dim spatial data structure. It cannot be re-projected!"%(taskname))
+      gipsy.finis() # No use to continue      
+
+if option == o_classiconly:
+   if togds:
+      # Check if the classic header has the right projection etc.
+      ct1 = "CTYPE%d"%Basefits.proj.lonaxnum
+      ct2 = "CTYPE%d"%Basefits.proj.lataxnum
+      cptype = Basefits.hdr[ct1]
+      s = cptype.split("-")
+      if len(s) > 1:
+         ptype = s[-1]
+      else:
+         ptype = ''
+      # Now check if GIPSY understands this
+      # Note that the last to are not an alias for GIPSY projections FLT and CYL.
+      if not ptype in ['AIT', 'FLT', 'CYL', 'TAN', 'SIN', 'ARC', 'GLS', 'NCP', 'STG', 'MER', 'CAR', 'CEA']:
+         gipsy.anyout("%s: Projection [%s] not recognized by GIPSY!"%(taskname, ptype))
+         gipsy.anyout("%s: Re-run task with option 4."%(taskname))
+         gipsy.finis()
+
+if option == o_changecurrent:
+   insertdict = {}
+   ckey1 = "CRVAL%d"%Basefits.proj.lonaxnum
+   ckey2 = "CRVAL%d"%Basefits.proj.lataxnum
+   crval1 = Basefits.hdr[ckey1]
+   crval2 = Basefits.hdr[ckey2]
+   ct1 = "CTYPE%d"%Basefits.proj.lonaxnum
+   ct2 = "CTYPE%d"%Basefits.proj.lataxnum
+    
+   # New sky system
+   cptype = Basefits.hdr[ct1]
+   s = cptype.split("-")
+   if len(s) > 1:
+      ptype = s[-1]
+   else:
+      ptype = ''
+   skyout = None
+   skyout, ctype, radesys, equinoxnumber, mjdobs = get_skyout(Basefits.proj, ptype, togds)
+   if not skyout is None:
+      trans = wcs.Transformation(Basefits.proj.skysys, skyout=skyout)
+      crval1n, crval2n = trans((crval1, crval2))
+      insertdict[ckey1] = crval1n
+      insertdict[ckey2] = crval2n
+      if not ctype is None:
+         insertdict[ct1] = ctype[0]
+         insertdict[ct2] = ctype[1]
+      if not radesys is None:
+         insertdict["RADESYS"] = radesys
+      if not equinoxnumber is None:
+         insertdict["EQUINOX"] = equinoxnumber
+      if not mjdobs is None:
+         insertdict["MJD-OBS"] = mjdobs
+      gipsy.anyout("%s: Generated FITS keywords for output sky"%(taskname))
+      gipsy.anyout("-"*50)
+
+   # New projection type
+   newproj, pv = get_projection(Basefits.proj, togds, ptype)
+   if not newproj is None:
+      ctype = ["", ""]
+      if ct1 in insertdict:
+         ctype[0] = insertdict[ct1]
+         ctype[1] = insertdict[ct2]
+      else:
+         lonaxnum = Basefits.proj.lonaxnum
+         lataxnum = Basefits.proj.lataxnum
+         ctype[0] = Basefits.proj.ctype[lonaxnum-1]
+         ctype[1] = Basefits.proj.ctype[lataxnum-1]
+      ctype[0] = "%s%s"%(ctype[0][:5], newproj)
+      ctype[1] = "%s%s"%(ctype[1][:5], newproj)
+      insertdict[ct1] = ctype[0]
+      insertdict[ct2] = ctype[1]
+      insertdict.update(pv)
+
+   # Left overs, i.e. CRVAL, CDELT, PV, CD etc.
+   key = "WCSKEYS="
+   mes = "Enter additional wcs keys in key:val format ... []:"
+   wcskeys = get_dict(key, mes)
+   insertdict.update(wcskeys)
+   rotation = None
+   insertspatial = False
+   toclassic = False
+   if togds:
+      toclassic = True
+      rotation = 0.0
+   else:
+      if not classic:
+         key = "CLASSIC="
+         mes = "Make header 'classic' (remove CD/PC, add CROTA)? ... [N]:"
+         toclassic = gipsy.userlog(key, mes, default=1, defval=False)
+         if toclassic:
+            rotation = 0.0  # Dummy, but it triggers the creation of a classic header
+   if toclassic:
+      gipsy.anyout("%s: PC and CD elements (if any) will be removed! A CROTA will be added if necessary."%(taskname))
+   # Note that with the 'toclassic' option set to YES, one also removes the PV elements.
+   gipsy.anyout("This task inserted header items:")
+   keys = insertdict.keys()
+   keys.sort()
+   for k in keys:
+      gipsy.anyout("%s : %s"%(k, insertdict[k]))   
+
+if option == o_rotate:
+   insertdict = {}
+   rotation = 0.0
+   mes = "Classic rotation over angle (deg): ... [%g]:"%rotation
+   key = "ROTATION="
+   rotation = gipsy.userdble(key, mes, defval=None, default=1)
+   insertspatial = False
+   if not rotation is None:
+      gipsy.anyout("%s: Header is or becomes a classic header"%(taskname))
+      gipsy.anyout("%s: and image will be rotated over angle %g"%(taskname, rotation))
+
+if option == o_tonorth:
+   crota = "CROTA%d"%Basefits.proj.lataxnum
+   insertdict = {crota:0.0}
+   rotation = 0.0
+   insertspatial = False
+   gipsy.anyout("%s: Header is or becomes a classic header"%(taskname))
+   gipsy.anyout("%s: It will be aligned with the north with %s=0"%(taskname, crota))
+
+if option == o_rotateto:
+   insertdict = {}
+   crota = "CROTA%d"%Basefits.proj.lataxnum
+   mes = "Rotate image so that %s becomes angle (deg): ... [0]:"%(crota)
+   key = "%s="%crota
+   rotation = gipsy.userdble(key, mes, defval=0.0, default=1)
+   gipsy.anyout("%s: Header is or becomes a classic header"%(taskname))
+   gipsy.anyout("%s: and %s in header will be %g"%(taskname, crota, rotation))
+   # Now the trick: Make header classic and set CROTA to value in rotation
+   insertdict = {crota:rotation}
+   insertspatial = False   
+   rotation = 0.0
+
+# Get the number of pixels in this HDU. Give a warning
+# if this number exceeds the maximum imposed by GIPSY.
+n = Basefits.naxis
+if option != o_fromfits:
+   maxn = 1
+   for axnr in range(1, n+1):
+      maxn *= Basefits.axisinfo[axnr].axlen
+   gipsy.anyout("%s: Number of pixels in this structure is: %d"%(taskname, maxn))
+   gipsy.anyout("%s: Maximum number of pixels allowed by GIPSY set is %d"%(taskname, 1024*1024*510))
+   diff = maxpixels - maxn
+   if diff >= 0:
+      gipsy.anyout("%s: You should be able to use this file in GIPSY!"%(taskname))
+   else:
+      if togds:
+         gipsy.anyout("%s: Data set too big to read in GIPSY!"%(taskname))
+         gipsy.finis()
+      else:
+         gipsy.anyout("%s: You should slice the data before using GIPSY!"%(taskname))
+
+
+# Ask user for new limits in pixel coordinates for each axis
+# Note that if the destination is another FITS file, the axis limits
+# for the spatial part of the output can differ from the input.
+plo = [0]*n
+phi = [0]*n
+pxlim_dst = [0]*2    # Limits for the spatial map
+pylim_dst = [0]*2
+plimlo = []          # Limits for the repeat axes
+plimhi = []
+i_spatial = 0
+
+# If one wants a GIPSY set, then we have a to check the number
+# of pixels in the output because GIPSY has a maximum number for
+# this number (gipsy.max_cword). If the destination header was a
+# separate FITS file, then one cannot change the output size
+if option == o_fromfits: 
+   lon = Destfits.proj.lonaxnum
+   lat = Destfits.proj.lataxnum
+   k = "NAXIS%d"%lon
+   destnaxislon = Destfits.hdr[k]
+   k = "NAXIS%d"%lat
+   destnaxislat = Destfits.hdr[k]
+
+totpix = 1
+for i in range(n):
+   axnr = i + 1
+   axname = Basefits.axisinfo[axnr].axname
+   naxis =  Basefits.axisinfo[axnr].axlen
+   if option == o_fromfits:
+      if axnr == Basefits.proj.lonaxnum:
+         naxis = destnaxislon
+      if axnr == Basefits.proj.lataxnum:
+         naxis = destnaxislat
+   key = "LIMITS_%s="%axname
+   mes = "Enter pixel limits on axis %s ... [1,%d]:"%(axname, naxis)
+   askagain = True
+   while askagain:
+      lo, hi = gipsy.userint(key, mes, defval=(1,naxis), default=1+4, nmax=2)
+      if hi < lo:
+         s = "High value cannot be smaller than low value!"
+         # Note that the values can define limits than the current.
+         # This generate extra whitespace which can be useful to show
+         # the rotated map without the edges being sliced.
+      else:
+         askagain = False
+         plo[i] = lo
+         phi[i] = hi
+         axislen = hi - lo + 1
+         if totpix * axislen <= maxpixels:
+            totpix *= axislen
+         else:
+            if togds:
+               s = "Number of pixels %d exceeds max. (%d)"%(totpix*axislen, maxpixels)
+               askagain = True
+      if askagain:
+         gipsy.reject(key, s)
+   if axnr == Basefits.proj.lonaxnum or axnr == Basefits.proj.lataxnum:
+      if 1: #option != o_fromfits:
+         if i_spatial == 0:
+            # X axis
+            pxlim_dst[0] = lo
+            pxlim_dst[1] = hi
+            i_spatial += 1
+         else:
+            # Y axis
+            pylim_dst[0] = lo
+            pylim_dst[1] = hi
+   else:
+      plimlo.append(lo)
+      plimhi.append(hi)
+
+s = "Limits spatial output x: %d to  %d, y: %d to %d"%(pxlim_dst[0], pxlim_dst[1], pylim_dst[0], pylim_dst[1])
+gipsy.anyout("%s: %s"%(taskname, s))
+gipsy.anyout("%s: Lower axis limits used on repeat axes: %s"%(taskname, str(plimlo)))
+gipsy.anyout("%s: Upper axis limits used on repeat axes: %s"%(taskname, str(plimhi)))
+
+if option == o_classiconly:
+   sl = []
+   for i in range(n-1,-1,-1):     # e.g. ax = 3,2,1
+      sl.append(slice(plo[i]-1, phi[i]))             # Slice indices start with 0, pixels with 1
+   boxdat = None
+   if Basefits.dat != None:
+      boxdat = Basefits.dat[sl]     # Sliced data
+
+   # Change CRPIX and NAXIS if the dimensions have been changed by the user
+   for i in range(n):
+      naxis = phi[i] - plo[i] + 1
+      axnr = i+1
+      naxiskey = "NAXIS%d"%axnr
+      classicheader[naxiskey] = naxis
+      crpix = Basefits.axisinfo[axnr].crpix - plo[i] + 1
+      crpixkey = "CRPIX%d"%axnr
+      classicheader[crpixkey] = crpix
+   Newfits = maputils.FITSimage(externalheader=classicheader, externaldata=boxdat)
+else:
+   # Prepare interpolation
+   # Assume coordinate (48.9, 2.4).
+   # Order 0: Nearest integer: [nint(x), nint(y)] -> [49, 2]
+   # Order 1: Bilinear interpolation in square with corners [int(x), int(y)], [int(x), int(y)+1]
+   #          [int(x)+1, int(y)], [int(x)+1, int(y)+1] i.e. [48,2], [48,3], [49,2], [49,3]
+   # Order 2: Quadratic spline interpolation over the 9 points derived from nint(x)-1, nint(x), nint(x)+1,
+   #          and same for y. Build with piecewise polynomials f(x) = a.X^2 + b.x +c. This is a polynomial
+   #          of degree 2 and order 3
+   # Order 3: Cubic spline, polynomials degree 3, order 4
+   # Order 4: Spline. Polynomials degree 4, order 5
+   # Order 5: Spline. Polynomials degree 5, order 6
+   #
+   # Order 1, bilinear, is much faster than 3, but may have visible seams between the
+   # square patches.
+
+   interpol_dict = {}
+   key = "IPORDER="
+   mes = "nint=0, bilin.=1, quad sp=2, cubic sp=3, sp4=4, sp5=5 ... [3]:"
+   iporder = gipsy.userint(key, mes, default=1, defval=3)
+   if iporder < 0:
+      iporder= 0
+   if iporder > 5:
+      iporder = 5
+   interpol_dict['order'] = iporder
+   prefilter = iporder > 1
+   interpol_dict['prefilter'] = prefilter
+
+   # Value used for points outside the boundaries of the input if mode='constant'.
+   # Default in this task is NaN (blank)
+   key = "IPCVAL="
+   mes = "Values outside boundaries of input ... [NaN]:"
+   ipcval = gipsy.userdble(key, mes, default=1, defval=NaN)
+   interpol_dict['cval'] = ipcval
+
+# Get output file name 
+key = "FITSOUT="
+if localfile:
+   outfitsname =  "reproj_" + fitsfilename
+else:
+   outfitsname =  "reproj_fromURL.fits"
+mes = "Name of reprojected FITS file ... [%s]"%outfitsname
+outfitsname = gipsy.usertext(key, mes, default=1, defval=outfitsname)
+
+
+if option in [o_rotate, o_tonorth, o_rotateto, o_changecurrent]:
+   gipsy.status("Start reprojection...")
+   Newfits = Basefits.reproject_to(reprojobj=None,
+                                   pxlim_dst=pxlim_dst, pylim_dst=pylim_dst,
+                                   plimlo=plimlo, plimhi=plimhi,
+                                   interpol_dict = interpol_dict,
+                                   rotation=rotation,
+                                   insertspatial=insertspatial,
+                                   **insertdict)
+         
+if option == o_fromfits:
+   gipsy.status("Start reprojection...")
+   Newfits = Basefits.reproject_to(reprojobj=Destfits.hdr,
+                                   pxlim_dst=pxlim_dst, pylim_dst=pylim_dst,
+                                   plimlo=plimlo, plimhi=plimhi,
+                                   interpol_dict = interpol_dict,
+                                   rotation=None,
+                                   insertspatial=True)
+
+
+# For two projections (CAR, CEA) we have a different code in GIPSY (FLT, CYL).
+if togds:
+   ct1 = "CTYPE%d"%Basefits.proj.lonaxnum
+   ct2 = "CTYPE%d"%Basefits.proj.lataxnum
+   ctype1 = Basefits.hdr[ct1]
+   ctype2 = Basefits.hdr[ct2]
+   if ctype1.endswith('CAR'):
+      ctype1 = "%s%s"%(ctype1[0][:5], 'FLT')
+      ctype2 = "%s%s"%(ctype2[0][:5], 'FLT')
+   if ctype1.endswith('CEA'):
+      ctype1 = "%s%s"%(ctype1[0][:5], 'CYL')
+      ctype2 = "%s%s"%(ctype2[0][:5], 'CYL')
+   Newfits.hdr[ct1] = ctype1
+   Newfits.hdr[ct2] = ctype2
+   # Deal with the equinox limitations in GIPSY
+   # If there is an EQUINOX keyword, leave it in the header even when
+   # the header represents a non-equatorial sky system. If it has also
+   # an EPOCH keyword than remove this. Otherwise GIPSY will read this
+   # EPOCH as the equinox. Usually this is not correct because for
+   # FK4 reference systems, this EPOCH is the data of observation
+   # and not the equinox and the numbers for EPOCH and EQUINOX
+   # could be different.
+   if "EQUINOX" in Newfits.hdr:
+      if "EPOCH" in Newfits.hdr:
+         del Newfits.hdr["EPOCH"]
+
+# Save FITS file. This file will not be deleted when this task is finished.
+Newfits.writetofits(outfitsname, clobber=True, append=False)
+
+if togds:
+   makegds = True
+else:
+   default = 1
+   defval = False
+   key = "MAKEGDS="
+   mes = "Do you want to create a GIPSY set? ... Y/[N]:"
+   makegds = gipsy.userlog(key, mes, defval=defval, default=default)
+
+if makegds:
+   if outfitsname.upper().endswith(".FITS"):
+      gdsname = outfitsname[0:-5]
+   else:
+      gdsname = outfitsname + "GDS"
+   key = "GDSNAME="
+   mes = "Name of GDS set: ... [%s]:"%gdsname
+   gdsname = gipsy.usertext(key, mes, defval=gdsname, default=1)
+   try:
+      # If the set already exists, then remove it first. Otherwise one cannot
+      # change the size of the output, no will keywords be changed.
+      s = gipsy.Set(gdsname, write=True)
+      s.delete()
+      # print "Could delete"
+   except:
+      pass
+   if togds:
+      # Best chance to be compatible with GDS is using RFITS
+      gipsy.xeq("RFITS AUTO=Y FITSFILE=%s; INFILES=0; OUTSET=%s" % (outfitsname, gdsname))
+   else:
+      # Otherwise we probably do not want to change the header in any way.
+      gipsy.xeq("FITSREAD FITSFILE=%s; OUTSET=%s" % (outfitsname, gdsname))
+
+# Close connection with Hermes
+gipsy.finis()
+
+
+#<

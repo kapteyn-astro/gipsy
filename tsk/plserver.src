@@ -1,0 +1,2139 @@
+plserver.src
+
+        Copyright (c) Kapteyn Laboratorium Groningen 1995
+        All Rights Reserved.
+
+Name:         plserver.src
+Creator:      kgb
+Host:         newton
+Date:         Jan 25, 1995
+Contents:     plserver.doc plserver.make plserver.h display.c main.c
+              misc.c pls.c server.c
+
+#>            plserver.doc
+
+Document:     PLSERVER
+
+Purpose:      Description of the GIPSY PLot SERVER.
+
+Category:     GRAPHICS
+
+File:         plserver.src
+
+Author:       K.G. Begeman
+
+Description:  The plserver is an X11 plot server, which can be started by
+              grexec or by hand.
+
+Use:          plserver -window DEVICENAME
+
+              plserver allows the user to specify some defaults in the
+              .Xdefaults or .Xresources file. The parameters which can
+              be set are the following:
+
+              plserver.plot_height:      height of plotwindow in pixels.
+              plserver.plot_width:       width of plotwindow in pixels.
+              plserver.plot_height_mm:   height of plotwindow in mm.
+              plserver.plot_width_mm:    width of plotwindow in mm.
+              plserver.font:             font for info & menu windows.
+              plserver.backgroundcolor:  color for background.
+              plserver.foregroundcolor:  color for foreground.
+              plserver.xposition:        startup at this x position.
+              plserver.yposition:        startup at this y position.
+
+Updates:      Sep 14, 1993: KGB, Document created.
+              Jan 25, 1995: KGB, User defined back- & foregroundcolors. 
+              May  4, 2007: JPT, Included conditional code for Apple Mac.
+              Jun 16, 2009: JPT, Disabled bzero() declaration (server_main_loop)
+#<
+
+#>            plserver.make
+#
+# Makefile to build PLot Server (Jan  3, 1995)
+# by K.G. Begeman
+#
+# The makefile is made as general as possible. It tries to find
+# the paths to the X11 include files and libraries with the findx.sh script.
+#
+SHELL = /bin/sh
+
+.SUFFIXES: .c .o
+
+DOCUMENTS = plserver.doc
+
+INCLUDES = plserver.h
+
+SOURCES = display.c main.c misc.c pls.c server.c
+
+OBJECTS = display.o main.o misc.o pls.o server.o
+
+default:: plserver
+
+pack::
+	$${gip_sys}/pack.csh plserver.src $(DOCUMENTS) plserver.make $(INCLUDES) $(SOURCES)
+
+clean::
+	rm -f plserver $(OBJECTS)
+
+.c.o:
+	@echo "$(CC_COMP) -c $(CC_OPTS) $(X11_OPTS) $<"
+	@$(CC_COMP) -c $(CC_OPTS) $(X11_OPTS) $<
+
+plserver:   $(INCLUDES) $(OBJECTS)
+	@echo "$(CC_COMP) -o plserver $(OBJECTS) $(X11_LIBS) $(CC_LIBS)"
+	@$(CC_COMP) -o plserver $(OBJECTS) $(X11_LIBS) $(CC_LIBS)
+
+#<
+
+#>            plserver.h
+/* plserver.h
+
+*/
+
+
+/*
+ * includes:
+ */
+
+#include	"ctype.h"			/* <ctype.h> */
+#include	"errno.h"			/* <errno.h> */
+#include	"limits.h"			/* <limits.h> */
+#include	"math.h"			/* <math.h> */
+#include	"stddef.h"			/* <stddef.h> */
+#include	"stdlib.h"			/* <stdlib.h> */
+#include	"stdio.h"			/* <stdio.h> */
+#include	"string.h"			/* <string.h> */
+#include	"time.h"			/* <time.h> */
+
+typedef struct {			/* command structure */
+   int	cmd;				/* the command */
+   int	code;				/* encryption */
+   int	nbytes;				/* number of bytes to expect */
+} Command_struct;
+
+#define	PLS_OPEN		0
+#define	PLS_OPEN_CLIENT		1
+#define	PLS_PGPLOT		2
+#define	PLS_CLOSE		3
+#define	PLS_MYNAME		4
+
+#define	PLSE_SUCCESS		0
+#define	PLSE_C_SEND		-1
+#define	PLSE_C_RECEIVE		-2
+#define	PLSE_NOSERVERSTART	-3
+#define	PLSE_NOCOMFILE		-4
+#define	PLSE_WRONGCOMFILE	-5
+#define	PLSE_NOUSOCKET		-6
+#define	PLSE_NOUCONNECT		-7
+#define	PLSE_NOHADDRESS		-8
+#define	PLSE_NOISOCKET		-9
+#define	PLSE_NOICONNECT		-10
+#define	PLSE_NOTIMPLEMENTED	-11
+#define	PLSE_WRONGCONTYPE	-12
+#define	PLSE_S_NOOPEN		-13
+#define	PLSE_S_NOFONT		-14
+#define	PLSE_S_NOCON		-15
+#define	PLSE_S_NOCOMFILE	-16
+#define	PLSE_S_RECEIVE		-17
+#define	PLSE_S_SEND		-18
+#define	PLSE_S_FLUSH		-19
+#define	PLSE_ERROR_UNKNOWN	-20
+
+/*
+ * Here we have to do some scrambling because some ansi routines
+ * are not in the c library of the machine, so they are taken from
+ * xclib. Or some things are defined deferently in the system
+ * include files, which causes any good c compiler to stop.
+ * It's tough, but if somebody has a better idea....
+ */
+
+#define	fcntl		FCNTL			/* fooling around */
+#define	gettimeofday	GETTIMEOFDAY		/* fooling around */
+
+#if	0
+#ifdef	strcspn
+#define	strcspn_defined
+#undef	strcspn
+#else
+#define	strcspn		STRCSPN
+#endif
+#ifdef	strspn
+#define	strspn_defined
+#undef	strspn
+#else
+#define	strspn		STRSPN
+#endif
+#ifdef	strerror				/* from xclib */
+#define	strerror_defined
+#undef	strerror
+#else
+#define	strerror	STRERROR		/* fooling around */
+#endif
+#ifdef	strlen					/* from xclib */
+#define	strlen_defined
+#undef	strlen
+#else
+#define	strlen		STRLEN			/* fooling around */
+#endif
+#endif
+#include	<sys/types.h>
+#include	<fcntl.h>
+#include	<netdb.h>
+#include	<netinet/in.h>
+#include	<signal.h>
+#if	defined(__aix__)
+#include	<sys/select.h>
+#endif
+#include	<sys/socket.h>
+#include	<sys/time.h>
+#include	<sys/un.h>
+
+#ifdef	__mips__			/* for decstations, we have to ... */
+#ifdef	__STDC__			/* undefine __STDC__ because the ... */
+#undef	__STDC__			/* local include file are not ... */
+#endif					/* setup in a nice manner */
+#endif
+
+#ifdef	__sun__				/* for sun work stations, we have ... */
+#ifdef	__sysv__  			/* check whether its Solaris, ... */
+#ifndef	att				/* and if so, we have to define ... */
+#define	att				/* att (if not already defined) */
+#endif
+#endif
+#endif
+
+#include	<X11/X.h>
+#include	<X11/Xlib.h>
+#include	<X11/Xproto.h>
+#include	<X11/Xutil.h>
+#include	<X11/Xatom.h>
+#include	<X11/cursorfont.h>
+#include	<X11/keysym.h>
+
+/*
+ * Here we do the unscrambling again. Shit.
+ */
+
+#undef	fcntl					/* unscramble */
+#undef	gettimeofday				/* unscramble */
+
+#if	0
+#ifdef	strcspn_defined
+#undef	strcspn
+#undef	strcspn_defined
+#define	strcspn	strcspn_x
+#else
+#undef	strcspn
+#endif
+#ifdef	strspn_defined
+#undef	strspn
+#undef	strspn_defined
+#define	strspn	strspn_x
+#else
+#undef	strspn
+#endif
+#ifdef	strerror_defined			/* unscramble */
+#undef	strerror
+#undef	strerror_defined
+#define	strerror	strerror_x		/* from xclib */
+#else
+#undef	strerror
+#endif
+#ifdef	strlen_defined				/* unscramble */
+#undef	strlen
+#undef	strlen_defined
+#define	strlen		strlen_x		/* from xclib */
+#else
+#undef	strlen
+#endif
+#endif
+
+#if	!defined(ntohs) & !defined(__alpha__) & !defined(__linux__)
+extern	u_short	ntohs( );			/* declare it */
+#endif						/* not ntohs */
+
+#if	!defined(htons) & !defined(__alpha__) & !defined(__linux__)
+extern	u_short	htons( );			/* declare it */
+#endif						/* not htons */
+
+
+/*
+ * defines:
+ */
+
+#define	MAXARG			20		/* max. # of arguments */
+#define	MAXCLIENTS		8		/* max. # of clients */
+#define	MAXPCOLORS		16		/* plot colors */
+#define	MAXSTRING		80		/* max. length of strings */
+
+#define	NONE_ACTION		0
+#define	QUIT_ACTION		1
+
+
+/*
+ * typedefs:
+ */
+
+typedef	struct {
+   int		open;				/* open or closed */
+   int		socket;				/* socket number */
+   int		swap;				/* byte swap needed ? */
+   int		ftype;				/* client floating type */
+   int		wstate;				/* wait state */
+} Client_struct;
+
+typedef	struct {				/* window info structure */
+   Colormap		colormap;		/* collor map */
+   Display		*id;			/* display id */
+   GC			gct;			/* text */
+   GC			gcr;			/* reverse of gct */
+   Visual		*visual;		/* default visual */
+   Window		root;			/* root window */
+   Window		top;			/* main window */
+   Window		info;			/* window for info */
+   Window		plot;			/* window for pgplot */
+   Window		quit;			/* window for quiting */
+   Window		cons;			/* shows connections */
+   float		Background_rgb[3];
+   float                Foreground_rgb[3];
+   char			*myname;		/* info text */
+   char			device[MAXSTRING];	/* name of devices */
+   char			con_string[MAXSTRING];	/* connection string */
+   XFontStruct		*font;			/* the font */
+   int			clients;		/* # of clients */
+   int			Xerror;			/* an X error ? */
+   int			class;			/* class of display */
+   int			depth;			/* depth of display */
+   int			height;			/* height of display */
+   int			width;			/* width of screen */
+   int			heightMM;		/* height of display in MM */
+   int			widthMM;		/* width of screen in MM */
+   int			cheight;		/* height of con. window */
+   int			cwidth;			/* width of con. window */
+   int			iheight;		/* height of info window */
+   int			iwidth;			/* width of info window */
+   int			pheight;		/* height of plot window */
+   int			pwidth;			/* width of plot window */
+   int			qheight;		/* height of quit window */
+   int			qwidth;			/* width of quit window */
+   int			theight;		/* total height */
+   int			twidth;			/* width of main window */
+   int			planes;			/* number of planes */
+   int			screen;			/* screen number */
+   unsigned long	black;			/* black pixel */
+   unsigned long	white;			/* white pixel */
+   unsigned long	background_pixel;	/* the background */
+   unsigned long	foreground_pixel;	/* the foreground */
+} Display_struct;
+
+extern	int	display_close( );		/* display.c */
+extern	int	display_command( );		/* display.c */
+extern	int	display_do( );			/* display.c */
+extern	int	display_open( );		/* display.c */
+extern	void	misc_broken_pipe( );		/* misc.c */
+extern	int	misc_client_close( );		/* misc.c */
+extern	int	misc_cmd_swap( );		/* misc.c */
+extern	int	misc_draw_cons( );		/* misc.c */
+extern	int	misc_draw_info( );		/* misc.c */
+extern	int	misc_draw_quit( );		/* misc.c */
+extern	int	misc_error_handler( );		/* misc.c */
+extern	int	misc_flush( );			/* misc.c */
+extern	int	misc_max( );			/* misc.c */
+extern	int	misc_min( );			/* misc.c */
+extern	int	misc_nint( );			/* misc.c */
+extern	int	misc_receive( );		/* misc.c */
+extern	int	misc_send( );			/* misc.c */
+extern	int	misc_sl( );			/* misc.c */
+extern	int	pls_close( );			/* pls.c */
+extern	int	pls_myname( );			/* pls.c */
+extern	int	pls_open( );			/* pls.c */
+extern	int	pls_pgplot( );			/* pls.c */
+extern	int	server_close( );		/* server.c */
+extern	int	server_do( );			/* server.c */
+extern	int	server_main_loop( );		/* server.c */
+extern	int	server_open( );			/* server.c */
+
+extern	Display_struct	winfo;			/* all window information */
+extern	Client_struct	clients[MAXCLIENTS];	/* for clients */
+
+extern	char	*myargv[MAXARG];		/* program arguments */
+extern	int	myargc;				/* number of arguments */
+#<
+
+#>            display.c
+/* display.c
+
+*/
+
+#include	"plserver.h"			/* plserver symbols */
+
+#define	PLOT_HEIGHT	535			/* height plot window */
+#define	PLOT_WIDTH	700			/* width plot window */
+#define	MIN_THEIGHT	( winfo.qheight + 7 + 128 )
+#define	MIN_TWIDTH	( winfo.qwidth + 2 * winfo.cwidth + 10 )
+
+Display_struct		winfo;			/* Declared here */
+static	int		event_mask;		/* mask for event types */
+
+static	char	*fonts[] = {
+   "-misc-fixed-bold-r-normal--15-*",
+   "-schumacher-clean-bold-r-normal--15-*",
+   "-misc-fixed-medium-r-semicondensed--14-*",
+   "-misc-fixed-medium-r-*-*-14-*",
+   "-adobe-courier-medium-r-normal--14-*",
+   "-misc-fixed-medium-r-semicondensed--13-*",
+   "*-*-bold-r-normal-*-15-*",
+   "fixed",
+   "6x13",
+   "6x12",
+};
+
+int	display_command( void )
+{
+   myargv[myargc++] = "-connection";
+   myargv[myargc++] = winfo.con_string;
+   XSetCommand( winfo.id, winfo.top, myargv, myargc );
+   return( 0 );
+}
+
+static	void	check_for_device( Window w )
+{
+   Window	r, p, *c[1];
+   char		*window_name[1];
+   unsigned int	nc, n;
+
+   XFetchName( winfo.id, w, window_name );
+   if ((window_name[0] != NULL ) && !strcmp( window_name[0], winfo.device )) {
+      Atom		actual_type;
+      int		actual_format;
+      unsigned long	nitems, bytes_after;
+      unsigned char	*prop[1];
+
+      if (XGetWindowProperty( winfo.id, w, XA_WM_COMMAND, 0, 400,
+         False, AnyPropertyType, &actual_type, &actual_format, &nitems,
+         &bytes_after, prop ) == Success) {
+         if (nitems && (actual_type == XA_STRING)) {
+            char	*ptr = (char *) prop[0];
+            int		next = 0;
+
+            while (nitems > 0) {
+               int	l = strlen( ptr );
+
+               if (next && l) {
+                  strcpy( winfo.con_string, ptr );
+                  next = 0;
+               }
+               if (!strcmp( ptr, "-connection" )) next = 1;
+               l++;
+               nitems -= l;
+               ptr += l;
+            }
+         }
+         if (prop[0] != NULL) XFree( (caddr_t) prop[0] );
+      }
+   }
+   if (window_name[0] != NULL) XFree( (caddr_t) window_name[0] );
+   XQueryTree( winfo.id, w, &r, &p, c, &nc );
+   for ( n = 0; n < nc && !winfo.con_string[0]; n++ ) {
+      check_for_device( c[0][n] );
+   }
+   if (nc) XFree( (caddr_t) c[0] );
+}
+
+int	display_open( char *display_name )
+{
+   int			n;			/* loop counter */
+   XGCValues	 	values;
+   XSetWindowAttributes	attributes;		/* window attributes */
+   XSizeHints		sizehints;		/* Sizehints */
+
+   winfo.con_string[0] = 0;			/* no connections yet */
+   winfo.clients = 0;
+   winfo.myname  = NULL;			/* reset */
+   winfo.id      = XOpenDisplay( display_name );/* open display */
+   if (winfo.id == NULL) {			/* error */
+      return( PLSE_S_NOOPEN );			/* display open error */
+   }
+   XSetErrorHandler( misc_error_handler );	/* our own error handler */
+   winfo.screen  = DefaultScreen( winfo.id );	/* get screen number */
+   winfo.root    = RootWindow( winfo.id, winfo.screen );
+   check_for_device( winfo.root );		/* PLSERVER alreay active ? */
+   if (winfo.con_string[0]) return( PLSE_SUCCESS );
+   n = 0;
+   {
+      char	*ptr;
+
+      ptr = XGetDefault( winfo.id, "plserver", "font" );
+      if (ptr == NULL) {
+         winfo.font = NULL;
+      } else {
+         winfo.font = XLoadQueryFont( winfo.id, ptr );
+      }
+   }
+   while ( (winfo.font == NULL) && (n < (sizeof(fonts)/sizeof(char *)))) {
+      winfo.font = XLoadQueryFont( winfo.id, fonts[n++] );
+   }
+   if (winfo.font == NULL ) {			/* no fonts */
+      display_close( display_name );
+      return( PLSE_S_NOFONT );
+   }
+   winfo.colormap= DefaultColormap( winfo.id, winfo.screen );
+   winfo.white   = WhitePixel( winfo.id, winfo.screen );
+   winfo.black   = BlackPixel( winfo.id, winfo.screen );
+   {
+      XColor	kleur;
+      char	*ptr;
+      int	s;
+
+      ptr = XGetDefault( winfo.id, "plserver", "backgroundcolor" );
+      if (ptr == NULL) {
+         s = XParseColor( winfo.id, winfo.colormap, "Black", &kleur );
+      } else {
+         s = XParseColor( winfo.id, winfo.colormap, ptr, &kleur );
+      }
+      if ( !s ) {
+         kleur.red   = 0;
+         kleur.green = 0;
+         kleur.blue  = 0;
+         kleur.flags = DoRed | DoGreen | DoBlue;
+      }
+      XAllocColor( winfo.id, winfo.colormap, &kleur );
+      winfo.background_pixel = kleur.pixel;
+      winfo.Background_rgb[0] = (float) kleur.red   / (float) USHRT_MAX;
+      winfo.Background_rgb[1] = (float) kleur.green / (float) USHRT_MAX;
+      winfo.Background_rgb[2] = (float) kleur.blue  / (float) USHRT_MAX;
+      ptr = XGetDefault( winfo.id, "plserver", "foregroundcolor" );
+      if (ptr == NULL) {
+         s = XParseColor( winfo.id, winfo.colormap, "White", &kleur );
+      } else {
+         s = XParseColor( winfo.id, winfo.colormap, ptr, &kleur );
+      }
+      if ( !s ) {
+         kleur.red   = USHRT_MAX;
+         kleur.green = USHRT_MAX;
+         kleur.blue  = USHRT_MAX;
+         kleur.flags = DoRed | DoGreen | DoBlue;
+      }
+      XAllocColor( winfo.id, winfo.colormap, &kleur );
+      winfo.foreground_pixel = kleur.pixel;
+      winfo.Foreground_rgb[0] = (float) kleur.red   / (float) USHRT_MAX;
+      winfo.Foreground_rgb[1] = (float) kleur.green / (float) USHRT_MAX;
+      winfo.Foreground_rgb[2] = (float) kleur.blue  / (float) USHRT_MAX;
+   }
+   winfo.visual  = XDefaultVisual( winfo.id, winfo.screen );
+   winfo.class   = winfo.visual->class;
+   winfo.planes  = DisplayPlanes( winfo.id, winfo.screen );
+   winfo.depth   = DefaultDepth( winfo.id, winfo.screen );
+   winfo.width   = DisplayWidth( winfo.id, winfo.screen );
+   winfo.widthMM = DisplayWidthMM( winfo.id, winfo.screen );
+   winfo.height  = DisplayHeight( winfo.id, winfo.screen );
+   winfo.heightMM= DisplayHeightMM( winfo.id, winfo.screen );
+   {
+      char	string[80];
+
+      strcpy( string, "Quit" );
+      winfo.qheight = 2 * ( winfo.font->ascent + winfo.font->descent );
+      winfo.qwidth = XTextWidth( winfo.font, string, strlen( string ) ) +
+         winfo.qheight / 2;
+   }
+   {
+      char	string[80];
+      int	len;
+
+      len = sprintf( string, "Clients: %d", MAXCLIENTS );
+      winfo.cheight = winfo.qheight;
+      winfo.cwidth = XTextWidth( winfo.font, string, len ) + winfo.qheight / 2;
+   }
+   {
+      char	*ptr;
+
+      ptr = XGetDefault( winfo.id, "plserver", "plot_height_mm" );
+      if ( ptr != NULL ) {
+         int	mm = atoi( ptr );
+
+         if ( mm > 0 ) {
+            winfo.pheight = misc_nint( ((float) mm) /
+               ((float) winfo.heightMM) * ((float) winfo.height) );
+         } else {
+            ptr = NULL;
+         }
+      }
+      if (ptr == NULL) {
+         ptr = XGetDefault( winfo.id, "plserver", "plot_height" );
+         if (ptr == NULL) {
+            winfo.pheight = PLOT_HEIGHT;
+         } else {
+            winfo.pheight = atoi( ptr );
+         }
+      }
+   }
+   {
+      char	*ptr;
+
+      ptr = XGetDefault( winfo.id, "plserver", "plot_width_mm" );
+      if ( ptr != NULL ) {
+         int	mm = atoi( ptr );
+         if ( mm > 0 ) {
+            winfo.pwidth = misc_nint( ((float) mm) /
+               ((float) winfo.widthMM) * ((float) winfo.width) );
+         } else {
+            ptr = NULL;
+         }
+      }
+      if (ptr == NULL) {
+         ptr = XGetDefault( winfo.id, "plserver", "plot_width" );
+         if (ptr == NULL) {
+            winfo.pwidth  = PLOT_WIDTH;
+         } else {
+            winfo.pwidth  = atoi( ptr );
+         }
+      }
+   }
+   winfo.theight = winfo.pheight + winfo.qheight + 7;
+   if (winfo.theight < MIN_THEIGHT) {
+      winfo.theight = MIN_THEIGHT;
+      winfo.pheight = winfo.theight - winfo.qheight - 7;
+   }
+   winfo.twidth  = winfo.pwidth + 4;
+   if (winfo.twidth < MIN_TWIDTH) {
+      winfo.twidth = MIN_TWIDTH;
+      winfo.pwidth = winfo.twidth - 4;
+   }
+   winfo.iheight = winfo.qheight;
+   winfo.iwidth  = winfo.twidth - winfo.qwidth - winfo.cwidth - 10;
+
+   values.line_width = 1;
+   values.cap_style  = CapRound;
+   values.join_style = JoinRound;
+   values.font       = winfo.font->fid;
+   values.foreground = winfo.black;
+   values.background = winfo.white;
+   winfo.gct         = XCreateGC( winfo.id, winfo.root, GCForeground | GCBackground |
+      GCFont | GCLineWidth | GCJoinStyle | GCCapStyle, &values );
+   values.foreground = winfo.white;
+   values.background = winfo.black;
+   winfo.gcr         = XCreateGC( winfo.id, winfo.root, GCForeground | GCBackground |
+      GCFont | GCLineWidth | GCJoinStyle | GCCapStyle, &values );
+
+   /*
+    * attributes for main window
+    */
+   attributes.colormap         = winfo.colormap;
+   attributes.cursor           = XCreateFontCursor( winfo.id, XC_crosshair );
+   attributes.background_pixel = winfo.white;
+						/* create main window */
+   winfo.top = XCreateWindow( winfo.id, winfo.root, 0, 0, winfo.twidth,
+      winfo.theight, 1, winfo.depth, InputOutput, winfo.visual,
+      CWCursor | CWBackPixel | CWColormap, &attributes );
+						/* set properties of window */
+   XStoreName( winfo.id, winfo.top, winfo.device );
+   sizehints.height     = winfo.theight;
+   sizehints.width      = winfo.twidth;
+   sizehints.height_inc = 1;
+   sizehints.width_inc  = 1;
+   sizehints.flags      = PSize | PResizeInc;
+   {
+      char	*ptrx, *ptry;
+
+      ptrx = XGetDefault( winfo.id, "plserver", "xposition" );
+      ptry = XGetDefault( winfo.id, "plserver", "yposition" );
+      if ( ptrx != NULL && ptry != NULL ) {
+         int	x, y;
+
+         x = atoi( ptrx );
+         y = atoi( ptry );
+         if ( x < 0 ) x += ( winfo.width - winfo.twidth );
+         if ( y < 0 ) y += ( winfo.height - winfo.theight );
+         sizehints.x = x;
+         sizehints.y = y;
+         sizehints.flags |= USPosition;
+         XMoveWindow( winfo.id, winfo.top, x, y );
+      }
+   }
+   XSetNormalHints( winfo.id, winfo.top, &sizehints );
+						/* create display window */
+   attributes.backing_store    = Always;
+   attributes.backing_planes   = 0xff;
+   attributes.border_pixel     = winfo.black;
+   attributes.background_pixel = winfo.background_pixel;
+   winfo.plot = XCreateWindow( winfo.id, winfo.top, 1, winfo.qheight + 4,
+      winfo.pwidth, winfo.pheight, 1, winfo.depth, InputOutput,
+      winfo.visual, CWBackingStore | CWBackingPlanes | CWCursor | CWBackPixel |
+      CWBorderPixel, &attributes );
+   attributes.background_pixel = winfo.white;
+   attributes.cursor           = XCreateFontCursor( winfo.id, XC_hand2 );
+   winfo.quit = XCreateWindow( winfo.id, winfo.top, 1, 1,
+      winfo.qwidth, winfo.qheight, 1, winfo.depth, InputOutput, winfo.visual,
+      CWBackingStore | CWBackingPlanes | CWCursor | CWBackPixel |
+      CWBorderPixel , &attributes );
+   attributes.cursor           = XCreateFontCursor( winfo.id, XC_tcross );
+   winfo.cons = XCreateWindow( winfo.id, winfo.top, winfo.qwidth + 4, 1,
+      winfo.cwidth, winfo.cheight, 1, winfo.depth, InputOutput,
+      winfo.visual, CWBackingStore | CWBackingPlanes | CWCursor | CWBackPixel |
+      CWBorderPixel, &attributes );
+   attributes.cursor           = XCreateFontCursor( winfo.id, XC_question_arrow );
+   winfo.info = XCreateWindow( winfo.id, winfo.top, winfo.qwidth + winfo.cwidth + 7, 1,
+      winfo.iwidth, winfo.iheight, 1, winfo.depth, InputOutput,
+      winfo.visual, CWBackingStore | CWBackingPlanes | CWCursor | CWBackPixel |
+      CWBorderPixel, &attributes );
+   XMapSubwindows( winfo.id, winfo.top );
+   XMapWindow( winfo.id, winfo.top );
+   XSelectInput( winfo.id, winfo.top, ExposureMask | VisibilityChangeMask |
+      StructureNotifyMask | SubstructureNotifyMask  );
+   XSelectInput( winfo.id, winfo.plot, ExposureMask | VisibilityChangeMask |
+      PointerMotionMask | ButtonPressMask | ButtonReleaseMask |
+      ButtonMotionMask );
+   XSelectInput( winfo.id, winfo.quit, ExposureMask | VisibilityChangeMask |
+      PointerMotionMask | ButtonPressMask | ButtonReleaseMask |
+      ButtonMotionMask | EnterWindowMask | LeaveWindowMask |
+      StructureNotifyMask | SubstructureNotifyMask );
+   XSelectInput( winfo.id, winfo.info, ExposureMask | VisibilityChangeMask |
+      StructureNotifyMask | SubstructureNotifyMask );
+   {
+      event_mask = 0;
+      n = 1;
+      do {
+         event_mask |= n;
+         n *= 2;
+      } while (n < LASTEvent);
+   }
+   XFlush( winfo.id );
+   {
+      XEvent	event;
+
+      XMaskEvent( winfo.id, ExposureMask | VisibilityChangeMask |
+      StructureNotifyMask | SubstructureNotifyMask, &event );
+      misc_draw_quit( );
+      misc_draw_info( );
+      misc_draw_cons( );
+   }
+   return( PLSE_SUCCESS );
+}
+
+int	display_close( char *display_name )	/* display name */
+{
+   if (winfo.id != NULL) {			/* display open ? */
+      XCloseDisplay( winfo.id );		/* close it */
+   }
+   winfo.id = NULL;				/* reset */
+   return( 0 );					/* return to caller */
+}
+
+int	display_do( int action )
+{
+   while (XPending( winfo.id )) {
+      XEvent	event;
+
+      XNextEvent( winfo.id, &event );
+      event.type &= event_mask;
+      switch( event.type ) {
+         case ButtonPress: {
+            break;
+         }
+         case ButtonRelease: {
+            if (event.xany.window == winfo.quit) {
+               action = QUIT_ACTION;
+            }
+            break;
+         }
+         case ClientMessage: {
+            break;
+         }
+         case ConfigureNotify: {		/* changed configuration */
+            int	height = event.xconfigure.height;
+            int	width = event.xconfigure.width;
+
+            if (event.xconfigure.window == winfo.top) {
+               if ((winfo.twidth != width) || (winfo.theight != height)) {
+                  if (winfo.clients == 0) {
+                     if (height < MIN_THEIGHT) {
+                        height = MIN_THEIGHT;
+                     }
+                     if (width < MIN_TWIDTH) {
+                        width = MIN_TWIDTH;
+                     }
+                     winfo.theight = height;
+                     winfo.twidth  = width;
+                     winfo.pheight = height - winfo.qheight - 7;
+                     winfo.pwidth  = width - 4;
+                     winfo.iwidth  = width - winfo.qwidth - winfo.cwidth - 10;
+                     XResizeWindow( winfo.id, winfo.top, winfo.twidth, winfo.theight );
+                     XResizeWindow( winfo.id, winfo.plot, winfo.pwidth, winfo.pheight );
+                     XResizeWindow( winfo.id, winfo.info, winfo.iwidth, winfo.iheight );
+                  } else {
+                     XResizeWindow( winfo.id, winfo.top, winfo.twidth, winfo.theight );
+                  }
+               }
+            }
+            break;
+         }
+         case KeyPress: {
+            break;
+         }
+         case KeyRelease: {
+            break;
+         }
+         case CirculateNotify:
+         case CreateNotify:
+         case Expose: 			/* show all windows */
+         case GraphicsExpose:
+         case MapNotify:
+         case MapRequest:
+         case MappingNotify:
+         case ReparentNotify:
+         case VisibilityNotify: {
+            break;
+         }
+         case LeaveNotify: {
+            if (event.xany.window == winfo.quit) {
+               XDrawRectangle( winfo.id, winfo.quit, winfo.gcr, 1, 1,
+                  winfo.qwidth - 3, winfo.qheight - 3 );
+               XDrawRectangle( winfo.id, winfo.quit, winfo.gcr, 0, 0,
+                  winfo.qwidth - 1, winfo.qheight - 1 );
+            }
+            break;
+         }
+         case EnterNotify: {
+            if (event.xany.window == winfo.quit) {
+               XDrawRectangle( winfo.id, winfo.quit, winfo.gct, 0, 0,
+                  winfo.qwidth - 1, winfo.qheight - 1 );
+               XDrawRectangle( winfo.id, winfo.quit, winfo.gct, 1, 1,
+                  winfo.qwidth - 3, winfo.qheight - 3 );
+            }
+            break;
+         }
+         case MotionNotify: {		/* pointer movement */
+            break;
+         }
+         default: {
+            break;
+         }
+      }
+      XFlush( winfo.id );
+   };
+   return( action );
+}
+#<
+
+#>            main.c
+/* main.c
+
+*/
+
+
+/*
+ * includes:
+ */
+
+#include	"plserver.h"			/* PLSERVER symbols and definitions */
+#if	defined(NO_GIPSY)
+#define	cmain(argc,argv)	main(argc,argv)
+#else
+#include	"cmain.h"			/* main programme in C */
+#endif
+
+char	*myargv[MAXARG];
+int	myargc;
+
+
+int cmain( int argc, char *argv[] )		/* main programme */
+{
+   char		*dis_name = NULL;		/* name of X11 display */
+   char		*fil_name = NULL;		/* name of file */
+   char		*dev_name = NULL;		/* name of device */
+   int		n = 0;				/* loop counter */
+   int		r;				/* return value */
+
+   myargc = 0;					/* reset */
+   myargv[myargc++] = argv[0];			/* program name */
+   while (++n < argc) {				/* loop through arguments */
+      myargv[myargc++] = argv[n];		/* next argument */
+      if (argv[n][0] == '-') {			/* - switch */
+         if (!strcmp( argv[n], "-display" )) {
+            dis_name = argv[++n];		/* X11 display name */
+            myargv[myargc++] = argv[n];		/* next argument */
+         } else if (!strcmp( argv[n], "-window" )) {
+            dev_name = argv[++n];
+            myargv[myargc++] = argv[n];		/* next argument */
+         } else if (!strcmp( argv[n], "-comfile" )) {
+            fil_name = argv[++n];		/* setup file */
+            myargv[myargc++] = argv[n];		/* next argument */
+         }
+      }
+   }
+   if (dev_name == NULL) {
+      strcpy( winfo.device, "PGWINDOW" );
+   } else {
+      strcpy( winfo.device, dev_name );
+   }
+   r = display_open( dis_name );		/* open display */
+   if (r == PLSE_SUCCESS && !winfo.con_string[0]) {	/* no error, continue */
+      r = server_open( fil_name );		/* open server */
+      if (r > 0) {				/* no error, continue */
+         int	fork( );
+
+         if (fork()) return( EXIT_SUCCESS );
+         signal( SIGPIPE, misc_broken_pipe );	/* catch boken pipes */
+         r = server_main_loop( );		/* continue */
+      } else if (r == 0) {
+         FILE	*f;
+
+         f = fopen( fil_name, "w" );
+         if (f != NULL) {
+            fprintf( f, "%d\n", PLSE_S_NOCON );
+            fclose( f );
+         }
+      } else {
+         FILE	*f;
+
+         f = fopen( fil_name, "w" );
+         if (f != NULL) {
+            fprintf( f, "%d\n", PLSE_S_NOCOMFILE );
+            fclose( f );
+         }
+      }
+      if (!r) {					/* no error, continue */
+         r = server_close( );
+      }
+      if (!r) {					/* no error, continue */
+         r = display_close( dis_name );		/* clean up display */
+      }
+   } else {
+      FILE	*f;
+
+      f = fopen( fil_name, "w" );		/* open com. file */
+      if (f != NULL) {				/* open o.k. */
+         if (r == PLSE_SUCCESS) {
+            fprintf( f, "%s\n", winfo.con_string );
+         } else {
+            fprintf( f, "%d\n", r );
+         }
+         fclose( f );
+      }
+   }
+   return( r ? EXIT_FAILURE : EXIT_SUCCESS );	/* return last status */
+}
+#<
+
+#>            misc.c
+/* misc.c
+
+*/
+
+#include	"plserver.h"			/* plserver symbols */
+
+extern	int	read( );
+extern	int	select( );
+extern	int	write( );
+
+
+int	misc_client_close( int sid )
+{
+   int	close( );
+
+   if (clients[sid].open) {
+      int	i;
+
+      close( clients[sid].socket );
+      clients[sid].open = 0;
+      winfo.clients -= 1;
+      for ( i = 0; i < MAXCLIENTS; i++) {
+         if (clients[i].open) clients[i].wstate--;
+      }
+      misc_draw_cons( );
+   }
+   return( 0 );
+}
+
+
+void	misc_broken_pipe( int sig )
+{
+   if (sig == SIGPIPE) {
+      signal( sig, misc_broken_pipe );
+   }
+}
+
+
+int	misc_max( int x, int y )
+{
+   return( x > y ? x : y );
+}
+
+
+int	misc_min( int x, int y )
+{
+   return( x < y ? x : y );
+}
+
+int	misc_nint( double d )
+{
+   int	r;
+
+   if (d > 0) r = d + 0.5; else { r = -d + 0.5; r = -r; }
+   return( r );
+}
+
+int	misc_error_handler( Display *display, XErrorEvent *event )
+{
+   FILE	*efile;
+   char	msg[80];
+   int	getpid( );
+
+   if (event->error_code == BadAlloc && event->request_code == X_CreatePixmap) {
+      winfo.Xerror = 1;
+   } else if (event->error_code == BadDrawable && event->request_code == X_PutImage) {
+      winfo.Xerror = 1;
+   } else {
+      winfo.Xerror = 0;
+   }
+   sprintf( msg, "/tmp/plserver%d.errors", getpid( ) );
+   efile = fopen( msg, "a" );
+   XGetErrorText( display, event->error_code, msg, 80 );
+   fprintf( efile, "Error_text   = %s\n", msg );
+   fclose( efile );
+   return( 0 );
+}
+
+int	misc_cmd_swap( int swap, Command_struct *cmd )
+{
+   if (swap) {
+      misc_sl( swap, &cmd->cmd, 1 );
+      misc_sl( swap, &cmd->code, 1 );
+      misc_sl( swap, &cmd->nbytes, 1 );
+   }
+   return( 0 );
+}
+
+int	misc_ss( int swap, short *si, int ns )
+{
+   if (	swap ) {
+      int	l;
+      int	m;
+      int	n;
+      union {
+         short	s;
+         char	b[sizeof(short)];
+      } i, o;
+
+      for (n = 0; n < ns; n++) {
+         i.s = si[n];
+         for (l = sizeof( short ), m = 0; m < sizeof( short ); o.b[--l] = i.b[m++] );
+         si[n] = o.s;
+      }
+   }
+   return( 0 );
+}
+
+int	misc_sl( int swap, int *li, int nl )
+{
+   if (	swap ) {
+      int	l;
+      int	m;
+      int	n;
+      union {
+         int	l;
+         char	b[sizeof(int)];
+      } i, o;
+
+      for (n = 0; n < nl; n++) {
+         i.l = li[n];
+         for (l = sizeof( int ), m = 0; m < sizeof( int ); o.b[--l] = i.b[m++]);
+         li[n] = o.l;
+      }
+   }
+   return( 0 );
+}
+
+static	int	read_wait( int fd )
+{
+   fd_set	read_fds;
+   int		nfound;
+   int		r = PLSE_SUCCESS;
+
+   do {
+      FD_ZERO( &read_fds );
+      FD_SET( fd, &read_fds );
+      nfound = select( fd + 1, (void *) &read_fds, NULL, NULL, NULL );
+      if (nfound == -1 && errno != EINTR) {
+         r = PLSE_S_RECEIVE;
+      }
+   } while (nfound <= 0 && r == PLSE_SUCCESS);
+   return( r );
+}
+
+static	int	write_wait( int fd )
+{
+   fd_set	write_fds;
+   int		nfound;
+   int		r = PLSE_SUCCESS;
+
+   do {
+      FD_ZERO( &write_fds );
+      FD_SET( fd, &write_fds );
+      nfound = select( fd + 1, NULL, (void *) &write_fds, NULL, NULL );
+      if (nfound == -1 && errno != EINTR) {
+         r = PLSE_S_SEND;
+      }
+   } while (nfound <= 0 && r == PLSE_SUCCESS);
+   return( r );
+}
+
+int	misc_send( int socket, void *data, int ndata )
+{
+   char	*p = (char *) data;			/* make character pointer */
+   int	nd = 0;					/* current byte count */
+   int	nl = ndata;				/* number of bytes left  */
+   int	nt = 0;					/* number of bytes done */
+   int	r = PLSE_SUCCESS;			/* return value */
+
+   while (nl && r == PLSE_SUCCESS) {
+      while ((nd = write( socket, &p[nt], nl )) == -1 && errno == EINTR);
+      if (nd > 0) {
+         nl -= nd;
+         nt += nd;
+#if	defined(EWOULDBLOCK)
+      } else if (nd == -1 && errno == EWOULDBLOCK) {
+         r = write_wait( socket );
+#endif
+      } else {
+         r = PLSE_S_SEND;
+      }
+   }
+   return( r );					/* return to caller */
+}
+
+int	misc_receive( int socket, void *data, int ndata )
+{
+   char	*p = (char *) data;			/* make character pointer */
+   int	nd = 0;					/* current byte count */
+   int	nl = ndata;				/* number of bytes left  */
+   int	nt = 0;					/* number of bytes done */
+   int	r = PLSE_SUCCESS;			/* return value */
+
+   while (nl && r == PLSE_SUCCESS) {
+      while ((nd = read( socket, &p[nt], nl )) == -1 && errno == EINTR);
+      if (nd > 0) {
+         nl -= nd;
+         nt += nd;
+#if	defined(EWOULDBLOCK)
+      } else if (nd == -1 && errno == EWOULDBLOCK) {
+         r = read_wait( socket );
+#endif
+      } else {
+         r = PLSE_S_RECEIVE;
+      }
+   }
+   return( r );					/* return to caller */
+}
+
+int	misc_flush( int socket, int nflush )
+{
+   char	c;					/* flush buffer */
+   int	n;					/* loop counter */
+   int	nd;					/* byte count */
+   int	r = PLSE_SUCCESS;			/* return value */
+
+   for (n = 0; r == PLSE_SUCCESS && n < nflush; n++) {
+      while (( nd = read( socket, &c, 1 )) == -1 && errno == EINTR);
+      if (nd == -1) {
+#if	defined(EWOULDBLOCK)
+         if (errno == EWOULDBLOCK) {
+            r = read_wait( socket );
+         } else {
+            r = PLSE_S_FLUSH;
+         }
+#else
+         f = PLSE_S_FLUSH;
+#endif
+      }
+   }
+   return( r );					/* return to caller */
+}
+
+int	misc_draw_cons( void )
+{
+   char	text[80];
+   int	nt;
+   int	xpos, ypos;
+
+   XClearWindow( winfo.id, winfo.cons );
+   nt = sprintf( text, "Clients: %d", winfo.clients );
+   xpos = ( winfo.cwidth - XTextWidth( winfo.font, text, nt ) ) / 2;
+   ypos = ( winfo.cheight + winfo.font->ascent - winfo.font->descent ) / 2;
+   XDrawString( winfo.id, winfo.cons, winfo.gct, xpos, ypos, text, nt );
+   XFlush( winfo.id );
+   return( 0 );
+}
+
+int	misc_draw_info( void )
+{
+   XClearWindow( winfo.id, winfo.info );
+   if (winfo.myname != NULL) {
+      XDrawString( winfo.id, winfo.info, winfo.gct,
+         ( winfo.font->ascent + winfo.font->descent ) / 2,
+         ( winfo.iheight + winfo.font->ascent - winfo.font->descent ) / 2,
+         winfo.myname, strlen( winfo.myname ) );
+   }
+   XFlush( winfo.id );
+   return( 0 );
+}
+
+int	misc_draw_quit( void )
+{
+   int	xpos, ypos;
+
+   xpos = ( winfo.qwidth - XTextWidth( winfo.font, "Quit", 4 ) ) / 2;
+   ypos = ( winfo.qheight + winfo.font->ascent - winfo.font->descent ) / 2;
+   XDrawString( winfo.id, winfo.quit, winfo.gct, xpos, ypos, "Quit", 4 );
+   XFlush( winfo.id );
+   return( 0 );
+}
+#<
+
+#>            pls.c
+/* pls.c
+
+*/
+
+
+/*
+ * includes:
+ */
+
+#include	"plserver.h"			/* pltserver definitions */
+#include	"f2cvvdefs.h"			/* Fortran -> C definitions */
+#include	"spfpfl.h"
+#include	"spfplf.h"
+
+int	pls_open( int sid, Command_struct cmd )
+{
+   int	close( );				/* closes a socket */
+   int	r = PLSE_SUCCESS;			/* return value */
+
+   if (cmd.code != PLS_OPEN_CLIENT) {
+      clients[sid].swap = 1;			/* try swapping the bytes */
+   }
+   misc_cmd_swap( clients[sid].swap, &cmd );	/* swap it */
+   if (cmd.code == PLS_OPEN_CLIENT) {		/* open by client */
+      int	ftype = OS_FLOATING_TYPE;	/* floating point type of client */
+
+      r = misc_receive( clients[sid].socket, &ftype, cmd.nbytes );
+      if (r == PLSE_SUCCESS) {
+         misc_sl( clients[sid].swap, &ftype, 1 );
+         clients[sid].ftype = ftype;		/* client floating type */
+         cmd.code   = 0;			/* return code */
+         cmd.nbytes = 0;			/* no next send */
+         misc_cmd_swap( clients[sid].swap, &cmd );
+         r = misc_send( clients[sid].socket, &cmd, sizeof( cmd ) );
+      }
+   } else {
+      r = PLSE_ERROR_UNKNOWN;			/* unknown option */
+   }
+   if (r != PLSE_SUCCESS) {
+      misc_client_close( sid );
+   } else {
+      clients[sid].wstate = winfo.clients++;
+   }
+   misc_draw_cons( );
+   return( r );					/* return to caller */
+}
+
+int	pls_close( int sid, Command_struct cmd )
+{
+   int	r = PLSE_SUCCESS;			/* return value */
+
+   cmd.code   = 0;				/* no error */
+   cmd.nbytes = 0;				/* no next send */
+   misc_cmd_swap( clients[sid].swap, &cmd );	/* swap it */
+   r = misc_send( clients[sid].socket, &cmd, sizeof( cmd ) );
+   misc_client_close( sid );
+   return( r );					/* return to caller */
+}
+
+int	pls_myname( int sid, Command_struct cmd )
+{
+   int	nr;					/* number of bytes */
+   int	r = PLSE_SUCCESS;			/* return value */
+
+   nr = cmd.nbytes;				/* read this many bytes */
+   winfo.myname = realloc( winfo.myname, nr + 1 );
+   winfo.myname[nr] = 0;			/* add zero byte */
+   r = misc_receive( clients[sid].socket, winfo.myname, nr );
+   if (r != PLSE_SUCCESS) {
+      free( winfo.myname );
+      winfo.myname = NULL;
+   }
+   misc_draw_info( );
+   return( r );					/* return to caller */
+}
+
+/*
+ * The PGPLOT Functions:
+ */
+
+#define INT(x)  ( (int) ( (x) + 0.5 ) )
+
+static	GC		xgc;
+static	XGCValues	xgcvl;
+static	int		append;
+static	int		cindex = 1;
+static	int		NPOLY = 0;
+static	int		POLY = 0;
+static	XPoint		VERTEX[500];
+static	unsigned long	pcells[MAXPCOLORS];
+static	int		maxpcolors = MAXPCOLORS;
+
+int	pls_pgplot( int sid, Command_struct cmd )
+{
+   fint	ftype;
+   int	ifunc;
+   int	r = PLSE_SUCCESS;
+
+   ifunc = cmd.code;				/* PGPLOT Function */
+   ftype = clients[sid].ftype;			/* Floating Point type */
+   switch( ifunc ) {
+      case 1: {		/* return device name */
+         int	nw;
+
+         nw = cmd.nbytes = strlen( winfo.device );
+         misc_cmd_swap( clients[sid].swap, &cmd );
+         r = misc_send( clients[sid].socket, &cmd, sizeof( cmd ) );
+         r = misc_send( clients[sid].socket, winfo.device, nw );
+         break;
+      }
+      case 2: {		/* return minimum range of view surface and color index */
+         float	rbuf[6];
+         fint	nrbf;
+
+         rbuf[0] = 0.0;
+         rbuf[1] = winfo.pwidth - 1;
+         rbuf[2] = 0.0;
+         rbuf[3] = winfo.pheight - 1;
+         rbuf[4] = 0.0;
+         rbuf[5] = maxpcolors - 1;
+         nrbf = sizeof( rbuf ) / sizeof( float );
+         cmd.nbytes = sizeof( rbuf );
+         misc_cmd_swap( clients[sid].swap, &cmd );
+         r = misc_send( clients[sid].socket, &cmd, sizeof( cmd ) );
+         spfplf_c( &ftype, rbuf, rbuf, &nrbf );
+         r = misc_send( clients[sid].socket, rbuf, sizeof( rbuf ) );
+         break;
+      }
+      case 3: {		/* return device scale */
+         float	rbuf[3];
+         fint	nrbf;
+
+         rbuf[0] = ( (float) winfo.width ) / ( (float) winfo.widthMM ) * 25.4;
+         rbuf[1] = ( (float) winfo.height ) / ( (float) winfo.heightMM ) * 25.4;
+         rbuf[2] = 1.0;
+         nrbf = sizeof( rbuf ) / sizeof( float );
+         cmd.nbytes = sizeof( rbuf );
+         misc_cmd_swap( clients[sid].swap, &cmd );
+         r = misc_send( clients[sid].socket, &cmd, sizeof( cmd ) );
+         spfplf_c( &ftype, rbuf, rbuf, &nrbf );
+         r = misc_send( clients[sid].socket, rbuf, sizeof( rbuf ) );
+         break;
+      }
+      case 4: {		/* return device capabilities */
+         char cbuf[10];
+
+         strncpy( cbuf, "ICNATRNNNN", sizeof( cbuf ) );
+         cmd.nbytes = sizeof( cbuf );
+         misc_cmd_swap( clients[sid].swap, &cmd );
+         r = misc_send( clients[sid].socket, &cmd, sizeof( cmd ) );
+         r = misc_send( clients[sid].socket, cbuf, sizeof( cbuf ) );
+         break;
+      }
+      case 5: {		/* return default device/file name */
+         break;
+      }
+      case 6: {		/* return default size of view */
+         float	rbuf[4];
+         fint	nrbf;
+
+         rbuf[0] = 0;
+         rbuf[1] = winfo.pwidth - 1;
+         rbuf[2] = 0;
+         rbuf[3] = winfo.pheight - 1;
+         nrbf = sizeof( rbuf ) / sizeof( float );
+         cmd.nbytes = sizeof( rbuf );
+         misc_cmd_swap( clients[sid].swap, &cmd );
+         r = misc_send( clients[sid].socket, &cmd, sizeof( cmd ) );
+         spfplf_c( &ftype, rbuf, rbuf, &nrbf );
+         r = misc_send( clients[sid].socket, rbuf, sizeof( rbuf ) );
+         break;
+      }
+      case 7: {		/* return miscellaneous defaults */
+         float	rbuf[1];
+         fint	nrbf;
+
+         rbuf[0] = 2.0;
+         nrbf = sizeof( rbuf ) / sizeof( float );
+         cmd.nbytes = sizeof( rbuf );
+         misc_cmd_swap( clients[sid].swap, &cmd );
+         r = misc_send( clients[sid].socket, &cmd, sizeof( cmd ) );
+         spfplf_c( &ftype, rbuf, rbuf, &nrbf );
+         r = misc_send( clients[sid].socket, rbuf, sizeof( rbuf ) );
+         break;
+      }
+      case 8: {		/* select device */
+         break;
+      }
+      case 9: {		/* open workstation */
+         XSetWindowAttributes	attributes;
+         float			rbuf[3];
+         fint			nrbf;
+         int			n;
+
+         nrbf = cmd.nbytes / sizeof( float );
+         r = misc_receive( clients[sid].socket, rbuf, cmd.nbytes );
+         spfpfl_c( &ftype, rbuf, rbuf, &nrbf );
+         cindex = 1;
+         switch (winfo.class) {
+            case GrayScale:
+            case StaticGray: {
+               maxpcolors = 2;
+               break;
+            }
+            default: {
+               maxpcolors = MAXPCOLORS;
+               break;
+            }
+         }
+         for (n = 0; n < maxpcolors; n++) {
+            XColor	mycolor;
+            float	red, green, blue;
+
+            switch( n ) {			/* color index */
+               case 0: {			/* black (background) */
+                  red   = winfo.Background_rgb[0];
+                  green = winfo.Background_rgb[1];
+                  blue  = winfo.Background_rgb[2];
+                  break;
+               }
+               case 1: {			/* white (default) */
+                  red   = winfo.Foreground_rgb[0];
+                  green = winfo.Foreground_rgb[1];
+                  blue  = winfo.Foreground_rgb[2];
+                  break;
+               }
+               case 2: {			/* red */
+                  red   = 1.00;
+                  green = 0.00;
+                  blue  = 0.00;
+                  break;
+               }
+               case 3: {			/* green */
+                  red   = 0.00;
+                  green = 1.00;
+                  blue  = 0.00;
+                  break;
+               }
+               case 4: {			/* blue */
+                  red   = 0.00;
+                  green = 0.00;
+                  blue  = 1.00;
+                  break;
+               }
+               case 5: {			/* cyan (green + blue) */
+                  red   = 0.00;
+                  green = 1.00;
+                  blue  = 1.00;
+                  break;
+               }
+               case 6: {			/* magenta (red + blue) */
+                  red   = 1.00;
+                  green = 0.00;
+                  blue  = 1.00;
+                  break;
+               }
+               case 7: {			/* yellow (red + green) */
+                  red   = 1.00;
+                  green = 1.00;
+                  blue  = 0.00;
+                  break;
+               }
+               case 8: {			/* red + yellow (orange) */
+                  red   = 1.00;
+                  green = 0.50;
+                  blue  = 0.00;
+                  break;
+               }
+               case 9: {			/* green + yellow */
+                  red   = 0.50;
+                  green = 1.00;
+                  blue  = 0.00;
+                  break;
+               }
+               case 10: {			/* green + cyan */
+                  red   = 0.00;
+                  green = 1.00;
+                  blue  = 0.50;
+                  break;
+               }
+               case 11: {			/* blue + cyan */
+                  red   = 0.00;
+                  green = 0.50;
+                  blue  = 1.00;
+                  break;
+               }
+               case 12: {			/* blue + magenta */
+                  red   = 0.50;
+                  green = 0.00;
+                  blue  = 1.00;
+                  break;
+               }
+               case 13: {			/* red + magenta */
+                  red   = 1.00;
+                  green = 0.00;
+                  blue  = 0.50;
+                  break;
+               }
+               case 14: {			/* dark gray */
+                  red   = 0.33;
+                  green = 0.33;
+                  blue  = 0.33;
+                  break;
+               }
+               case 15: {			/* light gray */
+                  red   = 0.66;
+                  green = 0.66;
+                  blue  = 0.66;
+                  break;
+               }
+               default: {			/* undefined (white) */
+                  red   = 1.00;
+                  green = 1.00;
+                  blue  = 1.00;
+                  break;
+               }
+            }
+            mycolor.flags = DoRed | DoGreen | DoBlue;
+            mycolor.red   = USHRT_MAX * red;
+            mycolor.green = USHRT_MAX * green;
+            mycolor.blue  = USHRT_MAX * blue;
+            XAllocColor( winfo.id, winfo.colormap, &mycolor );
+            pcells[n] = mycolor.pixel;
+         }
+         attributes.background_pixel = pcells[0];
+/*         XChangeWindowAttributes( winfo.id, winfo.plot, CWBackPixel, &attributes );*/
+         xgcvl.foreground = pcells[1];/*WhitePixel( winfo.id, winfo.screen );*/
+         xgcvl.background = pcells[0];/*BlackPixel( winfo.id, winfo.screen );*/
+         xgc = XCreateGC( winfo.id, winfo.plot, GCForeground | GCBackground, &xgcvl );
+         XSetForeground( winfo.id, xgc, pcells[cindex] );
+         XSetFont( winfo.id, xgc, XLoadFont( winfo.id, "-ADOBE-NEW CENTURY SCHOOLBOOK-MEDIUM-R-NORMAL--*-140-*-*-P-*" ) );
+         XSetLineAttributes( winfo.id, xgc, 1, LineSolid, CapButt, JoinRound );
+         
+         XMapWindow( winfo.id, winfo.plot );
+         rbuf[0] = 0.0;
+         rbuf[1] = 1.0;
+         append = INT( rbuf[2] );
+         nrbf = 2;
+         cmd.nbytes = nrbf * sizeof( float );
+         misc_cmd_swap( clients[sid].swap, &cmd );
+         r = misc_send( clients[sid].socket, &cmd, sizeof( cmd ) );
+         spfplf_c( &ftype, rbuf, rbuf, &nrbf );
+         r = misc_send( clients[sid].socket, rbuf, nrbf * sizeof( float ) );
+         XFlush( winfo.id );
+         break;
+      }
+      case 10: {	/* close workstation */
+         XFlush( winfo.id );
+         break;
+      }
+      case 11: {	/* begin picture */
+         XRaiseWindow( winfo.id, winfo.top );
+         if (!append) {
+            XClearWindow( winfo.id, winfo.plot );
+         }
+         XFlush( winfo.id );
+         break;
+      }
+      case 12: {	/* draw line */
+         float	rbuf[4];
+         fint	nrbf;
+         int	i0, i1, j0, j1;
+
+         nrbf = cmd.nbytes / sizeof( float );
+         r = misc_receive( clients[sid].socket, rbuf, cmd.nbytes );
+         spfpfl_c( &ftype, rbuf, rbuf, &nrbf );
+         i0 = INT( rbuf[0] );
+         j0 = winfo.pheight - 1 - INT( rbuf[1] );
+         i1 = INT( rbuf[2] );
+         j1 = winfo.pheight - 1 - INT( rbuf[3] );
+         XDrawLine( winfo.id, winfo.plot, xgc, i0, j0, i1, j1 );
+         break;
+      }
+      case 13: {	/* draw dot */
+         float	rbuf[2];
+         fint	nrbf;
+         int	i0, j0;
+         int	w;
+
+         nrbf = cmd.nbytes / sizeof( float );
+         r = misc_receive( clients[sid].socket, rbuf, cmd.nbytes );
+         spfpfl_c( &ftype, rbuf, rbuf, &nrbf );
+         i0 = INT( rbuf[0] );
+         j0 = winfo.pheight - 1 - INT( rbuf[1] );
+         w = xgcvl.line_width;
+         if (w == 1) {
+            XDrawPoint( winfo.id, winfo.plot, xgc, i0, j0 );
+         } else {
+            XFillArc( winfo.id, winfo.plot, xgc, i0 - w / 2,
+               j0 - w / 2, w, w, 0, 359 * 64 );
+         }
+         break;
+      }
+      case 14: {	/* end picture */
+         float	rbuf[1];
+         fint	nrbf;
+
+         nrbf = cmd.nbytes / sizeof( float );
+         r = misc_receive( clients[sid].socket, rbuf, cmd.nbytes );
+         spfpfl_c( &ftype, rbuf, rbuf, &nrbf );
+         XFlush( winfo.id );
+         XSync( winfo.id, True );
+         if (INT( rbuf[0] )) {
+/*            XClearWindow( winfo.id, winfo.plot );*/
+         }
+         break;
+      }
+      case 15: {	/* set color index */
+         float	rbuf[1];
+         fint	nrbf;
+
+         nrbf = cmd.nbytes / sizeof( float );
+         r = misc_receive( clients[sid].socket, rbuf, cmd.nbytes );
+         spfpfl_c( &ftype, rbuf, rbuf, &nrbf );
+         cindex = INT( rbuf[0] );
+         if ( cindex > 0 && cindex < MAXPCOLORS ) {
+            XSetForeground( winfo.id, xgc, pcells[cindex] );
+         } else {
+            XSetForeground( winfo.id, xgc, pcells[0] /*BlackPixel( winfo.id, winfo.screen )*/ );
+         }
+         break;
+      }
+      case 16: {	/* flush buffer */
+         XFlush( winfo.id );
+         XSync( winfo.id, True );
+         break;
+      }
+      case 17: {	/* read cursor */
+         XEvent		event;
+         char		cbuf[1];
+         float		rbuf[2];
+         fint		nrbf;
+         int		done = 0;
+         int		i0, j0;
+         int		thecursor;
+
+         nrbf = cmd.nbytes / sizeof( float );
+         r = misc_receive( clients[sid].socket, rbuf, cmd.nbytes );
+         spfpfl_c( &ftype, rbuf, rbuf, &nrbf );
+         i0 = INT( rbuf[0] );
+         j0 = winfo.pheight - 1 - INT( rbuf[1] );
+         XWarpPointer( winfo.id, None, winfo.plot, i0, j0,
+                        winfo.pwidth, winfo.pheight, i0, j0 );
+         thecursor = XCreateFontCursor( winfo.id, XC_crosshair );
+         XDefineCursor( winfo.id, winfo.plot, thecursor );
+         XGrabPointer( winfo.id, winfo.plot, True, KeyPressMask | ButtonPressMask,
+            GrabModeAsync, GrabModeAsync, winfo.plot, None, CurrentTime );
+         XGrabKeyboard( winfo.id, winfo.plot, False,
+            GrabModeAsync, GrabModeAsync, CurrentTime );
+         do {
+            XMaskEvent( winfo.id, KeyPressMask | ButtonPressMask, &event) ;
+            if (event.xkey.window == winfo.plot) {
+               switch( event.type ) {
+                  case ButtonPress: {
+                     i0 = event.xbutton.x;
+                     j0 = event.xbutton.y;
+                     cbuf[0] = (char) (event.xbutton.button + 060);
+                     done = 1;
+                     break;
+                  }
+                  case KeyPress: {
+                     KeySym		key;
+                     XComposeStatus	compose;
+                     char		buffer[10];
+                     int		count;
+
+                     i0 = event.xkey.x;
+                     j0 = event.xkey.y;
+                     count = XLookupString( (XKeyEvent *) &event, buffer, sizeof( buffer ), &key, &compose );
+                     if (((key >= XK_KP_Space) && (key <= XK_KP_9)) || ((key >= XK_space && key <= XK_asciitilde))) {
+                        cbuf[0] = buffer[0];
+                        done = 1;
+                     } else if ((key == XK_Return) || (key == XK_KP_Enter)) {
+                        cbuf[0] = 13;
+                        done = 1;
+                     } else {
+                        cbuf[0] = 0;
+                     }
+                     break;
+                  }
+                  default: {
+                     break;
+                  }
+               }
+            }
+         } while (!done);
+         XUngrabKeyboard( winfo.id, CurrentTime );
+         XUngrabPointer( winfo.id, CurrentTime );
+         thecursor = XCreateFontCursor( winfo.id, XC_circle );
+         XDefineCursor( winfo.id, winfo.plot, thecursor );
+         rbuf[0] = i0;
+         rbuf[1] = winfo.pheight - 1 - j0;
+         cmd.nbytes = sizeof( rbuf ) + sizeof( cbuf );
+         nrbf = sizeof( rbuf ) / sizeof( float );
+         misc_cmd_swap( clients[sid].swap, &cmd );
+         r = misc_send( clients[sid].socket, &cmd, sizeof( cmd ) );
+         spfplf_c( &ftype, rbuf, rbuf, &nrbf );
+         r = misc_send( clients[sid].socket, rbuf, sizeof( rbuf ) );
+         r = misc_send( clients[sid].socket, cbuf, sizeof( cbuf ) );
+         break;
+      }
+      case 18: {	/* erase alpha screen */
+         break;
+      }
+      case 19: {	/* set line style */
+         xgcvl.line_style = LineSolid;
+         XChangeGC( winfo.id, xgc, GCLineStyle, &xgcvl );
+         break;
+      }
+      case 20: {	/* polygon fill */
+         float	rbuf[2];
+         fint	nrbf;
+
+         nrbf = cmd.nbytes / sizeof( float );
+         r = misc_receive( clients[sid].socket, rbuf, cmd.nbytes );
+         spfpfl_c( &ftype, rbuf, rbuf, &nrbf );
+         if (POLY == 0) {
+            NPOLY = INT( rbuf[0] );
+            POLY = NPOLY;
+         } else {
+            VERTEX[POLY].y = winfo.pheight - 1 - INT( rbuf[1] );
+            VERTEX[POLY].x = INT( rbuf[0] );
+            --POLY;
+            if (POLY == 0) {
+               XFillPolygon( winfo.id, winfo.plot, xgc,
+                  &(VERTEX[1]), NPOLY, Complex, CoordModeOrigin );
+            }
+         }
+         XFlush( winfo.id );
+         break;
+      }
+      case 21: {	/* set color represention */
+         float	rbuf[4];
+         fint	nrbf;
+         int	ci;
+
+         nrbf = cmd.nbytes / sizeof( float );
+         r = misc_receive( clients[sid].socket, rbuf, cmd.nbytes );
+         spfpfl_c( &ftype, rbuf, rbuf, &nrbf );
+         ci = INT( rbuf[0] );
+         if ( ci > 0 && ci < maxpcolors ) {
+            XColor	mycolor;
+
+            mycolor.red   = USHRT_MAX * rbuf[1];
+            mycolor.green = USHRT_MAX * rbuf[2];
+            mycolor.blue  = USHRT_MAX * rbuf[3];
+            mycolor.flags = DoRed | DoGreen | DoBlue;
+            XAllocColor( winfo.id, winfo.colormap, &mycolor );
+            pcells[ci] = mycolor.pixel;
+            XFlush( winfo.id );
+         }
+         break;
+      }
+      case 22: {	/* set line width */
+         float	rbuf[1];
+         fint	nrbf;
+         int	lw;
+
+         nrbf = cmd.nbytes / sizeof( float );
+         r = misc_receive( clients[sid].socket, rbuf, cmd.nbytes );
+         spfpfl_c( &ftype, rbuf, rbuf, &nrbf );
+         lw = INT( rbuf[0] );
+         if (lw < 1 || lw > 40) lw = 1;
+         if (lw > 1) lw = lw / 2;
+         xgcvl.line_width = lw;
+         XChangeGC( winfo.id, xgc, GCLineWidth, &xgcvl );
+         break;
+      }
+      case 23: {	/* escape function */
+         break;
+      }
+      case 24: {	/* rectangle fill */
+         float	rbuf[4];
+         fint	nrbf;
+         int	i0, il, j0, jl;
+
+         nrbf = cmd.nbytes / sizeof( float );
+         r = misc_receive( clients[sid].socket, rbuf, cmd.nbytes );
+         spfpfl_c( &ftype, rbuf, rbuf, &nrbf );
+         i0 = INT( rbuf[0] );
+         j0 = winfo.pheight - 1 - INT( rbuf[3] );
+         il = INT( rbuf[2] - rbuf[0] );
+         jl = INT( rbuf[3] - rbuf[1] );
+         XFillRectangle( winfo.id, winfo.plot, xgc , i0, j0, il, jl );
+         XFlush( winfo.id );
+         break;
+      }
+      case 25: {	/* not implemented */
+         break;
+      }
+      default: {
+         break;
+      }
+   }
+   return( r );
+}
+#<
+
+#>            server.c
+/* server.c
+
+*/
+
+
+/*
+ * includes:
+ */
+
+#include	"plserver.h"			/* plserver definitions */
+
+static	int	socks[] = { -1, -1, -1 };	/* connection sockets */
+
+#define	MAXCONTYPE	(sizeof(socks)/sizeof(int))	/* max. connection types */
+#define	MAXSOCKNAMELEN	80			/* max length of socket name */
+
+Client_struct	clients[MAXCLIENTS];		/* the clients */
+static	char	sockname[MAXSOCKNAMELEN+1];	/* name of unix socket */
+
+
+/*
+ * server_main_loop handles all actions. After setting up the display
+ * and establishing the connections, PLSERVER remains in this routine until
+ * the user wants to quit.
+ * The main part of this routine is the select call. Here all open sockets
+ * are scanned for incomming requests. The programme waits until one or
+ * more sockets become readable. Then it its checked which socket has become
+ * readable. If the X11 socket has become readable, display_do() is called.
+ * This routine handles all display events by looping until all pending
+ * requests have been delt with. If one (or more) of the listening connection
+ * sockets have become readable, then a client has made a request to
+ * establish a connection. The socket connected with the client is obtained
+ * with a call to accept. This new socket is then but in the select check
+ * mask. If a client socket has become readable, a client is sending a
+ * request which is then handled by server_do().
+ * The call to select take also care of timer functions like blinking and
+ * looping. In case of loop/blink mode select is used to handle these
+ * time events. Since it is not always certain that the required time
+ * has passed after returning from select, we have to check ourselves
+ * whether action should be taken.
+ */
+
+int	server_main_loop( void )
+{
+   int		Xsock;				/* X socket number */
+#if 0 & !defined(__alpha__) & !defined(__APPLE__)  /* LEGACY in POSIX.1-2001 */
+   int		bzero( );			/* maybe used in FD macros */
+#endif
+   int		close( );			/* close a fd */
+   int		gettimeofday( );		/* returns current time */
+   int		select( );			/* select fd for work */
+   int		status;				/* return status */
+   int		m;				/* counter */
+   int		n;				/* counter */
+   int		nfound;				/* number of fd with pending io */
+   int		action = NONE_ACTION;		/* loop control */
+   fd_set	mask_fds, read_fds;		/* fd masks */
+
+   Xsock = XConnectionNumber( winfo.id );	/* get X socket fd */
+   FD_ZERO( &mask_fds );			/* clear all flags */
+   FD_SET( Xsock, &mask_fds );			/* insert X socket */
+   for (m = 0; m < MAXCONTYPE; m++) {		/* loop over all connections */
+      if (socks[m] != -1) {			/* this one listens */
+         FD_SET( socks[m], &mask_fds );		/* insert it */
+      }
+   }
+   XFlush( winfo.id );				/* flush */
+   while (!(action & QUIT_ACTION)) {		/* loop until user says quit */
+
+      memcpy( &read_fds, &mask_fds, sizeof( fd_set ) );
+      while ((nfound = select( FD_SETSIZE, (void *) &read_fds, NULL, NULL, NULL )) == -1 && errno == EINTR);
+      if (nfound == -1) continue;		/* implement error handling later */
+      if (!nfound) continue;			/* go on */
+      if (FD_ISSET( Xsock, &read_fds )) {	/* X wants us */
+         nfound -= 1;				/* decrement */
+         action = display_do( action );		/* finish some events */
+      }
+      for (n = 0; nfound && n < MAXCLIENTS; n++) {
+         if (clients[n].open && FD_ISSET( clients[n].socket, &read_fds ) && !clients[n].wstate) {
+            int	msgsock = clients[n].socket;	/* save socket */
+
+            nfound -= 1;			/* decrement */
+            status = server_do( n );
+            if (!clients[n].open) {		/* closed */
+               FD_CLR( msgsock, &mask_fds );	/* clear flag */
+             }
+         }
+      }
+      for (m = 0; nfound && m < MAXCONTYPE; m++) {
+         if (socks[m] != -1 && FD_ISSET( socks[m], &read_fds )) {
+            int	accept( );			/* accept a connection */
+            int	msgsock;			/* new socket */
+
+            nfound -= 1;			/* decrement */
+            msgsock = accept( socks[m], (struct sockaddr *)0, (int *)0 );
+            if (msgsock != -1) {		/* we got a socket */
+               for (n = 0; n < MAXCLIENTS; n++) {
+                  if (!clients[n].open) {	/* free client space */
+                     clients[n].socket = msgsock;
+                     clients[n].ftype  = OS_FLOATING_TYPE;
+                     clients[n].open   = 1;
+                     clients[n].wstate = 0;
+                     clients[n].swap   = 0;
+                     FD_SET( msgsock, &mask_fds );	/* set flag */
+                     break;
+                  }
+               }
+               if ( n == MAXCLIENTS ) {		/* out of client space */
+                  close( msgsock );
+               }
+            }
+         }
+      }
+   }
+   return( 0 );
+}
+
+
+/*
+ * server_do handles the client request.
+ */
+
+int	server_do( int n )
+{
+   Command_struct	cmd;			/* for command */
+   int			r;			/* resturn code */
+   int			status = PLSE_SUCCESS;	/* status */
+
+   r = misc_receive( clients[n].socket, &cmd, sizeof( cmd ) );
+   if (r == PLSE_SUCCESS) {
+      misc_cmd_swap( clients[n].swap, &cmd );	/* swap it */
+      switch( cmd.cmd ) {			/* which function */
+         case PLS_OPEN: {			/* open display */
+            status = pls_open( n, cmd );
+            break;
+         }
+         case PLS_CLOSE: {			/* close display */
+            status = pls_close( n, cmd );
+            break;
+         }
+         case PLS_PGPLOT: {			/* PGPLOT functions */
+            status = pls_pgplot( n, cmd );
+            break;
+         }
+         case PLS_MYNAME: {			/* send id text */
+            status = pls_myname( n, cmd );
+            break;
+         }
+         default: {
+            cmd.code   = PLSE_NOTIMPLEMENTED;
+            cmd.nbytes = 0;
+            misc_cmd_swap( clients[n].swap, &cmd );
+            r = misc_send( clients[n].socket, &cmd, sizeof( cmd ) );
+            status = PLSE_ERROR_UNKNOWN;
+            break;
+         }
+      }
+   } else {
+      misc_client_close( n );
+   }
+   return( status );
+}
+
+
+/*
+ * server_open creates all possible sockets (UNIX, INET, DNET) and sets
+ * them listening for connections wanted by the clients. server_main_loop
+ * handles all incomming requests, be it from X or the sockets created
+ * here.
+ */
+
+int	server_open( char *fil_name )
+{
+   FILE	*f;					/* setup file descriptor */
+   char	hostname[MAXSTRING];			/* for hostname */
+   int	bind( );				/* binds a socket */
+   int	fcntl( );				/* file control */
+   int	gethostname( );				/* obtains hostname */
+   int	getsockname( );				/* obtains socketname */
+   int	listen( );				/* starts listening on socket */
+   int	socket( );				/* creates socket */
+   int	n;					/* counter */
+   int	r = 0;					/* return value */
+
+   if (gethostname( hostname, MAXSTRING ) == -1) return( r );
+   /*
+    * Now get inet address of host.
+    */
+   {
+      char		*addr;
+      char		*inet_ntoa( );
+      struct hostent	*hp;
+      struct hostent	*gethostbyname( );
+      struct in_addr	ha;
+
+      hp = gethostbyname( hostname );
+      if ( ( hp == NULL ) && (strchr( hostname, '.' ) == NULL)) {
+         char	dname[MAXSTRING];
+         int	getdomainname( );
+
+         if (!getdomainname( dname, sizeof( dname ))) {
+            strcat( hostname, "." );
+            strcat( hostname, dname );
+            hp = gethostbyname( hostname );
+         }
+      }
+      if ( hp != NULL ) {
+         memmove( (void *) &ha, (void *) hp->h_addr, hp->h_length );
+#if	defined(__sun__) & defined(__GNUC__) & !defined(__i386__)
+         addr = inet_ntoa( &ha );
+#else
+         addr = inet_ntoa( ha );
+#endif
+         strcpy( winfo.con_string, addr );
+      } else {
+         strcpy( winfo.con_string, hostname );
+      }
+   }
+   for (n = 0; n < MAXCONTYPE; n++) {
+      strcat( winfo.con_string, ":" );		/* start next field */
+      switch( n ) {				/* which type of connection */
+         case 0: {				/* unix connection */
+#if	defined(AF_UNIX)
+            int			getpid( );	/* return programme id */
+            int			status;		/* reset status */
+            struct sockaddr_un	server;		/* unix socket address struct */
+
+						/* create socket */
+            status = socket( AF_UNIX, SOCK_STREAM, 0 );
+            if (status != -1) {			/* success */
+               socks[0] = status;		/* save socket descriptor */
+               server.sun_family = AF_UNIX;	/* unix socket */
+						/* constitute socket name */
+               sprintf( sockname, "/tmp/plserver%d", getpid( ) );
+						/* copy socket name */
+               strcpy( server.sun_path, sockname );
+						/* bind socket*/
+               status = bind( socks[0], (struct sockaddr *) &server, sizeof( server ) );
+            }
+            if (!status) {
+               status = listen( socks[0], 5 );	/* start listening */
+            }
+            if (status == -1) {
+               socks[0] = -1;			/* not in use */
+            } else {
+               strcat( winfo.con_string, sockname );	/* concatenate socket name */
+               r += 1;				/* increase #cons */
+            }
+#endif
+            break;
+         }
+         case 1: {				/* inet connection */
+#if	defined(AF_INET)
+            int			length;		/* length of struct */
+            int			status;		/* status */
+            struct sockaddr_in	server;		/* inet socket address struct */
+
+						/* create socket */
+            status = socket( AF_INET, SOCK_STREAM, 0 );
+            if (status != -1) {			/* success */
+               socks[1] = status;		/* save socket descriptor */
+               server.sin_family = AF_INET;	/* inet socket */
+						/* find free address */
+               server.sin_addr.s_addr = INADDR_ANY;
+               server.sin_port = 0;
+						/* bind to socket */
+               status = bind( socks[1], (struct sockaddr *)&server, sizeof( server ) );
+            }
+            if (status != -1) {
+               length = sizeof( server );	/* for return */
+						/* get socket name */
+               status = getsockname( socks[1], (struct sockaddr *) &server, &length );
+            }
+            if (!status) {
+               status = listen( socks[1], 5 );	/* start listening */
+            }
+            if (status == -1) {
+               socks[1] = -1;			/* not in use */
+            } else {
+               char	portnumber[10];		/* port number */
+
+               sprintf( portnumber, "%d", (int) ntohs( server.sin_port ) );
+               strcat( winfo.con_string, portnumber );/* concatenate socket name */
+               r += 1;				/* increase #cons */
+            }
+#endif
+            break;
+         }
+         case 2: {				/* dnet connection */
+            break;
+         }
+         default: {				/* wrong connection type */
+            break;
+         }
+      }
+   }
+   if (fil_name != NULL) {
+      f = fopen( fil_name, "w" );
+      if (f == NULL) r = -1;
+   } else {
+      f = NULL;
+   }
+   if (r > 0 && f != NULL) {
+      fprintf( f, "%s\n", winfo.con_string );
+      fclose( f );
+   }
+   if (r) display_command( );
+   return( r );					/* number of connections */
+}
+
+int	server_close( void )
+{
+   int	close( );				/* closes a socket */
+   int	n;					/* counter */
+   int	r = 0;					/* return code */
+
+   for (n = 0; n < MAXCLIENTS; n++) {
+      if (clients[n].open) {
+         misc_client_close( n );
+      }
+   }
+   for (n = 0; n < MAXCONTYPE; n++) {		/* all possible connections */
+      if (socks[n] != -1) switch( n ) {
+         case 0: {				/* UNIX socket */
+            r = close( socks[n] );		/* close it */
+            if (r != -1) {
+               r = remove( sockname );		/* remove socket */
+            }
+            break;
+         }
+         case 1: {				/* INET socket */
+            r = close( socks[n] );		/* close it */
+            break;
+         }
+         case 2: {				/* DNET socket */
+            r = -2;				/* not implemented */
+            break;
+         }
+         default: {				/* unknown connection type */
+            r = -2;				/* not implemented */
+            break;
+         }
+      }
+   }
+   return( r );					/* return to caller */
+}
+#<

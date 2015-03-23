@@ -1,0 +1,5299 @@
+image.src
+
+        Copyright (c) Kapteyn Laboratorium Groningen 1995
+        All Rights Reserved.
+
+Name:         image.src
+Creator:      do
+Host:         spica
+Date:         Aug 15, 1995
+Contents:     image.dc1 irim_image.c irim_init.c irim_userinfo.c irim_irdsname.c
+              irim_wrim2log.c irim_maphead.c irim_mapchek.c irim_iter.c irim_initstore.c
+              irim_lists.c irim_coadestr.c irim_axis.c irim_irds.c irim_snip.c
+              irim_index.c irim_sdet.c irim_squarebeam.c irim_addmoments.c irim_makemap.c
+              irim_stripe.c irim_wrmap.c irim_copy.c irim_outmap.c irim_median.c
+              irim_storemap.c irim_copymask.c irim_pixel_alloc.c irim_msx_alloc.c irim_showscan.c
+              irim_scanout.c irim_plotxy.c irim_userlog.c f_test.c irim_interpol.c
+              irim_roundbeam.c imkeys.h imtypes.h gdsio.h image.h
+              imdefs.h image.make
+
+#>            image.dc1
+
+Program:      IMAGE
+
+Purpose:      imager and/or destriper for IRAS 
+
+Category:     IRAS
+
+File:         image.src
+
+Author:       Do Kester
+
+Keywords:	(In the order in which they are asked for the first time)
+
+*** LOGLEVEL=   amount of output in logfile [Quiet]
+                Silent : no output at all
+                Quiet  : only global output
+                Normal : global plus last iteration
+                Loud   : global plus all iterations
+
+    IRSET=      Name(s) of input IR data set(s) [quit]
+
+    CENTER=     Long and Lat of the map [IRDS-center]
+
+    SIZE=       Long and Lat size of map [IRDS-size]
+
+    COOR=       Coordinate system [IRDS-coor]
+
+    NAME=       name of the map [none]
+
+    MEDIAN=     apply median filter else a simple mean [no]
+
+    BEAM=       Radius of convolution beam in pixels [0.0] (ie. true size)
+
+    PROJ=       Projection type [gnomon]
+
+*** PRCEN=      Long and Lat of projection center [center]
+
+*** PARSTATUS=  Start and end status of destripe parameters. [new,delete]
+		  old :	  continue upon params from a previous session.
+		  new :   start anew, irrespective of previous sessions.
+		  keep :  keep the params for further use.
+		  delete: delete params at all levels.
+
+*** FPROB=	Probabilty level for accepting stripe parameters [0.05]
+		The stripe has to stand out quite well to be accepted.
+		Use FPROB >= 1 to always accept the parameters eg. when
+		using the destripe parameters later in HIRAS. It does no harm.
+
+    SET=        map to be used as template in destriping; 
+                <real> : use map filled with <real> values [none]
+
+    ITER=       number of iterations [0]
+
+    PIXELS=     (set of) pixel size(s) [quit]
+
+    TUNE=       destripe power
+                  0: no tuning, 1: constant, 2: linear [2]
+
+    ADJUST=     list of snip.det's to be adjusted to map. [none]
+
+    EXCLUDE=    list of snip.det's to be skipped. [none]
+
+*** DETS=       which detectors to use
+                large : use large and three-quarter detectors only
+                small : use small detectors only
+                all   : use all detectors
+                <list of detector numbers> : use the list
+
+    OUTSET=     (Generic name of) the output set. [none]
+                  The final map will have this name; Earlier iterations,
+                  if they are made, will be named <name>_<iter>.
+
+    OVERWRITE=  Overwrite existing map. [yes]
+
+    MAPNRS=     list of iterations for which a map is to be made. [last]
+                  all : produce a map for every iteration.
+                  last: produce a map only for the last iteration.
+                  <iter ...> : produce a map for the given iterations.
+
+*** PLANES=     produce plane(s) in the output map of [1]
+                  1 : intensity map.
+                  0 : coverage map.
+                  2 : standard deviations map.
+
+    INTENDED=   Use intended positions if no bphf available [no]
+
+*** XYPLOT=     give the iteration number for which to plot an overlay [0]
+
+    GRDEVICE=   device to plot on [?]
+
+*** FLAGS=      Use also those samples flagged as [P,T]
+                  PointSource
+                  Tail of a pointsource ( only at 12 and 25 )
+                  Glitch
+
+*** SLOW=       speed of instrument wrt survey ( for AOs only )
+
+    SHOW=       produce a plot with destripe results 
+                  All : all snip_det will be shown without user interaction
+                  One : all snip_det will be shown after user interaction
+                  None: no display
+                  Last: display last iteration only
+                The last mnemonic (or no mnemonic at all) can be followed by
+                  <sop> <att> <det> : only this combi is shown.
+
+Updates: 0.1    07 May 1991 DK. first try.
+         1.1    05 Dec 1991 DK: several bugs repaired
+	 2.0	18 Mar 1992 DK, new version.
+	 2.1	12 May 1992 DK, sloppy corners & input set option repaired
+	 3.0	15 Jun 1992 DK.
+	 3.1    12 Aug 1993 DK, epoch read and written as double
+
+Description:
+
+
+1. Introduction
+   keywords: IRSET=
+
+IMAGE is a GIPSY program to combine the snips of an IRDS into an image. 
+There are several routes through the program which can be chosen to 
+arrive at the best scientific and/or visual image.
+The program consists largely of two parts: one to make a map
+by coaddition of an IRDS and the other part uses an
+already made map as a template to adjust snips to, which are then
+coadded into a new map. This is an iterative procedure called
+destriping.
+Both parts can be run separately, although the most natural way is
+to coadd a map first and destripe it in the same run. In the coadd
+an optional median (huber) filter can be switched on.
+
+
+2. Coadd
+   keywords: CENTER= SIZE= COOR= BEAM= PIXELS= PROJ= PRCEN= NAME=
+
+A map is defined by the longitude and latitude of the center of the
+map, the length of the sides and the size of pixels - the pixels are 
+always square, the map might be rectangular -,
+the coordinate system the coordinates are given in and
+the type of projection to transform spherical coordinates to a plane.
+Optionally a projection center different from the center of the map
+can be defined.
+
+To coadd the snips into a map we define two identical pixel grids.
+The pixels can be defined arbitrarily small. The position of each
+sample is projected onto the grid. Those pixels falling within a
+pre-chosen beam centered on the sample position are increased in the
+first grid with the brightness of the sample.
+In the other grid the corresponding pixel values are increased by one.
+In this way the sum of the brightnesses of the overlapping samples is
+stored in the first grid and the number of coverages in the second. Once
+all samples are processed we divide the first grid by the second,
+pixel by pixel, yielding a map in which every pixel represents the average
+of all overlapping samples.
+
+The beam can be chosen arbitrarily, provided that it is larger than the
+detector size and provided that at least one pixel falls within the beam
+for each beam position. The default value beam=0.0 chooses a convolution
+beam which has the same shape and size as the detectors themselves;
+see IRAS ExplSupp p. II-12 & 13. This yields the highest resolution
+possible in coaddition, although it is different in inscan and cross 
+scan directions.
+
+Dead detectors can not be processed by IMAGE; small detectors are not
+processed by default. Section 5 explains how to exclude other detectors 
+or to include the small ones.
+Table 1 defines dead and small detectors.
+
+===========================================================================
+                   Table 1. Dead and small detectors
+
+               band 1          band 2          band 3          band 4
+  dead                         17 20           36
+  small        26 47           39 46           11 31           55 62
+===========================================================================
+
+The keywords CENTER, SIZE, PIXELS and PRCEN are angular reals. An
+angular real is defined as a set of reals separated by 'd', 'm', 's' or 'h'.
+`d' indicates that the preceeding value is in degrees.
+`m' indicates that the preceeding value is in minutes.
+`s' indicates that the preceeding value is in seconds.
+`h' indicates that the preceeding value is in hours;
+following 'm' and/or 's' reals are converted to hourly values.
+The sign of the first real is given to the whole value. The default letter 
+is 'd'. Upper and lower case letters are equivalent.
+  Examples
+   -50d30m     translates to -50.5    degrees
+    12h12.5s                 180.0521
+    33.33                     33.33
+
+
+3. Destripe
+   keywords: ITER= PIXELS= TUNE= PARSTATUS=
+
+The destriping procedure boils down to three steps which are taken for
+each detector snip. First the trajectory of the detector over the map
+is determined; second the difference between the map values on the
+trajectory and the corresponding snip values is fitted with the
+function the user requested and third the detector snip values, corrected
+with the function just determined, are coadded into a new map.
+
+When all the snips are processed in this manner, the new map resembles
+the old map in a global way. They are made from the same set of snips
+and the old map functioned as a template for the new map. Locally, however
+the differences can be appreciable. If the snips which constitute the
+old map are not exactly on the same scale and offset, the map will show
+stripes. The stripes being the average of all locally overlapping snips
+are not as large as the differences between the snips themselves. By fitting
+the detector snips to a (striped) map the differences between the detectors
+are lessened and the next map will show less stripes. Iterating the
+whole procedure several times yields a map in which the snip pattern is
+(almost) invisible. The dominant snip direction can sometimes still be
+perceived as structured background noise.
+
+The fit of the differences between the map values and the detector values
+is performed using a robust estimator (see D. Kester IPAC IOM 701-039-89(1)
+and references therein). The particular estimator was a Tukey, which
+smoothly diminishes the influence of points as the stray away from
+the fit and disregards them completely if they are further than
+7 times a globally determined scale factor.
+
+One way to reduce the stripes in a map is to increase the pixel size. 
+More detectors from different snips fall on the same pixel and the
+differences are averaged out.  Although such a map is clearly not
+desirable as an end product due to its coarse grain, it can be used as
+template to fit the snips to, which are then coadded into a new, finer
+grained map.  Two precautions should be taken in this scheme.  The first
+is that one large point source might `spoil' a pixel much larger in size
+than the point source.  Neighbouring snips which have not seen the point
+source are compared with the spoiled pixel, possibly resulting in an
+improper fit.  To remedy this, point sources are detected with a very
+simple algorithm and excluded from the coadd of those maps that are not
+yet on their final grid; see section 6.  Another way around problems
+like these is to introduce a mask; see section 7.  The second danger is
+that a real slope present in the snips that should eventually show up in
+the map might not be conserved, especially in the corners of the map
+where a detector snip might overlap only one pixel.  This is countered
+by limiting the fit to an offset, the most important effect of the
+stripes, in the coarser maps. 
+
+The number of iterations, the power of the fit and the pixel size
+per iteration can be chosen by the user.
+
+The destripe parameters are (temporarily) stored as descriptor item in
+the header of the IRDS. For each detector snip a set of 3 parameters
+can be generated: offset, drift and standard deviation which adds another
+20% to the already large descriptor file of the IRDS.
+
+The (hidden) keyword PARSTATUS determines the status of the parameters
+at the start and at the end of the program.  It can take two values. 
+One from the set [old,new], which selects whether one wants to continue
+with previously generated (old) parameters, or whether one want a new
+session.  And one from the set [keep,delete] which determines whether
+the parameters should be kept for further processing or not.  The
+default is new,delete. 
+
+
+4. Median Filter
+   keywords: MEDIAN=
+
+The median filter is build into the program to eliminate transient
+phenomena as glitches and glints, space junk and asteroids from the map.
+All these phenomena are only present in a minority of the snips, but
+occasionally they might be (very) bright. A straight arithmetic mean
+leaves too much of it in the map. A median or a median-like filter
+should perform better. The median might be the ideal choice if not
+it requires that all the samples on all the pixels are stored individually
+until all snips are processed. Then a median has to be made by ordering
+the values. It requires an awfull lot of memory and a non-trivial sorting.
+
+The IMAGE program has instead a median-like (Huber) filter.
+It is a combination of a straight average for the central points
+and a median for the outliers. As explained in Kester (op.cit.)
+there is a simple way to calculate the huber average and scale factor
+which entails no storage of large numbers of values. It is an iterative
+procedure in its own right and it requires a standard deviations map
+to be made.
+
+Above it was mentioned that the transient phenomena are a minority of
+the sample values falling on a pixel. In a coarse grained map point
+sources themselves might become a minority of all the overlapping
+pixel values. Performing a median filter in such a situation would
+eliminate the point sources too. So the median filter is only applied
+when the map is on its final pixel grid and the user is responsible
+to assure the the point sources do not drown in the final map.
+The program does not make a standard deviations map as long as the median
+filter is off.
+
+The median filter can be switched on/off by the user.
+
+
+5. Selection
+   keywords: EXCLUDE= ADJUST= DETS=
+
+If for some reason one or more snips and/or detectors are deemed
+unreliable, improperly corrected, containing left-over zodiacal emission
+or whatever, they can be handled as a group in a different way.
+The choices are to exclude them completely from the whole procedure or 
+to adjust them to the template made up by the other snips.
+
+Snips in the exclude list are just disregarded as if they never existed. 
+Although a record of them can appear in the administration file (section 7).
+The snips in the adjust list are excluded in the first coadd of the map
+and in subsequent iterations they are taken along with all the others.
+
+Both EXCLUDE and ADJUST are lists of snip.det i.e. real numbers where
+the integral part equals the snip number and the fractional part equals
+the detector number divided by 100. When the integral part or the fractional
+part equals 0 it means that it is valid for all snips resp. all detectors.
+Examples:
+  list item             snip            detector        band
+    12.39                12                39             2
+    12.01                12                 1             4
+    12                   12               all            all
+     0.1                all                10             3
+Duplicate items and items referring to a detector which is not present 
+in the IRDS are silently removed.
+
+The keyword DETS determines which detectors are coadded. It can take
+the mnemonic `large' which means that only the large and the
+three-quarter size detectors are used. This is the default and it is
+equivalent to NOT using the small detectors of table 1. 
+The mnemonic `small' means that only the small detectors are used 
+and `all' means that all detectors are used. In stead of mnemonics
+it can take a list of detectors to be used. 
+Again, dead or duplicate detectors and detectors which are not present in 
+the IRDS are silently removed.
+
+
+6. Sample selection
+   keyword : FLAGS=
+
+During the processing of a snip two simple filters are passed over the 
+data stream: one to detect glitches and the other to detect point sources.
+The glitch filter extends over 3 points [-1,+2,-1]. The pointsource filter
+extends over 9 points [-1,-1,-1,+2,+2,+2,-1,-1,-1]. When the output of
+the point source filter exceeds a certain level, that sample and some
+before and after are flagged as source. How many depends on the strength 
+of the source. If the band is 12 or 25 micron a number of points 
+following the source are flagged as tail; again how many depends on the 
+strength of the source. A sample is flagged as a glitch if it is not
+a source and the glitch filter exceeds a certain level. 
+Samples flagged as sources, tails or glitches are not coadded into map
+which are not yet on their final pixel scale (see section 3).
+
+Which of these samples are coadded into the final map is under control
+of the user with the (hidden) keyword FLAGS. It can have 3 values at most
+and it checks the first letter of the mnemonics:
+  Point Source  indicating both the source flag
+  Tail          indicating the tail flag
+  Glitch        indicating the glitch flag.
+The values are `added'. By default the value of FLAGS=p,t indicating that
+in the final map both samples with point source flags and with tail flags
+are present.
+
+
+7. Input map and mask
+   keywords: SET= MASK=
+
+In stead of using a coadded map as template for the destriping, the user 
+can give an already made map, maybe from another band or from another
+instrument, to be used as template. This input map should have the same
+center and size as the map to be made. It should be a GDS set.
+Another option is to give just a number in answer to the keyword SET=. 
+The program will then generate a template map with pixel values equal 
+to the number, the most obvious choice being 0.
+
+A mask is a map with some values set to (GIPSY)blank. All non-blank 
+values are considered the same: only 1 of bit information is used.
+It is stored parallel to the template map and read at the same time during
+the destriping process. Whenever a value in the mask equals blank,
+the corresponding difference between snip and template is not taken 
+along in the fit. The mask is propagated through the destripe iteration,
+appropriately adjusted for a change in pixel size. The GIPSY task `blot'
+can be used to produce a mask.
+
+
+8. Output map
+   keywords: OUTSET= OVERWRITE= MAPNRS= PLANES=
+
+The map(s) are written as GIPSY sets to a file of which the basic name
+is supplied by the user. The last iteration has this basic name.
+For earlier iterations, if they must be written, the basic name is 
+appended with an underscore followed by the iteration number of 
+which the map is the result. 
+The iterations for which a map will be written are under control of the user
+although the last iteration is always written although once a basic name
+is supplied. 
+
+In the 3rd dimension of the set the standard deviations map and/or
+the coverage map might be stacked. The former is a map which gives 
+pixel by pixel the standard deviation of all samples which overlay 
+a pixel in the intensity map. The latter is a map which sums the 
+weights of all samples which fall on the pixels in the intensity map.
+The number and the order in the 3rd dimension of the GIPSY set 
+can also be controlled.
+
+
+9. Logfile
+   keywords: LOGLEVEL= 
+
+The administration file logs the setting of the parameters and the
+proceeding of the program. The loglevel `silent' provides no information
+about the run of the program; the level `quiet' echoes global information
+about the IRDS and about the overall fit of the stripes; the level `normal'
+provides the global information plus detailed information about the fit
+in the last iteration and finally, the level `loud' yields the global 
+information plus detailed information about the fit in each iteration. 
+Setting the GIPSY mode to `test' will give the loud information
+plus an unspecified amount of other garbage.
+
+
+10. Graphics
+   keywords: XYPLOT= GRDEVICE= SHOW=
+
+During the program 2 kinds of graphic output can be produced. The
+first shows where each of the samples fall within the map. With
+XYPLOT it can be chosen for which iteration it will be displayed,
+although the information is exactly the same in all iterations.
+The second kind of graphic output displays the values of the
+snip and the values under its cross section over the template map
+against time. This is in the upper panel. The difference between the 
+two is shown in the lower panel together with the fit, derived 
+by the program. In the middle panel it shows the timing of several 
+flags (if any is present). Where there appears a flag, the difference 
+data are not taken along in the fit.
+
+It is under control of the user how snips are displayed with SHOW.
+The answer `all' will display all snips as they are processed (auto); 
+the answer `one' will wait after each display until a new answer to SHOW
+has been given (manual); `none' will give no display at all and `last' will
+display only the last iteration. If `last' is given or if no answer
+is given, a list of 3 integers can follow which are interpreted as
+sop, att and detector. Only that combination is displayed. One or more
+of these numbers can be zero which is interpreted as a wildcard.
+Example:
+  answer to SHOW  displays      iteration   sop   att  det    auto/man
+  L 350 23 12                     last      350    23   12     manual
+  120 12                          all       120    12  all     manual
+  0 0 59                          all       all   all   59      auto
+  A                               all       all   all  all      auto
+  L                               last      all   all  all      auto
+  N                              none      none  none none      auto
+  O                               all       all   all  all     manual
+As it takes quite some time to set up the display, the fastest option
+is `none'. At any moment during the execution SHOW can be reset. 
+
+NB. It is left to the user to make sure that the two kinds of graphic
+display are not used at the same time.
+
+11. Memory usage.
+
+To estimate the memory necessary for this program, ie. for the internal
+storage of the map and the template, which are the main culprits, 
+calculate the number of pixels in your map, 
+multiply by 3 (if median) or 2 (if not) and 
+multiply by 4 (bytes/real).
+The total is the number of bytes the program needs in two continuous
+arrays, one for the map and the other for the template. For a 1000
+square pixels map this accumulates to about 25 Mbyte.
+On top of that some memory is needed e.g. to accustom one snip at a time.
+
+#<
+
+#>            irim_image.c
+/* image.c
+
+                            COPYRIGHT (c) 1990
+            Kapteyn Astronomical Institute - University of Groningen
+                P.O. Box 800, 9700 AV Groningen, The Netherlands
+
+Program:      IMAGE
+
+Purpose:      imager and/or destriper for IRAS 
+
+File:         irim_image.c
+
+Author:       Do Kester
+
+Structure:
+	There are 5 header files: 
+	  image.h	: global constants used in all modules
+	  imtypes.h	: typedefinitions  used in all modules
+	  imkeys.h      : keyword definitions for user interaction
+	  userfio.h	: redefinitions of the user interface
+	  gdsio.h	: redefinitions of the gds interface
+	All files in this program have a prefix irim_; this prefix is
+	not mentioned in the structure chart below.
+image	
+	userlog
+	init	
+		userinfo 
+			irdsname
+			wrim2log
+			userpars
+		maphead
+		mapchek
+		wrim2log
+		iter
+		axis	
+			initstore
+		storemap
+	lists	userlist
+		seldets
+			sortuniq
+			detinband
+			disjunct
+		detinband
+		sortuniq
+		disjunct
+		wrlist
+		cutlist
+	outmap
+	coadestr 
+		axis
+		initbeam
+		irds	
+			active
+			initsnip
+			getsigma
+			snip	
+				getpars
+				rdsnip	
+					flags
+				plotxy
+				sdet	
+					interpol 
+						index
+						stripe
+						scanout
+					squarebeam 
+						addmoments
+							index
+							correct	
+								index
+					roundbeam
+						addmoments
+							index
+							correct	
+								index
+				putpars
+			sigmap
+			putsigma
+			makemap
+			detsigma2log
+			initpars
+		sigma2log
+		disjunct
+	wrmap
+		copy
+
+Updates:  1.0   07 May 1991 DK.
+	  2.0   05 Dec 1991 DK
+	  2.1	12 May 1992 DK
+	  3.0   15 Jun 1992 DK
+	  3.1	12 Aug 1993 DK.
+*/
+
+/*Structured and translated by ASSISTANT II Plus,  v1.2*/
+#include "image.h"
+#include "imtypes.h"
+#include "cmain.h"	/* defines MAIN_PROGRAM_ENTRY and IDENTIFCATION */
+#include "userfio.h"
+#include "init.h"
+#include "finis.h"
+#include "irlist.h"
+#include "imdefs.h"
+#include "gdst_incr.h"
+
+/* identification */
+#define VERSION           "3.2"			/* version number */
+#define PROGRAM		"IMAGE"			/* program name */
+
+MAIN_PROGRAM_ENTRY
+{
+    irds_type	*irds ;
+    fchar	mapin ;
+    image_type	*image ;
+    store_type	*old, *new ;
+    list_type	*adjust, *exclude ;
+    iter_type	*iter ;
+    outmap_type	*out ;
+    int		mapresent = FALSE, loglevel, logfile = ANYOUT_DEF ;
+    fint	increment = 8*4096 ;
+
+    init_c( ); 					/* hello HERMES */
+    IDENTIFICATION( PROGRAM , VERSION ) ;	/* who are we */
+
+    gdst_incr_c( &increment ) ;
+    
+    IRDS_INIT( irds ) ;				/* initialise irds */
+    FCHAR_INIT( mapin, MAXTXTLEN ) ;		/* initialise mapin */
+    IMAGE_INIT( image ) ;			/* initialize image */
+    ITER_INIT( iter ) ;				/* initialize iter */
+    iter->nsizes = 0 ;
+    STORE_INIT( old ) ;			/* storage for old map */
+    LIST_INIT( adjust ) ;			/* initialize adjust */
+    LIST_INIT( exclude ) ;			/* initialize exclude */
+    OUTMAP_INIT( out ) ;			/* info for output map */
+    FCHAR_INIT( out->name, MAXTXTLEN ) ;
+
+	loglevel = irim_userlog( ) ;
+	logfile = ( loglevel > SILENT ) ? ANYOUT_DEF : ANYOUT_TST ;
+
+	if ( irim_init( logfile, irds, image, old, iter, &mapresent ) != OK ) 
+		errorf( FATAL, "fatal error(s) encountered" ) ;
+
+/*  read the non obligatory keywords delete, exclud, and adjust  */
+	irim_lists( logfile, exclude, adjust, image->inst, mapresent ) ;
+
+/*  get information about the output map */
+	irim_outmap( iter, out ) ;
+
+
+/*  start iteration */
+	while ( iter->keer <= iter->maxiter ) {
+
+/*  storage for new map */
+	    new = NULL ;
+	    STORE_INIT( new ) ;
+
+/*  coadd or destripe the map  */
+	    irim_coadestr( loglevel, irds, image, old, new, 
+			exclude, adjust, iter ) ;
+/*  write the map  */
+	    irim_wrmap( logfile, irds->name, new, image, iter, out ) ; 
+
+/*  copy the mask to the next iteration */
+	    irim_copymask( old, new ) ;
+
+/*  next iteration is destripe iteration */
+	    (iter->keer)++ ;
+	    iter->mode = iter->tune ;
+	    STORE_FREE( old ) ;
+	    old = new ;
+    }
+
+    finis_c( );					/* bye, bye HERMES */
+    return( 0 ) ;
+}
+
+#<
+
+#>            irim_init.c
+/* irim_init.c
+
+	Copyright (c) Kapteyn Laboratorium Groningen 1990
+	All Rights Reserved.
+
+Function:     irim_init
+
+Purpose:      reads irds, commandline and map
+
+Category:     IRAS
+
+Author:       Do Kester
+
+Use:  
+int irim_init(
+	fint		logfile,	IN : logfile
+	irds_type	*irds,		OUT: name of irds
+	image_type	*image,		OUT: info about image to be made
+	store_type	*store,		OUT: info about storage vector
+	iter_type	*iter,		OUT: info about iterations
+	int		*mapresent )    OUT: true if input map is present
+
+returns:
+
+Updates:      	22 July 1991: DK, Creation date
+		12 May 1992: DK, error in logic
+*/
+
+#include "image.h"
+#include "imtypes.h"
+#include "imkeys.h"
+#include "userfio.h"
+#include "imdefs.h"
+#include "irco.h"
+
+#define	ECL		3		/* ecliptic system */
+#define MISSION		1983.5		/* mid of mission */
+
+static char	*mapstatus = "Read an existing map of object:" ;
+
+int irim_init(
+	fint		logfile,
+	irds_type	*irds,
+	image_type	*image,
+	store_type	*store,
+	iter_type	*iter,
+	int		*mapresent )
+{
+    fchar	mapin, maskin ;
+    image_type  *mapimage = NULL, *maskimage = NULL ;
+    fint	ecl = ECL, i, k, npix2, next, level = 0 ;
+    int		plane = 1, maskpresent, map_ok, mask_ok ;
+    float	midmission = MISSION, mapvalue, *pS ;
+
+    FCHAR_INIT( mapin, MAXTXTLEN ) ;
+    IMAGE_INIT( mapimage ) ;
+    FCHAR_INIT( maskin, MAXTXTLEN ) ;
+    IMAGE_INIT( maskimage ) ;
+
+/* precess ecliptic coordinate system to 1983.5, mid of mission */
+    irco_precess_c( &ecl, &midmission, &ecl ) ;
+
+/* read information from commandline or from input irds  */
+    if ( irim_userinfo( logfile, irds, image ) != OK ) return( -1 ) ; 
+
+/* get info about input map */
+    if ( map_ok = ( irim_maphead( mapin, mapimage, mapresent,
+			          INSET_KEY, INSET_MES ) == OK && 
+	 	    *mapresent == PRESENT &&
+	 	    irim_mapchek( image, mapimage ) == OK ) ) {
+/* write info to logfile */
+	irim_wrim2log( logfile, mapstatus, mapimage ) ;
+    }
+
+/* get iteration dependent parameters  */
+    irim_iter( iter, *mapresent, mapimage, image ) ;
+
+/* get info about input mask and organize the storage */
+    if ( mask_ok = ( irim_maphead( maskin, maskimage, &maskpresent,
+				   MASK_KEY, MASK_MES ) == OK && 
+		     maskpresent == PRESENT ) ) {
+	if ( map_ok && irim_mapchek( mapimage, maskimage ) != OK ) {
+	    mask_ok = FALSE ;
+	} else {
+/* no `true' map; only a mask => take pixsize from mask */
+	    iter->sizes[0] = maskimage->pixsize ;
+	    irim_axis( iter, store, maskimage ) ;
+	}
+    }
+    if      ( map_ok ) 		     irim_axis( iter, store, mapimage ) ;
+    else if ( *mapresent == NULMAP ) irim_axis( iter, store, image ) ;
+
+anyoutf( ANYOUT_TST, "map ok %d present %d  mask ok %d present %d",
+map_ok, *mapresent, mask_ok, maskpresent ) ;
+anyoutf( ANYOUT_TST, "keer %d  store %p  pixsize %f", iter->keer,
+store->store, store->map.pixsize ) ;
+
+/* set iteration counter to 1 in case of DESTRIPE_MODE */
+    if ( iter->mode >= DESTRIPE_MODE ) iter->keer = 1 ;
+
+/* initialize the nulmap if present */
+    if ( *mapresent == NULMAP ) {
+	(void)sscanf( mapin.a, "%f", &mapvalue ) ;
+	if ( mapvalue != 0.0 ) {
+	    npix2 = store->npix * store->npix ;
+	    next = store->npl - npix2 ; 
+	    pS = store->store + store->npp[INT_MAP];
+	    for ( i = 0 ; i < store->nptr ; i++ ) {
+	        for ( k = 0 ; k < npix2 ; k++ ) *pS++ = mapvalue ;
+		pS += next ;
+	    }
+	}
+    } else if ( map_ok ) {
+/* copy the map into the store at the INT_MAP plane */
+	plane = INT_MAP ;
+	irim_storemap( store, plane, level, mapin ) ;
+    }
+
+    if ( mask_ok ) {
+/* copy the mask into the store at the COV_MAP plane */
+	plane = COV_MAP ;
+	irim_storemap( store, plane, level, maskin ) ;
+    }
+
+    IMAGE_FREE( mapimage ) ;
+    IMAGE_FREE( maskimage ) ;
+    FCHAR_FREE( maskin ) ;
+    return( 0 ) ;
+}
+#<
+
+#>            irim_userinfo.c
+/* irim_userinfo.c
+
+	Copyright (c) Kapteyn Laboratorium Groningen 1990
+	All Rights Reserved.
+
+Function:     irim_userinfo
+
+Purpose:      read info from irds or command line
+
+Category:     IRAS
+
+Author:       Do Kester
+
+Use:  
+int irim_userinfo( 
+	fint		logfile,        IN : anyout device
+	irds_type	*irds, 		OUT: input irds
+	image_type 	*image )	OUT: irds info 
+
+returns: 0 : 	ok
+	 -1 : 	no irds
+	 other: error from irds_enquire
+
+Updates:      22 July 1991: DK, Creation date
+
+Original:	IMINFO
+	Structured and translated by ASSISTANT II Plus,  v1.2
+*/
+
+#include "image.h"
+#include "imtypes.h"
+#include "imkeys.h"
+#include "userfio.h"
+#include "irco.h"
+#include "irus_coor.h"
+#include "nelc.h"
+#include "string.h"
+#include "imdefs.h"
+#include "irim_pars.h"
+
+#define UNKNOWN_PIXSIZE	0
+#define UNKNOWN_PRID	0
+#define UNKNOWN_BEAM	-1
+#define DEFAULT_BEAM	0
+#define EPSILON		0.16		/* 10 arcmin */
+
+int irim_userinfo( 
+	fint		logfile,
+	irds_type	*irds, 
+	image_type 	*image )
+
+{
+    fchar		prname ;
+    char		platename[80] ;
+    double		irds_side[2], irds_center[2], xyz[3] ;
+    fint		k, n, newcoor, nr ;
+    fint		coor_dflt = DFLT_DEF ;
+
+    FCHAR_INIT( prname, 40 ) ;
+
+/*  fill in default value  */
+    image->pixsize = UNKNOWN_PIXSIZE ; 
+    image->prid = UNKNOWN_PRID ; 
+    image->beam = UNKNOWN_BEAM ; 
+
+    anyoutf( logfile, "  " ) ; 
+    anyoutf( logfile, "  " ) ; 
+    anyoutf( logfile, "            IMAGE  " ) ; 
+    anyoutf( logfile, "  " ) ; 
+
+    if ( ( n = irim_irdsname( logfile, irds, image ) ) != OK ) return ( n ) ;
+
+    irds_center[LX] = image->center[LX] ;
+    irds_center[BY] = image->center[BY] ;
+    irds_side[LX] = image->side[LX] ;
+    irds_side[BY] = image->side[BY] ;
+/* read items from command line, center and side  */
+    k = userfangle( image->center, 2, DFLT_DEFEXACT, CENTER_KEY, CENTER_MES ) ;
+    if ( userfangle( image->side, 2, DFLT_DEF, SIZE_KEY, SIZE_MES ) < 2 )
+		image->side[BY] = image->side[LX] ;
+/* get coordinate system */
+    if ( image->crid == 0 ) coor_dflt = DFLT_NONE ;
+    image->crid = irus_coor_c( &(image->crid), &coor_dflt, 
+		tofchar( COOR_KEY ) ) ;
+/* get name */
+    k = userftext( image->name, DFLT_DEF, NAME_KEY, NAME_MES ) ; 
+/* median filtering ?? */
+    image->median = FALSE ;
+    k = userflog( &(image->median), 1, DFLT_HIDD, MEDIAN_KEY, MEDIAN_MES ) ; 
+/* set beam default and enquire beam */
+    image->beam = DEFAULT_BEAM ;
+    k = userfreal( &(image->beam), 1, DFLT_DEF, BEAM_KEY, BEAM_MES ) ;
+/* get projection type */
+    while ( TRUE ) {
+	if ( ! userfcharu( prname, 1, DFLT_HIDD, PROJ_KEY, PROJ_MES ) )
+		strcpy( prname.a, "GNOMON" ) ;
+	image->prid = irco_prnumber_c( prname ) ;
+	if ( ! image->prid ) {
+	    anyoutf( ANYOUT_DEF, "Unknown projection type: %.*s", 
+	    		nelc_c( prname ), prname.a ) ;
+	    anyoutf( ANYOUT_DEF, "Options: STEREO GNOMON AZEQD AZEQA  ORTHO " );
+	    anyoutf( ANYOUT_DEF, "         CYLIND MERCAT SINUS AITOFF CYLEQD" ); 
+	    cancel( PROJ_KEY );
+	} else break ;
+    }
+    image->prcenter[LX] = image->center[LX] ;
+    image->prcenter[BY] = image->center[BY] ;
+    k = userfangle( image->prcenter, 2, DFLT_HIDEXACT, PRCEN_KEY, PRCEN_MES ) ;
+    
+    irim_wrim2log( logfile, "A new map is made under the name: ", image ) ; 
+
+/* obtain parameter status from the user */
+    irim_userpars( ) ;
+
+/* make a plate system at the projection center */
+    newcoor = 0 ;
+    nr = 1 ;
+    image->prcenter[LX] *= D2R ; 	
+    image->prcenter[BY] *= D2R ; 
+    strcpy( platename, PLATESYS ) ;
+    irco_plate_c( &(image->crid), image->prcenter, 
+		tofchar( platename ), &newcoor ) ;
+/* project the image center to a projection centered map  */
+    image->prcenter[LX] = image->center[LX] * D2R ;	
+    image->prcenter[BY] = image->center[BY] * D2R ;
+    irco_torect_c( &(image->prcenter[LX]), &(image->prcenter[BY]), xyz, &nr ) ;
+    irco_transform_c( xyz, &(image->crid), xyz, &newcoor, &nr ) ;
+    irco_project_c( &(image->prid), xyz, 
+		&(image->prcenter[LX]), &(image->prcenter[BY]), &nr ) ;
+    image->prcenter[LX] /= D2R ; 
+    image->prcenter[BY] /= D2R ; 
+/* project the irds center to a projection centered map  */
+    irds_center[LX] *= D2R ;
+    irds_center[BY] *= D2R ;
+    irco_torect_c( &irds_center[LX], &irds_center[BY], xyz, &nr ) ;
+    irco_transform_c( xyz, &(image->crid), xyz, &newcoor, &nr ) ;
+    irco_project_c( &(image->prid), xyz, 
+		&irds_center[LX], &irds_center[BY], &nr ) ;
+    irds_center[LX] /= D2R ; 
+    irds_center[BY] /= D2R ; 
+/* check whether the requested map is within the limits of the irds  */
+    if ( fabs( image->prcenter[LX] - irds_center[LX] ) + 
+			image->side[LX] > irds_side[LX] + EPSILON ||
+	 fabs( image->prcenter[BY] - irds_center[BY] ) + 
+			image->side[BY] > irds_side[BY] + EPSILON ) 
+		errorf( WARNING, "(Part of) your map asks for "
+		"data outside this IRDS" ) ; 
+
+    return( 0 ) ;
+}
+
+#<
+
+#>            irim_irdsname.c
+/* irim_irdsname.c
+
+           Copyright (c) 1991
+  Laboratory for Space Research Groningen 
+       Kapteyn Laboratory Groningen 
+           All Rights Reserved.
+
+Function:     irim_irdsname
+
+Purpose:      get name(s) of the irds('s) to process
+
+Category:     IRAS, private to program: IMAGE
+
+Author:       Do Kester
+
+Use:  
+void irim_irdsname( 
+	fint		logfile,	IN : anyout device
+        irds_type   	*irds, 		OUT: list of irds's
+	image_type  	*image )	OUT: info about the first one
+
+returns: 0 : if OK
+	-1 : no irds given
+	-2 : different bands
+	other: errors from irds_enquire
+
+The user is queried for a (list of) irds('s). They are examined and
+some info is written to the logfile. Information about the first irds 
+is returned in image.
+
+Updates:      18 Oct 1991: DK, Creation date
+              10 Feb 1992: FL, IRDS's closed after processing
+
+*/
+
+
+#include "image.h"
+#include "imtypes.h"
+#include "imkeys.h"
+#include "userfio.h"
+#include "irds_enquire.h"
+#include "irco.h"
+#include "imdefs.h"
+#include "ircc_bandnr.h"
+#include "gds_close.h"
+
+#define NOIRDS		-1
+#define DIFF_BAND       -2
+
+int irim_irdsname( 
+	fint		logfile,
+        irds_type   	*irds, 
+	image_type  	*image )
+{
+    fint        k, n, kerr, naxis, axes[4], band, band1 = 0 ;
+    double      irds_side[2], irds_center[2] ;
+    float       irds_epoch ;
+    fchar	IrdsName, irds_coor ;
+    image_type	*pIm = NULL, *Imdummy = NULL ;
+
+    IMAGE_INIT( Imdummy ) ;
+    FCHAR_INIT( irds_coor, 40 ) ;
+
+/* initialize namespace for the irds's */
+    FCHAR_INIT( irds->name, MAXIRDS * MAXTXTLEN ) ;
+    irds->name.l = MAXTXTLEN ;
+    irds->nr = MAXIRDS ;
+
+    if ( ! ( irds->nr = userfchar( irds->name, MAXIRDS, DFLT_DEF, 
+                IRSET_KEY, IRSET_MES ) ) ) return( NOIRDS ) ;
+
+    pIm = image ;
+    IrdsName.a = irds->name.a ;
+    IrdsName.l = MAXTXTLEN ;
+    n = 0 ;
+    while ( n++ < irds->nr ) {
+/*  read information in the irds header */
+        kerr = 0 ;
+        irds_enquire_c( IrdsName, pIm->name, pIm->inst, &naxis, axes, 
+	        irds_center, irds_side, irds_coor, &irds_epoch, &kerr ) ;
+        if ( kerr ) {
+	    errorf( SERIOUS, "error in IRDS_ENQUIRE; nr %d", kerr ) ;
+	    return( kerr ) ;
+        }
+/*  check whether instrument is the same as in the first irds */
+        band = ircc_bandnr_c( pIm->inst ) ;
+        if ( n == 1 ) band1 = band ;
+        else if ( band != band1 ) return ( DIFF_BAND ) ;
+
+/*  write this information to the logfile  */
+        pIm->center[LX] = irds_center[LX] ; 
+        pIm->center[BY] = irds_center[BY] ; 
+        pIm->side[LX] = irds_side[LX] ; 
+        pIm->side[BY] = irds_side[BY] ; 
+        pIm->crid = irco_number_c( irds_coor, &irds_epoch ) ;
+        if ( pIm->crid < 0 ) {
+	    k = abs( pIm->crid ) ;
+	    pIm->crid = 0 ;
+	    irco_precess_c( &k, &irds_epoch, &(pIm->crid) ) ;
+        } 
+
+        irim_wrim2log( logfile, "Read IRDS of object: ", pIm );
+
+	kerr = 0 ;
+	gds_close_c( IrdsName, &kerr ) ;
+	IrdsName.a += IrdsName.l ;
+        pIm = Imdummy ;
+    }
+    IMAGE_FREE( Imdummy ) ;
+
+    return( OK ) ;
+}
+#<
+
+#>            irim_wrim2log.c
+/* irim_wrim2log.c
+
+	Copyright (c) Kapteyn Laboratorium Groningen 1990
+	All Rights Reserved.
+
+Function:     irim_wrim2log
+
+Purpose:      write information about the image to the logfile
+
+Category:     IRAS, private to program: IMAGE
+
+Author:       Do Kester		do@guspace.rug.nl
+
+Use:  
+void irim_wrim2log( 
+	int 		device,	IN : anyout device
+	char 		*mapstatus, 	IN : status line
+	image_type 	*image )	IN : image to write about
+
+Updates:      23 Jul 1991: DK, Creation date
+
+*/
+
+#include "image.h"
+#include "imtypes.h"
+#include "userfio.h"
+#include "imdefs.h"
+#include "nelc.h"
+#include "irco.h"
+
+#define EPSILON   1.0E-6
+
+static char 	*streep = 
+  {"***********************************************************************"} ; 
+
+void irim_wrim2log( 
+	int 		device, 
+	char 		*mapstatus, 
+	image_type 	*image )
+{
+  char 		mess[81] ; 
+  long 		leng ; 
+  float		epoch ;
+  fchar		koname, prname ; 
+
+  FCHAR_INIT( koname, 40 ) ;
+  FCHAR_INIT( prname, 40 ) ;
+
+/*  write to the logfile  */
+  anyoutf( device, streep ) ; 
+  anyoutf( device, "  " ) ; 
+  strcpy( mess, mapstatus ) ;
+  strncat( mess, image->name.a, nelc_c( image->name ) ) ;
+  anyoutf( device, mess ) ;
+  strcpy( mess, "  the instrument is " ) ;
+  strncat( mess, image->inst.a, nelc_c( image->inst ) ) ;
+  anyoutf( device, mess ) ; 
+  anyoutf( device, "  it is centered at longitude %10.4f and latitude %10.4f",
+	image->center[LX], image->center[BY] ) ;
+  irco_namepoch_c( &(image->crid), koname, &epoch ) ;
+  anyoutf( device, "  in coordinate system:  %20s %8.1f", koname.a, epoch ) ;
+  anyoutf( device, "  the size is %7.2f by %7.2f degrees.", 
+	image->side[LX], image->side[BY] ) ;
+  leng = nelc_c( tofchar( mess ) ) ; 
+  if ( image->pixsize > EPSILON )
+      anyoutf( device, " with axes having %4d by %4d pixels.",
+	(int)( image->side[LX] / image->pixsize + 0.5 ),
+	(int)( image->side[BY] / image->pixsize + 0.5 ) ) ;
+
+  if ( image->beam > EPSILON ) {
+    anyoutf( device, "  the radius of the convolution beam is %8.4f pixels.",
+	image->beam ) ; 
+  } else if ( image->beam > -EPSILON ) {
+    anyoutf( device, "  convolution is done with a rectangular beam. " ) ; 
+  }
+
+  if ( image->median ) {
+    anyoutf( device, "  the pixels will be median-filtered." ) ;
+  }
+
+  if ( image->prid ) {
+    irco_prname_c( prname, &(image->prid) ) ;
+    anyoutf( device, "  under the projection type:  %s", prname.a ) ;
+    if ( fabs( image->prcenter[LX] - image->center[LX] ) > EPSILON || 
+         fabs( image->prcenter[BY] - image->center[BY] ) > EPSILON ) {
+      anyoutf( device, "  with the projection center at longitude %10.4f "
+	"and latitude %10.4f", image->prcenter[LX], image->prcenter[BY] ) ; 
+    }
+  }
+  return ;
+}
+
+#<
+
+#>            irim_maphead.c
+/* irim_maphead.c
+
+	Copyright (c) Kapteyn Laboratorium Groningen 1990
+	All Rights Reserved.
+
+Function:     irim_maphead
+
+Purpose:      head a header if a map is presented
+
+Category:     IRAS
+
+Author:       Do Kester		do@guspace.rug.nl
+
+Use:  
+int irim_maphead(
+	fchar 		mapin, 		OUT: set name of map
+	image_type 	*mapimage,	OUT: info of map
+	int		*mapresent )	OUT: 1:present, 0:not, -1:nulmap
+
+returns  0 OK
+	-1 keys are missing
+	-2 non-square pixels
+
+Updates:      22 July 1991: DK, Creation date
+
+*/
+
+#include "image.h"
+#include "imtypes.h"
+#include "imkeys.h"
+#include "userfio.h"
+#include "imdefs.h"
+#include "gdsio.h"
+#include "nelc.h"
+#include "irco.h"
+#include "gds_exist.h"
+
+#define	EPSILON		1.0e-6
+#define NONSQUARE	-2
+#define	MISSING		-1
+
+
+int irim_maphead(
+	fchar 		mapin, 
+	image_type 	*mapimage,
+	int		*mapresent,
+	char		*key,
+	char		*mess )
+{
+    fint		present, naxis1, naxis2, ierr = OK, kerr = OK ;
+    double	        cdelt1, cdelt2, depoch ;
+    float		epoch, mapvalue ;
+    fchar		crname, prname ;
+    fint		level = TOPLEVEL ;
+
+    while ( TRUE ) {
+	present = userfchar( mapin, 1, DFLT_DEF, key, mess ) ;
+	if ( present == 0 ) {			/* no answer == no map */
+	    *mapresent = NOT_PRESENT ;
+	    return( OK ) ;
+	}
+	if ( present > 0 ) {
+	    if ( gds_exist_c( mapin, &ierr ) ) {
+		break ;				/* there is a map: read it */
+	    } else {
+		if ( sscanf( mapin.a, "%f", &mapvalue ) == 1 ) {
+		    *mapresent = NULMAP ;	/* nul-map request */
+		    return( OK ) ;
+	        }
+	    } 
+	}
+	anyoutf( ANYOUT_DEF, "Cannot find or interpret %.*s", 
+		nelc_c( mapin ), mapin.a );
+	cancel( INSET_KEY ) ;
+    }
+
+    ierr = OK ;
+    FCHAR_INIT( crname, 40 ) ;
+    FCHAR_INIT( prname, 40 ) ;
+/* read the items from the map header  */
+    if ( ! ierr ) GDSD_RDBLE( mapin, "CRVAL1",
+	level, &(mapimage->center[LX]), &ierr ) ;
+    if ( ! ierr ) GDSD_RDBLE( mapin, "CRVAL2",
+	level, &(mapimage->center[BY]), &ierr ) ;
+    if ( ! ierr ) GDSD_RCHAR( mapin, "INSTRUME",
+	level, mapimage->inst, &ierr ) ;
+    if ( ! ierr ) GDSD_RINT( mapin, "NAXIS1", level, &naxis1, &ierr ) ;
+    if ( ! ierr ) GDSD_RINT( mapin, "NAXIS2", level, &naxis2, &ierr ) ;
+    if ( ! ierr ) GDSD_RDBLE( mapin, "CDELT1", level, &cdelt1, &ierr ) ;
+    if ( ! ierr ) GDSD_RDBLE( mapin, "CDELT2", level, &cdelt2, &ierr ) ;
+    if ( ! ierr ) GDSD_RCHAR( mapin, "PROJTYPE", level, prname, &ierr ) ;
+    if ( ! ierr ) GDSD_RCHAR( mapin, "COORDSYS", level, crname, &ierr ) ;
+    if ( ! ierr ) GDSD_RDBLE( mapin, "EPOCH", level, &depoch, &kerr ) ;
+    epoch = depoch ;
+    if ( ierr ) {
+	errorf( SERIOUS, "Some keys are missing in the map header." ) ;
+	return( MISSING ) ;
+/* assert ( cdelt1 == -cdelt2 ) : longitude from rigth to left */
+    } else if ( fabs( cdelt1 + cdelt2 ) > EPSILON ) { 
+	errorf( SERIOUS, "Non-square pixels; please resample." ) ;
+	return( NONSQUARE ) ;
+    }
+    mapimage->crid = irco_number_c( crname, &epoch ) ;
+    mapimage->prid = irco_prnumber_c( prname ) ;
+    mapimage->pixsize = fabs( cdelt1 ) ;
+    mapimage->side[LX] = naxis1 * mapimage->pixsize ;
+    mapimage->side[BY] = naxis2 * mapimage->pixsize ;
+    ierr = OK ;
+    GDSD_RCHAR( mapin, "OBJECT", level, mapimage->name, &ierr ) ;
+    ierr = OK ;
+    GDSD_RREAL( mapin, "BEAMSIZE", level, &(mapimage->beam), &ierr ) ;
+    mapimage->beam /= mapimage->pixsize ;
+    mapimage->prcenter[LX] = mapimage->prcenter[BY] = 0.0 ;
+    ierr = OK ;
+    GDSD_RDBLE( mapin, "PROJCENL", level, &(mapimage->prcenter[LX]), &ierr ) ;
+    ierr = OK ;
+    GDSD_RDBLE( mapin, "PROJCENB", level, &(mapimage->prcenter[BY]), &ierr ) ;
+    *mapresent = PRESENT ;
+    return( OK ) ;
+}
+#<
+
+#>            irim_mapchek.c
+/* irim_mapchek.c
+
+	Copyright (c) Kapteyn Laboratorium Groningen 1990
+	All Rights Reserved.
+
+Function:     irim_mapchek
+
+Purpose:      checks a map against an irds
+
+Category:     IRAS
+
+Author:       Do Kester		do@guspace.rug.nl
+
+Use:  
+int irim_mapchek( 
+	image_type	*image,		IN: the irds information
+        image_type	*mapimage )	IN: the map information
+
+returns: 	0 : ok
+
+Description: It is left to the user to take action upon warnings
+		generated in this function. Always return OK.
+
+Updates:      19 Dec 1990: DK, Creation date
+		150692: DK always return a OK
+*/
+
+#include "image.h"
+#include "imtypes.h"
+#include "userfio.h"
+#include "imdefs.h"
+
+#define	EPSILON		1.0e-4
+
+int irim_mapchek( 
+	image_type	*image,		/* IN: the irds information	*/
+        image_type	*map )		/* IN: the map information	*/
+{
+  int	ierr = 0 ;
+
+/* check coordinate systems */
+    if ( image->crid != map->crid ) {
+	errorf( SERIOUS, 
+	"The requested coordinate system differs from the one in the map." );
+	ierr = -1 ;
+    }
+/* check centers */
+    if ( fabs( image->center[LX] - map->center[LX] ) > EPSILON ||
+	 fabs( image->center[BY] - map->center[BY] ) > EPSILON ) {
+	errorf( MINOR, 
+	"The requested center position differs from the one in the map." );
+	ierr -= 2 ;
+    }
+/* check sides */
+    if ( fabs( image->side[LX] - map->side[LX] ) > EPSILON ||
+	 fabs( image->side[BY] - map->side[BY] ) > EPSILON ) {
+	errorf( MINOR, 
+	"The requested size differs from the one in the map." );
+	ierr -= 4 ;
+    }
+/* check instruments */
+    if ( strcmp( image->inst.a, map->inst.a ) ) {
+	errorf( MINOR, 
+	"The requested instrument differs from the one in the map." );
+	ierr -= 8 ;
+    }
+
+/* check differences in projection type and center; less serious */
+    if ( image->prid != map->prid ) {
+	errorf( WARNING, 
+	"The requested projection type differs from the one in the map." );
+    }
+    if ( fabs( image->prcenter[LX] - map->prcenter[LX] ) > EPSILON ||
+	 fabs( image->prcenter[BY] - map->prcenter[BY] ) > EPSILON ) {
+	errorf( WARNING, 
+	"The requested projection center differs from the one in the map." );
+    }
+    return( 0 ) ;
+}
+#<
+
+#>            irim_iter.c
+/* irim_iter.c
+
+	Copyright (c) Kapteyn Laboratorium Groningen 1990
+	All Rights Reserved.
+
+Function:     irim_iter
+
+Purpose:      get iteration-dependent parameters
+
+Category:     IRAS, private to program: IMAGE
+
+Author:       Do Kester		do@guspace.rug.nl
+
+Use:  
+void irim_iter( 
+	iter_type	iter,		OUT: info about iterations
+	int		mapresent,	IN : map present ?
+	image_type	*mapimage,	IN : info about the map
+	image_type	*image )	I/0: info about the image
+
+	image->pixsize is set in this function
+
+Updates:      23 Jul 1991: DK, Creation date
+
+Original:     IMITER
+	Structured and translated by ASSISTANT II Plus, v1.2
+*/
+
+#include "image.h"
+#include "imtypes.h"
+#include "imkeys.h"
+#include "userfio.h"
+#include "imdefs.h"
+
+#define	DEFAULT_TUNE	2
+
+void irim_iter( 
+	iter_type	*iter,
+	int		mapresent,
+	image_type	*mapimage,
+	image_type	*image )
+
+{
+    fint	k, nr, keer ; 
+
+    iter->keer = 0 ;
+/* get number of iterations */
+    if ( mapresent ) {			/* map present */
+  	iter->maxiter = keer = iter->nsizes = 1 ;
+	iter->mode = DESTRIPE_MODE ;
+	if ( mapresent == PRESENT )		/* real map present */
+	    iter->sizes[0] = mapimage->pixsize ;
+    } else {				/* no map */
+	iter->maxiter = keer = iter->nsizes = 0 ;
+	iter->mode = COADD_MODE ;
+    }
+    k = userfint( &(iter->maxiter), 1, DFLT_DEF, ITER_KEY, ITER_MES, 
+	iter->maxiter );
+
+/* get pixels for the iterations */
+    nr = ( iter->maxiter < MAXAX ) ? iter->maxiter : MAXAX ;
+    nr += 1 - keer ;
+    while ( TRUE ) {
+	iter->nsizes += userfangle( &(iter->sizes[keer]), nr, 
+		DFLT_NONE, PIXEL_KEY, PIXEL_MES, nr ) ;
+/* set pixel size of 0th axis the same as in 1st axis in case of nulmap */
+	if ( mapresent == NULMAP ) iter->sizes[0] = iter->sizes[1] ;
+
+/* set image->pixsize to the last one */
+	image->pixsize = iter->sizes[iter->nsizes-1] ;
+	if ( image->pixsize < image->side[LX] ) break ;
+	anyoutf( ANYOUT_DEF, "Pixel size larger than image size" ) ;
+	cancel( PIXEL_KEY ) ;
+    }
+
+    if ( iter->maxiter ) {
+/* get power of stripe */
+	iter->tune = DEFAULT_TUNE ;		/* default value */
+	k = userfint( &(iter->tune), 1, DFLT_DEF, TUNE_KEY, TUNE_MES ) ;
+    }
+
+    return ;
+}
+#<
+
+#>            irim_initstore.c
+/* irim_initstore.c
+
+	Copyright (c) Kapteyn Laboratorium Groningen 1990
+	All Rights Reserved.
+
+Function:     irim_initstore
+
+Purpose:      initialize the struct store
+
+Category:     IRAS, private to program: IMAGE
+
+Author:       Do Kester		do@guspace.rug.nl
+
+Use:  
+void irim_initstore( 
+	image_type 	*image, 	IN : image info
+	store_type 	*store )	OUT: storage info
+
+Updates:      23 Jul 1991: DK, Creation date
+	      22 Jan 1992: DK, check planes to use STD_LAYER or not
+
+Original:     IMINST
+	Structured and translated by ASSISTANT II Plus, v1.2
+*/
+
+#include "image.h"
+#include "imtypes.h"
+#include "userfio.h"
+#include "imkeys.h"
+#include "imdefs.h"
+
+void irim_initstore( 
+	iter_type	*iter,
+	image_type 	*image, 
+	store_type 	*store )
+{
+    fint 		i, npix2, mapas, planes[MAXLAYER], np ; 
+    double		pixsz ;
+
+    pixsz = iter->sizes[iter->keer] ;
+
+    store->npix = PIX_PER_PATCH ;
+    npix2 = PIX_PER_PATCH * PIX_PER_PATCH ; 
+    store->nlayer = ( image->median ) ? STD_LAYER : INT_LAYER ;
+
+/* check PLANES keyword if the user want to write std.dev. map */
+    np = userfint( planes, MAXLAYER, DFLT_HIDD, PLANES_KEY, PLANES_MES );
+    for ( i = 0 ; i < np ; i++ )
+	if ( planes[i] == STD_MAP ) store->nlayer = STD_LAYER ;
+
+/* define offsets of the different layers */
+    for ( i = 0 ; i < store->nlayer ; i++ )
+	store->npp[i] = i * npix2 ; 
+/* set the remaining (if any) offsets to zero */
+    for ( i = store->nlayer ; i < MAXLAYER ; i++ )
+	store->npp[i] = 0 ;
+
+/* npatch is number of patches in a mapas ; add one if it doesnt fit exactly */
+    mapas = (int)( image->side[LX] / pixsz + 0.5 ) ;
+    store->npatch[LX] = mapas / PIX_PER_PATCH ; 
+    if ( store->npatch[LX] * PIX_PER_PATCH < mapas ) store->npatch[LX]++ ; 
+    store->map.refpix[LX] = 0.5 * mapas + 0.5 ;
+
+    mapas = (int)( image->side[BY] / pixsz + 0.5 ) ;
+    store->npatch[BY] = mapas / PIX_PER_PATCH ; 
+    if ( store->npatch[BY] * PIX_PER_PATCH < mapas ) store->npatch[BY]++ ; 
+    store->map.refpix[BY] = 0.5 * mapas + 0.5 ;
+    store->map.pixsize = pixsz ;
+
+    anyoutf( ANYOUT_TST, "side = %f pixsize = %f npatch = %d mapas = %d",
+	image->side[BY], pixsz, store->npatch[BY], mapas ) ;
+
+    store->npl = npix2 * store->nlayer ;
+    store->nptr = store->npatch[LX] * store->npatch[BY] ;
+    store->length = store->npl * store->nptr ;
+
+/* allocate memory to store->store */
+    FLOAT_INIT( store->store, store->length ) ;
+
+    anyoutf( ANYOUT_TST, "storage of length %d containing %d patches",
+	store->length, store->nptr );
+    anyoutf( ANYOUT_TST, "allocated at store->store: %p -> %p",
+	store, store->store );
+
+    if ( ! store->store ) {
+	errorf( FATAL, "Not enough memory to allocate to store." ) ;
+    }
+}
+#<
+
+#>            irim_lists.c
+/* irim_lists.c
+
+           Copyright (c) 1991
+  Laboratory for Space Research Groningen 
+       Kapteyn Laboratory Groningen 
+           All Rights Reserved.
+
+Function:     irim_lists
+
+Purpose:      read scan.detector lists from commandline
+
+Category:     IRAS, private to program: IMAGE
+
+Author:       Do Kester		do@guspace.rug.nl
+
+Use:  
+int irim_lists( 
+	int		logfile,
+	list_type	*exclude, 
+	list_type	*adjust, 
+	fchar		instrument,
+	int		mapresent )
+
+returns: 
+
+  The keywords EXCLUDE and ADJUST are read from the command line.
+  EXCLUDE and ADJUST are lists of scan numbers,  possibly
+  extended with detector numbers. No extension denotes the whole scan. 
+  Only detector numbers pertaining to the band to be processed are allowed. 
+  Dead detectors are not allowed.
+  The lists are sorted. EXCLUDE has no overlap with ADJUST.
+  Existing doublets are silently kicked out of the lists.
+
+Updates:      06 Aug 1991: DK, Creation date
+
+Original:     IMLIST
+	Structured and translated by ASSISTANT II Plus, v1.2
+*/
+
+#include "image.h"
+#include "imtypes.h"
+#include "imkeys.h"
+#include "userfio.h"
+#include "irlist.h"
+#include "ircc_bandnr.h"
+#include "imdefs.h"
+
+int irim_lists( 
+	int		logfile,
+	list_type	*exclude, 
+	list_type	*adjust, 
+	fchar		instrument,
+	int		mapresent )	/* true if a map is present */
+{
+    fint		band ;
+
+	if ( irim_userlist( adjust, DFLT_DEF, ADJUST_KEY, ADJUST_MES ) < 0 )
+		return( -1 ) ; 
+	adjust->complement = FALSE ;		/* operate on list itself */
+	if ( irim_userlist( exclude, DFLT_DEF, EXCLUDE_KEY, EXCLUDE_MES ) < 0 )
+ 		return( -1 ) ; 
+	exclude->complement = TRUE ;		/* skip items in list */
+  
+	band = ircc_bandnr_c( instrument ) ;
+	irim_seldets( exclude, band ) ;
+
+/* check whether all detectors in band ? */
+	irim_detinband( exclude, band ) ; 
+	irim_detinband( adjust, band ) ; 
+/* sort and uniq the list */
+	irim_sortuniq( exclude ) ; 
+	irim_sortuniq( adjust ) ; 
+/* sort the lists and make them disjunct */
+	irim_disjunct( exclude, adjust ) ; 
+
+/* write lists */
+	irim_wrlist( logfile, "the following scan.det combinations are "
+		"adjusted to a (existing) map", adjust ) ; 
+	irim_wrlist( logfile, "the following scan.det combinations are skipped", 
+		exclude ) ; 
+
+	if ( ! mapresent ) {
+	    if ( adjust->nl + exclude->nl <= MAXLIST ) {
+/*  merge adjust (for 1 iteration) with exclude  */
+	      irim_merge( adjust, exclude ) ; 
+	    } else {
+	      errorf( SERIOUS, 
+		"irim_lists: The combined adjust and exclude lists" );
+	      errorf( SERIOUS, 
+		"            lists are too long; ask expert help." ) ; 
+/*  help: increase MAXLIST in image.h */
+	    }
+	}
+
+/* cut lists to size */
+	irim_cutlist( adjust, adjust->nl ) ;
+	irim_cutlist( exclude, exclude->nl ) ;
+	
+	return( OK ) ;
+}
+#<
+
+#>            irim_coadestr.c
+/* irim_coadestr.c
+
+           Copyright (c) 1991
+  Laboratory for Space Research Groningen 
+       Kapteyn Laboratory Groningen 
+           All Rights Reserved.
+
+Function:     irim_coadestr
+
+Purpose:      coadd and destripe a map
+
+Category:     IRAS, private to program: IMAGE
+
+Author:       Do Kester		do@guspace.rug.nl
+
+Use:  
+void irim_coadestr( 
+	int		loglevel,
+	irds_type	*irds,
+	image_type	*image,
+	store_type	*store, 
+	list_type	*exclude, 
+	list_type	*adjust,
+	iter_type	*iter )
+
+USE  Several messages are written to the logfile,  concerning the
+     present iteration. irim_scan is called. After the first iteration
+     the adjust list is subtracted from the exclud list ;  the adjust
+     list emptied. Dlist is changed accordingly. During the last
+     iteration the logfile is left on to write the destripe params
+     to the logfile.
+
+     The moments of the map are put to zero after each iteration.
+
+Updates:      09 Aug 1991: DK, Creation date
+
+Original:     IMCADS
+	Structured and translated by ASSISTANT II Plus, v1.2
+*/
+
+
+#include "image.h"
+#include "imtypes.h"
+#include "imkeys.h"
+#include "userfio.h"
+#include "irlist.h"
+#include "imdefs.h"
+
+void irim_coadestr( 
+	int		loglevel,
+	irds_type	*irds,
+	image_type	*image,
+	store_type	*old_store, 
+	store_type	*new_store, 
+	list_type	*exclude, 
+	list_type	*adjust,
+	iter_type	*iter )
+{
+    char 		mess[81] ; 
+    float 		convol ;
+    int			logfile ; 
+    long 		i, lm ; 
+
+    static char 	namod[2][9] = {"destripe", "coadd   "} ; 
+    static char 	namtun[3][9] = {"offset  ", "drift   ", "gain    "} ; 
+    static char 	namav[2][9] = {"mean    ", "median  "} ; 
+    static char 	*streep[] = 
+    {"******************************************************************"} ; 
+
+	logfile = ( loglevel > SILENT ) ? ANYOUT_DEF : ANYOUT_TST ;
+
+/*  make new map parameters  */
+	irim_axis( iter, new_store, image ) ;
+
+	irim_initbeam( &convol, new_store->map.pixsize, image->beam ) ;
+/*  write to log file  */
+	anyoutf( logfile, *streep ) ; 
+	lm = ( iter->mode == COADD_MODE ) ? 1 : 0 ;
+	anyoutf( logfile, "mode is %s", namod[lm] ) ;
+	anyoutf( logfile, "iteration number is %d,"
+		" of a total of %d iterations", iter->keer, iter->maxiter ) ;
+
+	lm = ( image->median && new_store->map.psinclusion && 
+		iter->mode >= DESTRIPE_MODE ) ? 1 : 0 ; 
+	sprintf( mess, "pixel averaging is %s", namav[lm] );
+	if ( iter->mode >= DESTRIPE_MODE ) strcat( mess, " and tune is " );
+	for ( i = 0 ; i < iter->mode ; i++ )
+		strcat( mess, namtun[i] ) ;
+	anyoutf( logfile, mess );
+
+	if ( new_store->map.squarebeam && new_store->map.psinclusion ) {
+	    anyoutf( logfile, "beam is the true detector size." ) ;
+	} else {
+	    anyoutf( logfile, "beam is %6.3f degrees.", 
+			convol * new_store->map.pixsize ) ;
+	}
+
+	anyoutf( logfile, "the axes have %d by %d pixels", 
+		(int)( image->side[LX] / new_store->map.pixsize + 0.5 ),
+		(int)( image->side[BY] / new_store->map.pixsize + 0.5 ) ) ;
+
+/*  switch logfile on/off according to loglevel */
+	switch( loglevel ) {
+	    case SILENT : 
+	    case QUIET  : logfile = ANYOUT_TST ; break ;
+	    case NORMAL : logfile = ( iter->keer == iter->maxiter ) ?
+				    ANYOUT_DEF : ANYOUT_TST ; break ;
+	    case LOUD   : logfile = ANYOUT_DEF ;
+	}
+
+	anyoutf( logfile, *streep ) ; 
+
+	irim_irds( logfile, irds, image, old_store, new_store, 
+			exclude, iter ) ; 
+
+	logfile = ( loglevel > SILENT ) ? ANYOUT_DEF : ANYOUT_TST ;
+	if ( iter->mode >= DESTRIPE_MODE ) irim_sigma2log( logfile ) ;
+
+/*  prepare for the next iteration: remove adjust from exclude  */
+	irim_disjunct( adjust, exclude ) ; 
+
+}
+#<
+
+#>            irim_axis.c
+/* irim_axis.c
+
+           Copyright (c) 1991
+  Laboratory for Space Research Groningen 
+       Kapteyn Laboratory Groningen 
+           All Rights Reserved.
+
+Function:     irim_axis
+
+Purpose:      calculate new axis properties
+
+Category:     IRAS, private to program: IMAGE
+
+Author:       Do Kester		do@guspace.rug.nl
+
+Use:  
+void irim_axis( 
+	iter_type	*iter,
+	store_type	*store,
+	image_type	*image )
+
+The old values in iter->nr are replaced by the new ones.
+New values are made from iter->( sizes, maxiter, tune and nr.keer ).
+
+Updates:      09 Aug 1991: DK, Creation date
+
+Original:     IMAXIS
+	Structured and translated by ASSISTANT II Plus, v1.2
+*/
+
+#include "image.h"
+#include "imtypes.h"
+#include "imkeys.h"
+#include "userfio.h"
+#include "imdefs.h"
+
+#define MIN_BEAM	sqrt( 0.5 )	/* minimum beam size in pixels */
+#define EPSILON		1.0e-4		/* order of a microradian */
+
+void irim_axis( 
+	iter_type	*iter,
+	store_type	*store,
+	image_type	*image )
+{
+    int 		nitem, nr ; 
+    static int		deflev = DFLT_DEF ;
+
+
+    if ( iter->keer >= iter->nsizes ) {	/* ask new pixel size */
+	nr = iter->maxiter + 1 - iter->nsizes ;
+	cancel( PIXEL_KEY ) ;
+	nitem = userfangle( &(iter->sizes[iter->nsizes]), nr, deflev, PIXEL_KEY, 
+		PIXEL_MES "[last]" ) ;
+	if ( nitem ) {
+	    iter->nsizes += nitem ;
+	    image->pixsize = iter->sizes[iter->nsizes-1] ;
+	} else {
+	    iter->sizes[iter->nsizes] = iter->sizes[iter->nsizes - 1] ;
+	    (iter->nsizes)++ ;
+	    deflev = DFLT_HIDD ;	/* no answer: dont aks any more */
+	}
+    }
+
+    anyoutf( ANYOUT_TST, "iter : nsizes %d keer %d ", iter->nsizes, 
+	iter->keer ) ;
+    anyoutf( ANYOUT_TST, "iter : sizes %f %f %f %f %f ",
+        iter->sizes[0], iter->sizes[1], iter->sizes[2], iter->sizes[3],
+        iter->sizes[4] ) ;
+    anyoutf( ANYOUT_TST, "image: size %f beam %f", image->pixsize, 
+	image->beam );
+
+    irim_initstore( iter, image, store );
+
+/* calculate old refpix and pixsize
+   Note that 0.5 is added to the reference pixel to account for the 
+   fact that the true position of a pixel is located in its center. */
+
+    store->map.pixsize = iter->sizes[iter->keer] ;
+    store->map.axes[LX] = 
+		(int)( image->side[LX] / store->map.pixsize + 0.5 ) ;
+    store->map.axes[BY] = 
+		(int)( image->side[BY] / store->map.pixsize + 0.5 ) ;
+    store->map.refpix[LX] = ( image->side[LX] - image->prcenter[LX] ) /
+				( 2 * store->map.pixsize ) + 0.5 ;
+    store->map.refpix[BY] = ( image->side[BY] - image->prcenter[BY] ) /
+				( 2 * store->map.pixsize ) + 0.5 ;
+    store->map.squarebeam = ( image->beam < MIN_BEAM ) ;
+    store->map.sigma = DEFAULT_SIGMA ;
+
+    anyoutf( ANYOUT_TST, "store: pixsize %f axes %d %d refpix %f %f",
+	store->map.pixsize, store->map.axes[LX], store->map.axes[BY],
+	store->map.refpix[LX], store->map.refpix[BY] ) ;
+
+/*  decide on pointsource inclusion and number of destripe parameters  */
+    store->map.psinclusion = 
+		( fabs( store->map.pixsize - image->pixsize ) < EPSILON ) ; 
+
+    if ( iter->mode >= DESTRIPE_MODE ) {
+	if ( store->map.pixsize > 4 * image->pixsize ) 
+		iter->mode = ( iter->tune > 1 ) ? 1 : iter->tune ;
+	else if ( store->map.pixsize > 2 * image->pixsize ) 
+		iter->mode = ( iter->tune > 2 ) ? 2 : iter->tune ;
+	else iter->mode = iter->tune ;
+    }
+
+    anyoutf( ANYOUT_TST, "store: square %d psin %d iter->mode %d",
+	store->map.squarebeam, store->map.psinclusion, iter->mode ) ;
+}
+#<
+
+#>            irim_irds.c
+/* irim_irds.c
+
+           Copyright (c) 1991
+  Laboratory for Space Research Groningen 
+       Kapteyn Laboratory Groningen 
+           All Rights Reserved.
+
+Function:     irim_irds
+
+Purpose:      process an IRDS for program IMAGE
+
+Category:     IRAS, private to program: IMAGE
+
+Author:       Do Kester		do@guspace.rug.nl
+
+Use:  
+void irim_irds( 
+	int		logfile,
+	irds_type	*irds,
+	image_type	*image,
+	store_type	*old,
+	store_type	*new,
+	list_type	*list,
+	iter_type	*iter )
+
+      A list of detectors to be processed is made.
+      For each IRDS the header is read and the scan.detector
+      combinations that should be processed are sent to irim_snip.
+
+      When all is done,  a new map is written into store.
+
+Updates:      13 Aug 1991: DK, Creation date
+              10 Feb 1992: FL, IRDS's closed after processing
+              19 Mar 1992: HB, new interface to irds_enquire_snip
+	      23 Dec 1992: DK, free memory at the end.
+
+Original:     IMRUN2
+	Structured and translated by ASSISTANT II Plus, v1.2
+*/
+
+#include "image.h"
+#include "irscan.h"
+#include "imtypes.h"
+#include "imkeys.h"
+#include "irlist.h"
+#include "irim_pars.h"
+#include "userfio.h"
+#include "nelc.h"
+#include "imdefs.h"
+#include "gds_close.h"
+#include "ircc_bandnr.h"
+#include "ircc_obsmode.h"
+#include "irds_enquire.h"
+#include "irds_enquire_snip.h"
+#include "pgplot.h"
+
+#define	AOMODE		3		/* AO observation mode */
+#define SURVEY_SPEED    -0.06416666667  /* dgr/sec (= -3.85 arcmin/sec) */
+
+void irim_irds( 
+	int		logfile,
+	irds_type	*irds,
+	image_type	*image,
+	store_type	*old,
+	store_type	*new,
+	list_type	*list,
+	iter_type	*iter )
+{
+	char 		mess[81] ; 
+	int 		ng, global[MAXDET], na, actual[MAXDET] ; 
+	int 		k, i, kl, ao, allscans, doscan ;
+        fint            nirds, snipnr, band, error = 0 ;
+	fchar		IrdsName ;
+	static char	ob[41], inst[41], co[41], sc[41];
+	static fchar	object = {ob,40}, instrument = {inst,40} ;
+	static fchar	coor = {co,40}, scantype = {sc,40};
+	fint		naxis, axes[4], snips ;
+	fint		scancal, scandur, snipcal, snipdur, obs ;
+	double		center[2], size[2] ;
+	float		sigmap, epoch, psi, psirate, theta ;
+	static int	defdet[MAXBAND][MAXDET] = {
+	  23, 24, 25, 26, 27, 28, 29, 30, 47, 48, 49, 50, 51, 52, 53, 54, 
+    	  16, 18, 19, 21, 22, 39, 40, 41, 42, 43, 44, 45, 46,  0,  0,  0, 
+	   8,  9, 10, 11, 12, 13, 14, 15, 31, 32, 33, 34, 35, 37, 38,  0, 
+	   1,  2,  3,  4,  5,  6,  7, 55, 56, 57, 58, 59, 60, 61, 62,  0, 
+	  71, 72, 73, 74, 75,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0 } ; 
+	static int	ndef[MAXBAND] = { 16, 13, 15, 15, 5 }, first = TRUE ; 
+	static int	survey_rate[MAXBAND] = { 16, 16, 8, 4, 32 } ;
+	static scan_type	*scan ;
+	static fint		xyplot = 0 ;
+
+	if ( first ) { 
+	  SCAN_INIT( scan ) ; 
+	  (void) userfint( &xyplot, 1, DFLT_HIDD, XYPLOT_KEY, XYPLOT_MES ) ;
+	  first = FALSE ; 
+	}
+
+/*  set default values for the detectors  */
+	band = ircc_bandnr_c( image->inst ) ;
+	ng = ndef[band - 1] ; 
+	for ( k = 0 ; k < MAXDET ; k++ ) global[k] = defdet[band-1][k] ; 
+
+/*  search for globally excluded detectors in this iteration  */
+	scan->id.scannr = kl = 0 ; 
+	(void)irim_active( scan->id.scannr, list, &kl, global, &ng ) ; 
+	allscans = kl > 1 && ! list->complement ; 
+	anyoutf( logfile, "the following detectors are active " ); 
+	for( i = k = 0 ; i < ng ; i++, k += 4 ) 
+		sprintf( &mess[k], "%4d", global[i] ) ;
+	anyoutf( logfile, mess ); 
+	irim_wrlist( ANYOUT_TST, "Excluded snip det combinations", list ) ;
+
+/* initialize the detectors in irim_snip */
+	irim_initsnip( irds->name ) ;
+/*  process all irds's */
+	nirds = irds->nr ;
+	IrdsName.a = irds->name.a ;
+	IrdsName.l = MAXTXTLEN ;
+	while ( nirds-- ) {
+/*  get global information on the IRDS  */
+	    anyoutf( logfile, "  " ) ;
+	    (void)irim_getsigma( IrdsName, &(old->map.sigma) ) ;
+	    irds_enquire_c( IrdsName, object, instrument, &naxis, axes, 
+		center, size, coor, &epoch, &error ) ;
+	    anyoutf( logfile, "IRDS %.*s, object %.*s, instrument %.*s error %d",
+			(int)nelc_c( IrdsName ), IrdsName.a, 
+			(int)nelc_c( object ), object.a, 
+			(int)nelc_c( instrument ), instrument.a, error ) ;
+	    scan->id.rate = axes[0] ;
+	    scan->id.ndets = axes[2] ;
+	    snips = axes[3] ;
+	    scan->id.leg = 0 ;
+	    anyoutf( logfile, "snips = %d, ndets = %d, ticks = %d, rate = %d",
+	    	axes[3], axes[2], axes[1], axes[0] ) ;
+	    ao = ircc_obsmode_c( instrument ) == AOMODE ;
+/* process all snips in this irds */
+	    for ( snipnr = 1; snipnr <= snips ; snipnr++ ) {
+	      (scan->id.scannr)++ ;
+              irds_enquire_snip_c( IrdsName, &snipnr, &(scan->id.sop),
+			&obs, &(scan->id.att), scantype, 
+			&scancal, &scandur, &snipcal, &snipdur, &psi, 
+			&psirate, &theta, &error ) ;
+	      scan->id.datlen = snipdur * scan->id.rate ;
+/* calculate speed wrt survey speed */
+	      scan->id.speed = psirate * cos( (90-theta)*D2R ) / SURVEY_SPEED ;
+	      scan->id.speed *= ( survey_rate[band-1] / scan->id.rate ) ;
+/* write snip identification to logfile */
+              sprintf( mess, "scan nr.=%4d,  sop =%4d,  att =%4d",
+                        scan->id.scannr, scan->id.sop, scan->id.att ) ;
+              if ( ao ) sprintf( &mess[37], ",  leg =%4d", ++(scan->id.leg) ) ;
+              anyoutf( logfile, mess ) ;
+
+	      for ( k = 0 ; k < MAXDET ; k++ ) actual[k] = global[k] ;
+	      na = ng ;
+	      doscan = irim_active( scan->id.scannr, list, &kl, actual, &na ) ;
+anyoutf( ANYOUT_TST, "doscan = %d  allscans = %d", doscan, allscans ) ;
+	      doscan = doscan || allscans ;
+	      irim_snip( logfile, IrdsName, snipnr, old, new, 
+			image, scan, iter, actual, doscan ) ;
+	    }
+	    sigmap = irim_sigmap( ) ;
+	    if ( sigmap > 0 ) irim_putsigma( IrdsName, sigmap ) ;
+	    if ( iter->keer == iter->maxiter ) irim_finispars( IrdsName ) ;
+	    error = 0 ;
+	    gds_close_c( IrdsName, &error ) ;
+	    IrdsName.a += IrdsName.l ;
+	}
+	if ( iter->keer == xyplot ) pgend_c() ;		/* close xyplot */
+
+/*  make a new map  */
+	irim_makemap( new ) ; 
+
+        if ( iter->mode >= DESTRIPE_MODE ) {
+/* at least one destripe iteration has been done */
+            irim_detsigma2log( logfile ) ;
+            irim_initpars( ) ;
+        }
+
+}
+#<
+
+#>            irim_snip.c
+/* irim_snip.c
+
+           Copyright (c) 1991
+  Laboratory for Space Research Groningen 
+       Kapteyn Laboratory Groningen 
+           All Rights Reserved.
+
+Function:     irim_snip
+
+Purpose:      process one snip
+
+Category:     IRAS, private to program: IMAGE
+
+Author:       Do Kester		do@guspace.rug.nl
+
+Use:  
+void irim_snip( 
+	int		logfile, 
+	fchar		irds, 
+	store_type	*old, 
+	store_type	*new, 
+	scan_type	*scan, 
+	iter_type	*iter,
+	int		*actual,
+	int		doscan ) ;
+
+returns: 
+
+Updates:      13 Aug 1991: DK, Creation date
+
+*/
+#include "image.h"
+#include "irscan.h"
+#include "imtypes.h"
+#include "imkeys.h"
+#include "userfio.h"
+#include "gdsio.h"
+#include "gdsc_size.h"
+#include "imdefs.h"
+#include "irim_pars.h"
+#include "irco.h"
+
+/* add one for simplicity: do not use detector position 0 */
+static float    sigdet[MAXDET+1] =  { 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
+			1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0 } ;
+static float    sumsig[MAXDET+1] =  { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+			0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 } ;
+static float    sumdet[MAXDET+1] =  { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+			0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 } ;
+static fint	dets[MAXDET+1] ;
+
+void irim_snip(
+	int		logfile, 
+	fchar		irds, 
+	fint		snipnr,
+	store_type	*old, 
+	store_type	*new, 
+	image_type	*image,
+	scan_type	*scan, 
+	iter_type	*iter,
+	int		*actual,
+	int		doscan )
+{
+	int		i, k, overlap, det ;
+	fint		sdet ;
+	char		mess[81], platename[81] ;
+	float		epoch = 0 ;
+	long		range[2] ;
+        static char     namtun[4][10] = 
+		{"sigma-fit", "   offset", "    drift", "     gain"} ;
+	static fint	coornr, first = TRUE, xyplot = 0 ;
+
+	if ( first ) {
+	    (void) userfint( &xyplot, 1, DFLT_HIDD, XYPLOT_KEY, XYPLOT_MES ) ;
+/* read positional information */
+            strcpy( platename, PLATESYS ) ;
+            coornr = irco_number_c( tofchar( platename ), &epoch ) ;
+	    first = FALSE ;
+	}
+
+        strcpy( mess, " det samples  first-pixel   last-pixel     " ) ;
+        if ( iter->mode >= DESTRIPE_MODE ) {
+            for ( i = 0, k = 41 ; i <= iter->mode ; i++, k += 9 )
+                sprintf( &mess[k], "%s", namtun[i] );
+            }
+        anyoutf( logfile, mess ) ;
+
+	if ( doscan && irim_checkbphf( irds, snipnr ) ) {
+	    SAMPLE_INIT( scan->sample, scan->id.datlen ) ;
+/*  run the scan through the system  */
+	    for ( sdet = 1 ; sdet <= scan->id.ndets ; sdet++ ) {
+		det = dets[sdet] ;
+		i = 0 ; 
+		while ( i < MAXDET && actual[i] < det ) i++ ;
+		if ( det == actual[i]  ) {
+/*  get destripe parameters of the previous iteration  */
+		    scan->stripe.ncal = irim_getpars( irds, snipnr, sdet, 
+		    	scan->stripe.cal, MAXCAL, &(scan->stripe.scale) ) ; 
+		    scan->stripe.timref = 0.5 * scan->id.datlen /scan->id.rate ;
+		    scan->stripe.scale = MAX( scan->stripe.scale, 
+		    			      old->map.sigma ) ;
+		    scan->stripe.det = det ;
+/*  read the scan and set the flags */
+		    (void)irim_rdsnip( irds, snipnr, sdet, 
+				coornr, image->prid, scan ) ;
+		    irim_flags( image->inst, scan ) ;
+		    if ( iter->keer == xyplot ) irim_plotxy( new, scan ) ;
+		    if ( scan->stripe.scale < sigdet[i] )
+		    		scan->stripe.scale = sigdet[i] ;
+	            irim_sdet( logfile, old, new, scan, range, iter ) ; 
+		    overlap = range[LAST] - range[FIRST] ;
+	            sumsig[i] += scan->stripe.scale * overlap ; 
+	            sumdet[i] += overlap ;
+		    (void)irim_putpars( irds, snipnr, sdet, scan->stripe.cal, 
+		    		scan->stripe.ncal, scan->stripe.scale ) ; 
+	        }
+	    }
+	    SAMPLE_FREE( scan->sample ) ;
+	} else {
+	    anyoutf( logfile, "  scan is excluded from coaddition." ) ; 
+	}
+
+	return ;
+}
+
+/***************************************************************************/
+
+void irim_detsigma2log( 
+	int	logfile )
+{
+	int	idet ;	
+
+        anyoutf( logfile, "  detector   sigma" ) ;
+
+/*  find the standard deviation per detector  */
+        for ( idet = 1 ; idet <= MAXDET && dets[idet] ; idet++ ){
+            if ( sumdet[idet] > 1.0 && sumsig[idet] > 1.0 ) {
+                sigdet[idet] = sumsig[idet] / sumdet[idet] ;
+                anyoutf( logfile, "%7d   %8.3f", dets[idet], sigdet[idet] ) ;
+            }
+            sumdet[idet] = sumsig[idet] = 0.0 ;
+        }
+
+	return ;
+}
+
+/***************************************************************************/
+
+/* make a list of detector numbers of the irds */
+void irim_initsnip( 
+	fchar		irds )
+{
+	fint		ndet, error = 0, idet, axis = 3, nr = 1 ;
+
+	dets[0] = -1 ;		/* unused and wrong */
+
+	ndet = gdsc_size_c( irds, &axis, &error ) ;
+	for ( idet = 1 ; idet <= ndet ; idet++ ) {
+	    GDSD_GRINT( irds, "DETNO", &axis, &idet, nr, &dets[idet], &error ) ;
+	}
+	for ( ; idet <= MAXDET ; idet++ ) dets[idet] = 0 ;
+}
+	
+#<
+
+#>            irim_index.c
+/* irim_index.c
+
+           Copyright (c) 1991
+  Laboratory for Space Research Groningen 
+       Kapteyn Laboratory Groningen 
+           All Rights Reserved.
+
+Function:     irim_index
+
+Purpose:      find array of indices in patched map
+
+Category:     IRAS, private to program: IMAGE
+
+Author:       Do Kester		do@guspace.rug.nl
+
+Use:  
+void irim_index( 
+      input   x,  y    physical indices of the pixel in unpatched map
+                      x is the fastest moving ( axis1 )
+              ni      number of indices to be calculated
+      i / o     store   buffer of patches ;  last one is replaced if x, y
+                      points to a patch that is not in store
+      output  index   sequential index in map
+
+USE   Suppose a map of n by n,  NPIX * NPATCH  -  NPIX  <  n  <=  NPIX * NPATCH, 
+      pixels is stored in a patched way as direct access records
+      on UNITS ( if  >  0 ) and ( partly ) in STORE( * ) == ( npix, npix, 1, nptr ).
+      For a pixel with indices ( X, Y ),  both  <=  n,  the function returns
+      an index to the position in STORE where that pixel is located.
+      X is the fastest index ( axis1 ) ;  Y the second ( axis2 ).
+      PATCH is the sequential number of the patch where the pixel is
+      on in store. If the patch is not in store it is read from UNITS
+      and replaces the patch which hasnt been addressed longest.
+      The patch to be replaced is written to UNITS.
+      LOWX and LOWY are the lower corner of that patch.
+      If the pixel is on the same patch as the previous one an index
+      is returned fast: no calculation of PATCH,  LOWX and LOWY.
+
+      The commonblock  / store /  transfers info from caller.
+
+      NB1. to address the other layers of map: add one or two times
+           NPIX2 to imindx.
+
+returns: 
+
+Updates:      23 Aug 1991: DK, Creation date
+
+Original:     irim_index
+	Structured and translated by ASSISTANT II Plus, v1.2
+*/
+
+#include "image.h"
+#include "imtypes.h"
+#include "userfio.h"
+#include "assert.h"
+#include "imdefs.h"
+
+#define TUSSEN( i, j, k )  (int)( ( (i) <= (j) ) && ( (j) < (k) ) )
+
+void irim_index( 
+	pixel_type	*pixel,
+	store_type 	*store )
+{
+  long 		i, j, ni, *px, *py, *pindex ; 
+
+  long 	cumpat = 0 ; 
+  long 	lowx = 999999, lowy = 999999 ; 
+
+  px = pixel->x ;
+  py = pixel->y ;
+  pindex = pixel->index ;
+  ni = pixel->length ;
+  while ( ni-- ){
+    i = *px - lowx ; 
+    j = *py - lowy ; 
+    if ( !( TUSSEN( 0, i, store->npix ) && 
+	    TUSSEN( 0, j, store->npix ) ) ) {
+/*  it is not on the present patch ;  find new patch and lower corner  */
+      lowx = *px / store->npix ; 
+      lowy = *py / store->npix ; 
+      cumpat = ( lowy * store->npatch[0] + lowx ) * store->npl ; 
+      lowx *= store->npix ; 
+      lowy *= store->npix ; 
+      i = *px - lowx ; 
+      j = *py - lowy ; 
+    }
+/*  calculate the (one-dimensional) index in store  */
+    *pindex = cumpat + j * store->npix + i ; 
+    if ( ! ( *px >= 0     && *px < store->map.axes[LX] &&
+         *py >= 0     && *py < store->map.axes[BY] &&
+         *pindex >= 0 && *pindex < store->length ) ) {
+    anyoutf( 0, "px = %10d py = %10d  pindex = %10d", *px, *py, *pindex );
+    anyoutf( 0, "LX = %10d BY = %10d  length = %10d", store->map.axes[LX], 
+	store->map.axes[BY], store->length );
+    errorf( FATAL, "out of range on pixel %d", pixel->length - ni );
+    }
+    px++ ; py++ ; pindex++ ;
+  }
+
+}
+#<
+
+#>            irim_sdet.c
+/* irim_sdet.c
+
+           Copyright (c) 1991
+  Laboratory for Space Research Groningen 
+       Kapteyn Laboratory Groningen 
+           All Rights Reserved.
+
+Function:     irim_sdet
+
+Purpose:      process one detectorsnip for program IMAGE
+
+Category:     IRAS, private to program: IMAGE
+
+Author:       Do Kester		do@guspace.rug.nl
+
+Use:  
+void irim_sdet( 
+	char	*ARG1,		IN :		
+	float	*ARG2,		I/O:		
+	fint	*ARG3 )		OUT:		
+
+returns: 
+
+Updates:      13 Aug 1991: DK, Creation date
+
+Original:     irim_snip
+	Structured and translated by ASSISTANT II Plus, v1.2
+*/
+
+#include "image.h"
+#include "irscan.h"
+#include "imtypes.h"
+#include "userfio.h"
+#include "imdefs.h"
+
+#define EPSIL	0.01
+
+void irim_sdet(
+	int		logfile,
+	store_type	*old, 
+	store_type	*new,
+	scan_type	*scan,
+	long		*range,
+	iter_type	*iter )
+{
+	char 			mes1[40], mes2[80] ; 
+	float 			gain ; 
+	int			i, deflag, nc = 1 ; 
+	static pixel_type	*pixel ;
+	static int		first = TRUE ;
+
+	if ( first ) {
+	    PIXEL_INIT( pixel ) ;
+	    deflag = SOURCEFLAG | TAILFLAG ;
+	    pixel->flagmask = irim_flagmask( deflag ) ;
+	    first = FALSE ;
+	}
+
+	range[FIRST] = 0 ; 
+	range[LAST]  = scan->id.datlen ; 
+
+	mes1[0] = '\0' ;
+	if ( iter->mode >= DESTRIPE_MODE ) {
+	    nc = iter->mode ; 
+/*  update the calibration constants  */
+	    nc = irim_interpol( old, scan, pixel, nc, iter ) ; 
+	    if ( scan->stripe.scale >= DEFAULT_SIGMA - 1 ) range[LAST] = 0 ;
+	    sprintf( mes1, "%9.3f", scan->stripe.scale );
+	    gain = 1.0 / ( 1.0 + scan->stripe.cal[GAIN] ) ; 
+	    for ( i = BASE ; i < nc ; i++ ) {
+	      scan->stripe.cal[i] *= gain ; 
+	      sprintf( &mes1[9+i*9], "%9.3f", scan->stripe.cal[i] );
+	    }
+	    scan->stripe.ncal = nc ;
+	} else scan->stripe.ncal = -1 ;
+
+	if ( range[FIRST] < range[LAST] ) {
+	    if ( new->map.squarebeam && new->map.psinclusion ) 
+	         irim_squarebeam( old, new, scan, pixel, range ) ; 
+	    else irim_roundbeam(  old, new, scan, pixel, range ) ; 
+	}
+
+/*  write message to logfile  */
+	if ( range[FIRST] >= range[LAST] ) {
+	    scan->stripe.ncal = -1 ;
+	    anyoutf( logfile, "%4d    no overlap ", scan->stripe.det ) ;
+	} else {
+/*  find the first and last ( x, y ) positions  */
+	    sprintf( mes2, "%4d%6d%8.1f%6.1f%8.1f%6.1f  ", 
+	      scan->stripe.det, range[LAST] - range[FIRST],
+      scan->sample.x[range[FIRST]] / new->map.pixsize + new->map.refpix[LX], 
+      scan->sample.y[range[FIRST]] / new->map.pixsize + new->map.refpix[BY], 
+      scan->sample.x[range[LAST]]  / new->map.pixsize + new->map.refpix[LX], 
+      scan->sample.y[range[LAST]]  / new->map.pixsize + new->map.refpix[BY] ) ; 
+	    anyoutf( logfile, strcat( mes2, mes1 ) ) ; 
+	}
+
+}
+#<
+
+#>            irim_squarebeam.c
+/* irim_squarebeam.c
+
+           Copyright (c) 1991
+  Laboratory for Space Research Groningen 
+       Kapteyn Laboratory Groningen 
+           All Rights Reserved.
+
+Function:     irim_squarebeam
+
+Purpose:      weighted add ( part of ) a scan to part of an image
+
+Category:     IRAS, private to program: IMAGE
+
+Author:       Do Kester		do@guspace.rug.nl
+
+Use:  
+void irim_squarebeam( 
+	store_type	*old,
+	store_type	*new,
+	scan_type	*scan,
+	pixel_type	*pixel,
+	long		*range )
+
+
+Updates:      26 Aug 1991: DK, Creation date
+
+Original:     irim_squarebeam
+	Structured and translated by ASSISTANT II Plus, v1.2
+*/
+
+#include "image.h"
+#include "irscan.h"
+#include "imtypes.h"
+#include "userfio.h"
+#include "imdefs.h"
+#include "ircc_mask.h"
+
+#define NCAL   3
+
+void irim_squarebeam( 
+	store_type	*old,
+	store_type	*new,
+	scan_type	*scan,
+	pixel_type	*pixel,
+	long		*range )
+{
+	float 		insc, cros, inbeam, crbeam, dd, xx, yy, base, time, dt;
+	float		deltax, deltay, stxs, stxc ; 
+	float 		xsinph, xcosph, ysinph, ycosph, *pd, *pc, *ps, wgt ; 
+	int 		*pf ; 
+	long 		i, j, k, n, ilow, jlow, ihig, jhig, oldn ;
+	long		*pix, *pjy ;
+	float		*pkd ;
+	long		remain, mi, pixperbeam ; 
+	double		*px, *py ;
+
+/* get detector sizes in pixel dimensions */
+	ircc_mask_c( &(scan->stripe.det), &insc, &cros, &inbeam, &crbeam ) ; 
+	inbeam /= ( new->map.pixsize * 60 * 2 ) ; 
+	crbeam /= ( new->map.pixsize * 60 * 2 ) ; 
+	pixperbeam = (long)( 4 * ( inbeam + 1.0 ) * ( crbeam + 1.0 ) ) ;
+	mi = scan->id.datlen * pixperbeam ;
+	if ( ! irim_pixel_alloc( pixel, mi ) ) errorf( FATAL,
+		"irim_squarebeam: out of memory" ) ;
+
+        pix = pixel->x ;
+        pjy = pixel->y ;
+        pkd = pixel->dat ;
+	remain = mi - 2 * pixperbeam ; 
+
+        px = scan->sample.x ;
+        py = scan->sample.y ;
+        pd = scan->sample.dat ;
+        pf = scan->sample.flag ;
+	ps = scan->sample.ce ;		/* the detector is perpendicular */
+	pc = scan->sample.se ;		/*   to the twist angle          */
+
+	time = - scan->stripe.timref ;
+	dt = 1.0 / scan->id.rate ;
+        wgt = 1.0 / scan->stripe.scale ;
+        n = oldn = 0 ;
+        for ( k = 0 ; k < scan->id.datlen ; k++ ) {
+/*  fill arrays ix,  jy and kd with map position and sample value */
+            if ( n > remain ) {                 /* enough room left ? */
+                errorf( SERIOUS, "k = %d  n = %d  mi = %d  remain = %d",
+                        k, n, mi, remain ) ;
+                break ;
+            }
+
+            if ( *pf == OKFLAG || ( new->map.psinclusion && 
+                                  ! ( *pf & ~pixel->flagmask ) ) ) {
+	        base = scan->stripe.cal[BASE] +
+			time * scan->stripe.cal[DRIFT] ;
+            	dd = *pd * ( 1 - scan->stripe.cal[GAIN] ) - base ;
+	        deltax = inbeam * fabs( *pc ) + crbeam * fabs( *ps ) + 2 ; 
+	        deltay = inbeam * fabs( *ps ) + crbeam * fabs( *pc ) + 2 ; 
+                xx = *px / new->map.pixsize + new->map.refpix[LX] ;
+                yy = *py / new->map.pixsize + new->map.refpix[BY] ;
+/*  find low and high boundaries in the pixel grid  */
+	        ilow = MAX( (long)( xx - deltax ), 0 ) ; 
+	        ihig = MIN( (long)( xx + deltax ), new->map.axes[LX] ) ; 
+	        jlow = MAX( (long)( yy - deltay ), 0 ) ; 
+	        jhig = MIN( (long)( yy + deltay ), new->map.axes[BY] ) ; 
+/*  determine starting values  */
+	        stxs = ( ilow - xx ) * (*ps) ; 
+	        stxc = ( ilow - xx ) * (*pc) ; 
+	        ysinph = ( jlow - yy ) * (*ps) ; 
+	        ycosph = ( jlow - yy ) * (*pc) ; 
+	        for ( j = jlow ; j < jhig ; j++ ){
+	            xsinph = stxs ; 
+	            xcosph = stxc ; 
+	            for ( i = ilow ; i < ihig ; i++ ){
+	                if ( ( fabs( xsinph - ycosph ) <= crbeam ) && 
+		             ( fabs( xcosph + ysinph ) <= inbeam ) ) {
+/*  store the indices  */
+	                    *pix++ = i ;
+	                    *pjy++ = j ;
+	                    *pkd++ = dd ;
+	                    n++ ; 
+	                }
+	                xsinph += *ps ;
+	                xcosph += *pc ;
+	            }
+	            ysinph += *ps ; 
+	            ycosph += *pc ; 
+	        }
+	    }
+/*  determine last-point-before and first-point-after the crossing  */
+	    if ( n == 0 ) {
+	        range[FIRST] = range[LAST] = k ;
+	    } else if ( n > oldn ) {
+	        range[LAST] = k ;
+	        oldn = n ;
+	    }
+	    pd++ ; pf++ ; px++ ; py++ ; ps++ ; pc++ ;
+	    time += dt ;
+	}
+
+	statusf( "Scan %3d  det %2d  Number of pixels affected %d", 
+		scan->id.scannr, scan->stripe.det, n ) ;
+
+/*  coadd the samples to the pixels  */
+	pixel->length = n ;
+	irim_addmoments( pixel, wgt, old, new ) ; 
+
+	return ;
+
+}
+#<
+
+#>            irim_addmoments.c
+/* irim_addmoments.c
+
+           Copyright (c) 1991
+  Laboratory for Space Research Groningen 
+       Kapteyn Laboratory Groningen 
+           All Rights Reserved.
+
+Function:     irim_addmoments
+
+Purpose:      add the moments of data points to pixels in store
+
+Category:     IRAS, private to program: IMAGE
+
+Author:       Do Kester		do@guspace.rug.nl
+
+Use:  
+void irim_addmoments( 
+	pixel_type	*pixel,
+	float 		wgt, 
+	store_type	*old, 
+	store_type	*new )
+
+Description:
+	If median is true and a standard deviation layer is present,
+      	the median filter is applied.
+      	The moments of the data point ( wgt, wgt*dat, wgt*dat**2 )
+      	are added to resp. new->store[indx],  new->store[indx + npp[1]]
+       	and new->store[indx + npp[2]].
+      	If layer equals 2 only two moments are added into store.
+
+Updates:      27 Aug 1991: DK, Creation date
+
+Original:     IMCOAD
+	Structured and translated by ASSISTANT II Plus, v1.2
+*/
+
+#include "image.h"
+#include "imtypes.h"
+#include "userfio.h"
+#include "imdefs.h"
+
+void irim_addmoments( 
+	pixel_type	*pixel,
+	float 		wgt, 
+	store_type	*old, 
+	store_type	*new )
+{
+	float 		*ps, *pd, new2old ; 
+	int 		stdev, median ; 
+	long 		*pin, *px, *py, ni ;
+
+	px = pixel->x ;
+	py = pixel->y ;
+	pd = pixel->dat ;
+	pin = pixel->index ;
+	ni = pixel->length ;
+
+/*  find the indices of the pixels  */
+	irim_index( pixel, new ) ; 
+
+/*  prepare for median filter  */
+	stdev = new->nlayer == STD_LAYER ; 
+	median = new->map.psinclusion && stdev ; 
+	if ( median && old->nlayer == STD_LAYER ) {
+/*  check if old and new maps are on the same scale  */
+	    if ( old->map.axes[0] != new->map.axes[0] ) 
+		 new2old = new->map.pixsize / old->map.pixsize ;
+	    else new2old = -1.0 ;	/* signals same size maps */
+/*  correct the samples values according to the old map */
+	    irim_median( pixel, old, new2old ) ;
+	}
+	while ( ni-- ) {
+/*  coadd/subtract into the proper position in store  */
+		assert( *pin >= 0 && *pin + new->npp[M1] < new->length &&
+			( ! stdev || *pin + new->npp[M2] < new->length ) );
+		ps = new->store + *pin ;
+		*(ps + new->npp[M0]) += wgt ; 
+		*(ps + new->npp[M1]) += wgt * *pd ; 
+		if ( stdev ) *(ps + new->npp[M2]) += wgt * (*pd) * (*pd) ;
+		pd++ ; pin++ ; px++ ; py++ ;
+	}
+
+	return ;
+}
+#<
+
+#>            irim_makemap.c
+/* irim_makemap.c
+
+           Copyright (c) 1991
+  Laboratory for Space Research Groningen 
+       Kapteyn Laboratory Groningen 
+           All Rights Reserved.
+
+Function:     irim_makemap
+
+Purpose:      construct a map from the moments
+
+Category:     IRAS, private to program: IMAGE
+
+Author:       Do Kester		do@guspace.rug.nl
+
+Use:  
+void irim_makemap( 
+	char	*ARG1,		IN :		
+	float	*ARG2,		I/O:		
+	fint	*ARG3 )		OUT:		
+
+USE  IMAPMK calculates for each pixel the mean intensity and the
+     standard deviation. If the weigth of a pixel happens to be 0
+     i.e. there were no overlapping samples for the pixel,  then
+     the intensity and standard deviation will be set to 0.
+     The intensity is put in plane 2 and the standard deviation in
+     plane 3
+
+Updates:      04 Sep 1991: DK, Creation date
+
+Original:     IMAPMK
+	Structured and translated by ASSISTANT II Plus, v1.2
+*/
+
+#include "image.h"
+#include "imtypes.h"
+#include "userfio.h"
+#include "setfblank.h"
+#include "imdefs.h"
+
+#define EPSILON     	1.0E-6
+#define	LARGE		1.0E10
+
+static	float	dmin[3], dmax[3] ;
+static  fint	stdev ;
+
+void irim_makemap( 
+	store_type	*store )
+{
+    int     i, k, ii, kk, npix2, next ;
+    float   *pcov, *pint, *pstd, blank, r ;
+
+    pcov = store->store ;
+    pint = store->store + store->npp[INT_MAP] ;
+    pstd = store->store + store->npp[STD_MAP] ;
+    stdev = ( store->nlayer == STD_LAYER ) ;
+    npix2 = store->npix * store->npix ;
+    next = store->npl - npix2 ;
+    setfblank_c( &blank ) ;
+    dmin[0] = dmin[1] = dmin[2] = LARGE ;
+    dmax[0] = dmax[1] = dmax[2] =-LARGE ;
+
+    for ( i = 0 ; i < store->nptr ; i++ ) {
+        for ( k = 0 ; k < npix2 ; k++ ) {
+	    kk = ( i % 2 ) * store->npix + k % store->npix ; 
+	    ii = ( i / 2 ) * store->npix + k / store->npix ;
+	    if ( kk < store->map.axes[0] && ii < store->map.axes[1] ) {
+	        dmin[0] = MIN( dmin[0], *pcov ) ;
+	        dmax[0] = MAX( dmax[0], *pcov ) ;
+            }
+	    if ( *pcov > EPSILON ) {
+                *pint /= *pcov ;
+		dmin[1] = MIN( dmin[1], *pint ) ;
+		dmax[1] = MAX( dmax[1], *pint ) ;
+		if ( stdev ) {
+		    if ( ( r = *pstd / *pcov - *pint * *pint ) > 0 ) {
+		    	*pstd = sqrt( r ) ; 
+			dmin[2] = MIN( dmin[2], *pstd ) ;
+			dmax[2] = MAX( dmax[2], *pstd ) ;
+		    } else *pstd = EPSILON ; 
+		}
+	    } else {
+	        *pint = blank ;
+	        if ( stdev ) *pstd = blank ;
+	    }
+	    pcov++ ; pint++ ; pstd++ ;
+	}
+	pcov += next ;
+	pint += next ;
+	pstd += next ;
+    }
+}
+
+void irim_minmax( 
+	fint		logfile,
+	outmap_type	*out )
+{
+    int		k, kp ;
+    static char	*name[] = { "coverage ", "intensity", "std. dev." } ;
+
+    for ( k = 0 ; k < out->np ; k++ ) {
+	kp = out->planes[k] ;
+	anyoutf( logfile, 
+	"Plane %d contains the %s map with data min %10.3f and max %10.3f",
+	k + 1, name[kp], dmin[kp], dmax[kp] ) ;
+    }
+}
+#<
+
+#>            irim_stripe.c
+/* irim_stripe.c
+
+           Copyright (c) 1991
+  Laboratory for Space Research Groningen 
+       Kapteyn Laboratory Groningen 
+           All Rights Reserved.
+
+Function:     irim_stripe
+
+Purpose:      make and solve a matrix of tuning values
+
+Category:     IRAS, private to program: IMAGE
+
+Author:       Do Kester		do@guspace.rug.nl
+
+Use:  
+void irim_stripe( 
+	char	*ARG1,		IN :		
+	float	*ARG2,		I/O:		
+	fint	*ARG3 )		OUT:		
+
+USE   Each call to IMCMAT adds NP values to the internal matrix MAT, 
+      weighted with a Tukey - weight.
+
+      One last call to IMCNEW will solve the internal matrix MAT
+      for as many parameters ( max = tune ) as there is significance
+      present in MAT.
+      The significance is determined by an F-test.
+      Acton,  Analysis of straight line data,  p 211.
+      The matrix is reset to all zeros.
+
+      The variances of all snips are summed. A call to IMCMAP
+      yields the standard deviation over all snips.
+
+Updates:      03 Sep 1991: DK, Creation date
+	      15 Nov 1994: DK, use F-test
+
+Original:     IMCMAT
+	Structured and translated by ASSISTANT II Plus, v1.2
+*/
+
+#include "image.h"
+#include "imtypes.h"
+#include "userfio.h"
+#include "imdefs.h"
+
+#define EPSILON   	1.0E-6
+#define TUKEY   	7.0
+
+static float    summap = 0.0, sm = 0.0 ; 
+static float    sumsig = 0.0, ss = 0.0 ; 
+
+int irim_stripe( 
+	float 		*cal,
+	int		tune, 
+        float   	*scale,
+	msx_type	*msx )
+{
+    float       par[4] = { 0.0, 0.0, 0.0, 0.0 } ;
+    float       wpar[4] = { 0.0, 0.0, 0.0, 0.0 } ;
+    float	limit, fq, f0, tw, sumtw = 0.0 ; 
+    float       *pd, *pt, *pm, diff, caldif, tuksc ;
+    int         *pf ;
+    long	nitem, i, j, k, n, np = 0 ; 
+    float       mat[4][4] = { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 
+	                      0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 } ; 
+    static int	first = TRUE ;
+
+    par[0]  = 1.0 ;					/* base		*/
+    pt = msx->time ; pm = msx->model ; pd = msx->dat ; pf = msx->flag ;
+    tuksc = 1.0 / ( *scale * TUKEY ) ;
+    n = msx->length ;
+    while ( n-- ) {
+        if ( *pf++ ) {
+            pm++ ; pt++ ; pd++ ;
+            continue ;
+        }
+/*  make tukey weight  */
+        diff = *pd - *pm ;
+	caldif = *pd * ( 1 - cal[GAIN] ) - cal[BASE] - cal[DRIFT] * *pt - *pm ;
+        tw = fabs( caldif * tuksc ) ; 
+	tw = MIN( tw, 1.0 ) ;	tw *= tw ;
+	tw -= 1 ;	        tw *= tw ;
+        wpar[0]    = tw ;				/* base		*/
+        wpar[1]    = tw * ( par[1]    = *pt ) ; 	/* drift	*/
+        wpar[2]    = tw * ( par[2]    = *pm ) ; 	/* gain		*/
+        wpar[tune] = tw * ( par[tune] = diff ) ;	/* sigma	*/
+        switch ( tune ) {
+        case 3 : 
+            mat[3][3] += wpar[3] * par[3] ;
+            mat[3][2] += wpar[3] * par[2] ;
+            mat[3][1] += wpar[3] * par[1] ;
+            mat[3][0] += wpar[3] * par[0] ;
+	case 2 :
+	    mat[2][2] += wpar[2] * par[2] ;
+	    mat[2][1] += wpar[2] * par[1] ;
+	    mat[2][0] += wpar[2] * par[0] ;
+	case 1 :
+	    mat[1][1] += wpar[1] * par[1] ;
+	    mat[1][0] += wpar[1] * par[0] ;
+	case 0 :
+	    mat[0][0] += wpar[0] * par[0] ;
+	    sumtw += tw ;
+	    break ;
+	default :
+	    errorf( WARNING, "Unknown tune parameter: %d", tune ) ;
+	}
+	pt++ ; pm++ ; pd++ ; np++ ;
+    }
+    if ( np <= 1 ) return ( 0 ) ;
+
+if ( first || np == 2 ) {
+anyoutf( ANYOUT_TST, "length = %d  scale = %f", msx->length, *scale );
+pt = msx->time ; pm = msx->model ; pd = msx->dat ; pf = msx->flag ;
+n = msx->length ;
+while ( n-- ) anyoutf( ANYOUT_TST, "%10.4f %10.4f %10.4f %10d",
+	*pt++, *pm++, *pd++, *pf++ );
+anyoutf( ANYOUT_TST, "mat = %f %f %f %f",mat[0][0],mat[0][1],mat[0][2],mat[0][3] );
+anyoutf( ANYOUT_TST, "      %f %f %f %f",mat[1][0],mat[1][1],mat[1][2],mat[1][3] );
+anyoutf( ANYOUT_TST, "      %f %f %f %f",mat[2][0],mat[2][1],mat[2][2],mat[2][3] );
+anyoutf( ANYOUT_TST, "      %f %f %f %f",mat[3][0],mat[3][1],mat[3][2],mat[3][3] );
+}
+    
+    if ( sumtw  > EPSILON ) {
+/*  fill the underside of the matrix  */
+        for ( i = 0 ; i <= tune ; i++ )
+            for ( j = i + 1 ; j <= tune ; j++ ) mat[i][j] = mat[j][i] ; 
+
+/* perform crout's method */
+        for ( i = 0 ; i <= tune ; i++ )
+            for ( j = i + 1 ; j <= tune ; j++ )
+                if ( fabs( mat[i][i]  ) > EPSILON ) {
+                    mat[i][j] = mat[j][i] / mat[i][i] ; 
+                    for ( k = j ; k <= tune ; k++ ) 
+                        mat[k][j] -= mat[k][i] * mat[i][j] ; 
+                } else {
+                    errorf( SERIOUS, "Crout's method fails in irim_stripe" ) ;
+                    return 0 ;
+                } 
+
+if ( first || np == 2 ) {
+anyoutf( ANYOUT_TST, "mat = %f %f %f %f",mat[0][0],mat[0][1],mat[0][2],mat[0][3] );
+anyoutf( ANYOUT_TST, "      %f %f %f %f",mat[1][0],mat[1][1],mat[1][2],mat[1][3] );
+anyoutf( ANYOUT_TST, "      %f %f %f %f",mat[2][0],mat[2][1],mat[2][2],mat[2][3] );
+anyoutf( ANYOUT_TST, "      %f %f %f %f",mat[3][0],mat[3][1],mat[3][2],mat[3][3] );
+}
+/*  perform F-test for significance of new calibration values.  */
+        fq = mat[tune][tune] ; 
+	j = tune - 1 ;
+/* avoid more parameters than datapoints or negative chi-sq */
+	while ( ( ( np <= j ) || ( fq < EPSILON ) ) && ( j >= 0 ) ) {
+		fq += mat[tune][j] * mat[j][tune] ;
+		j-- ;
+	}
+	if ( fq < EPSILON ) return( 0 ) ;
+
+        limit = 0.05 ; 
+        nitem = userfreal( &limit, 1, DFLT_HIDD, "FPROB=", 
+        	"Probability for F-test in destriping [%4.2f]", limit ) ;
+	f0 = fq ;
+        while ( j >= 0  &&  f_test( f0, fq + mat[tune][j] * mat[j][tune], 
+        			 np - tune, np - j ) > limit ) {
+            fq += mat[tune][j] * mat[j][tune] ; 
+            j-- ;
+        }
+
+if ( first || np == 2 ) {
+anyoutf( ANYOUT_TST, "fq = %f sumtw = %f j = %d np = %d", fq, sumtw, j, np );
+anyoutf( ANYOUT_TST, "tune = %d scale = %f cal = %f %f %f",tune,*scale,
+cal[0], cal[1], cal[2] ); 
+first = FALSE ; }
+
+/*  there are new calibration values found for cal[k], k = 0, j */
+        for ( k = j ; k >= 0 ; k-- ){
+            cal[k] = mat[k][tune] ; 
+            for ( i = k + 1 ; i < tune ; i++ ) cal[k] -= mat[k][i] * cal[i] ; 
+        }
+        tune = j + 1 ; 
+        *scale = sqrt( fq / sumtw ) ; 
+        summap += sumtw ;
+        sumsig += fq ; 
+    } else {
+        tune = 0 ; 
+    }
+/*  set the remaining calibration values to zero  */
+    for ( i = tune ; i < MAXCAL ; i++ ) cal[i] = 0 ; 
+
+    return( tune ) ; 
+
+}
+/****************************************************************************/
+
+/* determine standard deviation per irds */
+
+float   irim_sigmap( )
+{
+    float       s ;
+
+    if ( summap > EPSILON ) {
+        s = sqrt( sumsig / summap ) ;
+	anyoutf( ANYOUT_TST, "sigmap = %f  sumsig = %f  summap = %f",
+		s, sumsig, summap ) ;
+    } else {
+        s = -1 ;
+    }
+    sm += summap ;
+    ss += sumsig ;
+    summap = 0.0 ;
+    sumsig = 0.0 ;
+
+    return( s ) ;
+}
+/****************************************************************************/
+
+/* determine overall standard deviation */
+
+void irim_sigma2log( 
+	int	logfile )
+{
+    if ( sm > EPSILON ) {
+	anyoutf( logfile, 
+		"The overall standard deviation of the map is %12.4g", 
+		sqrt( ss / sm ) ) ;
+    } else {
+        errorf( SERIOUS, "No overlap at all" ) ;
+    }
+    sm = 0.0 ;
+    ss = 0.0 ;
+
+    return ;
+}
+
+#<
+
+#>            irim_wrmap.c
+/* irim_wrmap.c
+
+           Copyright (c) 1991
+  Laboratory for Space Research Groningen 
+       Kapteyn Laboratory Groningen 
+           All Rights Reserved.
+
+Function:     irim_wrmap
+
+Purpose:      write a fits file for a map from image
+
+Category:     IRAS, private to program: IMAGE
+
+Author:       Do Kester		do@guspace.rug.nl
+
+Use:  
+void irim_wrmap( 
+	char	*ARG1,		IN :		
+	float	*ARG2,		I/O:		
+	fint	*ARG3 )		OUT:		
+
+returns: 
+
+Updates:      04 Sep 1991: DK, Creation date
+
+Original:     IMWRMP
+	Structured and translated by ASSISTANT II Plus, v1.2
+*/
+
+#include "image.h"
+#include "imtypes.h"
+#include "userfio.h"
+#include "gdsio.h"
+#include "nelc.h"
+#include "irco.h"
+#include "gdsc_word.h"
+#include "gds_exist.h"
+#include "gds_delete.h"
+#include "imdefs.h"
+
+#define EPSIL   1.0E-8
+
+void     irco_praxname_c( fint*, fint*, fchar, fchar ) ;
+
+void irim_wrmap( 
+	fint		logfile, 
+	fchar		irds,
+        store_type      *store, 
+        image_type      *image,
+	iter_type       *iter,
+	outmap_type	*out )
+{
+    double		rf, cdelt, origas, crvaldel = 1.0, depoch ; 
+    static char 	streep[81] = 
+      {"*****************************************************************"} ; 
+    static int 		first = TRUE ;
+    fint        	status = 0, kmap = 0, level = TOPLEVEL ;
+    static fchar       	bunit, origin, telescope, mapset ;
+    static fchar	lname, bname, coname, prname ;
+    static float	beam, epoch ;
+    fint		k, ax, plevel, nplanes = 1, p_as = 3 ;
+
+    if ( first ) {
+        FCHAR_INIT( mapset, 80 ) ;  FCHAR_INIT( bunit, 30 ) ;
+        FCHAR_INIT( origin, 30 ) ;  FCHAR_INIT( telescope, 30 ) ;
+        FCHAR_INIT( lname, 30 ) ;   FCHAR_INIT( bname, 30 ) ;
+        FCHAR_INIT( coname, 30 ) ;  FCHAR_INIT( prname, 30 ) ;
+        GDSD_RCHAR( irds, "BUNIT", level, bunit, &status ) ;
+        GDSD_RCHAR( irds, "ORIGIN", level, origin, &status ) ;
+        GDSD_RCHAR( irds, "TELESCOPE", level, telescope, &status ) ;
+        irco_praxname_c( &(image->crid), &(image->prid), lname, bname ) ;
+        irco_prname_c( prname, &(image->prid) ) ;
+        irco_namepoch_c( &(image->crid), coname, &epoch ) ;
+        first = FALSE ; 
+    }
+
+    while ( TRUE ) {  
+        if ( kmap == out->nl ) return ;
+        if ( out->list[kmap] == iter->keer ) { 
+/*  write the map if it is requested  */
+            if ( iter->keer != iter->maxiter ) sprintf( mapset.a, "%.*s_%d", 
+	            nelc_c( out->name ), out->name.a, iter->keer ) ;
+            else mapset.a = out->name.a ;
+            anyoutf( logfile, streep ) ; 
+            anyoutf( logfile, "the resulting map is written into set :" ) ; 
+            anyoutf( logfile, "    %.*s", nelc_c( mapset ), mapset.a  ) ; 
+	    irim_minmax( logfile, out ) ;
+	    break ;
+	}
+        kmap++ ;
+    }
+
+    if ( gds_exist_c( mapset, &status ) ) gds_delete_c( mapset, &status ) ;
+    gds_create_c( mapset, &status ) ;
+    rf = store->map.refpix[0] + 1.0 ; 
+    ax = store->map.axes[0] ;
+    GDS_EXTEND( mapset, lname.a, rf, ax, &status ) ;
+    rf = store->map.refpix[1] + 1.0 ; 
+    ax = store->map.axes[1] ;
+    GDS_EXTEND( mapset, bname.a, rf, ax, &status ) ;
+    GDSD_WCHAR( mapset, "OBJECT", level, image->name.a, &status ) ;
+    GDSD_WCHAR( mapset, "INSTRUME", level, image->inst.a, &status ) ;
+    GDSD_WDBLE( mapset, "CRVAL1", level, image->center[0], &status ) ;
+    GDSD_WDBLE( mapset, "CRVAL2", level, image->center[1], &status ) ;
+    cdelt = -store->map.pixsize ;
+    GDSD_WDBLE( mapset, "CDELT1", level, cdelt, &status ) ;
+    cdelt = store->map.pixsize ;
+    GDSD_WDBLE( mapset, "CDELT2", level, cdelt, &status ) ;
+    GDSD_WCHAR( mapset, "CUNIT1", level, "DEGREE", &status ) ;
+    GDSD_WCHAR( mapset, "CUNIT2", level, "DEGREE", &status ) ;
+    beam = image->beam / store->map.pixsize ;
+    GDSD_WREAL( mapset, "BEAMSIZE", level, beam, &status ) ; 
+    GDSD_WCHAR( mapset, "BUNIT", level, bunit.a, &status ) ;
+    GDSD_WCHAR( mapset, "ORIGIN", level, origin.a, &status ) ;
+    GDSD_WCHAR( mapset, "TELESCOPE", level, telescope.a, &status ) ;
+    GDSD_WCHAR( mapset, "PROJTYPE", level, prname.a, &status ) ;
+    GDSD_WCHAR( mapset, "COORDSYS", level, coname.a, &status ) ;
+    depoch = epoch ;
+    GDSD_WDBLE( mapset, "EPOCH", level, depoch, &status ) ; 
+
+    k = plevel = 0 ;
+    while ( TRUE ) {
+	if ( out->planes[k] < store->nlayer ) 
+            irim_copy( store, out->planes[k], plevel, mapset );
+	else errorf( MINOR, "There is no standard deviation map (yet)." ) ;
+
+        if ( ++k < out->np ) {
+            origas = 0.0 ; nplanes++ ;
+            GDS_EXTEND( mapset, "PARAM", origas, nplanes, &status ) ;
+	    level = TOPLEVEL ; 
+	    crvaldel = 1.0 ;
+	    GDSD_WDBLE( mapset, "CRVAL3", level, crvaldel, &status ) ;
+	    GDSD_WDBLE( mapset, "CDELT3", level, crvaldel, &status ) ;
+	    GDSD_WCHAR( mapset, "CUNIT3", level, " ", &status ) ;
+	    plevel = 0 ;
+	    plevel = gdsc_word_c( mapset, &p_as, &nplanes, &plevel, &status ) ;
+	} else break ;
+    }
+
+    if ( status == 0 ) anyoutf( logfile, "the map is written succesfully." ) ; 
+    else errorf( SERIOUS, "Error while writing the map: %d", status ) ;
+}
+#<
+
+#>            irim_copy.c
+/* irim_copy.c
+
+           Copyright (c) 1991
+  Laboratory for Space Research Groningen 
+       Kapteyn Laboratory Groningen 
+           All Rights Reserved.
+
+Function:     irim_copy
+
+Purpose:     
+
+Category:     IRAS, private to program: IMAGE
+
+Author:       Do Kester		do@guspace.rug.nl
+
+Use:  
+void irim_copy( 
+	char	*ARG1,		IN :		
+	float	*ARG2,		I/O:		
+	fint	*ARG3 )		OUT:		
+
+returns: 
+
+Updates:      05 Sep 1991: DK, Creation date
+
+*/
+
+#include "image.h"
+#include "imtypes.h"
+#include "userfio.h"
+#include "imdefs.h"
+#include "gdsc_word.h"
+#include "gdsc_range.h"
+#include "gdsc_grid.h"
+#include "gdsi_write.h"
+
+void irim_copy(
+	store_type	*store,
+	int		maplane,
+	fint		plevel,
+	fchar		mapset )
+
+{
+    int         ix, jy, i ;
+    fint        xlo, xhi, xb, xe, ylo, yhi, y, length, level, done, tid = 0 ;
+    fint        cwlo, cwhi, offset, error = 0, xas = 1, yas = 2, subset = 0 ;
+    float	*ps ;
+
+    gdsc_range_c( mapset, &subset, &cwlo, &cwhi, &error ) ;
+    anyoutf( ANYOUT_TST, " cwlo = %d  cwhi = %d", cwlo, cwhi );
+    xlo = gdsc_grid_c( mapset, &xas, &cwlo, &error ) ;
+    ylo = gdsc_grid_c( mapset, &yas, &cwlo, &error ) ;
+    xhi = gdsc_grid_c( mapset, &xas, &cwhi, &error ) ;
+    yhi = gdsc_grid_c( mapset, &yas, &cwhi, &error ) ;
+    anyoutf( ANYOUT_TST, " xlo,ylo = %d,%d  xhi,yhi = %d,%d",xlo,ylo,xhi,yhi);
+    offset = store->npp[maplane] ;
+    for ( jy = 0 ; jy < store->npatch[1] ; jy++ ) {
+        xb = xlo ;
+	xe = xlo - 1 + store->npix ;
+	xe = MIN( xe, xhi ) ;
+	length = xe - xb + 1 ;
+	anyoutf( ANYOUT_TST, "jy = %d  xb xe = %d %d  length = %d",
+		jy,xb,xe,length );
+        for ( ix = 0 ; ix < store->npatch[0] ; ix++ ) {
+            y = ylo ;
+	    ps = store->store + offset ;
+	    anyoutf( ANYOUT_TST, "ix = %d  xb xe = %d %d  y = %d  in store + "
+		"offset = %p + %d", ix, xb, xe, y, store->store, offset ) ;
+
+            for ( i = 0 ; i < store->npix ; i++ ) {
+	        level = gdsc_word_c( mapset, &yas, &y, &plevel, &error ) ;
+		if ( error ) errorf( FATAL, "irim_copy: "
+		    "at patch %d,%d line %d level %d", ix, jy, y, level ) ;
+
+	        cwlo = gdsc_word_c( mapset, &xas, &xb, &level, &error ) ;
+		if ( error ) errorf( FATAL, "irim_copy: "
+		    "at patch %d,%d line %d cwlo %d", ix, jy, y, cwlo ) ;
+
+	        cwhi = gdsc_word_c( mapset, &xas, &xe, &level, &error ) ;
+		if ( error ) errorf( FATAL, "irim_copy: "
+		    "at patch %d,%d line %d cwhi %d", ix, jy, y, cwhi ) ;
+/*	    	anyoutf( ANYOUT_TST, "i = %d  cl ch = %d %d  y = %d  "
+		  "%10.2f %10.2f %10.2f %10.2f",
+		  i, cwlo, cwhi, y, *ps, *(ps+1), *(ps+2), *(ps+3) ) ;
+*/
+		gdsi_write_c( mapset, &cwlo, &cwhi, ps, &length, &done, &tid ) ;
+                assert( tid == 0 ) ;
+		if ( ++y > yhi ) break ;
+		ps += store->npix ;
+	    }
+            xb += store->npix ;
+	    xe += store->npix ;
+	    xe = MIN( xe, xhi ) ;
+	    offset += store->npl ;
+	}
+	ylo += store->npix ;
+    }
+}
+
+#<
+
+#>            irim_outmap.c
+/* irim_outmap.c
+
+           Copyright (c) 1991
+  Laboratory for Space Research Groningen 
+       Kapteyn Laboratory Groningen 
+           All Rights Reserved.
+
+Function:     irim_outmap
+
+Purpose:     
+
+Category:     IRAS, private to program: IMAGE
+
+Author:       Do Kester		do@guspace.rug.nl
+
+Use:  
+void irim_outmap(
+	fchar		mapset,     OUT: generic map name
+	fint		*mapnrs,    OUT: numbers of the iterations to write
+	fint		*maplanes ) OUT: numbers of the planes to write
+
+
+Updates:      05 Sep 1991: DK, Creation date
+
+*/
+
+#include "image.h"
+#include "imtypes.h"
+#include "imkeys.h"
+#include "imdefs.h"
+#include "userfio.h"
+#include "gds_exist.h"
+#include "gds_delete.h"
+
+void irim_outmap(
+	iter_type	*iter,
+	outmap_type	*out )
+{
+    int		k = 0, n, nitem = 0 ;
+    fint	error = 0, status = TRUE ;
+    char	maps[80] ;
+    static char	dummy[81] ;
+    static fchar	maptext = { dummy, 80 } ;
+
+/*  Get a generic map name */
+    sprintf( maps, "none" ) ;
+    while ( TRUE ) {
+        nitem = userfchar( out->name, 1, DFLT_DEF, OUTSET_KEY, 
+                OUTSET_MES, maps ) ;
+        if ( ! nitem ) {
+            out->nl = out->np = 0 ;
+	    return ;
+        }
+
+        if ( ! gds_exist_c( out->name, &error ) ) break ;
+	k = userflog( &status, 1, DFLT_DEF, OVER_KEY, OVER_MES ) ;
+	if ( status ) {
+	    gds_delete_c( out->name, &error ) ;
+	    break ;
+	}
+	cancel( OUTSET_KEY ) ;
+    }
+
+/*  Find out of which iterations the maps have to be written */
+    out->nl = 1 ; out->list[0] = iter->maxiter ;
+/* but only if more than one map is made; else the last is (canbe) made */
+    if ( iter->maxiter > iter->keer ) {
+      nitem = userftext( maptext, DFLT_DEF, NRS_KEY, NRS_MES ) ;
+      if ( nitem ) {
+        switch ( maptext.a[0] ) {
+            case 'a' :
+            case 'A' :
+                for ( k = 0, n = iter->keer ; n <= iter->maxiter; k++, n++ ) 
+			out->list[k] = n ;
+                out->nl = iter->maxiter - iter->keer + 1 ;
+		break ;
+            case 'l' :
+	    case 'L' :
+	        break ;
+	    default :
+                out->nl = userfint( out->list, MAXAX, DFLT_HIDD, NRS_KEY,
+                    NRS_MES ) ;
+        }
+      }
+    }
+
+/*  Get the planes to write */
+    out->np = 1 ; out->planes[0] = INT_MAP ;
+    nitem = userfint( out->planes, MAXLAYER, DFLT_HIDD, PLANES_KEY, 
+        PLANES_MES ) ;
+    if ( nitem ) out->np = nitem ;
+
+}
+#<
+
+#>            irim_median.c
+/* irim_median.c
+
+           Copyright (c) 1991
+  Laboratory for Space Research Groningen 
+       Kapteyn Laboratory Groningen 
+           All Rights Reserved.
+
+Function:     irim_median
+
+Purpose:      apply median filter to correct data points
+
+Category:     IRAS, private to program: IMAGE
+
+Author:       Do Kester		do@guspace.rug.nl
+
+Use:  
+void irim_median(
+	pixel_type	*pixel,		I/O: pixel information
+	store_type      *old,		IN : old store
+	float		new2old )	IN : scale factor between old and new
+
+
+Updates:      10 Oct 1991: DK, Creation date
+
+*/
+
+#include "image.h"
+#include "imtypes.h"
+#include "userfio.h"
+#include "imdefs.h"
+
+#define CTUNE       1.6
+
+void irim_median(
+	pixel_type	*pixel,
+	store_type      *old,
+	float		new2old )
+{
+	long		*pIndex = NULL ;
+	long            ni, *pIndexSave, *pX, *pY, *pI ;
+	float		lim, hubers, ss, *pS, *pD ;
+
+/*  store pixel->index in pIndexSave */
+	pIndexSave = pixel->index ;
+
+	if ( new2old > 0.0 ) {
+/* different map sizes; allocate enough memory to index */
+            ni = pixel->length ;
+            if ( ! ( pIndex = (long*)calloc( ni, sizeof( long ) ) ) )
+		errorf( FATAL, "irim_median: out of memory; request %d", ni ) ;
+	    pixel->index = pIndex ;
+
+	    pX = pixel->x ;
+	    pY = pixel->y ;
+/* scale the x and y pixel values */
+            while ( ni-- ) {
+                *pX++ *= new2old ;
+                *pY++ *= new2old ;
+            }
+
+            irim_index( pixel, old ) ;
+	}
+
+	pI = pixel->index ;
+	pD = pixel->dat ;
+	ni = pixel->length ;
+	while( ni-- ) {
+	    if ( ! ( *pI >= 0 && *pI + old->npp[STD_MAP] < old->length ) ) {
+                anyoutf( 0, "old %10d %10d length %10d",
+                *pI, *pI + old->npp[STD_MAP], old->length );
+                errorf( FATAL, "out of range at pixel %d", 
+                pixel->length - ni ) ;
+            }
+            pS = old->store + *pI++ ;
+            ss = *(pS + old->npp[INT_MAP]) ;
+            hubers = *(pS + old->npp[STD_MAP]) * CTUNE ;
+            if ( hubers > 0.1 * old->map.sigma ) {
+                lim = ss + hubers ;
+                *pD = MIN( lim, *pD ) ;
+                lim = ss - hubers ;
+                *pD = MAX( lim, *pD ) ;
+            }
+            pD++ ;
+        }
+/* restore pixel->index */
+	pixel->index = pIndexSave ;                                                                
+	free( pIndex ) ;
+
+        return ;
+}
+#<
+
+#>            irim_storemap.c
+/* irim_storemap.c
+
+           Copyright (c) 1991
+  Laboratory for Space Research Groningen 
+       Kapteyn Laboratory Groningen 
+           All Rights Reserved.
+
+Function:     irim_storemap
+
+Purpose:      copy a 2-dim (sub)set into a store-plane
+
+Category:     IRAS, private to program: IMAGE
+
+Author:       Do Kester		do@guspace.rug.nl
+
+Use:  
+void irim_storemap(
+	store_type	*store,		OUT: store to be filled
+	int		maplane,	IN : plane to be filled
+	fint		plevel,		IN : coordinate word of subset 
+	fchar		mapset )	IN : set to be read
+
+Updates:      05 Sep 1991: DK, Creation date
+              10 Feb 1992: FL, The map is closed after being read
+              
+*/
+
+#include "image.h"
+#include "imtypes.h"
+#include "userfio.h"
+#include "imdefs.h"
+#include "gdsc_word.h"
+#include "gdsc_range.h"
+#include "gdsc_grid.h"
+#include "gdsi_read.h"
+#include "gds_close.h"
+
+void irim_storemap(
+	store_type	*store,
+	int		maplane,
+	fint		plevel,
+	fchar		mapset )
+
+{
+    int         ix, jy, i ;
+    fint        xlo, xhi, xb, xe, ylo, yhi, y, length, level, done, tid = 0 ;
+    fint        cwlo, cwhi, offset, error = 0, xas = 1, yas = 2, subset = 0 ;
+    float	*ps ;
+
+    assert( store->store != NULL ) ;
+    anyoutf( ANYOUT_TST, " plane = %d  plevel = %d", maplane, plevel );
+    gdsc_range_c( mapset, &subset, &cwlo, &cwhi, &error ) ;
+    anyoutf( ANYOUT_TST, " cwlo = %d  cwhi = %d", cwlo, cwhi );
+    xlo = gdsc_grid_c( mapset, &xas, &cwlo, &error ) ;
+    ylo = gdsc_grid_c( mapset, &yas, &cwlo, &error ) ;
+    xhi = gdsc_grid_c( mapset, &xas, &cwhi, &error ) ;
+    yhi = gdsc_grid_c( mapset, &yas, &cwhi, &error ) ;
+    anyoutf( ANYOUT_TST, " xlo,ylo = %d,%d  xhi,yhi = %d,%d",xlo,ylo,xhi,yhi);
+    offset = store->npp[maplane] ;
+    for ( jy = 0 ; jy < store->npatch[1] ; jy++ ) {
+        xb = xlo ;
+	xe = xlo - 1 + store->npix ;
+	xe = MIN( xe, xhi ) ;
+	length = xe - xb + 1 ;
+	anyoutf( ANYOUT_TST, "jy = %d  xb xe = %d %d  length = %d",
+		jy,xb,xe,length );
+        for ( ix = 0 ; ix < store->npatch[0] ; ix++ ) {
+            y = ylo ;
+	    ps = store->store + offset ;
+	    anyoutf( ANYOUT_TST, "ix = %d  xb xe = %d %d  y = %d  in store + "
+		"offset = %p + %d", ix, xb, xe, y, store->store, offset ) ;
+
+            for ( i = 0 ; i < store->npix ; i++ ) {
+	        level = gdsc_word_c( mapset, &yas, &y, &plevel, &error ) ;
+		if ( error ) errorf( FATAL, "irim_storemap: "
+		    "at patch %d,%d line %d level %d", ix, jy, y, level ) ;
+
+	        cwlo = gdsc_word_c( mapset, &xas, &xb, &level, &error ) ;
+		if ( error ) errorf( FATAL, "irim_storemap: "
+		    "at patch %d,%d line %d cwlo %d", ix, jy, y, cwlo ) ;
+
+	        cwhi = gdsc_word_c( mapset, &xas, &xe, &level, &error ) ;
+		if ( error ) errorf( FATAL, "irim_storemap: "
+		    "at patch %d,%d line %d cwhi %d", ix, jy, y, cwhi ) ;
+		gdsi_read_c( mapset, &cwlo, &cwhi, ps, &length, &done, &tid ) ;
+                assert( tid == 0 ) ;
+/*		anyoutf( ANYOUT_TST, "i = %d  cl ch = %d %d  y = %d  "
+		  "%10.2f %10.2f %10.2f %10.2f",
+		  i, cwlo, cwhi, y, *ps, *(ps+1), *(ps+2), *(ps+3) ) ;
+*/
+		if ( ++y > yhi ) break ;
+		ps += store->npix ;
+	    }
+	    error = 0 ;
+	    gds_close_c( mapset, &error ) ;
+            xb += store->npix ;
+	    xe += store->npix ;
+	    xe = MIN( xe, xhi ) ;
+	    offset += store->npl ;
+	}
+	ylo += store->npix ;
+    }
+}
+
+#<
+
+#>            irim_copymask.c
+/* irim_copymask.c
+
+           Copyright (c) 1991
+  Laboratory for Space Research Groningen 
+       Kapteyn Laboratory Groningen 
+           All Rights Reserved.
+
+Function:     irim_copymask
+
+Purpose:      copy a mask from one store to another
+
+Category:     IRAS, private to program: IMAGE
+
+Author:       Do Kester		do@guspace.rug.nl
+
+Use:  
+void irim_copymask( 
+	store_type	*old,
+	store_type	*new )
+
+Update:		21 Oct 1991: DK, Creation date
+		22 Jun 1992: DK, change in memory allocation
+*/
+
+#include "image.h"
+#include "imtypes.h"
+#include "userfio.h"
+#include "imdefs.h"
+#include "setfblank.h"
+
+void irim_copymask(
+	store_type	*old,
+	store_type	*new )
+{
+
+    long        i, k, xas, yas, *pX, *pY, *pIndex = NULL ;
+    long	*pIndexNew, *pIndexOld ;
+    float       blank, ratio ;
+    pixel_type  *pixel ;
+    store_type  *stLarge, *stSmall ;
+
+/*  return if there is nothing in old->store */
+    if ( ! old->store ) return ;
+
+/*  initialize and allocate memory; pixel->dat and pixel->max are not used */
+    PIXEL_INIT( pixel ) ;
+    xas = MAX( old->map.axes[0], new->map.axes[0] ) ;
+    yas = MAX( old->map.axes[1], new->map.axes[1] ) ;
+    pixel->length = xas * yas ;
+    if ( ! irim_pixel_alloc( pixel, pixel->length ) ||
+	 ! ( pIndex = (long*)calloc( pixel->length, sizeof( long ) ) ) )
+		errorf( FATAL, "irim_copymask: out of memory" ) ;
+
+/*  number the pixels of the largest map */    
+    pX = pixel->x ; pY = pixel->y ;
+    for ( k = 0 ; k < yas ; k++ ) {
+        for ( i = 0 ; i < xas ; i++ ) {
+            *pX++ = i ;
+	    *pY++ = k ;
+	}
+    }
+    
+/*  keep track of which map is the larger; pixels larger => map smaller */
+    if ( new->map.pixsize > old->map.pixsize ) {
+        ratio = old->map.pixsize / new->map.pixsize ;
+        stLarge = old ; pIndexOld = pixel->index ;
+	stSmall = new ; pIndexNew = pIndex ;
+    } else {
+        ratio = new->map.pixsize / old->map.pixsize ;
+        stLarge = new ; pIndexNew = pixel->index ;
+	stSmall = old ; pIndexOld = pIndex ;
+    }
+    
+/*  find the indices in the larger map */
+    irim_index( pixel, stLarge ) ;
+/*  swap pixel->index and pIndex */
+    pX = pixel->index ;
+    pixel->index = pIndex ;
+    pIndex = pX ;
+
+/*  and find the indices in the smaller map */
+    pX = pixel->x ; pY = pixel->y ;
+    for ( k = 0 ; k < pixel->length ; k++ ) {
+        *pX++ *= ratio ;
+	*pY++ *= ratio ;
+    }
+    irim_index( pixel, stSmall ) ;
+
+/*  write a blank in the new store wherever there is a blank 
+    in (one of) the corresponding pixel(s) of the old one store */
+    setfblank_c( &blank ) ;
+    for ( k = 0 ; k < pixel->length ; k++ ) {
+        if ( *(old->store + *pIndexOld) == blank )
+             *(new->store + *pIndexNew) = blank ;
+        pIndexOld++ ; pIndexNew++ ;
+    }
+
+    FREE( pixel->x ) ; FREE( pixel->y ) ; FREE( pixel->index ) ;
+    FREE( pixel ) ;
+    FREE( pIndex ) ;
+}
+#<
+
+#>            irim_pixel_alloc.c
+/* irim_pixel_alloc.c
+
+           Copyright (c) 1992
+  Laboratory for Space Research Groningen 
+       Kapteyn Laboratory Groningen 
+           All Rights Reserved.
+
+Function:     irim_pixel_alloc
+
+Purpose:      allocate memory to the arrays within a pixel_type
+
+Category:     IRAS, private to program: IMAGE
+
+Author:       Do Kester		do@guspace.rug.nl
+
+Use:  
+int irim_pixel_alloc( 
+	pixel_type	*pixel,		IN : pixel to allocate memory to
+	int		size )		IN : length of arrays
+
+returns 0 : out of memory
+	otherwise : true length of arrays
+
+	If the present length of the arrays is more than the requested size,
+	the present arrays will be used, otherwise, 
+	new memory will be allocated to the requested size,
+	freeing the present arrays.
+	
+	If out of memory, the function spawns a serious error.
+
+Updates:      03 Jan 1992: DK, Creation date
+              10 Feb 1992: FL, reallocation of memory changed
+	      09 Mar 1992: AdJ, changed memory allocation strategy again.
+*/
+
+#include "image.h"
+#include "imtypes.h"
+#include "userfio.h"
+#include "imdefs.h"
+
+int irim_pixel_alloc( 
+	pixel_type	*pixel,	
+	int		size )
+{
+        if ( size <= pixel->max ) return( pixel->max ) ;
+
+	free( pixel->x ) ;
+	free( pixel->y ) ;
+	free( pixel->index ) ;
+	free( pixel->dat ) ;
+
+        pixel->x = malloc( size*sizeof(long) );
+        pixel->y = malloc( size*sizeof(long) );
+        pixel->index = malloc( size*sizeof(long) );
+        pixel->dat = malloc( size*sizeof(float) );
+	if ( ! ( pixel->x && pixel->y && pixel->index && pixel->dat ) ){
+		errorf( SERIOUS,
+                     "pixel_alloc out of memory; request %d", size ) ;
+		if ( pixel->x ) free ( pixel->x );
+		if ( pixel->y ) free ( pixel->y );
+		if ( pixel->dat ) free ( pixel->dat );
+		if ( pixel->index ) free ( pixel->index );
+		return( 0 ) ;
+		}
+	return ( pixel->max = size );
+}
+
+
+#<
+
+#>            irim_msx_alloc.c
+/* irim_msx_alloc.c
+
+           Copyright (c) 1992
+  Laboratory for Space Research Groningen 
+       Kapteyn Laboratory Groningen 
+           All Rights Reserved.
+
+Function:     irim_msx_alloc
+
+Purpose:      allocate memory to the arrays within a msx_type
+
+Category:     IRAS, private to program: IMAGE
+
+Author:       Do Kester		do@guspace.rug.nl
+
+Use:  
+int irim_msx_alloc( 
+	msx_type	*msx,		IN : msx to allocate memory to
+	int		size )		IN : length of arrays
+
+returns	0 : out of memory
+	otherwise : true length of arrays
+
+	
+	If the present length of the arrays is more than the requested size
+	the present arrays will be used, otherwise,
+	new memory is allocated to the requested size,
+	and the present arrays will be freed.
+
+	If out of memory, the function spawns a serious error.
+
+Updates:      03 Jan 1992: DK, Creation date
+              10 Feb 1992: FL, Reallocation of memory changed
+              09 Mar 1992: AdJ, Allocation changed again.
+
+*/
+
+#include "image.h"
+#include "imtypes.h"
+#include "userfio.h"
+#include "imdefs.h"
+
+int irim_msx_alloc( 
+	msx_type	*msx,
+	int		size )
+{
+
+
+        if ( size <= msx->max ) return( msx->max ) ;
+
+	free( msx->model ) ;
+	free( msx->time ) ;
+	free( msx->dat ) ;
+	free( msx->flag ) ;
+
+        msx->model = malloc( size*sizeof(float) );
+        msx->time = malloc( size*sizeof(float) );
+        msx->dat = malloc( size*sizeof(float) );
+        msx->flag = malloc( size*sizeof(int) );
+	if ( ! ( msx->model && msx->time && msx->dat && msx->flag )){
+		errorf( SERIOUS, "msx_alloc out of memory; request %d", size ) ;
+		if ( msx->model ) free ( msx->model );
+		if ( msx->time ) free ( msx->time );
+		if ( msx->dat ) free ( msx->dat );
+		if ( msx->flag ) free ( msx->flag );
+		return( 0 ) ;
+        	}
+	
+	return ( msx->max = size );
+}
+#<
+
+#>            irim_showscan.c
+/* irim_showscan.c
+
+           Copyright (c) 1992
+  Laboratory for Space Research Groningen 
+       Kapteyn Laboratory Groningen 
+           All Rights Reserved.
+
+Function:     irim_showscan
+
+Purpose:      display (a selection of) scans
+
+Category:     IRAS, private to program: IMAGE
+
+Author:       Do Kester		do@guspace.rug.nl
+
+Use:  
+void irim_showscan( 
+	msx_type	*msx,
+	scan_type	*scan,
+	iter_type	*iter )
+
+Updates:      09 Jan 1992: DK, Creation date
+
+*/
+
+#include "image.h"
+#include "irscan.h"
+#include "imtypes.h"
+#include "imkeys.h"
+#include "userfio.h"
+#include "imdefs.h"
+
+void irim_showscan( 
+	msx_type	*msx,
+	scan_type	*scan,
+	iter_type	*iter )
+{
+	int 		i, j = 0, nitem ;
+        static fint     show[4] = { 0, 0, 0, 0 } ;
+        static char     dummy[81] ;
+        static fchar    text = { dummy, 20 } ;
+
+/* determine the selection */
+        nitem = userfcharu( text, 4, 1, SHOW_KEY, SHOW_MES ) ;
+        if ( nitem ) {
+		switch ( dummy[0] ) {
+     		    case 'O' :  show[0] = 1 ;	/* one by one */
+				nitem = 0 ;
+				break ;
+                    case 'N' :  show[0] = -1 ;	/* no display */
+				nitem = 0 ;
+                        	break ;
+                    case 'A' :  show[0] = 0 ;	/* all snips  */
+				nitem = 0 ;
+                	        break ;
+	            case 'L' :  j = 20 ;	/* last iteration */
+				show[3] = iter->maxiter ;
+				nitem-- ;
+				break ;
+	            default  :	break ;		/* <sop><att><det> */
+	  	}
+	  	for ( i = j = 0 ; i < nitem ; i++, j += 20 )
+		    (void) sscanf( &dummy[j], "%d", &show[i] ) ;
+	}
+
+/*  apply the selection */
+        if ( msx->length > 2 && 
+	   ( show[3] == 0 || show[3] == iter->keer ) &&
+           ( show[0] == 0 || show[0] == scan->id.sop || show[0] == 1 ) &&
+           ( show[1] == 0 || show[1] == scan->id.att ) &&
+           ( show[2] == 0 || show[2] == scan->stripe.det ) ) {
+                if ( show[0] ) cancel( SHOW_KEY ) ;
+                irim_scanout( msx, scan->stripe.cal ) ;
+        }
+}
+#<
+
+#>            irim_scanout.c
+/* irim_plot.c
+
+           Copyright (c) 1991
+  Laboratory for Space Research Groningen 
+       Kapteyn Laboratory Groningen 
+           All Rights Reserved.
+
+Function:     irim_plot
+
+Purpose:      display a selected scan in three panels
+
+Category:     IRAS, private to program: IMAGE
+
+Author:       Do Kester		do@guspace.rug.nl
+
+Use:  
+void irim_plot( 
+	msx_type	*msx,
+	float		*cal )
+
+Description:
+	Three panels are displayed. In the upper panel the scan itself and
+	the corresponding map pixels are displayed. The midpanel displays
+	the flags, if any. And the lower panel displays the difference and
+	the fitted line.
+
+Updates:      22 Aug 1991: DK, Creation date
+
+*/
+
+#include "image.h"
+#include "irscan.h"
+#include "imtypes.h"
+#include "userfio.h"
+#include "imdefs.h"
+#include "pgplot.h"
+
+#define	MAXSAM		2
+
+void irim_scanout(
+	msx_type	*msx,
+	float		*cal )
+{
+	fint	style, unit = 0, nx = 1, ny = 1, nul = 0 ;
+	fint	thick = 5, thin = 1 ;
+	float	fnul = 0.0, r, xb, xe, xt, yb, ye, x[MAXSAM], y[MAXSAM] ;
+	int	*pf, i, k, flag, plotted, found = FALSE, good = 0 ;
+	float	*pt, *pm, *pd, *pS, *ps ;
+	float	xmin, xmax, ymin, ymax, diff, half ;
+	char 	*flagtext[] = 
+		{ "outage", "source", "tail", "glitch", "mask", "blank" } ;
+
+
+	pgbeg_c( &unit, tofchar( "?" ), &nx, &ny );
+	pgpage_c( ) ;
+/* determine length of the x-axis */
+	x[0] = msx->time[0] ;
+	x[1] = msx->time[msx->length - 1] ;
+	r = ( x[1] - x[0] ) * 0.05 ;
+	xb = x[0] - 0.5 * r ;
+	xe = x[1] + 3 * r ;
+	xt = x[1] + r / 4 ;
+
+/* plot model and data in a viewport from y = 0.55 to 0.95 */
+	pm = msx->model ; pd = msx->dat ; pf = msx->flag ;
+	yb = ye = *pm ;
+	i = msx->length ;
+	while( i-- ) {
+	    if ( ! ( *pf & BLANKFLAG ) ) {
+		if ( *pm < yb ) yb = *pm ;
+		if ( *pm > ye ) ye = *pm ;
+	    }
+	    if ( ! ( *pf & OUTAGEFLAG ) ) {
+		if ( *pd < yb ) yb = *pd ;
+		if ( *pd > ye ) ye = *pd ;
+	        good++ ;
+	    }
+	    pd++ ; pm++ ; pf++ ;
+	}
+	if ( ! good ) return ;		/* no good data at all */
+	r = ( ye - yb ) * 0.05 ;
+	yb -= r ;
+	ye += r ;
+	xmin = 0.1 ; xmax = 0.95 ; ymin = 0.55 ; ymax = 0.95 ;
+	pgsvp_c( &xmin, &xmax, &ymin, &ymax ) ;
+	pgswin_c( &xb, &xe, &yb, &ye ) ;
+	pgbox_c( tofchar("BCST"), &fnul, &nul, 
+		 tofchar("BCNST"), &fnul, &nul );
+	pglab_c( tofchar( "" ), tofchar( "response" ), 
+		tofchar( "" ) ) ;
+
+	style = 1 ;
+	pgsls_c( &style ) ;
+	pgline_c( &(msx->length), msx->time, msx->dat ) ;
+	style = 2 ;
+	pgsls_c( &style ) ;
+	pgline_c( &(msx->length), msx->time, msx->model ) ;
+	pd = msx->dat  + msx->length - 1 ;
+	pm = msx->model+ msx->length - 1 ;
+	pgtext_c( &xt, pd, tofchar("scan data") ) ;
+	pgtext_c( &xt, pm, tofchar("map data") ) ;
+
+/* plot the difference and the fit in a viewport y = 0.1 to 0.4 */
+	y[0] = yb = cal[0] + xb * cal[1] ;
+	y[1] = ye = cal[0] + xe * cal[1] ;
+	pd = msx->dat ; pm = msx->model ; pf = msx->flag ;
+	i = msx->length ;
+	while ( i-- ) {
+	    if ( ! ( *pf++ & ( BLANKFLAG | OUTAGEFLAG ) ) ) {
+ 		diff = *pd - *pm ;
+		if ( diff < yb ) yb = diff ;
+		if ( diff > ye ) ye = diff ;
+	    }
+	    pd++ ; pm++ ;
+	}
+	r = ( ye - yb ) * 0.05 ;
+	yb -= r ;
+	ye += r ;
+	xmin = 0.1 ; xmax = 0.95 ; ymin = 0.1 ; ymax = 0.4 ;
+	style = 1 ;
+	pgsls_c( &style ) ;
+	pgsvp_c( &xmin, &xmax, &ymin, &ymax ) ;
+	pgswin_c( &xb, &xe, &yb, &ye ) ;
+	pgbox_c( tofchar("BCNST"), &fnul, &nul, 
+		 tofchar("BCNST"), &fnul, &nul );
+	pglab_c( tofchar( "time" ), tofchar( "difference" ), 
+		tofchar( "" ) ) ;
+
+	FLOAT_INIT( pS, msx->length ) ;
+	ps = pS ;
+	pm = msx->model ;
+	for( i = 0 ; i < msx->length ; i++ ) 
+		 *ps++ = *pm++ * cal[2] + cal[0] + cal[1] * msx->time[i] ;
+	style = 1 ;
+	pgsls_c( &style ) ;
+	pgline_c( &(msx->length), msx->time, pS ) ;
+	FREE( pS ) ;
+
+	pd = msx->dat ; pm = msx->model ;
+	i = msx->length ;
+	while ( i -- ) *pd++ -= *pm++ ;
+	style = 2 ;
+	pgsls_c( &style ) ;
+	pgline_c( &(msx->length), msx->time, msx->dat ) ;
+
+/* plot the flags in a viewport y = 0.4 to 0.55 */
+	xmin = 0.1 ; xmax = 0.95 ; ymin = 0.4 ; ymax = 0.55 ;
+	pgsvp_c( &xmin, &xmax, &ymin, &ymax ) ;
+	yb = 0 ; ye = 7 ;
+	style = 1 ;
+	pgsls_c( &style ) ;
+	pgswin_c( &xb, &xe, &yb, &ye ) ;
+	pgbox_c( tofchar("BCST"), &fnul, &nul, 
+		 tofchar("BC"), &fnul, &nul );
+	pglab_c( tofchar( "" ), tofchar( "flags" ), 
+		tofchar( "" ) ) ;
+	half = 0.5 * ( msx->time[1] - msx->time[0] ) ;
+	flag = 1 ;
+	k = 0 ;
+	while ( flag <= 32 ) {
+	    pgslw_c( &thick ) ;
+	    plotted = FALSE ;
+	    y[0] = y[1] = k + 1 ;
+	    pf = msx->flag ;
+	    pt = msx->time ;
+	    i = msx->length ;
+	    while ( i-- ) {
+	        if ( ( *pf & flag ) == flag ) {
+		    if ( ! found ) x[0] = *pt - half ;
+		    found = plotted = TRUE ;
+	        } else if ( found ) {
+		    x[1] = *(pt-1) + half ;
+		    found = FALSE ;
+		    pgline_c( &nx, x, y ) ;
+	        }
+	        pf++ ; pt++ ;
+	    }
+	    if ( found ) {
+	        x[1] = *(pt-1) + half ;
+	        found = FALSE ;
+		pgline_c( &nx, x, y ) ;
+	    }
+	    pgslw_c( &thin ) ;
+	    y[0] -= 0.3 ;
+	    if ( plotted ) pgtext_c( &xt, y, tofchar( flagtext[k] ) ) ;
+	    flag *= 2 ;
+	    k++ ;
+	}
+
+	pgend_c( ) ;
+}	
+
+#<
+
+#>            irim_plotxy.c
+/* irim_plot.c
+
+           Copyright (c) 1991
+  Laboratory for Space Research Groningen 
+       Kapteyn Laboratory Groningen 
+           All Rights Reserved.
+
+Function:     irim_plot
+
+Purpose:      plot positions of the samples
+
+Category:     IRAS, private to program: IMAGE
+
+Author:       Do Kester		do@guspace.rug.nl
+
+Use:  
+void irim_plot( 
+	store_type	*store,
+	scan_type	*scan )
+
+
+Updates:      22 Aug 1991: DK, Creation date
+
+*/
+
+#include "image.h"
+#include "irscan.h"
+#include "imtypes.h"
+#include "userfio.h"
+#include "imdefs.h"
+#include "pgplot.h"
+
+#define	MAXSAM		1000
+
+void irim_plotxy(
+	store_type	*store,
+	scan_type	*scan )
+{
+	fint		unit = 0, nx = 1, ny = 1, nul = 0, kdo, kdone ;
+	float		fnul = 0.0, xb, xe, yb, ye, x[MAXSAM], y[MAXSAM] ;
+	int		i ;
+	static int 	first = TRUE ;
+
+	if( first ) {
+		pgbeg_c( &unit, tofchar( "?" ), &nx, &ny );
+		xb = - store->map.refpix[0] * store->map.pixsize ;
+		xe = store->map.axes[0] * store->map.pixsize + xb ;
+		yb = - store->map.refpix[1] * store->map.pixsize ;
+		ye = store->map.axes[1] * store->map.pixsize + yb ;
+		pgpage_c( ) ;
+		pgvstd_c( ) ;
+		pgwnad_c( &xb, &xe, &yb, &ye ) ;
+		pgbox_c( tofchar("BCNST"), &fnul, &nul, 
+			 tofchar("BCNST"), &fnul, &nul );
+		pglab_c( tofchar( "x (degrees from projection center)" ), 
+			 tofchar( "y (degrees from projection center)" ), 
+			 tofchar( "positions of all samples" ) ) ;
+		first = FALSE ;
+	}
+
+	kdone = 0 ;
+	while ( kdone < scan->id.datlen ) {
+	    kdo = MIN( MAXSAM, scan->id.datlen - kdone ) ;
+	    for ( i = 0 ; i < kdo ; i++ ) {
+		x[i] = scan->sample.x[kdone + i] ;
+		y[i] = scan->sample.y[kdone + i] ;
+	    }
+	    pgpt_c( &kdo, x, y, &nx ) ;
+	    kdone += kdo ;
+	}
+
+}
+
+#<
+
+#>            irim_userlog.c
+/* irim_userlog.c
+
+           Copyright (c) 1991
+  Laboratory for Space Research Groningen 
+       Kapteyn Laboratory Groningen 
+           All Rights Reserved.
+
+Function:     irim_userlog
+
+Purpose:      get output level
+
+Category:     IRAS, private to program: IMAGE
+
+Author:       Do Kester		do@guspace.rug.nl
+
+Use:  
+int irim_userlog( )
+
+returns:      the output level: 
+		1 for silent
+		2 for quiet
+		3 for normal
+		4 for loud
+
+Updates:      13 Dec 1991: DK, Creation date
+
+*/
+
+#include "image.h"
+#include "imtypes.h"
+#include "imkeys.h"
+#include "userfio.h"
+#include "imdefs.h"
+
+int irim_userlog( ) 
+{
+	fint 		nitem = 0 ;
+	static char	dummy[81] ;
+	static fchar	maptext = { dummy, 80 } ;
+
+	while ( TRUE ) {
+	  nitem = userfcharu( maptext, 1, DFLT_HIDD, DEBUG_KEY, DEBUG_MES ) ;
+	  if ( nitem ) {
+	    switch ( maptext.a[0] ) {
+	        case 'S' : return ( SILENT ) ;
+		case 'Q' : return ( QUIET ) ;
+		case 'N' : return ( NORMAL ) ;
+		case 'L' : return ( LOUD ) ;
+		default  : anyoutf( ANYOUT_DEF, 
+			"Unknown level; use Silent, Quiet, Normal or Loud" ) ;
+	    }
+	  } else break ;
+	}
+	return ( QUIET ) ;
+}
+#<
+
+#>            f_test.c
+/* f_test.c
+
+           Copyright (c) 1994
+  Laboratory for Space Research Groningen 
+       Kapteyn Laboratory Groningen 
+           All Rights Reserved.
+
+Function:     f_test
+
+Purpose:      perform statistical F-test on two distributions
+
+Category:     IRAS
+
+Author:       Do Kester
+
+Use:  
+float f_test(
+	float	var1,		variance of distribution 1
+	float	var2,		variance of distribution 2
+	fint	dof1,		degrees of freedom of var1
+	fint	dof2 ) 		degrees of freedom of var2
+
+returns: 	probability of distibutions 1 and 2 being the same
+
+Comment:	Uses betai, betacf and gammln from Numerical Recipes.
+		see paragraphs 6.1, 6.3 and 13.4 of NumRec in C
+
+Updates:      15 Nov 1994: DK, Creation date
+
+*/
+
+#include "gipsyc.h"
+#include "stdlib.h"
+#include "math.h"
+#include "userfio.h"
+
+static float gammln( float x ) ;
+static float betacf( float a, float b, float x ) ;
+static float betai( float a, float b, float x ) ;
+
+float f_test(
+	float	var1,
+	float	var2,
+	fint	dof1,
+	fint	dof2 ) 
+{
+	float		prob, f ;
+
+	f = ( var1 > var2 ) ? var2 / var1 : var1 / var2 ;
+	prob = 2.0 * betai( 0.5*dof2, 0.5*dof1, dof2/( dof2 + dof1 * f ) ) ;
+	if ( prob > 1.0 ) prob = 2.0 - prob ;
+	anyoutf( ANYOUT_TST, "f = %10.4f  dof1 = %6d  dof2 = %6d   "
+			"prob = %10.4f", f, dof1, dof2, prob ) ;
+
+	return( prob ) ;
+}
+
+
+static float betai( float a, float b, float x )
+{
+	float bt;
+
+	if (x < 0.0 || x > 1.0) errorf( SERIOUS, 
+		"Bad x in routine betai of f_test: %f", x );
+	if (x == 0.0 || x == 1.0) bt=0.0;
+	else
+		bt=exp(gammln(a+b)-gammln(a)-gammln(b)+a*log(x)+b*log(1.0-x));
+	if (x < (a+1.0)/(a+b+2.0))
+		return bt*betacf(a,b,x)/a;
+	else
+		return 1.0-bt*betacf(b,a,1.0-x)/b;
+}
+
+#define ITMAX 100
+#define EPS 3.0e-7
+
+static float betacf( float a, float b, float x )
+{
+	float qap,qam,qab,em,tem,d;
+	float bz,bm=1.0,bp,bpp;
+	float az=1.0,am=1.0,ap,app,aold;
+	int m;
+
+	qab=a+b;
+	qap=a+1.0;
+	qam=a-1.0;
+	bz=1.0-qab*x/qap;
+	for (m=1;m<=ITMAX;m++) {
+		em=(float) m;
+		tem=em+em;
+		d=em*(b-em)*x/((qam+tem)*(a+tem));
+		ap=az+d*am;
+		bp=bz+d*bm;
+		d = -(a+em)*(qab+em)*x/((qap+tem)*(a+tem));
+		app=ap+d*az;
+		bpp=bp+d*bz;
+		aold=az;
+		am=ap/bpp;
+		bm=bp/bpp;
+		az=app/bpp;
+		bz=1.0;
+		if (fabs(az-aold) < (EPS*fabs(az))) return az;
+	}
+	errorf(SERIOUS, "a (=%f) or b (=%f) too big, "
+		"or ITMAX too small in betacf of f_test", a, b );
+}
+
+#undef ITMAX
+#undef EPS
+
+static float gammln( float xx )
+{
+	double x,tmp,ser;
+	static double cof[6]={76.18009173,-86.50532033,24.01409822,
+		-1.231739516,0.120858003e-2,-0.536382e-5};
+	int j;
+
+	x=xx-1.0;
+	tmp=x+5.5;
+	tmp -= (x+0.5)*log(tmp);
+	ser=1.0;
+	for (j=0;j<=5;j++) {
+		x += 1.0;
+		ser += cof[j]/x;
+	}
+	return -tmp+log(2.50662827465*ser);
+}
+#<
+
+#>            irim_interpol.c
+/* irim_interpol.c
+
+           Copyright (c) 1991
+  Laboratory for Space Research Groningen 
+       Kapteyn Laboratory Groningen 
+           All Rights Reserved.
+
+Function:     irim_interpol
+
+Purpose:      interpolate detector positions in a map
+
+Category:     IRAS, private to program: IMAGE
+
+Author:       Do Kester		do@guspace.rug.nl
+
+Use:  
+int irim_interpol( 
+	store_type	*old,
+	scan_type	*scan,
+	pixel_type	*pixel,	
+	int		nc )		IN : stripe power
+
+returns:      the stripe power found
+
+Updates:      	22 Aug 1991: DK, Creation date
+		12 May 1992: DK, include edge around map of size beam
+
+Original:     IMINTM
+	Structured and translated by ASSISTANT II Plus, v1.2
+*/
+
+#include "image.h"
+#include "irscan.h"
+#include "imtypes.h"
+#include "imkeys.h"
+#include "userfio.h"
+#include "imdefs.h"
+#include "setfblank.h"
+
+#define ROUND( x )	( (long) ( (x) + 0.5 ) )
+
+int irim_interpol( 
+	store_type	*old,
+	scan_type	*scan,
+	pixel_type	*pixel,
+	int		nc,
+	iter_type	*iter )
+{
+	float 		x, y, xmapedge, ymapedge, edge, time, dt, blank ; 
+	float 		*ps, *pm, *pmo, *pdd, *pti, *pd ; 
+	int		n, k, *pf, *pfl, kc ; 
+	long		xx, yy ; 
+	long		*pind, *pix, *pjy ; 
+	double		*px, *py ;
+
+	static int 	first = TRUE ;
+	static msx_type *msx = NULL ;
+	static float	beam = 0.0 ;
+
+	if ( first ) {
+	    n = userfreal( &beam, 1, DFLT_DEF, BEAM_KEY, BEAM_MES ) ;
+	    MSX_INIT( msx ) ;
+	    first = FALSE;
+	}
+
+	if ( ! irim_msx_alloc( msx, scan->id.datlen ) ||
+	     ! irim_pixel_alloc( pixel, scan->id.datlen ) )
+		 errorf( FATAL, "irim_interpol: out of memory" ) ;
+
+/*        anyoutf( ANYOUT_TST, 
+        "scanlength = %d  msxmax = %d  pixelmax = %d  model at %p  x at %p",
+        scan->id.datlen, msx->max, pixel->max, msx->model, pixel->x ) ; */
+
+	edge = ( beam > 0 ) ? beam : MINBEAM / old->map.pixsize ;
+	edge = MAX( 1.0, edge ) ;
+	xmapedge = old->map.refpix[LX] + edge ;
+	ymapedge = old->map.refpix[BY] + edge ;
+
+	px = scan->sample.x ;
+	py = scan->sample.y ;
+	pd = scan->sample.dat ;
+	pf = scan->sample.flag ;
+	pix = pixel->x ; 
+	pjy = pixel->y ; 
+	pdd = msx->dat ; 
+	pti = msx->time ; 
+	pfl = msx->flag ;
+	time =  - scan->stripe.timref ; 
+	dt = 1.0 / scan->id.rate ;
+	n = 0 ; 
+	for ( k = 0 ; k < scan->id.datlen ; k++ ) {
+	    x = *px / old->map.pixsize ;
+	    y = *py / old->map.pixsize ;
+	    if ( fabs( x ) < xmapedge && fabs( y ) < ymapedge ) {
+/*  it is inside: store pixel indices, intensity and time  */
+	    	xx = MAX( 0.0, ROUND( x + old->map.refpix[LX] ) ) ; 
+	    	yy = MAX( 0.0, ROUND( y + old->map.refpix[BY] ) ) ; 
+	        *pix++ = MIN( xx, old->map.axes[LX] - 1 ) ; 
+	        *pjy++ = MIN( yy, old->map.axes[BY] - 1 ) ; 
+	        *pdd++ = *pd ; 
+	        *pti++ = time ; 
+                *pfl++ = *pf ;
+	        n++ ; 
+	        assert( n <= scan->id.datlen ) ;
+	    }
+	    px++ ; py++ ; pd++ ; pf++ ;
+	    time += dt ; 
+	}
+
+/* anyoutf( ANYOUT_TST, "datlen = %d   n = %d", scan->id.datlen, n ) ; */
+
+/*  transform pixels to linear index in store  */
+        pixel->length = n ;
+	irim_index( pixel, old ) ; 
+/*  place extra flags for MASKed data and for blank data */
+	setfblank_c( &blank ) ;
+	pm = old->store ;
+	ps = old->store + old->npp[INT_MAP] ;
+	pmo = msx->model ; 
+	pfl = msx->flag ;
+	pind = pixel->index ;
+        msx->length = n ;
+	while ( n-- ) {
+	    if ( ( *pmo++ = *(ps + *pind) ) == blank ) *pfl |= BLANKFLAG ;
+	    if ( *(pm + *pind) == blank ) *pfl |= MASKFLAG ;
+	    pfl++ ; pind++ ;
+	}
+/*  calculate destripe parameters */
+	kc = nc ;
+	if ( kc == 3 && msx->length < 20 ) kc = 2 ;
+	do { 
+	  nc = irim_stripe( scan->stripe.cal, kc,
+	        &(scan->stripe.scale), msx ) ; 
+	} while ( kc-- == 3 && fabs( scan->stripe.cal[GAIN] ) > 0.3 ) ;
+
+/*  display the scans */
+	irim_showscan( msx, scan, iter ) ;
+
+	return ( nc ) ;
+}
+#<
+
+#>            irim_roundbeam.c
+/* irim_roundbeam.c
+
+           Copyright (c) 1991
+  Laboratory for Space Research Groningen 
+       Kapteyn Laboratory Groningen 
+           All Rights Reserved.
+
+Function:     irim_roundbeam
+
+Purpose:      weighted add ( part of ) a scan to part of an image
+
+Category:     IRAS, private to program: IMAGE
+
+Author:       Do Kester		do@guspace.rug.nl
+
+Use:  
+void irim_roundbeam( 
+	store_type	*old,
+	store_type	*new,
+	scan_type	*scan,
+	pixel_type	*pixel,
+	long		*range )	OUT: 0 for start; 1 for last 
+
+In order to speed up the distance computations 'dist2' is used, 
+distance squared. Formally, at pixel i,j and sample k, 
+        dist2( i, j, k )  =  ( Y(k) - j )**2 + ( X(k) - i )** 2
+
+The difference 'dx2' for a step in 'i' at constant 'j' is
+
+        dx2( i, j, k )   = dist2( i, j, k ) - dist2( i - 1, j, k )
+                         = 2 * ( i - X(k) ) - 1
+
+and similarly for 'dy2' when stepping 'j' at constant 'i'
+
+The second order difference 'dxy3' is the same for stepping
+either 'i' at constant 'j' or 'j' at constant 'i':
+
+        dxy3( i, j, k )  = dx2( i, j, k )  -  dx2( i - 1, j, k )
+                         = 2
+
+Updates:      	23 Aug 1991: DK, Creation date
+		03 Jan 1992: DK, separated out irim_pixel_alloc
+
+Original:     irim_roundbeam
+	Structured and translated by ASSISTANT II Plus, v1.2
+*/
+
+#include "image.h"
+#include "irscan.h"
+#include "imtypes.h"
+#include "userfio.h"
+#include "imdefs.h"
+
+#define DXY3   		2.0
+
+static	float 	pixsz, beam2 ; 
+static	long 	remain, pixsperbeam ; 
+
+void irim_roundbeam( 
+	store_type	*old,
+	store_type	*new,
+	scan_type	*scan,
+	pixel_type	*pixel,
+	long		*range )	/* 0 for start; 1 for last */
+{
+	float 		dx2, dy2, xx, yy, dd, base, time, dt;
+	float		x2, y2, dist2, wgt ; 
+	int 		*pf ; 
+	long 		i, j, k, n, mi, oldn, ilow, ihig, jlow, jhig ;
+	long		*pix, *pjy ; 
+	float		*pkd, *pd ; 
+	double		*px, *py ;
+
+	mi = scan->id.datlen * pixsperbeam ;
+	if ( ! irim_pixel_alloc( pixel, mi ) ) errorf( FATAL, 
+		"irim_roundbeam: out of memory" ) ;
+
+	pix = pixel->x ;
+	pjy = pixel->y ;
+	pkd = pixel->dat ;
+	remain = mi - 2 * pixsperbeam ;
+/* anyoutf( ANYOUT_TST, "mi = %d  pixelmax = %d  x at %p  y at %p  index at %p",
+    mi, pixel->max, pixel->x, pixel->y, pixel->index ) ; */
+
+	px = scan->sample.x ;
+	py = scan->sample.y ;
+	pd = scan->sample.dat ;
+	pf = scan->sample.flag ;
+
+	time = - scan->stripe.timref ;
+	dt = 1.0 / scan->id.rate ;
+	wgt = 1.0 / scan->stripe.scale ;
+	n = oldn = 0 ; 
+	k = scan->id.datlen ;
+	for ( k = 0 ; k < scan->id.datlen ; k++ ) {
+/*  fill arrays ix,  jy and kd with map position and sample value */
+	    if ( n > remain ) {			/* enough room left ? */
+	        errorf( SERIOUS, "k = %d  n = %d  mi = %d  remain = %d",
+			k, n, mi, remain ) ;
+		break ;
+	    }
+	    if ( *pf == OKFLAG || ( new->map.psinclusion && 
+				  ! ( *pf & ~pixel->flagmask ) ) ) {
+	        base = scan->stripe.cal[BASE] + 
+			time * scan->stripe.cal[DRIFT] ; 
+	        dd = *pd * ( 1 - scan->stripe.cal[GAIN] ) - base ; 
+/*  find low and high boundaries in the pixel grid  */
+	        xx = *px / new->map.pixsize + new->map.refpix[LX] ; 
+	        yy = *py / new->map.pixsize + new->map.refpix[BY] ; 
+	        ilow = MAX( (long)( xx - pixsz ), 0 ) ; 
+	        ihig = MIN( (long)( xx + pixsz ), new->map.axes[LX] ) ; 
+	        jlow = MAX( (long)( yy - pixsz ), 0 ) ; 
+	        jhig = MIN( (long)( yy + pixsz ), new->map.axes[BY] ) ; 
+	        y2 = jlow - yy ; 
+	        dy2 = 2 * y2 - 1 ; 
+	        y2 *= y2 ; 
+/*  loop over the rows from low to high boundary  */
+	        for ( j = jlow ; j < jhig ; j++ ){
+	            x2 = ilow - xx ; 
+	            dx2 = 2 * x2 - 1 ; 
+/*  loop over the columns from low to high boundary  */
+	            dist2 = x2 * x2 + y2 ; 
+	            for ( i = ilow ; i < ihig ; i++ ){
+	                if ( dist2 < beam2 ) {
+/*  store the indices  */
+	                    *pix++ = i ; 
+	                    *pjy++ = j ; 
+	                    *pkd++ = dd ; 
+	                    n++ ; 
+	                }
+/*  calculate distance for the next column,  same row  */
+	                dx2 += DXY3 ; 
+	                dist2 += dx2 ; 
+	            }
+/*  end of loop over columns ;  calculate distance for the next row  */
+	            dy2 += DXY3 ; 
+	            y2 += dy2 ; 
+		}
+	    }
+/*  determine last-point-before and first-point-after crossing  */
+	    if ( n == 0 ) {
+	        range[FIRST] = range[LAST] = k ; 
+	    } else if ( n > oldn ) {
+	        range[LAST] = k ; 
+	        oldn = n ; 
+	    }
+	    pd++ ; pf++ ; px++ ; py++ ;
+	    time += dt ;
+	}
+
+	statusf( "scan %3d  det %2d  Number of affected pixels %d", 
+	scan->id.scannr, scan->stripe.det, n );
+
+/*  coadd the sample intensities to the pixels  */
+	pixel->length = n ;
+	irim_addmoments( pixel, wgt, old, new ) ; 
+
+	return ; 
+
+}
+
+/* initialize the convolution beam */
+
+void irim_initbeam( 
+	float 	*convol,
+	float	pixsize,
+	float	beam )
+{
+	*convol = MINBEAM / pixsize ;
+	*convol = MAX( 1.0, *convol ) ;
+	*convol = ( beam == 0.0 ) ? *convol : beam ;
+	beam2 = *convol * *convol ;
+	pixsperbeam = ceil( 4 * beam2 ) ;
+	pixsz = *convol + 1 ;
+	return ;
+}
+
+#<
+
+#>            imkeys.h
+/* imkeys.h
+
+                            COPYRIGHT (c) 1990
+            Kapteyn Astronomical Institute - University of Groningen
+                P.O. Box 800, 9700 AV Groningen, The Netherlands
+
+Includefile:  IMAGE
+
+Purpose:      userfxxx, keywords and messages
+
+File:         imkeys.h
+
+Author:       Do Kester
+
+
+Updates:      May 07 1991 DK.
+
+*/
+
+/* keywords and USER*** message strings */
+#define IRSET_KEY	"IRSET="
+#define IRSET_MES	"Give input IR data set [quit]"
+#define PIXEL_KEY	"PIXELS="
+#define PIXEL_MES	"Give max of %d pixel size(s) "
+#define CENTER_KEY	"CENTER="
+#define CENTER_MES	"Give central lon & lat of map [IRDS-center]"
+#define SIZE_KEY	"SIZE="
+#define SIZE_MES	"Give lon & lat size of map [IRDS-size]"
+#define BEAM_KEY	"BEAM="
+#define BEAM_MES	"Give convolution beam (in pixels) [0.0]"
+#define COOR_KEY	"COOR="
+#define COOR_MES	"Give coordinate system [IRDS-coor]"
+#define PROJ_KEY	"PROJ="
+#define PROJ_MES	"Give projection type [GNOMON]"
+#define PRCEN_KEY	"PRCEN="
+#define PRCEN_MES	"Give projection center [center]"
+#define NAME_KEY	"NAME="
+#define NAME_MES	"Give name of the map [IRDS-name]"
+#define INSET_KEY	"SET="
+#define INSET_MES	"Give input map set [none]"
+#define MASK_KEY	"MASK="
+#define MASK_MES	"Give input mask [none]"
+#define OUTSET_KEY	"OUTSET="
+#define OUTSET_MES	"Give output map set [%s] "
+#define OVER_KEY	"OVERWRITE="
+#define OVER_MES	"The set already exists; overwrite? [yes]"
+#define NRS_KEY		"MAPNRS="
+#define NRS_MES		"The maps to write (all, last or list of int's) [last]"
+#define PLANES_KEY	"PLANES="
+#define PLANES_MES	"The planes (1=intensity; 0=coverage; 2=std.dev) [1]"
+#define IRSETOUT_KEY	"IRSETOUT="
+#define IRSETOUT_MES	"Give output IR data set [none]"
+#define TUNE_KEY	"TUNE="
+#define TUNE_MES	"Give destripe power (0,1 or 2) [2]"
+#define ITER_KEY	"ITER="
+#define ITER_MES	"Give number of iterations [%d]"
+#define MEDIAN_KEY	"MEDIAN="
+#define MEDIAN_MES	"Apply median filter [no]"
+#define DELETE_KEY	"DELETE="
+#define DELETE_MES	"Give list of snip.det to delete [none]"
+#define EXCLUDE_KEY	"EXCLUDE="
+#define EXCLUDE_MES	"Give list of snip.det to skip [none]"
+#define ADJUST_KEY	"ADJUST="
+#define	ADJUST_MES	"Give list of snip.det to adjust [none]"
+#define DEBUG_KEY	"LOGLEVEL="
+#define DEBUG_MES	"Amount of output in logfile [Quiet]"
+#define DETS_KEY	"DETS="
+#define DETS_MES	"Give detectors to be used [large]"
+#define XYPLOT_KEY	"XYPLOT="
+#define XYPLOT_MES	"Show overlay plot for iteration number [0]"
+#define SHOW_KEY	"SHOW="
+#define SHOW_MES	"Show map-scan cross sections; All One None Last [All] "
+#<
+
+#>            imtypes.h
+#define	MAXCAL		3	/* maximum stripe power */
+#define MAXAX		10	/* maximum different pixel numbers */
+#define MAXLAYER	3	/* maximum layers */
+
+/* get memory for arrays which is initialized to zero */
+#define FLOAT_INIT( f, n ) \
+	f = (float*)calloc( ( n ), sizeof( float ) ) ; assert( f )
+#define INT_INIT( f, n ) \
+	f = (int*)calloc( ( n ), sizeof( int ) ) ; assert( f )
+#define LONG_INIT( f, n ) \
+	f = (long*)calloc( ( n ), sizeof( long ) ) ; assert( f )
+#define DOUBLE_INIT( f, n ) \
+	f = (double*)calloc( ( n ), sizeof( double ) ) ; assert( f )
+#define FCHAR_INIT( fc, len )  \
+        (fc).a = (char*)malloc( (len+1) * sizeof( char ) );\
+        assert( (fc).a ) ; (fc).l = len
+
+/* free memory of the arrays above */
+#define FREE( p )		free( p ) ; p = NULL 
+#define FCHAR_FREE( fc )	FREE( (fc).a ) ; (fc).l = 0 ;
+
+/* wherever a var has dimension 2 it represents longitude and latitude resp. */
+
+typedef struct {
+  fchar		name ;		/* list of irds names	*/
+  fint		nr ;		/* length of the list	*/
+} irds_type ;
+
+#define IRDS_INIT( irds ) \
+	irds = (irds_type*)malloc( sizeof( irds_type ) ) ;\
+	assert( irds )
+
+typedef struct {
+  fchar		name ;		/* name of the map */
+  fchar		inst ;		/* instrument identification */
+  float		beam ; 		/* radius of beam; 0 => rectangular [pixel] */
+  double	center[2] ; 	/* center of the map 		   [degree] */
+  double	side[2] ; 	/* length of the sides 		   [degree] */
+  double	pixsize	;	/* size of a pixel 	     [degree/pixel] */
+  fint		crid ; 		/* coordinate type number */
+  double	prcenter[2] ;	/* projected coordinates of the center */
+  fint		prid ; 		/* projection type number */
+  bool		median ;	/* median filtering */
+} image_type ; 
+
+#define IMAGE_INIT( image ) \
+	image = (image_type*)malloc( sizeof( image_type ) ) ;\
+	assert( image ) ;\
+	FCHAR_INIT( image->name, MAXTXTLEN ) ;\
+	FCHAR_INIT( image->inst, MAXTXTLEN ) 
+#define IMAGE_FREE( image )	FCHAR_FREE( image->name ) ;\
+				FCHAR_FREE( image->inst ) ; FREE( image )
+
+typedef struct {
+  int		axes[2]	;	/* length of the axes in the map    [pixel] */
+  double 	refpix[2] ; 	/* reference pixel = proj. center   [pixel] */
+  double 	pixsize ; 	/* pixel size in map         [degree/pixel] */
+  float		sigma ;		/* standard deviation in the map */
+  int		squarebeam ;	/* square beam ? */
+  int		psinclusion ; 	/* point source inclusion in present map ? */
+} map_type ;
+
+typedef struct {
+  long		npix ; 		/* number of pixels on a patch */
+  long		npatch[2] ; 	/* number of patches in one dimension */
+  long		nptr ; 		/* total number of patches */
+  long		nlayer ;	/* number of layers */
+  long		npl ; 		/* number of pixels in one layered patch */
+  long		npp[MAXLAYER] ;	/* npix * npix * i, i=0,nlayer-1 */
+  float		*store ;	/* pointer to the storage vector */
+  long		length ;	/* total length of store: nptr * npl */
+  map_type	map ;		/* info about the map being stored */
+} store_type ; 
+
+#define STORE_INIT( st ) \
+	st = (store_type*)malloc( sizeof( store_type ) ) ;\
+	assert( st ) ;	st->store = NULL 
+#define STORE_FREE( st ) 	FREE( st->store ) ; FREE( st )
+
+typedef struct {
+  fint		tune ;		/* power of tuning function */
+  fint		maxiter ;	/* maximum number of iterations */
+  double	sizes[MAXAX] ; 	/* pixel sizes in subsequent iterations */
+  fint		nsizes ;	/* number of different pixel sizes */
+  int		keer ;		/* counter of present iteration */
+  int		mode ;		/* -2: delete; -1: coadd ; 
+				   other: destripe tune */
+} iter_type ;
+
+#define ITER_INIT( iter ) \
+	iter = (iter_type*)malloc( sizeof( iter_type ) ) ; assert( iter )
+
+typedef struct {
+  long		*x ;		/* x value of pixel */
+  long		*y ;		/* y value of pixel */
+  float		*dat ;		/* value of sample to be added to pixel */
+  long		*index ;	/* index of pixel in store */
+  long		length ;	/* length of the above */
+  long		max ;		/* maximum length upto now */
+  int		flagmask ;	/* mask for the flags to be used */
+} pixel_type ;
+
+#define PIXEL_INIT( pixel ) \
+	pixel = (pixel_type*)malloc( sizeof( pixel_type ) ) ; \
+	assert( pixel ) ; pixel->dat = NULL ; \
+	pixel->x = pixel->y = pixel->index = NULL ; \
+	pixel->length = pixel->max = 0 ;\
+	pixel->flagmask = 0 
+
+typedef struct {
+  float		*time ;		/* time of sample */
+  float		*model ;	/* corresponding pixel in map */
+  float		*dat ;		/* data value of sample */
+  int		*flag ;		/* flag of the sample */
+  long		length ;	/* length of the above */
+  long		max ;		/* maximum length upto now */
+} msx_type ;
+
+#define MSX_INIT( msx ) \
+	msx = (msx_type*)malloc( sizeof( msx_type ) ) ; \
+	assert( msx ) ; msx->flag = NULL ; \
+	msx->time = msx->model = msx->dat = NULL ; \
+	msx->length = msx->max = 0
+
+typedef struct {
+  fchar		name ;			/* (generic) name of output set */
+  fint		list[MAXAX+1] ;		/* list of iterations to be written */
+  fint		nl ;			/* length of list */
+  fint		planes[MAXLAYER] ;	/* planes to be writtem */
+  fint		np ;			/* number of planes */
+} outmap_type ;
+
+#define OUTMAP_INIT( out ) \
+	out = (outmap_type*)malloc( sizeof( outmap_type ) ) ; \
+	assert( out ) ;
+#<
+
+#>            gdsio.h
+/* gdsio.h
+
+           Copyright (c) 1991
+  Laboratory for Space Research Groningen 
+       Kapteyn Laboratory Groningen 
+           All Rights Reserved.
+
+Function:     gdsio.h
+
+Purpose:      Easy-C companions of gdsd routines
+
+Category:     IRAS, private to program: IMAGE
+
+Author:       Do Kester		do@guspace.rug.nl
+
+Updates:      06 Aug 1991: DK, Creation date
+
+*/
+
+#include "gds_create.h"
+#include "gds_extend.h"
+#include "gdsd_rint.h"
+#include "gdsd_rlog.h"
+#include "gdsd_rreal.h"
+#include "gdsd_rdble.h"
+#include "gdsd_rchar.h"
+#include "gdsd_grint.h"
+#include "gdsd_grlog.h"
+#include "gdsd_grreal.h"
+#include "gdsd_grdble.h"
+#include "gdsd_grchar.h"
+#include "gdsd_wint.h"
+#include "gdsd_wlog.h"
+#include "gdsd_wreal.h"
+#include "gdsd_wdble.h"
+#include "gdsd_wchar.h"
+
+#define GDS_EXTEND( a, b, c, d, e ) \
+	gds_extend_c( (a), tofchar(b), &(c), &(d), (e) )
+
+#define GDSD_RINT( a, b, c, d, e ) \
+	gdsd_rint_c( (a), tofchar(b), &(c), (d), (e) )
+#define GDSD_RLOG( a, b, c, d, e ) \
+	gdsd_rlog_c( (a), tofchar(b), &(c), (d), (e) )
+#define GDSD_RREAL( a, b, c, d, e ) \
+	gdsd_rreal_c( (a), tofchar(b), &(c), (d), (e) )
+#define GDSD_RDBLE( a, b, c, d, e ) \
+	gdsd_rdble_c( (a), tofchar(b), &(c), (d), (e) )
+#define GDSD_RCHAR( a, b, c, d, e ) \
+	gdsd_rchar_c( (a), tofchar(b), &(c), (d), (e) )
+
+#define GDSD_GRINT( a, b, c, d, e, f, g ) \
+	gdsd_grint_c( (a), tofchar(b), (c), (d), &(e), (f), (g) )
+#define GDSD_GRLOG( a, b, c, d, e, f, g ) \
+	gdsd_grlog_c( (a), tofchar(b), (c), (d), &(e), (f), (g) )
+#define GDSD_GRREAL( a, b, c, d, e, f, g ) \
+	gdsd_grreal_c( (a), tofchar(b), (c), (d), &(e), (f), (g) )
+#define GDSD_GRDBLE( a, b, c, d, e, f, g ) \
+	gdsd_grdble_c( (a), tofchar(b), (c), (d), &(e), (f), (g) )
+#define GDSD_GRCHAR( a, b, c, d, e, f, g ) \
+	gdsd_grchar_c( (a), tofchar(b), (c), (d), &(e), (f), (g) )
+
+#define GDSD_WINT( a, b, c, d, e ) \
+	gdsd_wint_c( (a), tofchar(b), &(c), &(d), (e) )
+#define GDSD_WLOG( a, b, c, d, e ) \
+	gdsd_wlog_c( (a), tofchar(b), &(c), &(d), (e) )
+#define GDSD_WREAL( a, b, c, d, e ) \
+	gdsd_wreal_c( (a), tofchar(b), &(c), &(d), (e) )
+#define GDSD_WDBLE( a, b, c, d, e ) \
+	gdsd_wdble_c( (a), tofchar(b), &(c), &(d), (e) )
+#define GDSD_WCHAR( a, b, c, d, e ) \
+	gdsd_wchar_c( (a), tofchar(b), &(c), tofchar(d), (e) )
+
+#define TOPLEVEL	0	/* for top level keywords */
+#<
+
+#>            image.h
+/* image.h
+
+                            COPYRIGHT (c) 1990
+            Kapteyn Astronomical Institute - University of Groningen
+                P.O. Box 800, 9700 AV Groningen, The Netherlands
+
+Includefile:  IMAGE
+
+Purpose:      Constants, typedefs and predefinitions of functions
+
+File:         image.h
+
+Author:       Do Kester
+
+
+Updates:      May 07 1991 DK.
+
+*/
+
+
+#include "gipsyc.h"
+#include "stdio.h"
+#include "string.h"
+#include "ctype.h"
+#include "stdlib.h"
+#include "assert.h"
+#include "math.h"
+
+#define MIN( a, b )	( ( (a) < (b) ) ? (a) : (b) )
+#define MAX( a, b )	( ( (a) > (b) ) ? (a) : (b) )
+
+/* miscellaneous definitions */
+#define OK		0
+#define	PI		3.14159265358979	/* Value of pi	*/
+#define D2R		0.01745325292		/* degree to radian	*/
+#define PLATESYS	"customplate_"		/* coordinate name of plate */
+#define MAXTXTLEN	80			/* length of line */
+
+#define MAXIRDS		20		/* max # irds that can be processed */
+#define MAXDET		16		/* max number of detectors */
+#define MAXBAND		5		/* max number of bands */
+#define MAXLIST		500		/* length of snip_det lists */
+
+#define LX		0		/* index of longitude & x-axis */
+#define BY		1		/* index of latitude & y-axis */
+#define FIRST		0		/* index of first data sample */
+#define LAST		1		/* index of last data sample */
+
+#define COADD_MODE	-1
+#define DESTRIPE_MODE	0		/* and other positive numbers */
+#define DELETE_MODE	-2
+
+#define BASE		0		/* constant offset in stripe */
+#define	DRIFT		1		/* linear drift in stripe */
+#define GAIN		2		/* gain stripe */
+
+#define PRESENT		1		/* a true map is present and read */
+#define NULMAP		-1		/* a nulmap is present */
+#define NOT_PRESENT	0		/* no map is present */
+
+#define PIX_PER_PATCH   64		/* number of pixels per patch */
+#define STD_LAYER	3		/* # layers for st.dev. calculation */
+#define INT_LAYER	2		/* # layers in other cases */
+#define COV_MAP		0		/* index of coverage map */
+#define INT_MAP		1		/* index of intensity map */
+#define STD_MAP		2		/* index of standard deviation map */
+#define	M0		0		/* index of zeroth moment layer */
+#define	M1		1		/* index of first moment layer */
+#define	M2		2		/* index of second moment layer */
+
+#define DEFAULT_SIGMA	1000.0		/* starting value for sigma */
+#define MINBEAM		0.041667	/* half a detector width: 2.5 arcmin */
+
+/* flags on the data samples */
+#define MASKFLAG	16		/* overlap of masked map data */
+#define BLANKFLAG	32		/* overlap of blank map data */
+
+/* levels of output to the logfile */
+#define SILENT		0		/* no output to logfile */
+#define QUIET		1		/* only global output */
+#define NORMAL		2		/* global plus last iteration */
+#define LOUD		3		/* global plus all iterations */
+#<
+
+#>            imdefs.h
+float	f_test( float, float, long, long ) ;
+void irim_addmoments( 
+		pixel_type*,		/* set of pixels */
+		float, 			/* weight	*/
+		store_type *,		/* old_store	*/
+		store_type * ) ;	/* new_store	*/
+void irim_axis(
+		iter_type*,		/* iteration */
+		store_type*,		/* new store */
+		image_type* ) ;		/* image */
+void irim_copy(
+		store_type*,		/* new store 	*/
+		int,			/* maplane	*/
+		fint,			/* plane level	*/
+		fchar ) ;		/* map set	*/
+void irim_copymask(
+	store_type *,			/* old store */
+	store_type * ) ;		/* new store */
+void irim_detsigma2log( int ) ;
+
+void irim_index( 
+		pixel_type*,		/* set of pixels */
+		store_type* );		/* store	*/
+int irim_init( 
+		fint,			/* logfile */
+		irds_type*, 			/* input irds */
+		image_type*, 		/* irds info */
+		store_type*,		/* storage vector info */
+		iter_type*,		/* iteration info */
+		int* );			/* map present ? */
+void irim_initbeam(
+		float *,		/* present beam */
+		float,			/* pixel size 	*/
+		float ) ;		/* beam 	*/
+void irim_initsnip( 
+		fchar ) ;		/* irds		*/
+void irim_initstore( 
+		iter_type*,		/* iteration info */
+		image_type*, 		/* irds info */
+		store_type* );		/* storage info */
+
+int irim_irdsname(
+        fint ,
+        irds_type * ,
+        image_type * ) ;
+
+void irim_iter( 
+		iter_type *,		/* iteration parameters */
+		int,			/* map present ? */
+		image_type *,		/* map info */
+		image_type * ) ;	/* irds info */
+void irim_makemap( 
+		store_type * );		/* store 	*/
+int irim_mapchek(
+		image_type*,		/* irds info */
+		image_type* ) ;		/* map info */
+int irim_maphead(
+		fchar,			/* name of map-set */
+		image_type *,		/* map info */
+		int *,			/* map present ? */
+		char *,			/* keyword */
+		char * ) ;		/* message */
+void irim_median(
+	pixel_type *,
+	store_type *,
+	float ) ;
+void irim_minmax(
+	fint,				/* logfile */
+	outmap_type* ) ;		/* outmap info	*/
+int irim_msx_alloc(
+        msx_type *,
+        int ) ;
+
+void irim_outmap(
+		iter_type*,		/* iteration 	*/
+		outmap_type* ) ;	/* output map 	*/
+
+int irim_pixel_alloc(
+        pixel_type *,
+        int ) ;
+
+void irim_scanout(
+		msx_type *,
+		float * ) ;
+void irim_sigma2log( 
+		int );			/* logfile	*/
+float irim_sigmap( void ) ;		/* overall stdev of stripes in map */
+void irim_storemap(
+		store_type*,		/* new store 	*/
+		int,			/* maplane	*/
+		fint,			/* plane level	*/
+		fchar ) ;		/* map set	*/
+int  irim_stripe(
+		float*,			/* stripe constants array */
+	        int,             	/* stripe moment */
+        	float*,           	/* standard dev. of stripe */
+		msx_type* ) ;		/* map-scan-cross section */
+int irim_userinfo( 
+		fint,			/* logfile */
+		irds_type *, 			/* name of irds */
+		image_type * );		/* image information from irds */
+int irim_userlog( void ) ;
+void irim_wrim2log(
+		int,			/* logfile */
+		char *,			/* status line */
+		image_type * ) ;	/* whose info is written to logfile */
+void irim_wrmap(
+		fint,			/* logfile	*/
+		fchar,			/* input idrs	*/
+		store_type*,		/* new store	*/
+		image_type*,		/* image	*/
+		iter_type*,		/* iter		*/
+		outmap_type* );		/* output map 	*/
+
+#ifdef SCAN_TYPE
+int irim_interpol( 			/* stripe moment */
+		store_type *,		/* old store 	 */
+		scan_type *,		/* scan		 */
+		pixel_type*,		/* set of pixels */
+		int,			/* tune parameter*/
+		iter_type* ) ;		/* iteration 	 */
+void irim_plotxy(
+	store_type*,
+	scan_type* ) ;
+void irim_roundbeam(
+	        store_type *,		/* old_store	*/
+	        store_type *,		/* new_store	*/
+        	scan_type *,		/* scan		*/
+		pixel_type *,		/* set of pixels */
+        	long * );         	/* range, 0 for start; 1 for last */
+void irim_sdet( 
+		int,			/* logfile 	*/
+		store_type *,		/* old store	*/
+		store_type *,		/* new store	*/
+		scan_type *,		/* scan		*/
+		long *,			/* range 	*/
+		iter_type * );		/* tuning	*/
+void irim_showscan(
+	msx_type *,			/* map-scan-cross-section */
+	scan_type *,			/* scan info */
+	iter_type * ) ;			/* iteration */
+void irim_snip( 
+		int,			/* logfile 	*/
+		fchar,			/* irds name(s)	*/
+		fint,			/* snip number  */
+		store_type *,		/* old store	*/
+		store_type *,		/* new store	*/
+		image_type *,		/* image	*/
+		scan_type *,		/* scan		*/
+		iter_type *,		/* iter		*/
+		int*,			/* actual	*/
+		int ) ;			/* doscan	*/
+void irim_squarebeam(
+	        store_type *,		/* old_store	*/
+	        store_type *,		/* new_store	*/
+        	scan_type *,		/* scan		*/
+		pixel_type *,		/* set of pixels */
+        	long * );         	/* range, 0 for start, 1 for last */
+#endif
+
+#ifdef LIST_TYPE
+void irim_coadestr(
+		int,			/* logfile */
+		irds_type*,			/* irds name */
+		image_type*,		/* image */
+		store_type*,		/* old store */
+		store_type*,		/* new store */
+		list_type*,		/* exclude */
+		list_type*,		/* adjust */
+		iter_type* );		/* iteration */
+void irim_irds(
+	        int,			/* logfile 	*/
+        	irds_type *,		/* list of irds */
+	        image_type *,		/* image	*/
+        	store_type *,		/* old_store	*/
+	        store_type *,		/* new_store 	*/
+	        list_type *,		/* any list	*/
+	        iter_type * );		/* iteration	*/
+int  irim_lists( 	
+		int,			/* logfile */
+		list_type*, 		/* exclude	*/
+		list_type*, 		/* adjust	*/
+		fchar, 			/* instrument */
+		int );			/* map present? */
+
+#endif
+#<
+
+#>            image.make
+# makefile for gipsy tasks, written in sheltran
+# fill in 
+#   PROG : the file name that contains the program-statement
+#   SUBS : the file names containing the subroutines belonging to PROG
+#   EXE  : the name to be assigned to the task; 
+#	   it should be different from PROG
+#
+# For the program `image'
+EXE  =  image
+OBJ1 = 	irim_image.o 
+OBJ2 =	irim_init.o irim_userinfo.o irim_irdsname.o irim_wrim2log.o \
+	irim_maphead.o irim_mapchek.o irim_iter.o irim_initstore.o \
+	irim_lists.o irim_coadestr.o irim_axis.o \
+	irim_irds.o irim_snip.o irim_index.o \
+	irim_sdet.o irim_squarebeam.o irim_addmoments.o \
+	irim_makemap.o irim_stripe.o irim_wrmap.o irim_copy.o \
+	irim_outmap.o irim_median.o irim_storemap.o irim_copymask.o \
+	irim_pixel_alloc.o irim_msx_alloc.o irim_showscan.o \
+	irim_scanout.o irim_plotxy.o irim_userlog.o f_test.o \
+	irim_interpol.o irim_roundbeam.o 
+
+# if (temporarily, for debugging) more objectfiles have to be linked,
+#   fill them in here. Otherwise leave empty.
+MOREOBJ = 
+
+# define the source files
+PROG =  $(OBJ1:.o=.c) $(OBJ2:.o=.c)
+# define all headerfiles
+HEDR =  imkeys.h imtypes.h gdsio.h image.h imdefs.h
+#define all object files
+OBJ  =  $(OBJ1) $(OBJ2) $(MOREOBJ)
+
+# define makefile
+MAK  =  $(EXE).make
+# define documantation file(s)
+DOC  =  $(EXE).dc1 
+# define the source files to be bundled 
+SRC  =  $(DOC) $(PROG) $(HEDR) $(MAK)
+# define the name of the bundle
+TASK =  $(EXE).src
+#define the sourcefiles to be printed
+PRNT =  $(DOC) $(PROG) $(HEDR) 
+
+# rules to make .o files
+.c.o		: 
+	$(CC_COMP) -c $(CC_OPTS) $<
+
+# make a local task with the name EXE
+$(EXE)		: $(OBJ)
+	$(CC_COMP) -o $(EXE) $(OBJ) $(CC_LIBS)
+
+# bundle the sources and the makefile
+$(TASK)		: $(DOC) $(OBJ1:.o=.c) $(OBJ2:.o=.c) $(HEDR) $(MAK) 
+	-rm $(TASK).bak
+	$(gip_sys)/pack.csh $(TASK) $(DOC) $(OBJ1:.o=.c) $(OBJ2:.o=.c) $(HEDR) $(MAK)
+
+# clean up the files created in compilation
+clean		: 
+	-rmchild -f $(SRC) 2> /dev/null
+	-rm -i $(SRC) 
+
+# print the source files on the laserjet
+print		: $(PRNT)
+	qmsprint $?
+	@touch print
+
+# files dependency on header-files
+$(OBJ)		: image.h imdefs.h imtypes.h imkeys.h
+#<

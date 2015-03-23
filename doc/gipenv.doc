@@ -1,0 +1,40 @@
+
+Script:       gipenv
+
+Purpose:      Set some GIPSY environment variables in .cshrc or .profile
+              for process wide use.
+
+Category:     MANAGEMENT
+
+File:         gipenv.csh
+
+Author:       K.G. Begeman
+
+Use:          when running csh, execute this C shell script in .cshrc by
+              the following statement:
+
+              source $gip_root/sys/gipenv.csh
+
+              when running sh, execute gipenv.sh in .profile by the
+              following statement:
+
+              . $gip_root/sys/gipenv.sh
+
+Notes:        1) gip_root must have been defined before this statement
+              and is system dependent. For example for the Kapteyn alliant
+              gip_root must be defined as follows in .cshrc:
+              setenv gip_root /dj3/users/gipsy
+              and in .profile:
+              gip_root=/dj3/users/gipsy; export gip_root
+              2) if a local setup file exists ($gip_root/loc/gipenv.csh
+              or $gip_root/loc/gipenv.sh), then the local file will be
+              executed.
+
+Updates:      Jun 30, 1990: KGB, Document created.
+              Mar 22, 1993: KGB, also for sh.
+              Apr  4, 1996: KGB, allowed local setup.
+              Feb 12, 2003: JPT, suppress client error message.
+              Nov 15, 2004: JPT, introduced generic per-architecture client.
+              Jun 16, 2009: JPT, 64-bit generic clients added. x86_64 only.
+              Mar 22, 2011: JPT, added command-line invokable task aliases.
+

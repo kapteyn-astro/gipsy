@@ -1,0 +1,2472 @@
+C
+C                           COPYRIGHT (c) 1990
+C                    Kapteyn Astronomical Institute
+C               University of Groningen, The Netherlands
+C                          All Rights Reserved.
+C
+C
+C#>             smooth.dc1
+C
+CProgram:       SMOOTH
+C
+CPurpose:       Smooth sets with a gaussian beam
+C
+CFile:          smooth.shl
+C
+CAuthor:        M. Vogelaar
+C
+CCategory:      MANIPULATION, HEADER, FITTING
+C
+CKeywords:
+C
+C   INSET=      Give input set, subsets:
+C               Input set (and subsets). Maximum number of subsets is
+C               2048.
+C
+C   BOX=        Frame for input subsets.                 [entire subset]
+C
+C   OUTSET=     Give output set (and subsets):
+C               Output set and subset(s) for the result. The number of
+C               output subsets is the same as the number of input sub-
+C               sets.
+C
+C** CUTOFF=     Give cutoff ratio for gaussian                 [1/10000]
+C               This is the ratio of the gaussian function values
+C               at central point and a point x on the boundary.
+C
+C   AUTO=       Automatic mode?                                      [Y]
+C               In automatic mode, beam parameters of an old beam are,
+C               if possible, calculated from the header and new beam
+C               parameters are asked. Parameters of a convolution func-
+C               tion are calculated by the program, and are used as
+C               initialization for the iteration towards the new beam.
+C               In this mode you need the associated antenna pat-
+C               tern (AP). In non-automatic mode the user can give the
+C               convolution parameters directly.
+C
+C** WRITECONV=  Write convolution function to a set:               Y/[N]
+C               Write 2-d gauss data used in convolution to a
+C               set (CONSET=) for further inspection f.i.
+C
+C   OUTCONSET=  Output set & subsets for conv. fie.:              [none]
+C               Keyword is only asked if WRITECONV=Y
+C
+C   DECIM=	Give decimation:				   [1,1]
+C               There is an upper limit to the decimation, depending on
+C               the size of your input set.
+C
+C
+C               IN automatic MODE THE FOLLOWING KEYWORDS ARE ASKED:
+C
+C   APSET=      Give set (, subset) of antenna pattern:
+C               Input of the AP sub structure. Its dimension has
+C               to be 2.
+C
+C   OUTAPSET=   Output set (, subset) for AP:                     [none]
+C
+C   OLDBEAM=    Beam sizes old maj, min axes (arcsec):
+C               Size of major, minor axis (FWHM) of the original beam in
+C               arcsec if nothing was found in header. If values were
+C               found in the header of APSET=, these values are default
+C               and the keyword is asked hidden.
+C
+C   OLDPOSANG=  Position angle old beam (deg):
+C               Position angle in degrees of major axis wrt. the north
+C               in the direction of the east. If a value was
+C               found in the header of APSET=, this value is default
+C               and the keyword is asked hidden.
+C
+C   NEWBEAM=    Beam sizes new maj, min axes (arcsec):
+C               Wanted size of major, minor axis of smoothed new beam in
+C               arcsec. For one dimensional smoothing, give one of the
+C               axes the same value as the original axis and give the
+C               new position angle the same value as the old one.
+C
+C   NEWPOSANG=  Give position angle new beam (deg):
+C               Position angle in degrees of major axis of smoothed
+C               beam wrt. the north.
+C
+C** FITBOX=     Minimum size of convolved part of AP used in     [11,11]
+C               a least squares fit. The sizes have to be odd and smal-
+C               ler than 127. The default values are the same as in
+C               the program ANTPAT.
+C
+C** CLIP=       Use data in fit with values above a user given    [none]
+C               clip level.
+C
+C** TOLERANCE=  Give tolerance in least squares fit:              [0.01]
+C               Fitting of the new beam stops when
+C               successive iterations fail to produce a decrement in
+C               reduced chi-squared less than TOLERANCE. If its value
+C               is less than the minimum tolerance possible, it will be
+C               set to this value. This means that maximum accuracy can
+C               be obtained by setting TOLERANCE=0.0.
+C
+C** EPSILON=    Give accuracy in fitted beam (%):                    [1]
+C               Stop iteration if calculated new beam sizes
+C               and wanted beam sizes don't differ more than epsilon
+C               (percentage!).
+C
+C** PRESMOOTH=  Only presmoothing?                                   [N]
+C               (i.e. determine convolution parameters and scale factor
+C               only)
+C
+C** SCALE=      Scaling factor output subsets.              [Calculated]
+C               The scaling factor used will be stored in the descriptor
+C               item SCALEFAC in the output subset(s).
+C
+C               IN non-automatic MODE THE FOLLOWING KEYWORDS ARE ASKED:
+C
+C   OLDBEAM=    Beam sizes old maj, min axes (arcsec):   [Header values]
+C               or: 
+C               Beam sizes old maj, min axes (arcsec):   [grid spacings]
+C
+C               Size of major, minor axis (FWHM) of the
+C               original beam in arcsec. The default depends on the 
+C               availability of header items BMMAJ en BMMIN in the 
+C               header of INSET=
+C
+C   OLDPOSANG=  Position angle old beam (deg):                       [0]
+C               Position angle in degrees of major axis wrt. the north
+C               in the direction of the east.
+C
+C   NEWBEAM=    Beam sizes new maj, min axes (arcsec):
+C               Wanted size of major, minor axis of smoothed new beam in
+C               arcsec. For one dimensional smoothing, give one of the
+C               axes the same value as the original axis and give the
+C               new position angle the same value as the old one.
+C
+C   NEWPOSANG=  Give position angle new beam (deg):             [old PA]
+C               Position angle in degrees of major axis of smoothed
+C               beam wrt. the north.
+C
+C** CONBEAM=    Give maj. & min. axis of con.               [Calculated]
+C               beam (arcsec):
+C               Size of major and minor axis in arcsec of the gaussian
+C               convolution function.
+C
+C** CONPOSANG=  Give P.A. (deg) major axis (N->E):          [Calculated]
+C               Position angle of major axis wrt North in the
+C               direction of East
+C
+C   SCALE=      Give scale factor for output:               [Calculated]
+C               Scaling factor output subsets.
+C
+C
+CDescription:   SMOOTH Convolves maps to larger beam sizes using a
+C               Gaussian convolution function. This function is cal-
+C               culated by giving the current and the new (wanted) beam
+C               sizes in R.A. and Dec. in arcseconds and the current and
+C               the new position angle of the beam. The position angle
+C               is given in degrees and is measured with respect to the
+C               north in the direction of the east. If this information
+C               is not available, the convolution parameters can be
+C               given by the user. The convolution function is normal-
+C               ized to unity. Note that the definition of Tb (bright-
+C               ness temperature) is not preserved, e.g. a point source
+C               at a certain point of X mJy does not contain the value
+C               X at that point after smoothing. To maintain the same
+C               definition in old and new (smoothed) subsets the latter
+C               can be scaled using the keyword SCALE=  The appropriate
+C               scale factors may be determined empirically by using
+C               SMOOTH on an antenna pattern (AP) first, and determining
+C               the factor needed to scale the central value back to
+C               unity.
+C               To facilitate this procedure, SMOOTH can be used in an
+C               automatic mode. Since the original beam usually is not
+C               gaussian, the assumption of its being so leads to a new
+C               beam somewhat different from the one specified. In the
+C               automatic mode first only the appropriate AP is given,
+C               and the wanted new beam. SMOOTH then performs several
+C               iterations, during each one of which the AP is smoothed,
+C               whereby the beam size of the resulting AP converges to
+C               the user given wanted value. Once the convergence has
+C               proceeded far enough the currently valid smoothing para-
+C               meters are preserved, and the appropriate scaling is
+C               determined. With the keywords FITBOX= and CLIP= the user
+C               can modify the default box used in the fit.
+C               Hereafter the program proceeds with smoothing the set,
+C               and if selected, the AP itself. Output for the AP is
+C               specified with the keyword OUTAPSET=
+C
+C               In automatic mode SMOOTH updates the new set header with
+C               the destination of the AP associated with the output.
+C               If output for a smoothed AP is selected, the name of the
+C               input AP will be written in its header.
+C               In non-automatic mode the AP information is removed.
+C
+C               Whenever the smoothing routine encounters a blank
+C               value within the smoothing beam, it sets the smoothed
+C               pixel value to blank. This results in a growth of blanks
+C               in your subset. To avoid this problem, make sure the
+C               subsets don't contain any blanks.
+C
+C               In non-automatic mode, the parameters of the convolution
+C               function can be a direct input also. This is done by
+C               specifying the (hidden) keywords CONBEAM= and CONPOSANG=.
+C               Use dummy values for the other keywords (OLDBEAM=,
+C               NEWBEAM=) that are prompted.
+C               The default value for SCALE= is obtained by convolving
+C               the calculated convolution function with a 2-d gaussian
+C               with maximum amplitude equal to 1 and with parameters
+C               given in OLDBEAM= and OLDPOSANG=  The result is a gaussian
+C               of which the central value is not longer equal to zero.
+C               The scale factor is the number that is needed to scale the
+C               central value back to 1.
+C
+C
+CNotes:         There is a limit using large beams. If you want to
+C               smooth with a large beam, it is best to smooth to an
+C               intermediate sized beam first. If you set the output
+C               mode to TEST, you get the presmooth iteration results
+C               in your log-file.
+C
+CUpdates:       May 10, 1990: VOG, Document created
+C               Jun 27, 1991: VOG, Presmooth iteration rewritten
+C               Aug 26, 1992: VOG, All rotation related routines
+C                                  have angle offset wrt pos. X-axis
+C               Dec  5, 1996: VOG, Changed defaults for OLDBEAM= in 
+C                                  non automatic mode
+C               Aug  5, 2008: JPT, Removed redundant write statement
+C#<
+C
+E     ***** Program SMOOTH *****
+      PROGRAM SMOOTH
+
+C     Declaration of parameters:
+
+      CHARACTER*(*)      ident
+      PARAMETER        ( ident = '  Version 2.0  (Sep 1, 1992)' )
+      INTEGER            maxsubs
+      PARAMETER        ( maxsubs = 2048 )
+      INTEGER            maxaxes
+      PARAMETER        ( maxaxes = 10 )
+N     Default options for use in USERxxx() routines
+      INTEGER            none, request, hidden, exact
+      PARAMETER        ( none    = 0 )
+      PARAMETER        ( request = 1 )
+      PARAMETER        ( hidden  = 2 )
+      PARAMETER        ( exact   = 4 )
+N     Buffer size for I/O
+      INTEGER            maxIObuf
+      PARAMETER        ( maxIObuf = 262144)
+N     Remove with 'WMINMAX' old minmax descriptors
+      INTEGER            remove
+      PARAMETER        ( remove = 1 )
+N     Max. length of convolution function array
+      INTEGER            maxconv
+N     Make it odd * odd
+      PARAMETER        ( maxconv = 512*512 )
+N     Coordinate word for whole set
+      INTEGER            wholeset
+      PARAMETER        ( wholeset = 0 )
+N     Minimum number of pixels left after decimation
+      INTEGER            minpix
+      PARAMETER        ( minpix = 10 )
+N     Maximum dimensions of the 'FITBOX'
+      INTEGER            maxfitX, maxfitY
+      PARAMETER        ( maxfitX = 128, maxfitY = 128 )
+
+C     Declarations for GDSINP:
+
+      INTEGER            GDSINP
+      CHARACTER*80       setin
+N     Array containing subset coordinate words
+      INTEGER            subin(   maxsubs )
+N     Axis permutation array
+      INTEGER            axperm(  maxaxes )
+      INTEGER            axcount( maxaxes )
+N     Axcount version for decimated subsets
+      INTEGER            Daxcount( maxaxes )
+N     Number of subsets
+      INTEGER            nsubs
+N     Determined at first input of sets
+      INTEGER            dfault
+N     Number of output device [0..16]
+      INTEGER            devnum
+N     Keywords for numerous inputs
+      CHARACTER*12       keyword
+      CHARACTER*80       message
+N     Algorithm with repeat axes ==> class = 1
+      INTEGER            class
+N     Dimension of the subsets
+      INTEGER            subdim
+N     Gridspacings from header
+      DOUBLE PRECISION   cdelt( 2 )
+N     The AP version
+      DOUBLE PRECISION   APcdelt(  2 )
+      DOUBLE PRECISION   APDcdelt( 2 )
+N     The decimated version
+      DOUBLE PRECISION   Dcdelt(   2 )
+N     Angle of latitude axis wrt (N->E)
+      DOUBLE PRECISION   crotaD, APcrotaD
+      REAL               crota, APcrota
+N     Real version of grid spacings
+      REAL               gridspac( 2 )
+      REAL               APgridspac( 2 )
+
+C     Declarations for GDSBOX:
+
+N     Grid vectors of sub frames of input sets
+      INTEGER            BgridLO(   maxaxes )
+      INTEGER            BgridHI(   maxaxes )
+N     Grid vectors of entire frames of inp. sets
+      INTEGER            FgridLO(   maxaxes )
+      INTEGER            FgridHI(   maxaxes )
+N     Same for output sets
+      INTEGER            FgridLOO(  maxaxes )
+      INTEGER            FgridHIO(  maxaxes )
+N     Same for antenna pattern
+      INTEGER            APFgridLO( maxaxes )
+      INTEGER            APFgridHI( maxaxes )
+N     Same for decimated frame
+      INTEGER            DgridLO(   maxaxes )
+      INTEGER            DgridHI(   maxaxes )
+N     Grid vectors for the decimated AP
+      INTEGER            APDgridLO( maxaxes )
+      INTEGER            APDgridHI( maxaxes )
+N     What's the default in GDSBOX?
+      INTEGER            boxopt
+N     Length of box axes
+      INTEGER            NdatX, NdatY
+
+C     Declarations for GDSOUT:
+
+      INTEGER            GDSOUT
+N     Number of output sets
+      INTEGER            nsubsO
+      INTEGER            subout(   maxsubs )
+      INTEGER            axpermO(  maxaxes )
+      INTEGER            axcountO( maxaxes )
+      CHARACTER*80       setout
+
+C     Functions:
+
+N     Returns dimension of a set
+      INTEGER            GDSC_NDIMS
+N     Extracts grid coordinate from coord. word
+      INTEGER            GDSC_GRID
+N     Returns coordinate word
+      INTEGER            GDSC_FILL
+      INTEGER            NELC
+N     Obtain the name under which a GIPSY task runs
+      CHARACTER*9        MYNAME
+      INTEGER            USERREAL
+      INTEGER            USERINT
+      INTEGER            USERLOG
+N     Performs convolution
+      INTEGER            CONVOLVE
+      INTEGER            CONVPARS
+      INTEGER            PRESMOOTH
+N     Is a value a blank?
+      LOGICAL            FBLANK
+N     Fills an array with values of 2dim gauss
+      INTEGER            FILLGAUSS2D
+N     Convert units of axes to arcsecs
+      REAL               CONVERTUNIT
+N     Decimate an array, return length
+      INTEGER            DECIMATOR
+N     Update header for new beam parameters
+      INTEGER            UPDATEHEAD
+
+C     Variables related to Antenna Pattern:
+
+N     Mode for automatically rescaling etc.
+      LOGICAL            automatic
+      LOGICAL            writeconv
+      INTEGER            nsubsAP, nsubsAPO
+      CHARACTER*80       APsetin, APsetout
+      INTEGER            APsubin(    maxsubs ), APsubout(   maxsubs )
+      INTEGER            axpermAP(   maxaxes ), axpermAPO(  maxaxes )
+      INTEGER            axcountAP(  maxaxes ), axcountAPO( maxaxes )
+      INTEGER            axcountAPD( maxaxes )
+      INTEGER            subdimAP
+N     Is there a smoothed AP to write?
+      LOGICAL            extraAP
+
+C     Variables for the convolution parameters:
+
+N     Axes of gaussian beams
+      REAL               oldbeam(2), newbeam(2), conbeam(2)
+N     Position angle of beams
+      REAL               oldPA, newPA, conPA
+N     Beam widths major, minor axis from header
+      DOUBLE PRECISION   Dbmmin, Dbmmaj
+      DOUBLE PRECISION   Dminmaj(2)
+N     Single precision version of min, maj axis
+      REAL               bmmin, bmmaj
+N     Position angle of major axis of beam (header)
+      DOUBLE PRECISION   Dbmpa
+N     Single precision version
+      REAL               bmpa
+N     Array holding the convolution function data
+      REAL               confie( maxconv )
+N     Ratio gauss f(0)/f(x) where x is boundary
+      REAL               cutoffratio
+N     Convert degrees to radians
+      REAL               degtorad
+N     Convert radians to degrees
+      REAL               radtodeg
+N     BMMIN, BMMAJ from header?
+      LOGICAL            frhead
+
+C     Variables for function LSQFIT
+
+N     Default values for the fitbox size
+      INTEGER            dfltfitX, dfltfitY
+N     Array version of Nx, Ny
+      INTEGER            fitlen(2)
+N     Clip level for fit data
+      REAL               clip
+N     Relative tolerance
+      REAL               tol
+
+C     Variables for the read/write algorithms:
+
+N     Beam sizes in pixels
+      INTEGER            NconX, NconY
+      INTEGER            dumNconX, dumNconY
+N     Various counters
+      INTEGER            m
+N     There are totpixels in one subset
+      INTEGER            totpixels
+N     Array version of transfer id's
+      INTEGER            tid
+N     For output data
+      INTEGER            tidO
+N     Counter for subroutine MINMAX3
+      INTEGER            mcount
+N     Number of pointers in INITPTR buffer
+      INTEGER            ptrcount
+N     Coordinate words for frames & boxes
+      INTEGER            Fcwlo
+      INTEGER            Fcwhi
+      INTEGER            Bcwlo
+      INTEGER            Bcwhi
+      INTEGER            FcwloO
+      INTEGER            FcwhiO
+      INTEGER            numpixels
+      INTEGER            pixelsdone
+N     For updating number of blanks
+      INTEGER            nblanks( maxsubs )
+N     For updating minimum and maximum of subset
+      REAL               minval(  maxsubs )
+      REAL               maxval(  maxsubs )
+N     Arrays holding the data
+      REAL               dataO( maxIObuf )
+      REAL               dataI( maxIObuf )
+      INTEGER            linesleft
+N     Number of blank lines with length of X-axis
+      INTEGER            blanklines
+      INTEGER            numblanks
+N     Read this number of lines from disk
+      INTEGER            readlines
+N     Total number of lines to convolve
+      INTEGER            totreadlines
+N     Maximum number to read in one run
+      INTEGER            maxreadlines
+N     Number of stored lines from previous conv.
+      INTEGER            storelines
+N     Store this number of pixels
+      INTEGER            numtokeep
+      INTEGER            number
+N     Just a counter of number of pixels
+      INTEGER            pixels
+N     Used as offset in a data array
+      INTEGER            offset
+N     Used as starting index in data array
+      INTEGER            start
+N     Number of lines to be convolved
+      INTEGER            conheight
+N     Number of blanks left & right of box
+      INTEGER            leftblanks
+      INTEGER            rightblanks
+      INTEGER            writelines
+N     Check required size against available
+      INTEGER            maxbufsize
+N     Holding the data read from disk
+      REAL               datadummy(      maxIObuf )
+N     Holding dummy data + stored data before conv.
+      REAL               beforeCON(  2 * maxIObuf )
+N     Input data is convolved to 'afterCON'
+      REAL               afterCON( 2 * maxIObuf )
+N     Control the actual number of pixels to write
+      INTEGER            numtodisk
+N     Position for decimation
+      INTEGER            startpos
+N     Dummy value for check on blanks etc.
+      REAL               value
+N     Blank value for comparison
+      REAL               blank
+
+
+C     STABAR variables:
+
+      REAL               allpixels
+      REAL               currentpixels
+N     Needed to determine total number of pixels
+      INTEGER            APpixels
+
+
+C     Iterate old beam to new beam:
+
+N     Variable to control the iteration
+      REAL               epsilon
+
+
+C     Miscellaneous:
+
+N     Various counters
+      INTEGER            i
+N     Dimension of the whole set
+      INTEGER            setdim
+N     Error values for Range and Grid routines etc
+      INTEGER            Rerr, Werr, Gerr, R1, R2
+N     Errorlevel for error message routine
+      INTEGER            errlevel
+N     Coordinate words to determine total range
+      INTEGER            cwlo, cwhi
+N     Loop guard for valid set input etc.
+      LOGICAL            agreed
+N     First line, nothing convolved
+      LOGICAL            first
+N     Display name of this program
+      CHARACTER*9        task
+N     Dummy text
+      CHARACTER*80       txt
+N     Dummy to use in combination with functions
+      INTEGER            Iresult
+N     Convert arbitrary units to arcseconds
+      REAL               unittoarc
+N     Scale factor
+      REAL               scalefac
+N     Decimation factors
+      INTEGER            decim( 2 )
+N     Maximum decimation factors
+      INTEGER            maxdecX, maxdecY
+N     Is it necessary to decimate
+      LOGICAL            decimate
+N     Used in GDSD_READC
+      INTEGER            bytesdone
+N     Stop after presmoothing?
+      LOGICAL            presmo
+      REAL               dumangle
+      INTEGER            mx, my, jp, ip, lx,ly, ix, iy
+
+
+
+N     Default size of the 'fitbox'
+      dfltfitX = 11
+      dfltfitY = 11
+
+N     Convert degrees to radians
+      degtorad = ATAN(1.0) / 45.0
+N     Convert radians to degrees
+      radtodeg = 45.0 / ATAN(1.0)
+
+C***********     Fortran to C vv interface:   ***********
+C@ real function func( real, real, integer, integer )
+C@ subroutine derv( real, real, real, integer, integer )
+
+
+E     ***** SMOOTH: Main *****
+
+N     Enter HERMES
+      CALL INIT
+N     Get task name
+      task = MYNAME()
+N     Show task and version number
+      CALL ANYOUT( 8, ( task(:NELC(task) ) // ident) )
+C----------------------------------------------------------------------
+C     Prepare GDSINP for SET:
+C----------------------------------------------------------------------
+      dfault  = none
+      keyword ='INSET='
+      message ='Give input set, subsets: '
+N     Application repeats operation for each subset
+      class   = 1
+N     Only two dimensional structures are accepted!
+      subdim  = 2
+      devnum  = 8
+      nsubs   = GDSINP( setin, subin, maxsubs, dfault,
+     #                  keyword, message, devnum, axperm,
+     #                  axcount, maxaxes, class, subdim )
+      setdim = GDSC_NDIMS( setin, wholeset )
+N     Determine the edges of this set
+      Rerr = 0
+      Gerr = 0
+      CALL GDSC_RANGE( setin, wholeset, cwlo, cwhi, Rerr )
+      FOR m = 1, subdim
+        FgridLO(m) = GDSC_GRID( setin, axperm(m), cwlo, Gerr )
+        FgridHI(m) = GDSC_GRID( setin, axperm(m), cwhi, Gerr )
+      CFOR
+N     Get grid spacings from header
+      R1 = 0
+      R2 = 0
+N     Get the pixel separation of the axes
+      WRITE( txt, '(''CDELT'', I1 )' ) axperm(1)
+      CALL GDSD_RDBLE( setin, txt, wholeset, cdelt(1), R1 )
+      WRITE( txt, '(''CDELT'', I1 )' ) axperm(2)
+      CALL GDSD_RDBLE( setin, txt, wholeset, cdelt(2), R2 )
+      IF ( (R1 .LT. 0) .OR. (R2 .LT. 0) )
+      THEN
+        CALL ERROR( 4, 'SMOOTH: No grid spacings in header of'//
+     #                 ' this set!' )
+      CIF
+
+C-------------------------------------------------------------
+C     Get the rotation angle of the image. The angle that
+C     is associated with the spatial axis latitude,
+C     is an angle wrt North in the direction of the
+C     positive y-axis (counted positive if counter clockwise).
+C--------------------------------------------------------------
+      WRITE( txt, '(''CROTA'', I1 )' ) axperm(2)
+      R1 = 0
+      CALL GDSD_RDBLE( setin, txt, wholeset, crotaD, R1 )
+      IF (R1 .LT. 0)
+      THEN
+        txt = 'Cannot find rotation angle in header, 0.0 assumed'
+        CALL ANYOUT( 3, txt )
+        crota = 0.0
+      ELSE
+        crota = SNGL( crotaD )
+      CIF
+
+C----------------------------------------------------------------------
+C     Prepare a frame for SET:
+C----------------------------------------------------------------------
+      dfault  = request
+      keyword = 'BOX='
+      message = ' '
+N     Default is entire subset
+      boxopt  = 0
+      devnum  = 8
+      CALL GDSBOX( BgridLO, BgridHI, setin, subin,
+     #             dfault, keyword, message, devnum, boxopt )
+N     Determine length of X-axis & Y-axis of box
+      NdatX = BgridHI(1) - BgridLO(1) + 1
+      NdatY = BgridHI(2) - BgridLO(2) + 1
+
+C----------------------------------------------------------------------
+C     Put in automatic mode if definition of brightness temperature
+C     has to be preserved. For the rescaling one needs an antenna
+C     pattern. Convolution function parameters will be
+C     calculated in a way such that this function convolved with the
+C     original beam, results in a new beam with user given characteris-
+C     tics.
+C----------------------------------------------------------------------
+N     Only presmoothing?
+      presmo     =.FALSE.
+      message    ='Only presmoothing?               Y[N]'
+      keyword    ='PRESMOOTH='
+      Iresult    = USERLOG( presmo, 1, hidden, keyword, message )
+      automatic  =.TRUE.
+      IF (presmo)
+      THEN
+        dfault   = hidden
+      ELSE
+        dfault   = request
+      CIF
+      keyword    ='AUTO='
+      message    ='Automatic mode?    [Y]/N'
+      Iresult    = USERLOG( automatic, 1, dfault, keyword, message )
+
+C     Write convolution fie. to a set?
+      writeconv  =.FALSE.
+      dfault     = hidden
+      keyword    ='WRITECONV='
+      message    ='Write convolution function to a set:   Y/[N]'
+      Iresult    = USERLOG( writeconv, 1, dfault, keyword, message )
+
+C----------------------------------------------------------------------
+C     Ask for a value f(0) / f(x) to determine the boundaries of the
+C     convolution function.
+C----------------------------------------------------------------------
+      cutoffratio = 1.0 / 10000.0
+      dfault = hidden
+      keyword = 'CUTOFF='
+      message = 'Give cutoff ratio for gaussian  [1/10000]'
+      Iresult = USERREAL( cutoffratio, 1, dfault, keyword, message )
+
+      IF automatic
+      THEN
+C----------------------------------------------------------------------
+C       Find out whether there is an associated AP, i.e.
+C       get the string associated with the header item 'APSET'
+C       from the header. Documentation for GDSD_READC can be found in
+C       GDSD_READ.DC2. Note that this item is not compatible with
+C       the old integer type 'APSET' item.
+C----------------------------------------------------------------------
+        Rerr = 0
+        CALL GDSD_READC( setin, 'APSET', subin(1), APsetin, 30,
+     #                   1, bytesdone, Rerr )
+        IF (Rerr .LT. 0)
+        THEN
+          message ='Give set (, subset) of ant. pat.: '
+          dfault  = none
+        ELSE
+          txt     ='SMOOTH: AP in header: ' // APsetin
+          CALL ANYOUT( 3, txt )
+          message ='Set (, subset) of ant. pat.:  [header]'
+          dfault  = request
+        CIF
+N       Prepare GDSINP for AP-set
+        keyword  ='APSET='
+N       Application repeats operation for each subset
+        class    = 1
+N       Dimension of AP always 2
+        subdimAP = 2
+        devnum   = 8
+N       Only one AP subset is allowed
+        nsubsAP  = GDSINP( APsetin, APsubin, 1, dfault,
+     #                     keyword, message, devnum, axpermAP,
+     #                     axcountAP, maxaxes, class, subdimAP )
+N       Find the corners of the AP
+        Gerr = 0
+        Rerr = 0
+        CALL GDSC_RANGE( APsetin, wholeset, cwlo, cwhi, Rerr )
+        FOR m = 1, subdimAP
+          APFgridLO(m) = GDSC_GRID( APsetin, axpermAP(m), cwlo, Gerr )
+          APFgridHI(m) = GDSC_GRID( APsetin, axpermAP(m), cwhi, Gerr )
+        CFOR
+N       Get grid spacings from header
+        R1 = 0
+        R2 = 0
+N       Get the pixel separation of the axes
+        CALL GDSD_RDBLE( APsetin, 'CDELT1', wholeset, APcdelt(1), R1 )
+        CALL GDSD_RDBLE( APsetin, 'CDELT2', wholeset, APcdelt(2), R2 )
+        IF ( (R1 .LT. 0) .OR. (R2 .LT. 0) )
+        THEN
+          CALL ERROR( 4, 'SMOOTH: No grid spacings in ' //
+     #               'header of this AP set!' )
+        CIF
+        R1 = 0
+N       Get angle of latitude axis (wrt north)
+        CALL GDSD_RDBLE( APsetin, 'CROTA2', wholeset, APcrotaD, R1 )
+        IF (R1 .LT. 0)
+        THEN
+          CALL ANYOUT( 3, 'SMOOTH: No rotation of latitude in ' //
+     #                    'AP header, 0 is assumed.')
+          APcrota = 0.0
+        ELSE
+          APcrota = SNGL( APcrotaD )
+        CIF
+
+C----------------------------------------------------------------------
+C       Now there is an antenna pattern, so try to find the beam sizes
+C       and position angle from the header of this AP. First major axis
+C       then minor axis and position angle.
+C----------------------------------------------------------------------
+	Rerr = 0
+        CALL GDSD_RDBLE( APsetin,'BMMAJ',APsubin(1),Dbmmaj,Rerr )
+        IF ( Rerr .LT. 0 )
+        THEN
+          CALL SETFBLANK(bmmaj)
+          message = 'SMOOTH: Major axis length not in AP header'
+        ELSE
+          bmmaj = SNGL(Dbmmaj)
+          WRITE( message, '(''SMOOTH: Length of major ' //
+     #          'axis (arcsec): '', F7.3 )' ) bmmaj
+        CIF
+        CALL ANYOUT( 3, message )
+N       Minor axis:
+        Rerr = 0
+        CALL GDSD_RDBLE( APsetin,'BMMIN',APsubin(1),Dbmmin,Rerr )
+        IF ( Rerr .LT. 0 )
+        THEN
+          CALL SETFBLANK(bmmin)
+          message = 'SMOOTH: Minor axis length not in APheader'
+        ELSE
+          bmmin = SNGL(Dbmmin)
+          WRITE( message, '(''SMOOTH: Length of minor ' //
+     #          'axis (arcsec): '', F7.3 )' ) bmmin
+        CIF
+        CALL ANYOUT( 3, message )
+N       Position angle from header in degrees
+        Rerr = 0
+        CALL GDSD_RDBLE( APsetin,'BMPA',APsubin(1),Dbmpa,Rerr )
+        IF ( Rerr .LT. 0 )
+        THEN
+          CALL SETFBLANK(bmpa)
+          message = 'SMOOTH: Position angle not in AP header'
+        ELSE
+          bmpa = SNGL(Dbmpa)
+          WRITE( message, '(''SMOOTH: Position angle of major axis '',
+     #                      ''of beam (N->E): '', F7.3 )' ) bmpa
+        CIF
+        CALL ANYOUT( 3, message )
+
+C----------------------------------------------------------------------
+C       To determine the convolution parameters, one needs the
+C       parameters of the old beam. In what follows,
+C       get these old beam properties. If there are values already
+C       constructed or found in the header, the keywords are hidden:
+C----------------------------------------------------------------------
+        keyword    ='OLDBEAM='
+        oldbeam(1) = bmmaj
+        oldbeam(2) = bmmin
+        IF ( ( FBLANK(bmmin) .OR. FBLANK(bmmaj)       ) .OR.
+     #       ( (bmmin .EQ. 0.0) .AND. (bmmaj .EQ. 0.0) )  )
+        THEN
+N         User has to give exact number
+          dfault  = none + exact
+          message = 'Beam sizes old maj, min axes (arcsec): '
+        ELSE
+          dfault = hidden
+          message = 'Beam sizes old maj, min axes (arcsec): [HEADER]'
+        CIF
+        Iresult = USERREAL( oldbeam, 2, dfault, keyword, message )
+        IF (oldbeam(1) .LT. oldbeam(2))
+        THEN
+          CALL ANYOUT( 8, 'Major axis < minor axis' )
+        CIF
+N       Get position angle
+        keyword = 'OLDPOSANG='
+        oldPA   = bmpa
+        IF FBLANK(bmpa)
+        THEN
+          dfault  = none
+          message = 'Pos. angle old beam (N->E) (deg): '
+        ELSE
+          dfault  = hidden
+          message = 'Pos. angle old beam (N->E) (deg): [HEADER]'
+        CIF
+        Iresult = USERREAL( oldPA, 1, dfault, keyword, message )
+
+N       Ask properties new beam
+        REPEAT
+          keyword = 'NEWBEAM='
+          dfault  = none + exact
+          message = 'Beam sizes new maj, min axes (arcsec):'
+          Iresult = USERREAL( newbeam, 2, dfault, keyword, message )
+          agreed  = ( (newbeam(1) .GE. oldbeam(1)) .AND.
+     #                (newbeam(2) .GE. oldbeam(2)) )
+          IF (.NOT. agreed)
+          THEN
+            CALL ANYOUT( 3, 'SMOOTH: new beam smaller than old beam' )
+            CALL CANCEL( keyword )
+          CIF
+          IF (newbeam(1) .LT. newbeam(2))
+          THEN
+            CALL ANYOUT( 8, 'Major axis < minor axis' )
+          CIF
+
+          IF agreed
+          THEN
+            keyword ='NEWPOSANG='
+            newPA   = oldPA
+            dfault  = request
+            message ='Pos. angle new beam (N->E)(deg):   [old PA]'
+            Iresult = USERREAL( newPA, 1, dfault, keyword, message )
+C----------------------------------------------------------------------
+C           In automatic mode we have both old and new beam parameters.
+C           By means of iteration we try to find the parameters of a
+C           convolution function in such a way that the convolution
+C           function convolved with the old beam results in the new beam.
+C           Initial values can be calculated with formulas given by
+C           J. P. Wild in Aust. J. Phys.,1970,23,113-115
+C           The angles are wrt. North, but the routine 'CONVPARS'
+C           needs the angles wrt. the pos. X-axis!
+C----------------------------------------------------------------------
+            Iresult = CONVPARS( oldbeam, newbeam, oldPA+90.0,
+     #                          newPA+90.0, conbeam, conPA )
+            agreed = (Iresult .GT. 0)
+            IF (.NOT. agreed)
+            THEN
+              CALL ANYOUT(8, 'Unsuitable combination of new beam'//
+     #                       ' parameters, try other combination.' )
+            CIF
+          CIF
+          IF (.NOT. agreed)
+          THEN
+            CALL CANCEL( 'NEWBEAM=' )
+            CALL CANCEL( 'NEWPOSANG=' )
+          CIF
+        UNTIL agreed
+      CIF
+
+C----------------------------------------------------------------------
+C     In non-automatic mode the parameters of the convolution
+C     function are asked. In this case there is no control over
+C     the resulting axis lengths:
+C----------------------------------------------------------------------
+      IF (.NOT. automatic)
+      THEN
+N       Only the axis units of the set are available
+        unittoarc   = CONVERTUNIT( setin, axperm )
+        gridspac(1) = SNGL( cdelt(1) ) * unittoarc
+N       Convert from units to arcsec
+        gridspac(2) = SNGL( cdelt(2) ) * unittoarc
+        frhead = .TRUE.
+        Rerr = 0
+        CALL GDSD_RDBLE( setin,'BMMIN',subin(1),Dminmaj(1),Rerr )
+        IF ( Rerr .LT. 0 )
+        THEN
+           frhead = .FALSE.
+        CIF
+        Rerr = 0
+        CALL GDSD_RDBLE( setin,'BMMAJ',subin(1),Dminmaj(2),Rerr ) 
+        IF ( Rerr .LT. 0 )
+        THEN
+           frhead = .FALSE.
+        CIF
+        REPEAT
+          keyword    ='OLDBEAM='
+N         Note order in defaults!          
+          IF (frhead)
+          THEN
+             oldbeam(1) = Dminmaj(2)
+             oldbeam(2) = Dminmaj(1)
+          ELSE
+             oldbeam(1) = gridspac(2)
+             oldbeam(2) = gridspac(1)
+          CIF
+          dfault  = request
+          write(message, '(''Old maj, min axes (arcsec):   ['',
+     #          F6.2,F6.2, '']'' )' )
+     #          ABS(oldbeam(1)), ABS(oldbeam(2))
+          Iresult = USERREAL( oldbeam, 2, dfault, keyword, message )
+          IF (oldbeam(1) .LT. oldbeam(2))
+          THEN
+            CALL ANYOUT( 8, 'Major < Minor!' )
+          CIF
+N         Get position angle
+          keyword = 'OLDPOSANG='
+          oldPA   = 0.0
+          dfault  = request
+          message = 'Pos. angle old beam (N->E)(deg):   [0]'
+          Iresult = USERREAL( oldPA, 1, dfault, keyword, message )
+N         Ask properties new beam
+          REPEAT
+            keyword = 'NEWBEAM='
+            dfault  = none + exact
+            message = 'Beam sizes new maj, min axes (arcsec):'
+            Iresult = USERREAL( newbeam, 2, dfault, keyword, message )
+            agreed  = ( (newbeam(1) .GE. oldbeam(1)) .AND.
+     #                  (newbeam(2) .GE. oldbeam(2)) )
+            IF (.NOT. agreed)
+            THEN
+              CALL ANYOUT( 3, 'SMOOTH: new beam smaller than old beam')
+              CALL REJECT( keyword, 'Wrong beam!' )
+              CALL CANCEL( keyword )
+            CIF
+            IF (newbeam(1) .LT. newbeam(2))
+            THEN
+              CALL ANYOUT( 8, 'Major < Minor!' )
+            CIF
+          UNTIL agreed
+          keyword ='NEWPOSANG='
+          dfault  = request
+          newPA   = oldPA
+          message ='Pos. angle new beam (N->E)(deg):  [old PA]'
+          Iresult = USERREAL( newPA, 1, dfault, keyword, message )
+          Iresult = CONVPARS( oldbeam, newbeam, oldPA+90.0,
+     #                        newPA+90.0, conbeam, conPA )
+          agreed = (Iresult .GT. 0)
+          IF (.NOT. agreed)
+          THEN
+            CALL ANYOUT(8, 'Unsuitable combination of new beam '//
+     #                     'parameters, try other combination.' )
+          CIF
+          IF (.NOT. agreed)
+          THEN
+            CALL CANCEL( 'NEWBEAM=' )
+            CALL CANCEL( 'NEWPOSANG=' )
+          CIF
+        UNTIL agreed
+
+C       Now user can change the convolution defaults:
+
+        keyword ='CONBEAM='
+N       User has to give exact number
+        dfault  = hidden
+        message ='Sizes conv. fie. (maj, min):  [Calculated]'
+        Iresult = USERREAL( conbeam, 2, dfault, keyword, message )
+        keyword ='CONPOSANG='
+N       Position angle in the convolution
+        conPA   = conPA - 90.0
+        dfault  = hidden
+        message ='Pos. angle conv. beam (N->E)(deg):  [Calculated]'
+        Iresult = USERREAL( conPA, 1, dfault, keyword, message )
+N       Again wrt. pos. X-axis:
+        conPA   = conPA + 90.0
+N       Create 2d-gauss but correct for crota of map
+        Iresult = FILLGAUSS2D( conbeam, conPA-crota, maxconv,
+     #                         gridspac, 1.0, cutoffratio,
+     #                         1, NconX, NconY, confie )
+        IF (Iresult .LT. 0)
+        THEN
+          CALL ERROR( 4, 'SMOOTH: Convolution region too big!' )
+        CIF
+        IF writeconv
+        THEN
+          CALL CONFIESET( confie, NconX, NconY )
+        CIF
+      CIF
+
+C----------------------------------------------------------------------
+C     Prepare an output set. The output set can have a different size.
+C     This depends on the user given decimation factors. These factors
+C     are integers with a minimum value of 1. The maximum value is
+C     calculated so that there are at least 'minpix' pixels in each
+C     direction.
+C----------------------------------------------------------------------
+      maxdecX = axcount(1) / minpix
+      maxdecY = axcount(2) / minpix
+N     Exact number required
+      dfault  = request + exact
+      keyword ='DECIM='
+      message ='Give decimation:   [1,1]'
+      REPEAT
+        decim(1) = 1
+        decim(2) = 1
+N       Determine if decimation is wanted
+        decimate = ( USERINT( decim, 2, dfault, keyword, message )
+     #              .GT. 0 )
+        agreed   = ( (decim(1) .GE. 1) .AND. (decim(2) .GE. 1) )
+     #             .AND.
+     #             ( (decim(1).LE.maxdecX).AND.(decim(2).LE.maxdecY) )
+        IF (.NOT. agreed)
+        THEN
+          CALL CANCEL( keyword )
+          message ='Outside range, try again:   [1,1]'
+        CIF
+      UNTIL agreed
+      IF ( decimate .AND. (decim(1) .EQ. 1) .AND. (decim(2) .EQ. 1) )
+      THEN
+        decimate = .FALSE.
+      CIF
+C----------------------------------------------------------------------
+C     Assign GDSINP buffer to GDSOUT. Output set will get same
+C     coordinate system as input SET.
+C----------------------------------------------------------------------
+      keyword ='OUTSET='
+      CALL GDSASN( 'INSET=', keyword, class )
+      IF decimate
+      THEN
+N       determine new edges
+        FOR i = 1, subdim
+N         Operate on integers ==> -7/2=-3,  7/2=3
+          DgridHI(i)  = ( FgridHI(i)/decim(i) )
+          DgridLO(i)  = ( FgridLO(i)/decim(i) )
+        CFOR
+N       Change size of output set
+        CALL GDSCSS( keyword, DgridLO, DgridHI )
+        FOR i = 1, subdim
+N         Determine new axis length
+          Daxcount(i) = DgridHI(i) - DgridLO(i) + 1
+N         New pixel separation in double precision
+          Dcdelt(i)   = cdelt(i) * DBLE( decim(i) )
+N         Change the axis
+          CALL GDSCPA( keyword, axperm(i), Daxcount(i), Dcdelt(i),
+     #                 0.0D0, 0.0D0, 0.0D0, ' ', ' ', 32 )
+        CFOR
+      CIF
+C----------------------------------------------------------------------
+C     Ask for output set, check on number of subsets:
+C----------------------------------------------------------------------
+      dfault  = none
+      message ='Give output set (and subsets):'
+      devnum  = 8
+      REPEAT
+        nsubsO = GDSOUT( setout, subout, nsubs,
+     #                   dfault, keyword, message, devnum,
+     #                   axpermO, axcountO, maxaxes )
+        agreed  = (nsubsO .EQ. nsubs)
+        IF (.NOT. agreed)
+        THEN
+          CALL CANCEL( keyword )
+          CALL ANYOUT( 3, 'SMOOTH: Wrong number of subsets: ' )
+        CIF
+      UNTIL agreed
+      Rerr = 0
+      Gerr = 0
+      CALL GDSC_RANGE( setout, 0, cwlo, cwhi, Rerr )
+      FOR m = 1, subdim
+        FgridLOO(m) = GDSC_GRID( setout, axpermO(m), cwlo, Gerr )
+        FgridHIO(m) = GDSC_GRID( setout, axpermO(m), cwhi, Gerr )
+      CFOR
+
+C----------------------------------------------------------------------
+C     Prepare an output set for the AP:
+C----------------------------------------------------------------------
+      IF (automatic)
+      THEN
+        IF (nsubsAP .NE. 0)
+        THEN
+          keyword ='OUTAPSET='
+          class   = 1
+          CALL GDSASN( 'APSET=', keyword, class )
+          IF decimate
+          THEN
+N           determine new edges
+            FOR i = 1, subdim
+N             Operate on integers ==> -7/2=-3,  7/2=3
+              APDgridHI(i)  = ( APFgridHI(i)/decim(i) )
+              APDgridLO(i)  = ( APFgridLO(i)/decim(i) )
+            CFOR
+N           Change size of output set
+            CALL GDSCSS( keyword, APDgridLO, APDgridHI )
+            FOR i = 1, subdim
+N             Determine new axis length
+              axcountAPD(i) = APDgridHI(i) - APDgridLO(i) + 1
+N             New pixel separation in double precision
+              APDcdelt(i)   = APcdelt(i) * DBLE( decim(i) )
+N             Change the axis
+              CALL GDSCPA( keyword, axpermAP(i), axcountAPD(i),
+     #        APDcdelt(i), 0.0D0, 0.0D0, 0.0D0, ' ', ' ', 32 )
+            CFOR
+          CIF
+          dfault   = request
+          message  = 'Output set & subsets for AP:  [none]'
+          devnum   = 8
+          nsubsAPO = GDSOUT( APsetout, APsubout, 1,
+     #                       dfault, keyword, message, devnum,
+     #                       axpermAPO, axcountAPO, maxaxes )
+        CIF
+      CIF
+
+C----------------------------------------------------------------------
+C     Write information to screen and logfile:
+C----------------------------------------------------------------------
+      txt = '==================================== SMOOTH ==========' //
+     #      '========================='
+      CALL ANYOUT( 3, txt )
+      CALL ANYOUT( 3, ' ' )
+      txt = 'Smooth set ['//setin( 1:NELC(setin) )//'] to set ['//
+     #        setout( 1:NELC(setout) )// ']'
+      CALL ANYOUT( 3, txt )
+      WRITE( txt, '(''Decimation:     '', I3, '' x'', I3 )' )
+     #       decim(1), decim(2)
+      CALL ANYOUT( 3, txt )
+      WRITE( txt, '(''Angle between North and latitude of image: '',
+     #       F6.2, '' deg'')' ) crota
+      CALL ANYOUT( 3, txt )
+      IF automatic
+      THEN
+        txt = 'Used mode:       Automatic'
+        CALL ANYOUT( 3, txt )
+        txt = 'Name of antenna pattern: ' //
+     #          APsetin( 1:NELC(APsetin) )
+        CALL ANYOUT( 3, txt )
+        IF (nsubsAPO .GE. 1)
+        THEN
+          txt = 'AP is smoothed to new set: ' //
+     #            APsetout( 1:NELC(APsetout) )
+          CALL ANYOUT( 3, txt )
+        CIF
+        txt = 'Beam properties found in header of [' //
+     #        APsetin( 1:NELC(APsetin) ) // ']:'
+        CALL ANYOUT( 3, txt )
+        IF ( FBLANK( bmmin ) .OR. FBLANK( bmmaj ) )
+        THEN
+          txt = 'No minor and major axis in AP header'
+          CALL ANYOUT( 3, txt )
+        ELSE
+          WRITE( txt, '(''BMMAJ: Major axis: '', F7.2,
+     #        '' arcsec'' )' ) bmmaj
+          CALL ANYOUT( 3, txt )
+          WRITE( txt, '(''BMMIN: Minor axis: '', F7.2,
+     #        '' arcsec'' )' ) bmmin
+          CALL ANYOUT( 3, txt )
+        CIF
+N       Write position angle from header
+        IF ( FBLANK( bmpa ) )
+        THEN
+          txt = 'No position angle in AP header'
+        ELSE
+          WRITE( txt, '(''BMPA:  Position angle of beam: '',
+     #           F8.2, '' in degrees (N->E)'' )' ) bmpa
+        CIF
+        CALL ANYOUT( 3, txt )
+        WRITE( txt, '(''CROTA: Rotation angle of AP latitude '',
+     #       ''axis wrt (N->E): '',F8.2, '' deg'' )' ) APcrota
+        CALL ANYOUT( 3, txt )
+        CALL ANYOUT( 3, ' ' )
+      CIF
+      txt = ' ***MISSION***'
+      CALL ANYOUT( 3, txt )
+      CALL ANYOUT( 3, ' ' )
+      WRITE( txt, '(''Convert old beam: '', F7.2, '','', F7.2,
+     #    '' arcsec'', F7.2, '' deg'' )' ) oldbeam(1), oldbeam(2),
+     #       oldPA
+      CALL ANYOUT( 3, txt )
+      WRITE( txt, '(''to the new beam : '', F7.2, '','', F7.2,
+     #    '' arcsec'', F7.2, '' deg'' )' ) newbeam(1), newbeam(2),
+     #       newPA
+      CALL ANYOUT( 3, txt )
+      IF (.NOT. automatic)
+      THEN
+        dumangle = conPA - 90.0
+        IF (dumangle .LT. 0.0 )
+        THEN
+          dumangle = dumangle + 180.0
+        CIF
+        WRITE( txt, '(''with conv. beam : '', F7.2, '','', F7.2,
+     #      '' arcsec'', F7.2, '' deg (N->E)'' )' ) conbeam(1),
+     #         conbeam(2), dumangle
+        CALL ANYOUT( 3, txt )
+      CIF
+      CALL ANYOUT( 3, ' ' )
+      IF (automatic)
+      THEN
+        CALL ANYOUT( 3, ' ' )
+        txt = ' ***ITERATION***'
+        CALL ANYOUT( 3, txt )
+        CALL ANYOUT( 3, ' ' )
+N       Get size of fitbox
+        dfault    = hidden
+        keyword   ='FITBOX='
+        fitlen(1) = 11
+        fitlen(2) = 11
+        WRITE( message, '('' Give size of fitbox (odd): ['', I3,
+     #       '' x'', I3,'']'' )' ) fitlen(1), fitlen(2)
+        Iresult   = USERINT( fitlen, 2, dfault, keyword, message )
+        CALL SETFBLANK( clip )
+        Iresult = USERREAL( clip, 1, hidden, 'CLIP=', ' ' )
+C----------------------------------------------------------------------
+C       Before starting the iteration, we have to insert some criteria
+C       in our algorithm. Stop the iteration if the number of
+C       iterations exceeds 'maxiters' or finish if new and wanted beam
+C       differ less than 'epsilon' %
+C       'tol' is the relative tolerance. Fitting of the new beam stops
+C       when successive iterations fail to produce a decrement in
+C       reduced chi-squared less than 'tol'.
+C----------------------------------------------------------------------
+N       Get the tolerance
+        tol       = 0.01
+        dfault    = hidden
+        message   = 'Give tolerance in least squares fit:  [0.01]'
+        keyword   ='TOLERANCE='
+        Iresult   = USERREAL( tol, 1, dfault, keyword, message )
+N       Criterion to abort iteration
+        epsilon   = 1.0
+        message   = 'Give accuracy in fitted beam (%):    [1]'
+        Iresult   = USERREAL(epsilon, 1, hidden, 'EPSILON=', message)
+N       Write some info
+        IF FBLANK( clip )
+        THEN
+          txt = 'No clip level selected.'
+          CALL ANYOUT( 3, txt )
+        ELSE
+          WRITE( txt, '(''Used clip level for AP data: '', F9.6 )' )
+     #           clip
+          CALL ANYOUT( 3, txt )
+        CIF
+        WRITE( txt, '(''Tolerance in fit: '', F9.6,
+     #         ''   {**TOLERANCE=}'' )' ) tol
+        CALL ANYOUT( 3, txt )
+        WRITE( txt, '(''Epsilon in fit  : '', F9.6,
+     #         ''%  {**EPSILON=}'' )' ) epsilon
+        CALL ANYOUT( 3, txt )
+
+C----------------------------------------------------------------------
+C      'conbeam' and 'conPA' are initial estimates of the parameters
+C       of the convolution function. However these are estimates
+C       based on convolution of gaussians. The antenna pattern is not
+C       gaussian. To control whether the convolution resulted in the
+C       desired new parameters, we need a routine which returns the
+C       real parameters of the new beam. The new beam is a convolution
+C       of old beam and convolution function.
+C----------------------------------------------------------------------
+
+        Iresult = PRESMOOTH( APsetin, APsubin,
+     #                       oldbeam, oldPA, newbeam, newPA,
+     #                       fitlen, cutoffratio,
+     #                       decim, tol, epsilon, clip,
+     #                       conbeam, conPA,
+     #                       scalefac, APgridspac )
+        IF (Iresult .NE. 0)
+        THEN
+           CALL ANYOUT(3, 'SMOOTH could not pre smooth the AP. ')
+           IF (Iresult .EQ. -4)
+           THEN
+             CALL ANYOUT( 3,  'Combination of old parameters and '//
+     #                        ' new parameters' )
+             CALL ANYOUT( 3,  'is not possible, try other ' //
+     #                        'combination' )
+           CIF
+           IF (Iresult .EQ. -12)
+           THEN
+             CALL ANYOUT( 3,  'Iteration aborted. A different set '//
+     #                        ' of new parameters' )
+             CALL ANYOUT( 3,  '(f.i. different angle) will ' //
+     #                        'probably result in better iteration')
+           CIF
+           CALL ERROR( 4, 'Cannot do a presmoothing!')
+        ELSE
+N         Fill the convolution function, correct for crota
+          conPA = conPA + 90.0
+          Iresult = FILLGAUSS2D( conbeam, conPA-crota, maxconv,
+     #                           APgridspac, 1.0, cutoffratio,
+     #                           1, NconX, NconY, confie )
+          IF (Iresult .LT. 0)
+          THEN
+            CALL ERROR( 4, 'Convolution region too big!' )
+          CIF
+N         Use presmoothed new beam parameters for header update
+          bmmaj = newbeam(1)
+          bmmin = newbeam(2)
+          bmpa  = newPA
+        CIF
+        IF writeconv
+        THEN
+          CALL CONFIESET( confie, NconX, NconY )
+        CIF
+      CIF
+
+C----------------------------------------------------------------------
+C     After calculating NconX/Y, calculate some buffer properties.
+C     Required minimum buffer size is length of X-axis of
+C     whole frame times height of convolution fie so at least
+C     'NconY' output lines of X-axis length can be written.
+C----------------------------------------------------------------------
+      maxbufsize = axcount(1) * NconY
+      IF (maxbufsize .GT. maxIObuf)
+      THEN
+        message = 'SMOOTH: Conv. fie. too big or buffer too small'
+        CALL ANYOUT( 3, message )
+        CALL ERROR( 4, 'SMOOTH: Buffer problem!' )
+      CIF
+
+C----------------------------------------------------------------------
+C     All what's done sofar is called presmoothing. The user has a
+C     option to stop the program at this point.
+C----------------------------------------------------------------------
+      IF presmo
+      THEN
+        CALL FINIS
+        STOP
+      CIF
+
+
+
+
+C----------------------------------------------------------------------
+C     In case of automatic mode, the default scale is the calculated
+C     value.
+C----------------------------------------------------------------------
+      IF automatic
+      THEN
+        dfault  = hidden
+        message = 'Give scale factor:   [calculated]'
+      ELSE
+C       Set amplitude to 1 and do not normalize
+N       Correct angle so it is wrt. pos. X-axis
+        oldPA = oldPA + 90.0
+        Iresult = FILLGAUSS2D( oldbeam, oldPA-crota, maxconv,
+     #                         gridspac, 1.0, cutoffratio,
+     #                         0, dumNconX, dumNconY, datadummy )
+
+C        call confieset( datadummy, dumNconX, dumNconY )
+
+        IF (Iresult .LT. 0)
+        THEN
+          message = 'Give scale factor:'
+          dfault  = none
+          CALL ANYOUT( 3, 'Cannot calculate a default scale!')
+        ELSE
+C         Transfer to bigger array
+          mx = MAX( NconX+10, dumNconX ) / 2
+          my = MAX( NconY+10, dumNconY ) / 2
+          IF ((mx*my) .GT. maxIObuf)
+          THEN
+            CALL ERROR(4, 'Gaussians too big for buffer!')
+          CIF
+          jp = 0
+          ip = 0
+          lx = dumNconX / 2
+          ly = dumNconY / 2
+          FOR iy = -my,my
+            FOR ix = -mx, mx
+              ip = ip + 1
+              IF ( (ix .LT. -lx) .OR. (ix .GT. lx) .OR.
+     #             (iy .LT. -ly) .OR. (iy .GT. ly) )
+              THEN
+                dataI(ip) = 0.0
+              ELSE
+                jp = jp + 1
+                dataI(ip) = datadummy(jp)
+              CIF
+            CFOR
+          CFOR
+          lx = 2*mx+1
+          ly = 2*my+1
+          Iresult = CONVOLVE( confie, NconX, NconY, dataI,
+     #                        dataO, lx, ly )
+          WRITE( message, '(''Old gauss  : '', I4,'' x '', I4)')
+     #           dumNconX, dumNconY
+          CALL ANYOUT(16, message)
+          WRITE( message, '(''enlarged to: '', I4,'' x '', I4)')
+     #           lx, ly
+          CALL ANYOUT(16, message)
+          WRITE( message, '(''Conv. fie  : '', I4,'' x '', I4)')
+     #           NconX, NconY
+          CALL ANYOUT(16, message)
+          IF (Iresult .NE. 0)
+          THEN
+            message  ='Give scale factor for output:'
+            dfault = none
+          ELSE
+            dfault   = request
+            scalefac = 1.0 / dataO( (lx*ly)/2 + 1)
+            WRITE( message, '(''Give scale factor for output:    ['',
+     #             F9.4, '']'')') scalefac
+          CIF
+        CIF
+      CIF
+      keyword ='SCALE='
+      Iresult = USERREAL( scalefac, 1, dfault, keyword, message )
+      CALL CANCEL( keyword )
+      IF (.NOT. automatic)
+      THEN
+        WRITE( message,'(''Scale factor in non automatic mode: '',
+     #         F10.4)') scalefac
+        CALL ANYOUT(3, message)
+      CIF
+C----------------------------------------------------------------------
+C     Loop over subsets, do the actual smoothing on the user given set
+C     and write results to disk. Scaling and decimating is performed
+C     also.
+C----------------------------------------------------------------------
+N     After this loop another one?
+      extraAP = ( automatic .AND. (nsubsAPO .GE. 1) )
+
+C     Initialize STABAR
+      allpixels = 1.0
+      FOR m = 1, subdim
+N       All pixels in one subset
+        allpixels = allpixels * FLOAT(axcount(m))
+      CFOR
+N     All pixels in all subsets together
+      allpixels = allpixels * FLOAT(nsubs)
+      IF (extraAP)
+      THEN
+        APpixels = 1
+        FOR m = 1, subdimAP
+N         All pixels in one AP
+          APpixels = APpixels * axcountAP(m)
+        CFOR
+        allpixels = allpixels + FLOAT(APpixels)
+      CIF
+      currentpixels = 0.0
+N      CALL STABAR( 0.0, allpixels, currentpixels )
+
+      CALL SETFBLANK( blank )
+N     Maximum number of lines to read for conv.
+C       maxreadlines = (maxIObuf / NdatX) - 1
+      maxreadlines = (maxIObuf / axcount(1)) - 1
+N     Actual number of lines to read for conv.
+      totreadlines = NdatY
+N     cw=coordinate word, lo=lower, hi=upper
+      FOR m = 1, nsubsO
+        R1 = 0
+        CALL GDSD_WREAL( setout, 'SCALEFAC', subout(m), scalefac, R1 )
+N       F=Frame, B=Box
+        Fcwlo  = GDSC_FILL( setin, subin(m), FgridLO )
+        Fcwhi  = GDSC_FILL( setin, subin(m), FgridHI )
+        Bcwlo  = GDSC_FILL( setin, subin(m), BgridLO )
+        Bcwhi  = GDSC_FILL( setin, subin(m), BgridHI )
+        IF decimate
+        THEN
+N         Use decimated output grids
+          FcwloO = GDSC_FILL( setout, subout(m), DgridLO )
+          FcwhiO = GDSC_FILL( setout, subout(m), DgridHI )
+        ELSE
+          FcwloO = GDSC_FILL( setout, subout(m), FgridLOO )
+          FcwhiO = GDSC_FILL( setout, subout(m), FgridHIO )
+        CIF
+        tid       = 0
+        tidO      = 0
+        mcount    = 0
+        startpos  = 1
+        ptrcount  = 0
+        numpixels = 0
+        linesleft = totreadlines
+C----------------------------------------------------------------------
+C       First write all lines containing only blanks to disk:
+C----------------------------------------------------------------------
+        blanklines = BgridLO(2) - FgridLO(2)
+        numblanks  = blanklines * axcount(1)
+        REPEAT
+          pixels = MIN( maxIObuf, numblanks )
+          CALL SETNFBLANK( dataO, pixels )
+          IF decimate
+          THEN
+            numtodisk = DECIMATOR( dataO, pixels, axcount(1), FgridLO,
+     # 	   		           startpos, decim )
+            startpos = startpos + pixels
+          ELSE
+ 	    numtodisk = pixels
+ 	  CIF
+N         Note that output is between FcwloO & FcwhiO
+          CALL GDSI_WRITE( setout, FcwloO, FcwhiO, dataO,
+     #                     numtodisk, numpixels, tidO )
+          numblanks = numblanks - pixels
+          currentpixels = currentpixels + FLOAT(pixels)
+
+          CALL CRESTAT(m, allpixels, currentpixels)
+C          CALL STABAR( 0.0, allpixels, currentpixels )
+        UNTIL (numblanks .EQ. 0)
+C----------------------------------------------------------------------
+C       Read and process data to be convolved:
+C----------------------------------------------------------------------
+        readlines = 0
+        REPEAT
+N         Maximum number of lines to read in one time
+          readlines = MIN( maxreadlines, linesleft )
+N         This number is always less than maxIObuf
+          totpixels = readlines * NdatX
+          number = 0
+N         Nothing is convolved yet?
+          first = (linesleft .EQ. totreadlines)
+N         Read totpixels in the dummy data array
+          CALL GDSI_READ( setin, Bcwlo, Bcwhi, datadummy,
+     #                    totpixels, pixelsdone, tid )
+          linesleft = linesleft - readlines
+          IF first
+          THEN
+            CALL MOVER( datadummy, beforeCON, totpixels )
+            storelines = 0
+          ELSE
+C----------------------------------------------------------------------
+C           Transfer the last NconY-1 lines to the start of
+C           your input convolution array, so that successive
+C           convolved (but not blank) regions do match:
+C----------------------------------------------------------------------
+N           Number of lines to be stored of previous conv.
+            storelines =  (NconY-1)
+N           i.e. height-1 of confie * X-len of box
+            numtokeep  = storelines * NdatX
+C----------------------------------------------------------------------
+C           The position of the first point in the beforeCON array
+C           to be stored depends on the position of the last element
+C           of this array. This position depends on 'conheight'
+C           determined in a previous stadium:
+C----------------------------------------------------------------------
+            start = ( conheight*NdatX ) - numtokeep + 1
+N           Move these lines to the front of this array
+            CALL MOVER( beforeCON(start), beforeCON, numtokeep )
+N           Append read lines
+            CALL MOVER( datadummy, beforeCON(numtokeep + 1 ),
+     #                  totpixels )
+          CIF
+N         This many lines have to be convolved
+          conheight = readlines + storelines
+          Iresult = CONVOLVE( confie, NconX, NconY, beforeCON,
+     #                        afterCON, NdatX, conheight )
+
+N         Something went wrong in CONVOLVE subroutine
+          IF (Iresult .NE. 0)
+          THEN
+            errlevel = 4
+            CALL ERRORMESS( 'CONVOLVE', Iresult, errlevel )
+          CIF
+C----------------------------------------------------------------------
+C         A 'writeline' is constructed as follows: Determine the
+C         number of blanks on left and right sides. Fill the line
+C         with 'leftblanks', the corresponding convolved values
+C         and 'rightblanks'. If it was not the first convolution
+C         then there is an offset for the corresponding convolved
+C         values.
+C----------------------------------------------------------------------
+N         If box<frame fill lines partially with blanks
+          leftblanks  = ABS( BgridLO(1) - FgridLO(1) )
+          rightblanks = ABS( BgridHI(1) - FgridHI(1) )
+          IF (first)
+          THEN
+            writelines = readlines - (NconY-1)/2
+N           Offset for convolved data to write
+            offset = 0
+          ELSE
+            writelines = readlines
+            offset = (NconY-1) / 2
+          CIF
+          pixels = writelines * axcount(1)
+          FOR i = 1, writelines
+N             'start' is starting point in array for line i
+              start = (i - 1) * axcount(1) + 1
+              CALL SETNFBLANK( dataO(start), leftblanks )
+N             Remember: length of 'afterCON' is 'NdatX'
+              CALL MOVER( afterCON( (offset + i - 1) * NdatX + 1 ),
+     #                    dataO(start + leftblanks), NdatX )
+              CALL SETNFBLANK( dataO(start + leftblanks + NdatX),
+     #                         rightblanks )
+          CFOR
+
+          IF decimate
+          THEN
+            numtodisk = DECIMATOR( dataO, pixels, axcount(1), FgridLO,
+     #                             startpos, decim )
+            startpos = startpos + pixels
+          ELSE
+ 	    numtodisk = pixels
+ 	  CIF
+ 	  IF (scalefac .NE. 1.0)
+ 	  THEN
+ 	    FOR i = 1, numtodisk
+ 	      value = dataO(i)
+ 	      IF (value .NE. blank)
+ 	      THEN
+         	dataO(i) = value * scalefac
+              CIF
+ 	    CFOR
+ 	  CIF
+          CALL GDSI_WRITE( setout, FcwloO, FcwhiO, dataO,
+     #                     numtodisk, numpixels, tidO )
+
+
+          currentpixels = currentpixels + FLOAT(pixels)
+          CALL CRESTAT(m, allpixels, currentpixels)
+C          CALL STABAR( 0.0, allpixels, currentpixels )
+N         Keep track of min/max & blanks
+          CALL MINMAX3( dataO, numtodisk, minval(m), maxval(m),
+     #                  nblanks(m), mcount )
+
+        UNTIL (linesleft .EQ. 0)
+C----------------------------------------------------------------------
+C       Write last lines of frame with blanks. Include last n
+C       lines of box containing the blanks from last convolution.
+C----------------------------------------------------------------------
+N       Contribution of line from frame
+        blanklines = ABS( BgridHI(2) - FgridHI(2) )
+N       Contribution from box
+        blanklines = blanklines + ( (NconY-1) / 2 )
+N       Convert to number of pixels
+        numblanks = blanklines * axcount(1)
+        REPEAT
+          pixels = MIN( maxIObuf, numblanks )
+          CALL SETNFBLANK( dataO, pixels )
+          IF decimate
+          THEN
+            numtodisk = DECIMATOR( dataO, pixels, axcount(1), FgridLO,
+     # 	   		           startpos, decim )
+            startpos = startpos + pixels
+          ELSE
+ 	    numtodisk = pixels
+ 	  CIF
+          currentpixels = currentpixels + FLOAT(pixels)
+          CALL CRESTAT(m, allpixels, currentpixels)
+C          CALL STABAR( 0.0, allpixels, currentpixels )
+          CALL GDSI_WRITE( setout, FcwloO, FcwhiO, dataO,
+     #                     numtodisk, numpixels, tidO )
+          numblanks = numblanks - pixels
+        UNTIL (numblanks .EQ. 0)
+C----------------------------------------------------------------------
+C       If the user selected an output set for the smoothed AP, then
+C       it is possible to update the headers of the subsets for the
+C       AP related items. These items are the minor and major axis
+C       and the position angle of the associated AP. The GDSD_WRITEC
+C       routine updates (or creates) header item 'APSET' containing
+C       the source of the associated AP. The text belonging to the
+C       'APSET' item is copied from the setname that was given for the
+C       (smoothed) output-AP. All this work is done in the routine
+C       UPDATEHEAD.
+C----------------------------------------------------------------------
+        IF (extraAP .AND. automatic)
+        THEN
+          txt    = APsetout
+          Dbmmin = DBLE( bmmin )
+	  Dbmmaj = DBLE( bmmaj )
+	  Dbmpa  = DBLE( bmpa  )
+        ELSE
+          txt    = ' '
+          Dbmmin = 0.0
+	  Dbmmaj = 0.0
+	  Dbmpa  = 0.0
+        CIF
+        Werr = UPDATEHEAD( setout, subout(m), Dbmmin, Dbmmaj,
+     #                     Dbmpa, txt )
+      CFOR
+C----------------------------------------------------------------------
+C     min max always change, ==> update min, max
+C     minval, maxval, nblanks are arrays!
+C     If it was not possible in the subset loop to update the header
+C     for one of the beam parameters, give the user a warning.
+C     This is only checked for the last subset in the loop.
+C----------------------------------------------------------------------
+      CALL WMINMAX( setout, subout, minval, maxval, nblanks,
+     #              nsubsO, remove )
+      IF (Werr .LT. 0)
+      THEN
+        CALL ANYOUT( 3, 'SMOOTH: Cannot update header properly.' )
+      CIF
+C----------------------------------------------------------------------
+C     If the mode was 'automatic' and the user specified an output AP
+C     then do part of previous loop one more time for AP.
+C----------------------------------------------------------------------
+      IF extraAP
+      THEN
+N       Maximum number of lines to read for conv.
+        maxreadlines = (maxIObuf / axcountAP(1)) - 1
+N       Actual number of lines to read for conv.
+        totreadlines = axcountAP(2)
+        Fcwlo  = GDSC_FILL( APsetin, APsubin(1), APFgridLO )
+        Fcwhi  = GDSC_FILL( APsetin, APsubin(1), APFgridHI )
+        IF decimate
+        THEN
+          FcwloO = GDSC_FILL( APsetout, APsubout(1), APDgridLO )
+          FcwhiO = GDSC_FILL( APsetout, APsubout(1), APDgridHI )
+        ELSE
+          FcwloO = GDSC_FILL( APsetout, APsubout(1), APFgridLO )
+          FcwhiO = GDSC_FILL( APsetout, APsubout(1), APFgridHI )
+        CIF
+        tid       = 0
+        tidO      = 0
+        mcount    = 0
+        startpos  = 1
+        ptrcount  = 0
+        numpixels = 0
+        linesleft = totreadlines
+C----------------------------------------------------------------------
+C       Read and process data to be convolved:
+C----------------------------------------------------------------------
+        readlines = 0
+        REPEAT
+N         Maximum number of lines to read in one time
+          readlines = MIN( maxreadlines, linesleft )
+N         This number is always less than maxIObuf
+          totpixels = readlines * axcountAP(1)
+N         Nothing is convolved yet?
+          first = (linesleft .EQ. totreadlines)
+C----------------------------------------------------------------------
+C         Read totpixels in the dummy data array.
+C         Note that for the AP there is not a box, only a frame.
+C         This frame can be decimated. For this, the
+C         coordinate words Fcwlo and Fcwhi are adapted:
+C----------------------------------------------------------------------
+          CALL GDSI_READ( APsetin, Fcwlo, Fcwhi, datadummy,
+     #                    totpixels, pixelsdone, tid )
+          currentpixels = currentpixels + FLOAT(pixelsdone)
+          CALL CRESTAT(nsubsO, allpixels, currentpixels)
+C          CALL STABAR( 0.0, allpixels, currentpixels )
+          linesleft = linesleft - readlines
+          IF first
+          THEN
+            CALL MOVER( datadummy, beforeCON, totpixels )
+            storelines = 0
+          ELSE
+C----------------------------------------------------------------------
+C           Transfer the last NconY-1 lines to the start of
+C           your input convolution array, so that successive
+C           convolved (but not blank) regions do match:
+C----------------------------------------------------------------------
+N           Number of lines to be stored of previous conv.
+            storelines =  (NconY-1)
+N           i.e. height-1 of confie * X-len of box
+            numtokeep  = storelines * axcountAP(1)
+C----------------------------------------------------------------------
+C           The position of the first point in the beforeCON array
+C           to be stored depends on the position of the last element
+C           of this array. This position depends on 'conheight'
+C           determined in a previous stadium:
+C----------------------------------------------------------------------
+            start = ( conheight*axcountAP(1) ) - numtokeep + 1
+N           Move these lines to the front of this array
+            CALL MOVER( beforeCON(start), beforeCON, numtokeep )
+N           Append read lines
+            CALL MOVER( datadummy, beforeCON(numtokeep + 1), totpixels )
+          CIF
+N         This many lines have to be convolved
+          conheight = readlines + storelines
+          Iresult = CONVOLVE( confie, NconX, NconY, beforeCON,
+     #                        afterCON, axcountAP(1), conheight )
+N         Something went wrong in CONVOLVE subroutine
+          IF (Iresult .NE. 0)
+          THEN
+            errlevel = 4
+            CALL ERRORMESS( 'CONVOLVE', Iresult, errlevel )
+          CIF
+          IF (first)
+          THEN
+            writelines = readlines - (NconY-1)/2
+N           Offset for convolved data to write
+            offset = 0
+          ELSE
+            writelines = readlines
+            offset = (NconY-1) / 2
+            IF (linesleft .EQ. 0)
+            THEN
+              writelines = writelines + (NconY-1)/2
+            CIF
+          CIF
+          pixels = writelines * axcountAP(1)
+	  CALL MOVER( afterCON( offset*axcountAP(1)+1 ),
+     #                dataO, pixels )
+          IF decimate
+          THEN
+            numtodisk = DECIMATOR( dataO, pixels, axcountAP(1),
+     # 	   		           APFgridLO, startpos, decim )
+            startpos = startpos + pixels
+          ELSE
+ 	    numtodisk = pixels
+ 	  CIF
+ 	  IF (scalefac .NE. 1.0)
+N         Scaling
+ 	  THEN
+ 	    FOR i = 1, numtodisk
+ 	      value = dataO(i)
+ 	      IF (value .NE. blank)
+ 	      THEN
+         	dataO(i) = value * scalefac
+              CIF
+ 	    CFOR
+ 	  CIF
+          CALL GDSI_WRITE( APsetout, FcwloO, FcwhiO, dataO,
+     #                     numtodisk, numpixels, tidO )
+N         Keep track of min/max & blanks
+          CALL MINMAX3( dataO, numtodisk, minval(1), maxval(1),
+     #                  nblanks(1), mcount )
+        UNTIL (linesleft .EQ. 0)
+N       Write the last blank lines
+        blanklines =  (NconY-1) / 2
+        CALL WMINMAX( APsetout, APsubout, minval(1),
+     #                maxval(1), nblanks(1), 1, remove )
+C----------------------------------------------------------------------
+C       Update the header of the new AP for the new beam parameters
+C       and the 'APSET' item. The 'APSET' string is copied from the
+C       string associated with the input-AP, so the user can always
+C       trace back the source of the original.
+C----------------------------------------------------------------------
+        Werr = UPDATEHEAD( APsetout, APsubout(1), Dbmmin, Dbmmaj,
+     #                     Dbmpa, APsetin )
+        IF (Werr .LT. 0)
+        THEN
+          CALL ANYOUT( 3, 'SMOOTH: Cannot update AP header properly.' )
+        CIF
+      CIF
+
+      CALL FINIS
+
+      STOP
+      END
+
+
+
+E     ***** Subroutine ERRORMESS *****
+
+      SUBROUTINE ERRORMESS( fiename, result, errorlevel )
+C----------------------------------------------------------------------
+C INPUT:   fiename,   Input CHARACTER*(*)
+C          result,    Input INTEGER
+C          errorlevel Input INTEGER
+C PURPOSE: Give error message if something went wrong in a function
+C          with name 'fiename' and abort program.
+C----------------------------------------------------------------------
+
+C     Arguments:
+
+      CHARACTER*(*)   fiename
+      INTEGER         result
+      INTEGER         errorlevel
+
+      IF (fiename .EQ. 'CONVOLVE')
+      THEN
+        IF (result .EQ. 1)
+        THEN
+          CALL ERROR( errorlevel, 'NDATX < NCONX' )
+        CIF
+        IF (result .EQ. 2)
+        THEN
+          CALL ERROR( errorlevel, 'NDATY < NCONY' )
+        CIF
+        IF (result .EQ. 4)
+        THEN
+          CALL ERROR( errorlevel, 'NCONX not an odd number' )
+        CIF
+        IF (result .EQ. 8)
+        THEN
+          CALL ERROR( errorlevel, 'NCONY not an odd number' )
+        CIF
+        IF ( (result .GT. 8) .OR. (result .LT. 0) )
+        THEN
+          CALL ERROR( errorlevel, 'No successful convolution' )
+        CIF
+      CIF
+
+      IF (fiename .EQ. 'LSQFIT')
+      THEN
+        IF (result .EQ. -1)
+        THEN
+          CALL ERROR( errorlevel, 'Too many free parameters in fit' )
+        CIF
+        IF (result .EQ. -2)
+        THEN
+          CALL ERROR( errorlevel, 'No free parameters in fit' )
+        CIF
+        IF (result .EQ. -3)
+        THEN
+          CALL ERROR( errorlevel, 'Not enough degrees of freedom' )
+        CIF
+        IF (result .EQ. -4)
+        THEN
+          CALL ERROR( errorlevel, 'Max number of iterations too small' )
+        CIF
+        IF (result .EQ. -5)
+        THEN
+          CALL ERROR( errorlevel, 'Diagonal of matrix contains zeros' )
+        CIF
+        IF (result .EQ. -6)
+        THEN
+          CALL ERROR( errorlevel,'Determinant of coeff. matrix is zero')
+        CIF
+        IF (result .EQ. -7)
+        THEN
+          CALL ERROR( errorlevel, 'Square root of negative number' )
+        CIF
+      CIF
+
+      RETURN
+      END
+
+
+E     ***** Function UPDATEHEAD *****
+
+      INTEGER FUNCTION UPDATEHEAD( updateset, subset, minor,
+     #                             major, angle, apset )
+C----------------------------------------------------------------------
+C Use:        INTEGER UPDATEHEAD( updateset, Input  CHARACTER*(*)
+C                                 subset,    Input  INTEGER
+C                                 minor,     Input  DOUBLE PRECISION
+C                                 major,     Input  DOUBLE PRECISION
+C                                 angle,     Input  DOUBLE PRECISION
+C                                 apset,     Input  CHARACTER*(*)
+C
+C              UPDATEHEAD  returns a positive value if the header
+C                          could be updated, it returns a negative
+C                          value otherwise.
+C              updateset   Name of the set to be updated.
+C              subset      Coordinate word indicating the level of
+C                          the update ( 0 = whole set ).
+C              minor       Minor axis of beam (FWHM in arcsecs).
+C              major       Major axis of beam.
+C              angle       Position angle of beam. I.e. angle in degrees
+C                          between major axis and the north.
+C              apset       Name of antenna pattern to be written in
+C                          the header.
+C
+C Description: The keyword 'APSET' is associated with a string
+C              containing the name of the AP. Updating of this item
+C              is done by means of the GDSD_WRITEC routine.
+C              The beam parameters are written in the usual way.
+C
+C----------------------------------------------------------------------
+
+C     Arguments:
+
+      CHARACTER*(*)     updateset
+      INTEGER           subset
+      DOUBLE PRECISION  minor, major
+      DOUBLE PRECISION  angle
+      CHARACTER*(*)     apset
+
+C     Function:
+
+      INTEGER           NELC
+
+C     Miscellaneous:
+
+      INTEGER           W1
+      INTEGER           bytesdone
+      INTEGER           writebytes
+      INTEGER           result
+
+      result = 1
+      W1 = 0
+      CALL GDSD_WDBLE( updateset, 'BMMIN', subset, minor, W1 )
+      IF (W1 .LT. 0)
+      THEN
+        result = -1
+      CIF
+      W1 = 0
+      CALL GDSD_WDBLE( updateset, 'BMMAJ', subset, major, W1 )
+      IF (W1 .LT. 0)
+      THEN
+        result = result - 1
+      CIF
+      W1 = 0
+      CALL GDSD_WDBLE( updateset, 'BMPA', subset, angle, W1 )
+      IF (W1 .LT. 0)
+      THEN
+        result = result - 1
+      CIF
+      W1 = 0
+      bytesdone  = 0
+N     Write name of AP in (sub)set header
+      writebytes = NELC(apset)
+      CALL GDSD_WRITEC( updateset, 'APSET', subset, apset,
+     #                  writebytes, 1, bytesdone, W1 )
+      IF (W1 .LT. 0)
+      THEN
+        result = result - 1
+      CIF
+      UPDATEHEAD = result
+
+      RETURN
+      END
+
+
+
+E     ***** Function CONVERTUNIT *****
+
+      REAL FUNCTION CONVERTUNIT( setname, axperm )
+C----------------------------------------------------------------------
+C Use:         REAL CONVERTUNIT( setname, Input CHARACTER*(*)
+C                                axperm,  Input INTEGER ARRAY
+C                              )
+C
+C              CONVERTUNIT  Factor to convert axis units to degrees
+C              setname      Name of the set with the axes
+C              axperm       Axis permutation array of this set
+C
+C Description: Find units of axes and try to find a factor to convert
+C              these units to arcsecs. If the function cannot convert
+C              the program is aborted!
+C----------------------------------------------------------------------
+
+      INTEGER              wholeset
+      PARAMETER          ( wholeset = 0 )
+
+      CHARACTER*( * )      setname
+      INTEGER              axperm( * )
+      CHARACTER*30         cunit( 2 )
+      INTEGER              AXUNIT
+      INTEGER              FACTOR
+      INTEGER              Iresult
+      DOUBLE PRECISION     cfact
+
+
+      Iresult = AXUNIT( setname, axperm(1), cunit(1) )
+      IF (Iresult .GT. 0)
+      THEN
+        CALL ANYOUT( 3, 'SMOOTH: Units first axis not in header?' )
+        CALL ANYOUT( 3, 'SMOOTH: assuming degrees' )
+        cunit(1) = 'DEGREE'
+      CIF
+      Iresult = AXUNIT( setname, axperm(2), cunit(2) )
+      IF (Iresult .GT. 0)
+      THEN
+        CALL ANYOUT( 3, 'SMOOTH: Units second axis not in header?' )
+        CALL ANYOUT( 3, 'SMOOTH: assuming degrees' )
+        cunit(2) = 'DEGREE'
+      CIF
+      IF ( cunit(1) .NE. cunit(2) )
+      THEN
+        CALL ERROR( 4, 'SMOOTH: Axis units not equal!' )
+      ELSE
+        Iresult = FACTOR( cunit(1), 'ARCSEC', cfact )
+        IF (Iresult .NE. 0)
+        THEN
+          CALL ERROR( 4, 'SMOOTH: Cannot convert units!' )
+        CIF
+        CONVERTUNIT = SNGL( cfact )
+      CIF
+
+      RETURN
+      END
+
+
+E     ***** Subroutine CONFIESET *****
+
+      SUBROUTINE CONFIESET( confie, Nx, Ny )
+C------------------------------------------------------------
+C     If user wants to examine the convolution function
+C     directly, write data to a set made from scratch.
+C     Currently NOT called by the program.
+C------------------------------------------------------------
+
+      REAL           confie(*)
+      INTEGER        Nx, Ny
+      CHARACTER*30   keyword
+      CHARACTER*80   message
+      INTEGER        USERCHAR
+      INTEGER        gerror, derror
+      LOGICAL        GDS_EXIST
+      INTEGER        result
+      LOGICAL        del
+      CHARACTER*80   set
+      INTEGER        USERLOG
+      INTEGER        cwlo, cwhi
+      INTEGER        GDSC_FILL
+      INTEGER        tid
+      INTEGER        numpixels
+      INTEGER        CONgridHI(2), CONgridLO(2)
+      DOUBLE PRECISION   origin
+
+
+      keyword ='OUTCONSET='
+      message = 'Output set & subsets for conv.fie.:  [none]'
+      repeat
+        n = userchar( set, 1, 1, keyword, message )
+        call cancel( 'OUTCONSET=' )
+        IF (n .EQ. 0)
+        THEN
+          RETURN
+        CIF
+N       Does it exist already?
+        gerror = 0
+        if (gds_exist( set, gerror ))
+        then
+          call anyout( 1, 'Set already exists!' )
+          result = userlog( del, 1, 1, 'DELETE=',
+     #        'Delete this set ? [NO]' )
+          if (result .eq. 0)
+          then
+            del = .false.
+          cif
+          if (del)
+          then
+            call gds_delete( set, gerror )
+            xrepeat
+          else
+            call cancel( 'DELETE=' )
+          cif
+        else
+          xrepeat
+        cif
+      until (.false.)
+N     Create set.
+      call gds_create( set, gerror )
+N     error ?
+      if (gerror .lt. 0)
+      then
+         call error( 4, 'Error while creating set' )
+      cif
+      derror = 0
+      call gdsd_wchar( set, 'INSTRUME', 0, 'WSRT', derror )
+N     Now create the axis
+      origin = DBLE((Nx-1)/2+1)
+      call gds_extend( set, 'RA-NCP', origin , Nx, gerror )
+      if (gerror .eq. -28)
+      then
+        call error( 1, 'axis already in use' )
+      else
+        call gdsd_wdble( set, 'CRVAL1', 0, 45.0D0,   derror )
+        call gdsd_wdble( set, 'CDELT1', 0, 0.01D0, derror )
+        call gdsd_wdble( set, 'CROTA1', 0, 0.0D0,  derror )
+        call gdsd_wchar( set, 'CUNIT1', 0, 'DEGREE', derror )
+      cif
+      origin = DBLE((Ny-1)/2+1)
+      call gds_extend( set, 'DEC-NCP', origin , Ny, gerror )
+      if (gerror .eq. -28)
+      then
+        call error( 1, 'axis already in use' )
+      else
+        call gdsd_wdble( set, 'CRVAL2', 0, 45.0D0,   derror )
+        call gdsd_wdble( set, 'CDELT2', 0, 0.01D0, derror )
+        call gdsd_wdble( set, 'CROTA2', 0, 0.0D0,  derror )
+        call gdsd_wchar( set, 'CUNIT2', 0, 'DEGREE', derror )
+      cif
+
+      CONgridHI(1) = (Nx-1)/2
+      CONgridHI(2) = (Ny-1)/2
+      CONgridLO(1) = -1.0*(Nx-1)/2
+      CONgridLO(2) = -1.0*(Ny-1)/2
+
+      tid = 0
+      cwlo   = GDSC_FILL( set, 0, CONgridLO )
+      cwhi   = GDSC_FILL( set, 0, CONgridHI )
+      CALL GDSI_WRITE( set, cwlo, cwhi, confie,
+     #                 Nx*Ny, numpixels, tid )
+
+      gerror = 0
+      call gds_close( set, gerror )
+
+      RETURN
+      END
+
+
+
+
+
+E     ***** Function FUNC *****
+
+      REAL FUNCTION FUNC( Xdat, parlist, npar, fopt )
+C----------------------------------------------------------------------
+C Use:         REAL FUNC( Xdat,    Input REAL ARRAY
+C                         parlist, Input REAL ARRAY
+C                         npar,    Input INTEGER
+C                         fopt,    Input INTEGER
+C
+C              FUNC    Returns the function value of the function to
+C                      be fitted.
+C              Xdat    Coordinate(s) of data point.
+C              parlist Parameter list.
+C              npar    Number of parameters.
+C              fopt    A user defined option. Not used in this
+C                      function.
+C
+C Description: Calculates the value of a gaussian with parameters
+C              stored in parlist at position Xdat.
+C              The parameters are:
+C              parlist(1) : Amplitude
+C              parlist(2) : Major axis (FWHM) in arcsecs
+C              parlist(3) : Minor axis (FWHM) in arcsecs
+C              parlist(4) : X0, centre of gauss in arcsecs wrt centre
+C                           of subset
+C              parlist(5) : Y0, centre of gauss in arcsecs wrt centre
+C                           of subset
+C              parlist(6) : Position angle in radians wrt. positive
+C                           X-axis counted anti-clockwise
+C              parlist(7) : Zero level
+C
+C              The 2d-gaussian is:
+C
+C              F(x,y) = par(1) * EXP( -4.0*ALOG(2.0) *
+C                       [(xr / par(2))**2 + (yr / par(3))**2] + par(7)
+C
+C              where: xr =  xo * cos(par(6)) + yo * sin(par(6))
+C                     yr = -xo * sin(par(6)) + yo * cos(par(6))
+C
+C              and:   xo = x - par(4)
+C                     yo = y - par(5)
+C
+C----------------------------------------------------------------------
+
+C     Arguments:
+
+      REAL                Xdat( 2, 1 )
+      REAL                parlist( * )
+      INTEGER             npar
+      INTEGER             fopt
+
+C     Miscellaneous:
+
+N     Major and minor axis
+      REAL                minor, major
+N     Position
+      REAL                x, y
+N     Sine, cosine of position angle
+      REAL                sinpa, cospa
+N     Arguments in the exponent
+      REAL                argmaj, argmin
+      REAL                arg
+
+
+      major  = ABS( parlist(2) )
+      minor  = ABS( parlist(3) )
+      x      = Xdat(1,1) - parlist(4)
+      y      = Xdat(2,1) - parlist(5)
+      cospa  = COS( parlist(6) )
+      sinpa  = SIN( parlist(6) )
+C     Coordinates in rotated frame:
+      argmaj =  x * cospa + y * sinpa
+      argmin = -x * sinpa + y * cospa
+      arg    =  -4.0 * ALOG(2.0) *
+     #        ( (argmaj / major)**2 + (argmin / minor)**2 )
+      IF (arg .GT. -16.0)
+      THEN
+        FUNC = parlist(1) * EXP( arg ) + parlist(7)
+      ELSE
+        FUNC = parlist(7)
+      CIF
+
+      RETURN
+      END
+
+
+
+
+E     ***** Subroutine DERV *****
+
+      SUBROUTINE DERV( Xdat, parlist, dervs, npar, fopt )
+C----------------------------------------------------------------------
+C Use:      CALL DERV( Xdat,    Input   REAL ARRAY
+C                      parlist, Input   REAL ARRAY
+C                      dervs,   Output  REAL ARRAY
+C                      npar,    Input   INTEGER
+C                      fopt,    Input   INTEGER
+C                    )
+C
+C           Xdat     Coordinates of a data point. Dimension: Xdat(2,1)
+C           parlist  Parameter list, see description.
+C           dervs    Partial derivatives to the parameters of the
+C                    function to be fitted.
+C           npar     number of parameters in parlist.
+C           fopt     A user defined option. Not used in this routine.
+C
+C Description:       The subroutine DERV calculates calculate the partial
+C                    derivatives wrt. the parameters for a gaussian with
+C                    parameters listed in 'parlist' at position Xdat.
+C                    The parameters are:
+C                    parlist(1) : Amplitude
+C                    parlist(2) : Major axis (FWHM) in arcsecs
+C                    parlist(3) : Minor axis (FWHM) in arcsecs
+C                    parlist(4) : X0, centre of gauss in arcsecs wrt centre
+C                                 of subset
+C                    parlist(5) : Y0, centre of gauss in arcsecs wrt centre
+C                                 of subset
+C                    parlist(6) : Position angle in radians wrt. positive
+C                                 X-axis counted anti-clockwise
+C                    parlist(7) : Zero level
+C
+C                    This routine is part of the function LSQFIT.
+C----------------------------------------------------------------------
+
+C     Arguments:
+
+      REAL                Xdat( 2, 1 )
+      REAL                parlist( * )
+      REAL                dervs( 7 )
+      INTEGER             npar
+      INTEGER             fopt
+
+C     Miscellaneous:
+
+N     Major and minor axis
+      REAL                minor, major
+N     squared versions
+      REAL                min2, maj2
+N     Position
+      REAL                x, y
+N     Sine, cosine of position angle
+      REAL                sinpa, cospa
+N     Arguments in the exponent
+      REAL                argmaj, argmin
+      REAL                xpon
+      INTEGER             i
+      REAL                lgval
+N     Amplitude * exponent * 8 * ln(2)
+      REAL                xpln
+
+
+N     Positive widths
+      major  = ABS( parlist(2) )
+      minor  = ABS( parlist(3) )
+N     Offset from position peak
+      x      = Xdat(1,1) - parlist(4)
+      y      = Xdat(2,1) - parlist(5)
+      cospa  = COS( parlist(6) )
+      sinpa  = SIN( parlist(6) )
+      argmaj =  x * cospa + y * sinpa
+      argmin = -x * sinpa + y * cospa
+N     Determine the derivatives:
+      xpon   = -4.0*ALOG(2.0) *
+     #         ( (argmaj/major)**2 + (argmin/minor)**2 )
+      IF (xpon .LT. -16.0)
+N     Amplitude zero -> derivative zero
+      THEN
+        FOR i = 1, 6
+          dervs(i) = 0.0
+        CFOR
+      ELSE
+        min2     = minor * minor
+        maj2     = major * major
+        lgval    = 8.0 * ALOG(2.0)
+        xpon     = EXP( xpon )
+N       Partial derivative amplitude
+        dervs(1) = xpon
+N       Calculate A.exp(-arg)
+        xpon     = parlist(1) * xpon
+        xpln     = xpon * lgval
+N       Partial derivative major axis
+        dervs(2) = xpln * argmaj**2 / (major**3)
+N       Partial derivative minor axis
+        dervs(3) = xpln * argmin**2 / (minor**3)
+N       Partial derivative x-position
+        dervs(4) = -xpln *
+     #            ( -argmaj*cospa/(maj2) + argmin*sinpa/(min2) )
+N       Partial derivative y-position
+        dervs(5) = -xpln *
+     #            ( -argmaj*sinpa/(maj2) - argmin*cospa/(min2) )
+N       Partial derivative position angle
+        dervs(6) = -xpln * argmin * argmaj *
+     #             ( 1.0/(maj2) - 1.0/(min2) )
+N       Partial derivative zero level
+        dervs(7) = 1.0
+      CIF
+
+      RETURN
+      END
+
+
+
+E     ***** Subroutine CRESTAT *****
+
+      SUBROUTINE CRESTAT( subsetnr, totpix, currentpix )
+C-------------------------------------------------------------------------------
+C     Create status message with subset number, subset percentage and total
+C     percentage.
+C-------------------------------------------------------------------------------
+
+      INTEGER        subsetnr
+      REAL           totpix
+      REAL           currentpix
+      CHARACTER*80   stattxt
+
+
+      WRITE( stattxt, '(''Subset '', I4, ''  ('',I3,''% of total )'')' )
+     #       subsetnr, INT(100.0*currentpix / totpix)
+      CALL STATUS( stattxt )
+
+      RETURN
+      END
+
+
+
+
+E     ***** Function DECIMATOR *****
+
+      INTEGER FUNCTION DECIMATOR( inarray, inlen, Xlen, FgridLO,
+     #                            startpos, decim )
+C----------------------------------------------------------------------
+C Use:  INTEGER DECIMATOR( inarray  , I/O     REAL ARRAY
+C                          inlen    , I       INTEGER
+C                          Xlen     , I       INTEGER
+C   			   FgridLO  , I       INTEGER ARRAY
+C                          startpos , I       INTEGER
+C                          decim    , I       INTEGER ARRAY
+C                        )
+C
+C        DECIMATOR  Returns the length of a decimated array.
+C        inarray    Input:  The original array to be decimated
+C 		    Output: The decimated array
+C 	 inlen      Number of elements of 'inarray' to be examined.
+C        Xlen       Horizontal length of frame with undecimated data.
+C        FgridLO    The coordinates of the lower left corner of the
+C		    frame.
+C        startpos   The start position of the first element of the
+C                   input array with respect to the lower left corner.
+C                   In a sequence of calls to decimator, the first
+C                   time 'startpos' will be 1. After this, increase
+C                   'startpos' in the calling environment with the
+C                   length of 'inarray'.
+C        decim      Decimation factors.
+C
+C----------------------------------------------------------------------
+
+C     Arguments:
+      REAL              inarray( * )
+      INTEGER           inlen
+      INTEGER           Xlen
+      INTEGER           FgridLO( * )
+      INTEGER           startpos
+      INTEGER           decim( 2 )
+
+C     Miscellaneous:
+
+      INTEGER           result
+      INTEGER           i, j
+      INTEGER           x, y
+      INTEGER           count
+      INTEGER           pos
+
+
+N     Nothing is transferred yet
+      result = 0
+      FOR count = 1, inlen
+        pos = startpos + (count - 1)
+        j = ( (pos - 1)/Xlen ) + 1
+        i = pos - (j - 1)*Xlen
+        x = FgridLO(1) + i - 1
+        y = FgridLO(2) + j - 1
+        IF ( (mod(x, decim(1)) .EQ. 0) .AND. (mod(y, decim(2)) .EQ. 0) )
+        THEN
+          result = result + 1
+          inarray(result) = inarray(count)
+        CIF
+      CFOR
+      DECIMATOR = result
+
+      RETURN
+      END

@@ -1,0 +1,128 @@
+
+                            COPYRIGHT (c) 1992
+                      Kapteyn Astronomical Institute
+                University of Groningen, The Netherlands
+                           All Rights Reserved.
+
+
+Document:     categories
+
+Purpose:      Categories for tasks and subroutines
+
+Category:     DOCUMENTATION
+
+File:         categories.doc
+
+Author:       M.G.R. Vogelaar
+
+Description:  This document describes the different categories that can be
+              used to identify different types of programs and subroutines. 
+              These categories are to generate a list of programs 
+              (or subroutines) sorted in functionality. 
+              For this purpose EVERY document MUST have a line 
+              containing a category name. The syntax for this is as follows
+              (Names can be in any case)
+
+              Category:    <category name>[, <category names>]
+
+              'Category:' must be left aligned. The category name in a 
+              document can be in any case and starts at the 15th column. 
+
+
+              Organisation of this file:
+
+              The categories mentioned in this file are sorted and
+              have a comment that starts with a '/' character. 
+              There are categories for tasks (the list starts with
+              #tasks:), for subroutines (#subroutines:)
+              and for general documentation (#general:). Each field 
+              is separated by at least one empty line.
+              The file must be updated with 'compile' (p).
+
+
+#tasks:
+ANALYSIS                  /Data Analysis 
+CALCULATION               /Calculations with set data 
+CLEAN                     /Applications related to the 'CLEAN' alg. 
+COMBINATION               /Data combinations 
+COMPILE                   /Task source code compilation etc. 
+COORDINATES               /Coordinate transformations etc. 
+DATABASE                  /Information from a database
+DEMO                      /Demo applications    
+DISPLAY                   /Display of data (colour or B&W) 
+DYNAMICS                  /Dynamics, kinematics 
+FITS                      /Fits Data Format 
+FITTING                   /Fitting of data 
+GENERAL                   /Tasks like NEWS etc 
+HEADER                    /Header access/manipulation 
+INFO                      /General and/or Specific Information 
+IRAS                      /IRAS data handling 
+MANIPULATION              /Data manipulation/changes of data values 
+MATH                      /Mathematical operations  
+MODELS                    /Model fitting 
+OPTICAL                   /Optical data handling 
+PLOTTING                  /Line/grey scale plots 
+PROFILES                  /Profile manipulation/analysis 
+PRINTING                  /Hardcopy of data values 
+RADIO                     /Radio data handling 
+ROTATION-CURVES           /Rotation curves related 
+TABLES                    /Manipulation with tables 
+TAPES                     /Tape related utilities 
+TAURUS                    /Taurus data handling 
+TRANSFER                  /Data Transfer 
+USER-INTERFACE            /User IO etc (Hermes) 
+UTILITY                   /General utilities
+UV                        /UV data handling.
+VELOCITY-FIELDS           /Velocity field related 
+
+
+#subroutines:
+ARRAY                     /Operations on arrays 
+BASIC-GDS                 /Basic GDS routines 
+CONVOLUTION               /Convolution of data 
+COORDINATES               /Coordinate transformations etc. 
+DATA                      /Operate on data 
+DISPLAY                   /Related to GIDS 
+FILES                     /Related to files on disk 
+FITS                      /Flexible Image Transport System 
+GDS                       /Gipsy Database System 
+GRAPHICS                  /PGplot routines etc. 
+HEADER                    /Manipulation in set descriptor 
+IMAGE-IO                  /Reading/writing of set data 
+IR                        /Infra Red Astronomical Satellite 
+IRAS                      /IRAS related routines 
+IRDS                      /InfraRed Data Structure 
+LRS                       /Low-Resolution Spectrometer (IRAS)
+MANAGEMENT                /System management 
+MATH                      /Mathematics 
+MISC                      /Miscellaneous routines 
+PHYSICAL-COORDINATES      /Calculations with physical coordinates 
+PLOTTING                  /Same as GRAPHICS 
+PRINTING                  /Related to printers 
+RADIO-DATA                /Radio data handling 
+STATISTICS                /Calculation of moments, averages etc.
+STRINGS                   /String manipulation 
+SYSTEM                    /System specific routines 
+TABLES                    /Table routines 
+TAPES                     /Tape IO 
+TEXT                      /Strings related routines 
+USER-INTERFACE            /User interface routines 
+USER-IO                   /Set related IO (GDSBOX etc)  
+UTILITY                   /General utility routines 
+WORLD-COORDINATES         /Coordinate transformations 
+
+
+#general:
+DISPLAY                   /Related to GIDS 
+DOCUMENTATION             /Manual references etc. 
+GRAPHICS                  /PGplot routines etc.
+MANAGEMENT                /General system management 
+SYSTEM                    /System setup 
+SYNTAX                    /Explains IO syntax for tasks
+UTILITY                   /General utilities like PACK 
+TAPES                     /Tape devices     
+
+
+Updates:      Nov 12, 1992: VOG, Document created.
+              Dec 19, 1994: VOG, Small changes.
+              Sep  1, 1995: JTP, Small change.

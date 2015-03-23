@@ -1,0 +1,84 @@
+
+Script:       sysgen
+
+Purpose:      Generates the GIPSY system.
+
+Category:     MANAGEMENT
+
+File:         sysgen.csh
+
+Author:       K.G. Begeman
+
+Use:          sysgen.csh
+
+Description:  This script obtains the necessary files to compile and run
+              GIPSY. The script should be run in the GIPSY ROOT directory,
+              i.e. the directory where all the GIPSY sub directories will
+              be created. It tries to obtain all necessary files via
+              gftp from the GIPSY server at the Kapteyn Astronomical
+              Institute.
+              You should obtain the executable of gftp from the anonymous
+              ftp directory at kapteyn.astro.rug.nl and copy
+              it (in binary mode) from gipsy/<machine-architecture>/gftp to
+              the directory where you want to run this script.
+              Then type: chmod +x gftp to make it executable.
+              The procedure to install GIPSY via this script is as
+              follows:
+
+               1) Goto the directory where you want to have all the
+                  GIPSY sub directories  (the so called GIPSY ROOT).
+                  Also the gftp executable should be here.
+               2) type: sysgen.csh
+                  This command should get the necessary files from the
+                  GIPSY source server. If the script complains that some
+                  files could not be retrieved, run it again until it
+                  does not complain anymore.
+               3) type: setenv gip_root `pwd`
+                  This defines the GIPSY ROOT directory
+               4) type: cd sys
+                  Goto the directory where all the GIPSY scripts are.
+               5) type: mkclient.csh 199
+                  This command makes the current host a GIPSY client,
+                  i.e. it creates an entry in the clients file. The modified
+                  files is in the current directory and is called clients.new.
+                  You should check this file and if necessary, modify it.
+                  Usually the fields which are modified are the paths to the
+                  GIPSY exe, lib and tmp directory. A description of the
+                  clients file and the mkclient.csh script can be found in
+                  ../doc/clients.doc and ../doc/mkclient.doc resp.
+               6) type: mv clients.new ../loc/clients
+               7) type: source gipenv.csh
+                  This command sets the GIPSY enviroment variables. A
+                  description of the gipenv.csh script can be found in
+                  ../doc/gipenv.doc.
+               8) The next step is to create the setup file for the compilers
+                  in the $gip_loc directory. You can check the
+                  $gip_sys/setup.mgr file for entries which match your local
+                  situation, and copy the relevant part to ${gip_loc}/setup.
+                  You also might want to create a manager file. A desription
+                  can be found in $gip_doc/manager.doc.
+               9) type: install.csh
+                  This script compiles the basic GIPSY programmes necessary
+                  to create the GIPSY library and applications.
+                  A description can be found in $gip_doc/install.doc.
+              10) Read $gip_doc/server.doc and check whether your machine
+                  can resolve the address of the GIPSY source server.
+                  If not, you must create a file server in $gip_loc with
+                  the correct address of the GIPSY source server.
+              11) type: p -sysgen >& p.log &
+                  This command will generate the GIPSY library and the
+                  GIPSY applications. It will retrieve the sources from
+                  the GIPSY source server and compile them.
+              12) If compilation has been successfull, you should put
+                  in your .cshrc the following lines:
+                  setenv gip_root <path to GIPSY ROOT>
+                  source ${gip_root}/sys/gipenv.csh
+                  If you want to receive regular updates of GIPSY
+                  applications, you should read $gip_loc/update.doc
+                  In order to get a working system, you should read
+                  in $gip_doc grdevices.doc, lpdevices.doc, mtdevices.doc
+                  and tvdevices.doc.  
+
+Updates:      Jan 11, 1993: KGB, Document created
+              Sep 22, 2000: JPT, Add copy .template files to $gip_loc
+

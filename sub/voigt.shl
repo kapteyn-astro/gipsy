@@ -1,0 +1,224 @@
+C#> voigt.dc2
+C
+CName:          VOIGT              
+C
+C
+CPurpose:       VOIGT computes the value of an N-component Voigt
+C
+CFiles:         voigt.dc2,voigt.shl
+C
+CAuthor:        Peter Roelfsema
+C
+C
+CCall:
+C
+C    GX=VOIGT(X,PAR,NPAR)
+C
+CInput parameters:
+C             X     -R   -running coordinate.
+C             PAR   -R   -array defined as follows: PAR(0:NPAR*4) that
+C                 contains the parameters for the Voigt in the following
+C		    order:
+C
+C                         PAR(0)        -zerolevel
+C                    PAR(1)  -PAR(4)    -int, pos. of peak, gauss fwhm
+C                                        and lorentz fwhm of cmp.  1
+C                          .                     .
+C                  PAR(1+4*n)-PAR(4+4*n)-int, pos. of peak, gauss fwhm
+C                                        and lorentz fwhm of cmp.  n-1
+C                                  etc
+C             NPAR  -I   -number of components.
+C
+CUse:
+C               VOIGT gives the value of a multi-component gaussian.
+C               Note that the Voigt components are defined in terms of
+C               their Intensity, centre coordinate and Full Widths at Half
+C               Maximum (i.e. not in terms of amplitude and sigma ! ).
+C
+C
+C
+CUpdate History:
+C   6-12-85-PRR.-original document
+C   8- 1-86-PRR.-fixed small bug
+C  16- 6-86-PRR.-coverted to VAX8600.
+C  10-11-92-PRR.-converted to UNIX-GIPSY
+C#<
+C  +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+C
+C   VOIGT  gives the value of a multi-component voigt
+C   DVOIGT gives the partial derivatives for this voigt
+C
+C   The parameters and deriavatives are defined as follows:
+C      PAR(0)       -zerolevel
+C     DERIV(0)      -part deriv zero level
+CPAR(1)  -PAR(3)    -int,pos. of peak,dopp. fwhm,lor. fwhm of cmp. 1
+CDERIV(1)-DERIV(3)  -part. derivs. of component 1
+C PAR(1+3*n)-PAR(3+3*n)-int,pos. of peak,dopp. fwhm,lor. fwhm of cmp. n-1
+C                   etc
+C
+C   ----------------------------------------------------------------
+CC       
+C@ real function voigt( real , real , integer )
+C@ subroutine dvoigt( real , real , real , integer )
+C             
+
+      FUNCTION VOIGT(X,PAR,NPAR)
+N. 2 * SQRT ( LN(2) )
+      PARAMETER ( SQLN = 1.6651092 )
+N. square root of pi
+      PARAMETER ( SQPI = 1.7724539 )
+
+N.running coordinate
+      REAL       X
+N.parameter array, array with derivatives
+      REAL       PAR(0:*),DERIV(0:*)
+N.buffer variables
+      REAL       VGT,AMPFCT
+N.real part of constructs with the Z-function
+      REAL       REZWZ,IMZWZ,REZZWZ
+N.'complex' numbers
+      REAL       Z(2),SW(2)
+N.time-saver variable
+      REAL       ZOLD(2)
+
+N.defenitions for R*8 function W
+C      DOUBLE PRECISION     DW,W
+      COMPLEX              DW,W
+
+N.number of parameters, number of components
+      INTEGER    NPAR,NCOMP
+N.loop counter
+      INTEGER    I
+
+N.dirty trick to use 'complex' numbers
+      EQUIVALENCE (DW,SW)
+
+N.initialisation
+      DATA        ZOLD/0.0,0.0/
+
+E     *** Main code ***
+N.determine number of components
+      NCOMP=(NPAR-1)/3
+
+N.zero level
+      VGT=PAR(0)
+N.loop on all components
+      FOR I=0,(NCOMP-1)
+      IF (PAR(I*4+3) .NE. 0.0)
+      THEN
+N.next calculate the complex coordinate for the W-function
+      Z(1) =(X-PAR(I*4+2))*SQLN/PAR(I*4+3)
+      Z(2) =PAR(I*4+4)*SQLN/2.0/PAR(I*4+3)
+      IF Z(1).NE.ZOLD(1) .OR. Z(2).NE.ZOLD(2)
+N.new Z-coordinate
+      THEN
+N.use W
+      DW   =W(Z)
+N.transfer new Z to OLD Z
+      ZOLD(1)=Z(1)
+      ZOLD(2)=Z(2)
+      CIF
+N.the 'amplitude-factor'
+      AMPFCT =PAR(I*4+1)*SQLN/(PAR(I*4+3)*SQPI)
+N.add it to what we have already
+      VGT  =VGT+AMPFCT*SW(1)
+      CIF
+      CFOR
+
+N.transfer the value to the function
+      VOIGT=VGT
+
+      RETURN
+C#> dvoigt.dc2
+C
+CName:          VOIGT              
+C
+C
+CPurpose:       DVOIGT computes the partial derivatives of a Voigt
+C
+CFiles:         voigt.dc2,voigt.shl
+C
+CAuthor:        Peter Roelfsema
+C
+C
+CCall:
+C
+C    CALL DVOIGT(X,PAR,DERIV,NPAR)          ( entry point in VOIGT )
+C
+CInput parameters:
+C             X     -R   -running coordinate.
+C             PAR   -R   -array defined as follows: PAR(0:NPAR*4) that
+C                 contains the parameters for the Voigt in the following
+C                 order:
+C
+C                         PAR(0)        -zerolevel
+C                    PAR(1)  -PAR(4)    -int, pos. of peak, gauss fwhm
+C                                        and lorentz fwhm of cmp. 1
+C                          .                     .
+C                  PAR(1+4*n)-PAR(4+4*n)-int, pos. of peak, gauss fwhm
+C                                        and lorentz fwhm of cmp. n-1
+C                                  etc
+C
+C             NPAR  -I   -number of components.
+COutput parameters:
+C             DERIV -R   -array defined as follows: DERIV(0:NPAR*4) that
+C                 contains the partial derivatives in the following order:
+C                            DERIV(0)       -part.  deriv of zerolevel
+C                      DERIV(1)-DERIV(4)    -part.  derivs. of cmp. 1
+C                             .                     .
+C                  DERIV(1+4*n)-DERIV(4+4*n)-part.  derivs. of cmp. n-1
+C                                       etc
+C
+C
+CUse:
+C               DVOIGT gives the partial derivatives for the gaussian.
+C               Note that the Voigt components are defined in terms of
+C               their Intensity, centre coordinate and Full Widths at  Half
+C               Maximum ( i.e. not in terms of amplitude and sigma ! ).
+C
+C#<
+C
+      ENTRY DVOIGT(X,PAR,DERIV,NPAR)
+
+N.determine number of components
+      NCOMP=(NPAR-1)/3
+
+N.zero-level
+      DERIV(0)=1.0
+N.loop on all components
+      FOR I=0,(NCOMP-1)
+N.next calculate the complex coordinate for the W-function
+      IF (PAR(I*4+3) .EQ. 0.0)
+      THEN
+      DERIV(I*4+1)=0.0
+      DERIV(I*4+2)=0.0
+      DERIV(I*4+3)=0.0
+      DERIV(I*4+4)=0.0
+      ELSE
+      Z(1) =(X-PAR(I*4+2))*SQLN/PAR(I*4+3)
+      Z(2) =PAR(I*4+4)*SQLN/2.0/PAR(I*4+3)
+      IF Z(1).NE.ZOLD(1) .OR. Z(2).NE.ZOLD(2)
+N.new Z-coordinate
+      THEN
+N.use W
+      DW   =W(Z)
+N.transfer new Z to OLD Z
+      ZOLD(1)=Z(1)
+      ZOLD(2)=Z(2)
+      CIF
+N.the 'amplitude-factor'
+      AMPFCT =PAR(I*4+1)*SQLN/(PAR(I*4+3)*SQPI)
+N.calculate some usefull variables
+      REZWZ  =(Z(1)*SW(1)-Z(2)*SW(2))/2.0
+      IMZWZ  =(Z(1)*SW(2)+Z(2)*SW(1))/2.0
+      REZZWZ =(SW(1)*(Z(1)*Z(1)-Z(2)*Z(2))+2.0*Z(1)*Z(2)*SW(2))/2.0
+N.determine the derivatives
+      DERIV(I*4+1)=AMPFCT*SW(1)/PAR(I*4+1)
+      DERIV(I*4+2)=AMPFCT*2.0*SQLN*REZWZ/PAR(I*4+3)
+      DERIV(I*4+3)=AMPFCT/PAR(I*4+3)*(2.0*Z(2)/SQPI+2.0*REZZWZ-SW(1))
+      DERIV(I*4+4)=AMPFCT*SQLN/PAR(I*4+3)*(IMZWZ-1.0/SQPI)
+      CIF
+      CFOR
+
+      RETURN
+      END

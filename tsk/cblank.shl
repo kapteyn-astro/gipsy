@@ -1,0 +1,360 @@
+E     PROGRAM CBLANK (copyright notice)
+C cblank.shl
+C                           COPYRIGHT (c) 1990
+C         Kapteyn Astronomical Institute - University of Groningen
+C            P.O. box 800,  9700 AV Groningen, The Netherlands
+C
+C
+E     PROGRAM CBLANK (cblank.dc1)
+C#>            cblank.dc1
+C
+CProgram:      CBLANK
+C
+CPurpose:      Converts datavalues to BLANK and vice versa. CBLANK
+C              also checks whether the data are legal (i.e. it checks
+C              for NaN's etc. and replaces them by BLANKS).
+C
+CCategory:     MANIPULATION, UTILITY
+C
+CFile:         cblank.shl
+C
+CAuthor:       K.G. Begeman
+C
+CKeywords:
+C
+C   INSET=     Set (and subsets) to work on. Maximum number of
+C              subsets is 2048.
+C
+C** BOX=       Frame of subset to work on [whole subset].
+C
+C   BLANK=     Value to be replaced by BLANK [BLANK].
+C
+C   VALUE=     Value to replace BLANK [BLANK].
+C
+C** OPTION=    Option where to replace. 0 means inside frame,
+C              1 means outside frame [0].
+C
+CExample:      <USER  >CBLANK
+C              <USER  >CBLANK   ,INSET=AURORA FREQ
+C              Set AURORA has 3 axes
+C              RA-NCP             from    -7 to     8
+C              DEC-NCP            from    -7 to     8
+C              FREQ-OHEL          from     1 to    59
+C              BOX range for set AURORA :
+C              RA-NCP             from    -7 to     8
+C              DEC-NCP            from    -7 to     8
+C              <USER  >CBLANK   ,BLANK=
+C              <USER  >CBLANK   ,VALUE=0.0
+C              <STATUS>  CBLANK  +++ FINISHED +++
+C
+CUpdates:      Oct 26, 1988: KGB, Document created.
+C
+C#<
+E     PROGRAM CBLANK (code)
+      program cblank
+C
+C     Parameters:
+C
+N     Change version number on next line
+      character*(*) id
+      parameter (id = ' CBLANK  Version 1.1  Oct 26, 1993 ')
+N     Maximum number of subsets
+      integer maxsubs
+      parameter (maxsubs = 2048)
+N     Size of data buffer
+      integer maxdata
+      parameter (maxdata = 4096)
+N     Maximum number of axes
+      integer maxaxes
+      parameter (maxaxes = 10)
+N     Device for set info
+      integer showdev
+      parameter (showdev = 11)
+C
+C     Variables for GDSINP:
+C
+N     Name of GDS set
+      character*80 set
+N     Array with the numbers of grids along an axis
+      integer      axcount(maxaxes)
+N     Permutation array with axis number
+      integer      axperm(maxaxes)
+N     Number of subsets entered by user
+      integer      nsubs
+N     Dimension of input set
+      integer      setdim
+N     Dimension of subsets
+      integer      subdim
+N     Array for subset coordinate words
+      integer      subset(maxsubs)
+C
+C     Variables for GDSBOX:
+C
+N     Arrays for frame defined by user
+      integer      blo(maxaxes), bhi(maxaxes)
+C
+C     Variables for BLANK and replacement VALUE:
+C
+N     System defined BLANK
+      real         blank
+N     Replacement value
+      real         value
+C
+C     Variables for INITPTR:
+C
+N     Counter for initptr
+      integer      icount
+N     Pointer in/outside sub frame
+      integer      ip
+N     Counter in/outside sub frame
+      integer      np
+C
+C     Variables for MINMAX3:
+C
+N     Counter for minmax3
+      integer      mcount
+N     Array for number of blanks in subsets
+      integer      nblank(maxsubs)
+N     Array for maximum in subsets
+      real         datamax(maxsubs)
+N     Array for minimum in subsets
+      real         datamin(maxsubs)
+C
+C     Variables for GDS:
+C
+N     Coordinate words
+      integer      cwlo, cwhi
+N     GDS error returns
+      integer      gerror
+N     Transfer id input and output data
+      integer      tid1, tid2
+C
+C     Other variables:
+C
+      character*80 text
+N     Arrays for edge grids of subset
+      integer      flo(maxaxes), fhi(maxaxes)
+N     Loop counter
+      integer      n
+N     Number of blanks added
+      integer      nbt
+N     Subset counter
+      integer      ns
+N     Option
+      integer      option
+N     Number of pixels in data buffer
+      integer      pixels_done
+N     Array for data
+      real         datar(maxdata)
+C
+C     Functions:
+C
+N     Fills coordinate word with array of grids
+      integer      gdsc_fill
+N     Returns grid value
+      integer      gdsc_grid
+N     Gets dimension of substructure
+      integer      gdsc_ndims
+N     Gets input set and subset from user
+      integer      gdsinp
+N     Gets input (integers) from user
+      integer      userint
+N     Get input (reals) from user
+      integer      userreal
+N     True when inside sub frame
+      logical      insideptr
+N     True when outside sub frame
+      logical      outsideptr
+      integer      clspfp
+C
+C     Data statements:
+C
+N     Reset GDS error return
+      data gerror / 0 /
+N     No restriction on subset dimensions
+      data subdim / 0 /
+C
+C     Executable code:
+C
+N     Link with HERMES
+      call init
+N     Show user who we are
+      call anyout( 8, id )
+N     Get input set from user
+      nsubs = gdsinp( set,
+     #                subset,
+     #                maxsubs,
+     #                0,
+     #                'INSET=',
+     #                'Set (and subsets) to work on' ,
+     #                showdev,
+     #                axperm,
+     #                axcount,
+     #                maxaxes,
+     #                1,
+     #                subdim )
+N     Get dimension of input set
+      setdim = gdsc_ndims( set, 0 )
+N     Get edge coordinates words
+      call gdsc_range( set, subset, cwlo, cwhi, gerror )
+N     Get edges of subset
+      for n = 1, subdim
+N        Get lower left grid
+         flo(n) = gdsc_grid( set, axperm(n), cwlo, gerror )
+N        Get upper left grid
+         fhi(n) = gdsc_grid( set, axperm(n), cwhi, gerror )
+      cfor
+N     Get frame of subset to work on
+      call gdsbox( blo,
+     #             bhi,
+     #             set,
+     #             subset,
+     #             2,
+     #             'BOX=',
+     #             ' ',
+     #             showdev,
+     #             0 )
+N     Get BLANK
+      if (userreal( blank,
+     #              1,
+     #              1,
+     #              'BLANK=',
+     #              'Value in set to be replaced [BLANK]' ) .eq. 0)
+      then
+N        Default is BLANK
+         call setfblank( blank )
+      cif
+N     Get replacement value
+      if (userreal( value,
+     #              1,
+     #              1,
+     #              'VALUE=',
+     #              'Value to replace [BLANK]' ) .eq. 0)
+      then
+N        Default is BLANK
+         call setfblank( value )
+      cif
+N     Get option from user
+      if (userint( option,
+     #             1,
+     #             2,
+     #             'OPTION=',
+     #             'Give option where to replace [0]' ) .eq. 0)
+      then
+N        Default is inside frame
+         option = 0
+      cif
+N     Now check whether we should do anything
+      if (value .eq. blank)
+      then
+N        Simple solution
+         call anyout( 1, 'Only checking for legal data!' )
+      cif
+N     Subset loop
+      for ns = 1, nsubs
+N        Show user what we are working on
+         call showsub1( set, subset(ns), axperm )
+N        Reset transfer id input data
+         tid1 = 0
+N        Reset transfer id output data
+         tid2 = 0
+N        Reset counter for initptr
+         icount = 0
+N        Reset counter for minmax3
+         mcount = 0
+N        Get lower coordinate words of frame
+         cwlo = gdsc_fill( set, subset(ns), flo )
+N        Get upper coordinate words of frame
+         cwhi = gdsc_fill( set, subset(ns), fhi )
+N        Read/write loop
+         nbt = 0
+         repeat
+N           Read data
+            call gdsi_read( set,
+     #                      cwlo,
+     #                      cwhi,
+     #                      datar,
+     #                      maxdata,
+     #                      pixels_done,
+     #                      tid1 )
+N           Initialize initptr
+            call initptr( flo,
+     #                    fhi,
+     #                    blo,
+     #                    bhi,
+     #                    subdim,
+     #                    pixels_done,
+     #                    icount )
+N           Check data
+            nbt = nbt + clspfp( datar, pixels_done )
+N           Do we have to do anything?
+            if (value .ne. blank )
+            then
+N              Replace inside frame
+               if (option .eq. 0)
+               then
+N                 Inside frame
+                  while (insideptr( ip, np ))
+N                    Loop though data in buffer
+                     for n = 1, np
+N                       Does it match
+                        if (datar(n+ip) .eq. blank)
+                        then
+N                          Replace it
+                           datar(n+ip) = value
+                         cif
+                     cfor
+                  cwhile
+N              Replace outside frame
+               else
+N                 Outside frame
+                  while (outsideptr( ip, np ))
+N                    Loop though data in buffer
+                     for n = 1, np
+N                       Does it match
+                        if (datar(n+ip) .eq. blank)
+                        then
+N                          Replace it
+                           datar(n+ip) = value
+                        cif
+                     cfor
+                  cwhile
+               cif
+            cif
+N           Determine new minimum and maximum
+            call minmax3( datar,
+     #                    pixels_done,
+     #                    datamin(ns),
+     #                    datamax(ns),
+     #                    nblank(ns),
+     #                    mcount )
+N           Write (modified) data back to disk
+            call gdsi_write( set,
+     #                       cwlo,
+     #                       cwhi,
+     #                       datar,
+     #                       pixels_done,
+     #                       pixels_done,
+     #                       tid2 )
+         until (tid1 .eq. 0)
+         if (nbt .ne. 0) 
+         then
+            write( text, '(''Found '',I5,'' Weirdos'')') NBT 
+            call anyout( 0, text )
+         endif
+      cfor
+N     Update new minimum and maximum
+      call wminmax( set,
+     #              subset,
+     #              datamin,
+     #              datamax,
+     #              nblank,
+     #              nsubs,
+     #              1 )
+N     Tell HERMES we're done
+      call finis
+C
+C     That's All Folks
+C
+      stop
+      end

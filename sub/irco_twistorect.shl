@@ -1,0 +1,73 @@
+
+c@ subroutine irco_twistorect( double precision, double precision,
+c@	double precision, double precision, double precision, integer )
+c
+c#>             irco_twistorect.dc2
+c Subroutine:	IRCO_TWISTORECT.
+c
+c Purpose:	Transform twist angles to rectangular coordinates.
+c
+c Category	WORLD COORDINATES, IRAS
+c
+c File:		irco.shl
+c
+c Author:	900921	Do Kester
+c
+c Use:
+c	call IRCO_TWISTORECT (
+c		lon	  I	doubleprecision(n) 
+c		lat	  I	doubleprecision(n) 
+c		twist	  I	doubleprecision(n),
+c		xyz	  I	doubleprecision(3,n),
+c		twv	  O	doubleprecision(3,n),
+c		n 	  I	integer.
+c		)
+c	lon 	longitude of direction
+c	lat	latitude
+c	twist   (in radian:) twist angle perpendicular to XYZ, 
+c		counterclock from north
+c	xyz	rectangular coordinates of direction
+c	twv	rectangular coordinates of the twist angle
+c	n	number of coordinates to transform.
+c Description:
+c	Transformation according to:
+c		x = cos(lat) * cos(lon),
+c 		y = cos(lat) * sin(lon),
+c		z = sin(lat).
+c		tx = cos(lon) * sin(lat) * cos(twist) + sin(lon) * sin(twist)
+c		ty = sin(lon) * sin(lat) * cos(twist) - cos(lon) * sin(twist)
+c		tz = cos(lat) * cos(twist)
+c	In this module (psi, theta,epsilon) is not applicable, use:
+c	call IRCO_TWISTORECT( psi, pi/2 - theta, epsilon + pi/2, xyz, twv, n) !!
+c Updates:
+c	90 Apr 24 Sjag Steensma; documentation changed, n-coordinates,
+c	87 May 25 Timo Prusti; unification of versions,
+c	87 May 25 Romke Bontekoe; documentation changed.
+c#<
+
+	subroutine IRCO_TWISTORECT ( lon, lat, twist, xyz, twv, n )
+
+	doubleprecision lon(n), lat(n), twist(n), xyz(3,n), twv(3,n)
+	integer		n
+	
+	doubleprecision coslat, x, y, z, cost, sint
+	integer		i
+	
+	for i = 1, n
+	  coslat = dcos( lat(i) )
+	  x = dcos( lon(i) )
+	  y = dsin( lon(i) )
+	  z = dsin( lat(i) )
+	  xyz(1,i) = x * coslat
+	  xyz(2,i) = y * coslat
+	  xyz(3,i) = z
+	  cost = dcos( twist(i) )
+	  sint = dsin( twist(i) )
+	  twv(1,i) = x * z * cost + y * sint
+	  twv(2,i) = y * z * cost - x * sint
+	  twv(3,i) = coslat * cost
+	cfor
+	
+	return
+	end
+

@@ -1,0 +1,392 @@
+conremcheb.src
+
+        Copyright (c) Kapteyn Astronomical Institute, Groningen 2013
+        All Rights Reserved.
+
+Name:         conremcheb.src
+Creator:      vogelaar
+Host:         albirumi
+Date:         Aug 29, 2013
+Contents:     conremcheb.make conremcheb.dc1 conremcheb.py
+
+#>            conremcheb.make
+#----------------------------------------------------------------------
+# Makefile for task(!) conremcheb (conremcheb.make)
+#
+# Pack sources into conremcheb.src with:    > make -f conremcheb.make pack
+# Unpack source files with:                 > $gip_exe/xfile conremcheb.src
+# Install source file with:                 > p -reserve conremcheb.src
+#                                           > p -install conremcheb.src
+#
+# CONREMCHEB is task and it is installed as conremcheb
+#----------------------------------------------------------------------
+
+SHELL   = /bin/sh
+
+DOCUMENTS =  conremcheb.dc1
+
+SOURCES   = conremcheb.py
+
+default:: conremcheb
+
+conremcheb: conremcheb.py
+	cp conremcheb.py conremcheb
+	chmod +x conremcheb
+
+pack::
+	$$gip_sys/pack.csh conremcheb.src conremcheb.make $(DOCUMENTS) $(SOURCES)
+#<
+
+#>            conremcheb.dc1
+
+Program:      CONREMCHEB
+
+Purpose:      Removes continuum from channel maps by fitting a
+              polynomial or a Chebychev series to the continuum channels.
+
+Category:     ANALYSIS, COMBINATION
+
+File:         conrem.py
+
+Author:       M.G.R. Vogelaar
+
+Keywords:
+
+   INSET=     Set and subsets from which to subtract the continuum:
+              
+   FITSET=    Set and subsets for which to fit the continuum:
+              Number of profiles with fit data must be equal to number
+              of input profiles
+
+   DEGREE=    Degree of pol. or series to be fitted:     [1]
+              Maximum degree depends on the number of available
+              x values in the fit.
+
+   OUTSET=    Set and subsets for the result:
+              The result depends on the value of SUBTRACT=
+
+   FUNCTION=  Fit standard Polynomial or Chebyshev series?   P/[C]
+              Default is a Chebyshev series.
+
+   FITOUTSET= Set to write fit results only:   [skip]
+              Write the fitted continuum to a set. The set is created and
+              has the same size and header as the input set.
+              
+
+Description:  A polynomial or a Chebyshev series of degree NPOLY= is
+              fitted to the subset selected with FITSET= for each
+              grid position in the subset separately.
+              This fitted polynomial can then be subtracted
+              from the subsets selected with INSET= and/or can be used
+              to calculate an interpolated continuum in OUTSET=.
+              The program is especially useful for removing the continuum
+              from a series of line maps.
+
+Example:      <USER> CONREMCHEB
+              CONREM  Version 1.0  (Jul 30 1991)
+              <USER> CONREMCHEB INSET=NGC4214 3:58
+              Set NGC4214 has 3 axes
+              RA-NCP             from  -127 to   128
+              DEC-NCP            from  -127 to   128
+              FREQ-OHEL          from     1 to    63
+              <USER> CONREMCHEB FITSET=NGC4214 3:16 42:58
+              Set NGC4214 has 3 axes
+              RA-NCP             from  -127 to   128
+              DEC-NCP            from  -127 to   128
+              FREQ-OHEL          from     1 to    63
+              <USER> CONREMCHEB DEGREE=1
+              <USER> CONREMCHEB OUTSET=NGC4214_SUB
+              Set NGC4214_SUB has 3 axes
+              RA-NCP             from  -127 to   128
+              DEC-NCP            from  -127 to   128
+              FREQ-OHEL          from     3 to    58
+              <USER> CONREMCHEB FUNCTION=P
+              <USER> CONREMCHEB FITOUTSET=fit4214
+
+              <STATUS>  CONREMCHEB   +++ FINISHED +++
+
+Updates:      Aug 28, 2013: VOG Document (based on conrem.dc1) created
+
+Note:         This program provides functionality as in CONREM but besides a
+              standard polynomial, you can also fit a Chebychev series, which
+              is less sensitive to oscillations at the edges of a fit interval
+              (Runge's phenomenon).
+
+              With versions of NumPy >= 1.7.1 the fit functions accepts multiple
+              profiles to fit. This makes the program (much) faster than versions
+              with an older NumPy.#<
+
+#<
+
+#>            conremcheb.py
+#!/usr/bin/env python
+import numpy as np
+import gipsy
+from numpy.polynomial.chebyshev import chebfit, chebval
+from numpy.polynomial.polynomial import polyfit, polyval
+
+# Define the keywords an their prompts
+key_in = ("INSET=", "Set and subsets from which to subtract the continuum:")
+key_fit = ("FITSET=", "Set and subsets for which to fit the continuum:")
+key_out = ("OUTSET=", "Set and subsets for the continuum subtracted data:")
+key_model = ("FUNCTION=", "Fit standard Polynomial or Chebyshev series?   P/[C]")
+key_degree =("DEGREE=", "Degree of pol. or series to be fitted:     [1]")
+key_conset = ("FITOUTSET=", "Set to write fit results only:   [skip]")
+
+gipsy.init()       # Needed to contact Hermes
+myname = gipsy.myname()
+
+# Here we have an interesting situation. We have a data structure that is defined
+# as M[....,z,y,x]. Any of the axes x, y and z (or other axis if dim>3), can be the
+# profile axis. This profile must be identified as the only axis outside the
+# input subset. e.g. if AURORA has axes RA,DEC,FREQ,STOKES then INSET=AURORA FREQ
+# defines subsets in RA,DEC,STOKES and the profile axis is FREQ.
+
+# Get the input data. Note that the input follows the syntax of a
+# class 2 program. That is, we expect one axis as repeat axis, which
+# plays the role here of a profile axis.
+while 1:
+   try:
+      set_in = gipsy.Set(gipsy.usertext(key_in[0], key_in[1]))
+      gipsy.anyout("Set %s has %d axes:"%(set_in.spec.split()[0], set_in.naxis))
+      for a in set_in.axes(level=0, mode=''):               # Inform user about axes in this set
+         t = "%-20s from %10d to %10d"%(a.ctype, a.slo, a.shi)
+         gipsy.anyout(t)
+      axesoutside = set_in.axperm('outside')
+      if len(axesoutside) <> 1:
+         raise Exception, "I need 1 axis that represents a profile"
+      break
+   except Exception, errmes:
+      gipsy.reject(keyword=key_in[0], message=str(errmes))
+
+gipsy.anyout("Shape of input cube: %s"%(str(set_in.image.shape)), 16)
+
+
+# We need to know which axis represents the profile from which the
+# data should be corrected because we need to compose the x values,
+# derived from the grid positions. These x values are used to
+# interpolate the fitted (Chebyshev) polynomials.
+profileaxis_in = set_in.axperm('outside')[-1]
+x = []
+for cword in set_in.subsets:
+   grid = set_in.grid(profileaxis_in, cword)
+   x.append(grid)
+
+x = np.array(x)
+gipsy.anyout("Grid coordinates for profile: %s"%(str(x)), 16)
+
+
+# How many profiles must we process?
+numprofiles_in = 1
+for axp in set_in.axperm():
+   if axp != profileaxis_in:           # But exclude the profile axis (must be first element in shape)
+      axsize = set_in.axsize(axp)
+      numprofiles_in *= axsize
+
+
+# Use a (possibly) different set from which we extract parts of a profile
+# which are used to find the best fit polynomial coefficients.
+while 1:
+   try:
+      set_fit = gipsy.Set(gipsy.usertext(key_fit[0], key_fit[1]))      
+      gipsy.anyout("flo= %s, fhi= %s" % (set_fit.slo, set_fit.shi), 16)
+      axesoutside = set_fit.axperm('outside')
+      if len(axesoutside) <> 1:
+         raise Exception, "I need 1 axis that represents a profile!"
+      # How many profiles are there for the fit? Number must be equal to
+      # number of input profiles
+      profileaxis_fit = set_fit.axperm('outside')[-1]
+      numprofiles_fit = 1
+      for axp in set_fit.axperm():
+         if axp != profileaxis_fit:           # But exclude the profile axis (must be first element in shape)
+            axsize = set_fit.axsize(axp)
+            numprofiles_fit *= axsize
+      if numprofiles_fit !=  numprofiles_in:
+         raise Exception, "The number of profiles to fit is not equal to input number of profiles!"
+      break
+   except Exception, errmes:
+      gipsy.reject(keyword=key_fit[0], message=str(errmes))
+
+set_fit = gipsy.Set(gipsy.usertext(key_fit[0], key_fit[1]))
+gipsy.anyout("Shape of fit cube: %s"%(str(set_fit.image.shape)), 16)
+
+
+# Get the x values used in the least squares fit of the polynomial
+xf = []
+for cword in set_fit.subsets:
+   grid = set_fit.grid(profileaxis_fit, cword)
+   xf.append(grid)
+
+xf = np.array(xf)
+gipsy.anyout("Grid coordinates for fit: %s"%(str(xf)), 16)
+
+
+# Here we need to setup a data structure for the y data values
+# that we need in the fit of the polynomial. This avoids the need to loop
+# over all profiles. The fit routines need a data structure where the
+# first element of the shape is the length of a profile (so the profile is
+# always along the slowest varying axis.
+shape = [xf.size]                       # The length of the profile data in the fit
+N = xf.size
+N2 = 1
+for axp in set_fit.axperm()[::-1]:      # Get the shape from the axes lengths in inverse order
+   if axp != profileaxis_fit:           # But exclude the profile axis (must be first element in shape)
+      axsize = set_fit.axsize(axp)
+      shape.append(axsize)
+      N *= axsize
+      N2 *= axsize
+yfitcube = np.zeros(N).reshape(shape)   # Get in right shape and fill with zeros
+gipsy.anyout("Shape of fit cube derived from axes: %s"%(str(yfitcube.shape)), 16)
+
+
+# User can make a choice between a polynomial fit (as in conrem.c) or a Chebyshev fit
+model = gipsy.userchar(key_model[0], key_model[1], defval='C', default=1)
+if model.upper() == 'P':
+   getfit = polyfit
+   getval = polyval
+else:                     # Models have the same interface
+   getfit = chebfit
+   getval = chebval
+
+
+# We need the degree of the fit polynomial. The minimum is 0 (a constant).
+# The maximum is equal to the number of subsets in the fit data set.
+# The default is 1
+while 1:
+   try:
+      deg = gipsy.userint(key_degree[0], key_degree[1], defval=1, default=1)
+      if deg < 0:
+         raise Exception, "The degree of the polynomial must be > 0"
+      if deg > xf.size:
+         raise Exception, "The degree of the polynomial must be smaller than %d"%(xf.size)
+      break
+   except Exception, errmes:
+      gipsy.reject(keyword=key_degree[0], message=str(errmes))
+gipsy.anyout("Selected degree for fit: %d"%deg)
+
+
+# Get name of output set. Use name after calculations to open set and write results
+outname = gipsy.usertext(key_out[0], key_out[1])
+
+
+# Get name of a set to write the results of the fit itself
+fitoutsetname = gipsy.usertext(key_conset[0], key_conset[1], defval='', default=1)
+if fitoutsetname:
+   savefit = True
+else:
+   savefit = False
+
+   
+# Fill the fitcube with data from the subsets given when the fit set was entered.
+# The slowest axes is the profile axis. In fact we stack a number of planes here.
+count = 0
+for subset in set_fit.subsets:
+    yfitcube[count] = set_fit.subimage(subset)
+    count += 1
+
+
+# Do the (Chebyshev) polynomial fit and interpolate the result at all
+# positions x in the original (input) profile.
+# But first we have to flatten all non-profile axes because the fit routines
+# require this.
+yfitcube.shape = (xf.size, N2)
+# Fitting and interpolation can be done in two steps as in:
+# coeff = chebfit(xf, yfitcube, deg=deg)     # Get the fitted model coefficients
+# yinterpol = chebval(x, coeff)
+# but to avoid an extra data array, we combine them
+try:
+   yinterpol = getval(x, getfit(xf, yfitcube, deg=deg)).T
+except:
+   # This is for older versions of NumPy (< 1.7.1)
+   # We have to loop over all fitted coefficients. So in this case we have to transpose
+   # the coefficient matrix first.
+   gipsy.anyout("This version of NumPy cannot process interpolations without a (slow) loop")
+   coeff = getfit(xf, yfitcube, deg=deg)
+   # We need a data structure equal to the input data, but we must reshape it
+   # to store N2 fitted profiles.
+   yinterpol = set_in.image.copy().reshape(N2, x.size)
+   i = 0
+   for c in coeff.T:      # Iterate over all sets of fitted coefficients (Transpose is needed)
+      yinterpol[i] = getval(x, c)
+      i += 1
+   yinterpol = yinterpol.T
+
+   
+# Note that we need the transpose, because the polyval routine returns
+# something with shape=(number_of_profiles, profile_length)
+gipsy.anyout("Shape of yinterpol after chebval: %s"%(str(yinterpol.shape)), 16)
+yinterpol.shape = set_in.image.shape      # Get into shape of input set
+gipsy.anyout("Shape of yinterpol after reshape: %s"%(str(yinterpol.shape)), 16)
+
+
+# Get name of output set. Copy it and re-open it again.
+name_in = set_in.spec.split()[0]
+dummy = gipsy.Set(name_in)
+gipsy.anyout("Shape dummy=%s"%(str(dummy.image.shape)), 16)
+set_out = dummy.copy(outname)
+gipsy.anyout("Shape set_out=%s"%(str(set_out.image.shape)), 16)
+if savefit:
+   set_fitout = dummy.copy(fitoutsetname)
+
+setout_spec = set_out.spec
+del dummy
+
+gipsy.anyout("Shape set_out (after re-opening)=%s"%(str(set_out.image.shape)), 16)
+gipsy.status("Saving the subtracted input...")
+set_out.image[:] = set_fit.image - yinterpol
+gipsy.status("")
+
+if savefit:
+   gipsy.status("Saving the fit itself...")
+   set_fitout.image[:] = yinterpol
+   set_fitout.wminmax(set_fitout.subsets[0])
+   gipsy.status("")
+
+# Update header at set level with min & max value information
+set_out.wminmax(set_out.subsets[0])   # There is only one subset
+
+# Write some useful information in the Log
+gipsy.anyout("\n---------------- Summary task %s ----------------"%myname)
+gipsy.anyout("You procesed data from %s"%(set_in.spec))
+gipsy.anyout("Your data from the fit was from  %s"%(set_fit.spec))
+gipsy.anyout("The (input-fit) result was written to %s"%(set_out.spec))
+if savefit:
+   gipsy.anyout("The fit result itself was written to %s"%(set_fitout.spec))
+else:
+   gipsy.anyout("You decided NOT to write the result of the fit itself")
+if model.upper() == 'P':
+   gipsy.anyout("The fit function was a standard polynomial p(x) = a0 + a1.x + a2.x_2 + ...")
+else:
+   gipsy.anyout("The fit function was a Chebyshev series p(x) = c0 + c1 * T1(x) + c2 * T2(x) + ....")
+   gipsy.anyout("With T0 = 1, T1 = x,  T2=2x^2-1 etc.")
+gipsy.anyout("The degree of the polynomial was %d"%(deg))
+gipsy.anyout("The number of data points in the fit was %d"%(xf.size))
+gipsy.anyout("-------------------- End summary --------------------")
+gipsy.anyout("")  # Empty line
+
+# Write data and close sets
+del set_in
+del set_fit
+del set_out
+if savefit:
+   del set_fitout
+
+
+# Disconnect Hermes, finish task
+gipsy.finis()
+
+
+"""
+In CONREM (conrem.c) there is no box option. We keep this code in case
+this functionality is needed later.
+# Prepare to enter a box
+boxmes = 'Enter box in '
+for k in setin.axperm('inside'):
+    boxmes += str(setin.axname(k)) + ' '
+boxmes += '   [entire subset]'
+b = gipsy.usertext("BOX=", boxmes, defval='', default=1)
+setin.setbox(b)
+anyout( "blo=%s bhi=%s" % (setin.blo,setin.bhi) )
+"""#<
+
+#<

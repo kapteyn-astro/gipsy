@@ -1,0 +1,219 @@
+C#> gaussn.dc2
+C
+CFunction:     GAUSSN  
+C
+CPurpose:      GAUSSN computes the value of an N-component Gaussian
+C
+CFiles:        gaussn.dc2,gaussn.shl
+C
+CAuthor:       Peter Roelfsema
+C
+CCategory:     UTILITY
+C
+CCall:
+C
+C       GX=GAUSSN(X,PAR,NPAR)
+C
+C   Input parameters:
+C                X     -R   -running coordinate.
+C                PAR   -R   -array  defined  as  follows:  PAR(0:NPAR*3)  that
+C                    contains the parameters for the Gaussian in the following
+C                    order:
+C
+C                            PAR(0)        -zerolevel
+C                       PAR(1)  -PAR(3)    -int, pos.  of peak, fwhm cmp.  1
+C                             .                     .
+C                     PAR(1+3*n)-PAR(3+3*n)-int, pos.  of peak, fwhm cmp.  n-1
+C                                     etc
+C                NPAR  -I   -number of components.
+C
+CUse:
+C                  GAUSSN gives the value of a multi-component gaussian.
+C                  Note  that  the Gaussian components are defined in terms of
+C                  their Intensity, centre coordinate and Full Width  at  Half
+C                  Maximum ( i.e.  not in terms of amplitude and sigma ! ).
+C
+C
+C   Call:
+C
+C       CALL DGAUSN(X,PAR,DERIV,NPAR)          ( entry point in GAUSSN )
+C
+C   Input parameters:
+C                X     -R   -running coordinate.
+C                PAR   -R   -array  defined  as  follows:  PAR(0:NPAR*3)  that
+C                    contains the parameters for the Gaussian in the following
+C                    order:
+C
+C                            PAR(0)        -zerolevel
+C                       PAR(1)  -PAR(3)    -int, pos.  of peak, fwhm cmp.  1
+C                             .                     .
+C                     PAR(1+3*n)-PAR(3+3*n)-int, pos.  of peak, fwhm cmp.  n-1
+C                                     etc
+C                NPAR  -I   -number of components.
+C   Output parameters:
+C                DERIV -R   -array defined as  follows:  DERIV(0:NPAR*3)  that
+C                    contains the partial derivatives in the following order:
+C                               DERIV(0)       -part.  deriv of zerolevel
+C                         DERIV(1)-DERIV(3)    -part.  derivs.  of cmp.  1
+C                                .                     .
+C                     DERIV(1+3*n)-DERIV(3+3*n)-part.  derivs.  of cmp.  n-1
+C                                          etc
+C
+C
+CUse:
+C                  DGAUSN gives the partial derivatives for the gaussian.
+C                  Note  that  the Gaussian components are defined in terms of
+C                  their Intensity, centre coordinate and Full Width  at  Half
+C                  Maximum ( i.e.  not in terms of amplitude and sigma ! ).
+C
+C
+C   Update History:
+C      8- 7-85-PRR.-original document
+C     16- 6-86-PRR.-converted for VAX8600
+C     26- 2-92-PRR.-converted to new GIPSY
+C#<
+C
+C@ real function gaussn( real , real , integer )
+C@ subroutine dgausn( real , real , real , integer )
+C
+      REAL FUNCTION GAUSSN(X,PAR,NPAR)
+C
+C      ----------------------------------------------------------------
+C
+C      GAUSSN gives the value of a multi-component guassian
+C
+C      DGAUSN gives the partial derivatives for this gaussian
+C
+C      The parameters and deriavatives are defined as follows:
+C             PAR(0)       -zerolevel
+C            DERIV(0)      -part deriv zero level
+C        PAR(1)  -PAR(3)   -int, pos. of peak and fwhm of component 1
+C        DERIV(1)-DERIV(3) -part. derivs. of component 1
+C              .                     .
+C      PAR(1+3*n)-PAR(3+3*n)- int, pos. of peak, fwhm of comp. n-1
+C                      etc
+C
+C      ----------------------------------------------------------------
+
+N.natural logarithm of 2: LN(2)
+      PARAMETER ( RLN2 = 0.6931472 )
+N.factor to calculate the amplitude: 2*SQRT(LN(2)/PI)
+      PARAMETER (  A0  = 0.9394373 )
+
+N.running coordinate
+      REAL       X
+N.parameter array
+      REAL       PAR(0:*)
+N.array with derivatives
+      REAL       DERIV(0:*)
+N.buffer variables
+      REAL       GAUSS,A
+
+N.number of parameters
+      INTEGER    NPAR
+N.number of components
+      INTEGER    NCOMP
+N.loop counter
+      INTEGER    I
+
+E *** Main code ***
+N.determine number of components
+      NCOMP=(NPAR-1)/3
+
+N.zero level
+      GAUSS=PAR(0)
+N.loop on all components
+      FOR I=0,(NCOMP-1)
+N.argument of exponential
+      IF (PAR(I*3+3) .NE. 0.0)
+      THEN
+      A=(X-PAR(I*3+2))/PAR(I*3+3)
+N.add component to what we had already
+      GAUSS=GAUSS+A0*PAR(I*3+1)/PAR(I*3+3)*EXP(-4*RLN2*A*A)
+      CIF
+      CFOR
+
+      GAUSSN=GAUSS
+      RETURN
+
+
+C#> dgausn.dc2
+C
+CName:          DGAUSN  
+C
+C
+CPurpose:       DGAUSN computes the partial derivatives of that Gaussian
+C
+CFiles:         dgaussn.dc2,gaussn.shl
+C
+CAuthor:        Peter Roelfsema
+C
+C
+C   Call:
+C
+C       CALL DGAUSN(X,PAR,DERIV,NPAR)          ( entry point in GAUSSN )
+C
+C   Input parameters:
+C                X     -R   -running coordinate.
+C                PAR   -R   -array  defined  as  follows:  PAR(0:NPAR*3)  that
+C                    contains the parameters for the Gaussian in the following
+C                    order:
+C
+C                            PAR(0)        -zerolevel
+C                       PAR(1)  -PAR(3)    -int, pos.  of peak, fwhm cmp.  1
+C                             .                     .
+C                     PAR(1+3*n)-PAR(3+3*n)-int, pos.  of peak, fwhm cmp.  n-1
+C                                     etc
+C                NPAR  -I   -number of components.
+C   Output parameters:
+C                DERIV -R   -array defined as  follows:  DERIV(0:NPAR*3)  that
+C                    contains the partial derivatives in the following order:
+C                               DERIV(0)       -part.  deriv of zerolevel
+C                         DERIV(1)-DERIV(3)    -part.  derivs.  of cmp.  1
+C                                .                     .
+C                     DERIV(1+3*n)-DERIV(3+3*n)-part.  derivs.  of cmp.  n-1
+C                                          etc
+C
+C
+C   Use:
+C                  DGAUSN gives the partial derivatives for the gaussian.
+C                  Note  that  the Gaussian components are defined in terms of
+C                  their Intensity, centre coordinate and Full Width  at  Half
+C                  Maximum ( i.e.  not in terms of amplitude and sigma ! ).
+C
+C
+C   Update History:
+C      8- 7-85-PRR.-original document
+C     16- 6-86-PRR.-converted for VAX8600
+C     26- 2-92-PRR.-converted to new GIPSY
+C#<
+      ENTRY DGAUSN(X,PAR,DERIV,NPAR)
+
+N.determine number of components
+      NCOMP=(NPAR-1)/3
+
+N.zero-level
+      DERIV(0)=1.0
+N.loop on all components
+      FOR I=0,(NCOMP-1)
+N.argument of exponential
+      IF (PAR(I*3+3) .NE. 0.0)
+      THEN   
+      A=(X-PAR(I*3+2))/PAR(I*3+3)
+N.calculate this component
+      GAUSS=A0/PAR(I*3+3)*EXP(-4*RLN2*A*A)
+N.derivative of integral
+      DERIV(I*3+1)=GAUSS
+N.derivative of centre coordinate
+      DERIV(I*3+2)=GAUSS*8*RLN2*A*PAR(I*3+1)/PAR(I*3+3)
+N.derivative of FWHM
+      DERIV(I*3+3)=GAUSS*(8*RLN2*A*A-1)*PAR(I*3+1)/PAR(I*3+3)
+      ELSE
+      DERIV(I*3+1)=0.0
+      DERIV(I*3+2)=0.0
+      DERIV(I*3+3)=0.0
+      CIF
+      CFOR
+
+      RETURN
+      END

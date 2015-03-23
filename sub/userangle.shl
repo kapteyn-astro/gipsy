@@ -1,0 +1,327 @@
+c#>             userangle.dc2
+c
+cFunction:	USERANGLE
+c
+cPurpose:      User input interface routine for angular reals
+c
+cCategory:	user io
+c
+cAuthor:	Do Kester
+c
+cUse: integer USERANGLE(
+c	value,		O	doubleprecision
+c	nmax,		I	integer
+c	default,	I	integer
+c	key,		I	character*(*)
+c	mess )		I	character*(*)
+c
+c	userangle	number of items entered
+c
+c	value		result
+c	nmax		maximum number of values
+c	default		default level
+c	key		prompt string
+c	mess		accompanying message
+c
+cDescription:
+c     The string(s) presented to KEY may be written in two formats
+c     1. It can consist of one string containing 3 (or less) numbers
+c     separated by a delimiter from the set 'dDhHmMsSrR'. They mean
+c     the obvious: the degrees (or hours) are separated by a 'd' ('h') 
+c     from the minutes which in turn are separated by an 'm' from 
+c     the seconds. The seconds may be closed by an 's'. Minutes and
+c     seconds may alternatively be indicated by a single quote (') and
+c     a double quote (") -not 2 single quotes-. An 'r' indicates radians.
+c     2. The second format consists of 3 or less strings, each a valid
+c     fortran real, closed with a unit indicator: Hour, Degree or Radian.
+c     The unit indicator is obligatory for an interpretation as 
+c     degrees(hours) minutes and seconds. When none is given each string 
+c     is interpreted as an individual value (in degrees). The strings are
+c     separated from each other by one or more blanks (more blanks are
+c     equivalent to one) or by one of the set ',;:' (more of these
+c     separate empty strings which result in a zero on that position.)
+c     All numbers must comply to the fortran reals. If the
+c     number is to be negative, the first character should be a '-'.
+c     Some examples:
+c	format 1  	 format 2	result
+c
+c       120d30m15s      120 30 15 deg	120 + 30/60. + 15/3600.
+c       -60d12.5m       -60:12.5 d	-( 60 + 12.5/60. )
+c       12h30            12;30 hours	( 12 + 30/60.            ) * 15
+c       12h30s           12;;30 h	( 12 +        + 30/3600. ) * 15
+c       12.3             12.3		12.3
+c	4r		  4 Radian	4 * 180 / pi
+c
+cExternals:  	USERTEXT NELC
+cReferences:	former name in Geisha: gucala
+cUpdate:       890109  Timo Prusti, unification of versions
+c               880322  Do Kester
+c		28 Nov 1990 Do Kester, gipsy code
+c               19 Nov 1991 Pjotr Roelfsema, changed use of EXACT default
+c		07 Jan 1992 DK, better conformance to default levels
+c		03 Sep 1992 DK, initialization of input string to blanks
+c				and ios initialized to 0
+c#<
+c@ integer function userangle( double precision, integer, integer,
+c@				character, character )
+
+        integer function USERANGLE( value, nmax, default, key, mess )
+
+        integer          nmax, default
+        doubleprecision  value(nmax)
+        character *(*)   key, mess
+
+        integer         length, NELC, userangle_indexn, USERTEXT
+	integer		k, item, delim(3), skip, reddef
+	integer		TS, MINOR, INEXP
+        parameter       ( TS = 80, MINOR = 2, INEXP = 8 )
+        character*(TS)  buff, tmp, str
+	character	list*3
+        integer         i, id, in(3), start, leng, ios, pos, found
+        doubleprecision factor, frac, x, deg, R2D
+	parameter	( R2D = 180 / 3.1415926535897932384 )
+	logical		blank, separ, pblank, psepar
+
+	data	tmp	/ ' ' /
+	data	ios	/ 0 /
+
+c reduced ie. `not-exact'-ed version of default
+	reddef = mod( default, 4 )
+
+	repeat
+
+  	  length = USERTEXT( tmp, reddef, key, mess )
+
+c replace multiple blanks by one separater
+	  pblank = .false.
+	  psepar = .true.
+	  skip = 0
+	  for pos = 1, length
+	    separ = userangle_indexn( tmp(pos:pos), ',;:' ) .eq. 1
+	    blank = tmp(pos:pos) .eq. ' '
+	    if ( ( psepar .and. blank ) .or. ( pblank .and. separ ) .or.
+     #	    ( pblank .and. blank ) ) .and. .not. ( psepar .and. separ )
+	    then
+	      skip = skip + 1
+	    cif
+	    tmp(pos-skip:pos-skip) = tmp(pos:pos)
+	    psepar = separ .or. ( psepar .and. blank )
+	    pblank = blank
+	  cfor
+	  length = length - skip
+	  tmp(length+1:) = ' '
+
+c The first part transforms the second format variant into the first
+c e.g. '2 12 34 hours' becomes '2h12m34s'
+
+	  pos = 1
+	  item = 0
+	  while length .gt. pos
+	    leng = userangle_indexn( tmp(pos:), ' ,;:' )
+	    pos = pos + leng - 1
+	    if userangle_indexn( tmp(pos-leng+1:pos), 
+     #			'HhDdMm''Ss"' ) .gt. 1
+	    then
+	      item = 0
+	    else
+	      item = item + 1
+	      if item .eq. 4
+	      then
+	        delim(1) = delim(2)
+	        delim(2) = delim(3)
+	        item = 3
+	      cif
+	      delim(item) = pos
+	      if userangle_indexn( tmp(pos+1:), 'HhDdRr' ) .eq. 1
+	      then
+	        list = 'dms'
+	        list(1:1) = tmp(pos+1:pos+1)
+	        if userangle_indexn( tmp(pos+1:), 'Rr' ) .eq. 1
+	        then
+	          delim(1) = delim(item)
+	          item = 1
+	        cif
+	        for i = 1, item
+	          k = delim(i)
+	          tmp(k:k) = list(i:i)
+	        cfor
+	        leng = userangle_indexn( tmp(pos+1:), ' ,;:' )
+	        tmp(pos+1:pos+leng) = ' '
+	        pos = pos + leng
+	        item = 0
+	      cif
+	    cif
+	    pos = pos + 1
+	  cwhile
+
+c The second part decodes the first format variant
+c e.g. 2h23m34s becomes 35.861667
+
+	  pos = 1
+	  found = 0
+          while length .ge. pos
+c find next delimiter (=space,comma,colon,semi-colon) in tmp
+	    leng = userangle_indexn( tmp(pos:), ' ,:;' ) - 1
+	    buff = tmp(pos:pos + leng - 1)
+            leng = NELC( buff )
+c initialize some values
+            if buff(1:1) .eq. '-'
+            then
+              factor = -1.0
+              start = 2
+            else
+              factor = 1.0
+              start = 1
+            cif
+            frac = 1.0
+            deg = 0.0
+c hours conversion if 'h' is present in stead of 'd'
+            in(1) = userangle_indexn( buff, 'hH' ) - 1
+            if in(1) .ge. 0
+            then
+              factor = factor * 15
+            else
+              in(1) = userangle_indexn( buff, 'rR' ) - 1
+	      if in(1) .ge. 0
+	      then
+	        factor = factor * R2D
+	      else
+                in(1) = userangle_indexn( buff, 'dD' ) - 1
+	      cif
+            cif
+            in(2) = userangle_indexn( buff, 'mM''' ) - 1
+            in(3) = userangle_indexn( buff, 'sS"' ) - 1
+c the remainder is in the first unspecified unit
+            if in(3) .eq. -1
+            then
+              in(3) = leng
+              if in(2) .eq. -1
+              then
+                in(2) = leng
+                if in(1) .eq. -1
+                then
+                  in(1) = leng
+                cif
+              cif
+            cif
+c read the numbers between the separators
+            for i = 1, 3
+              id = in(i)
+              if id .ge. start
+              then
+                str = ' '
+                str(TS-id+start:TS) = buff(start:id)
+                read( str, '(e80.0)',iostat = ios ) x
+                if ios .ne. 0
+                then
+                  xwhile
+                cif
+                deg = deg + x * frac
+              cif
+	      start = max( start, id + 2 )
+              frac = frac / 60.0
+            cfor
+c
+            found = found + 1
+	    if found .gt. nmax
+	    then
+	      xwhile
+	    cif
+	    value(found) = factor * deg
+	    pos = pos + leng
+
+c skip blanks
+	    repeat
+	      pos = pos + 1
+	    until tmp(pos:pos) .ne. ' ' .or. pos .gt. length
+
+          cwhile
+
+c check whether we got a proper answer
+	  if ios .ne. 0
+	  then
+	    write( str, '(a,a)' ) 'Cannot decode your answer: ', 
+     #			buff(start:id)
+	    call ERROR( MINOR, str(:NELC( str )) )
+	    ios = 0
+	  elseif found .gt. nmax
+	  then
+	    write( str, '(a,i4)' ) 'Too many items; maximum is ', nmax 
+	    call ERROR( MINOR, str(:NELC( str )) )
+	  elseif default .eq. 4 .and. found .ne. nmax
+	  then
+	    write( str, '(2(a,i4))' ) 
+     #		'Not exactly ', nmax, ' items; found ', found
+	    call ERROR( MINOR, str(:NELC( str )) )
+	  elseif default .gt. 4 .and. .not.
+     #		 ( found .eq. nmax .or. found .eq. 0 )
+	  then
+	    write( str, '(2(a,i4))' ) 
+     #		'Not exactly ', nmax, ' or 0 items; found ', found
+	    call ERROR( MINOR, str(:NELC( str )) )
+	  else
+	    xrepeat
+	  cif
+	  reddef = min( 1, reddef )
+	  call CANCEL( key )
+	  call ANYOUT( INEXP, 'See userangle.dc2 for definitions' )
+	
+	until .FALSE.
+
+	userangle = found
+
+        return
+
+        end
+
+c#>             userangle_indexn.dc2
+c
+cFunction:	USERANGLE_indexn
+c
+cPurpose:      find first position of any one of the characters of 
+c		str2 within str1
+c
+cCategory:	user io
+c
+cAuthor:	Do Kester
+c
+cUse: integer USERANGLE_INDEXN(
+c	str1,		I	character*(*)
+c	str2 )		I	character*(*)
+c
+c   userangle_indexn	value of the first position
+c			0 if none is found
+c
+cUpdate:       910911  DK
+c#<
+
+	integer function userangle_indexn( str1, str2 )
+
+c find first position of any one of the characters of str2 within str1
+c 0 if none is found
+
+	character*(*)	str1, str2
+	integer		k, least, i, length
+
+	length = len( str2 )
+	least = 0
+	k = 0
+	while k .lt. length
+	  k = k + 1
+	  i = index( str1, str2(k:k) )
+	  if i .gt. 0
+	  then
+	    if least .eq. 0
+	    then
+	      least = i
+	    else
+	      least = min( least, i )
+	    cif
+	  cif
+	cwhile
+c	print '(a,i4,5x,a20,x,a10)', 'at pos', least, str1, str2
+
+	userangle_indexn = least
+
+	return
+	end

@@ -1,0 +1,19 @@
+
+Script:       pack
+
+Purpose:      Packs files so that they can be unpacked by xfile
+
+Category:     UTILTIY
+
+File:         pack.csh
+
+Author:       K.G. Begeman
+
+Use:          $gip_sys/pack.csh pname [ iname [ iname [ iname ... ] ] ]
+
+Description:  The file 'pname' will be created and the rest of the
+              filenames on the command line will be packed into this file.
+
+Updates:      Aug  7, 1991: KGB, Document created.
+              Mar  6, 2011: JPT, Changed copyright notice.
+

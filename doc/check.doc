@@ -1,0 +1,17 @@
+
+Script:       check
+
+Purpose:      Checks $gip_sys/bookkeeper for compiler or other errors.
+
+Category:     MANAGEMENT
+
+File:         check.csh
+
+Author:       K.G. Begeman
+
+Use:          $gip_sys/check.csh or $gip_sys/check.sh
+
+Updates:      Nov 26, 1991: KGB, Document created.
+              Mar 23, 1993: KGB, also for sh.
+              May 17, 1994: KGB, also for gawk.
+

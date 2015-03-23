@@ -1,0 +1,126 @@
+c@ subroutine IRCO_PROJECT ( integer, double precision,
+c@                           double precision, double precision, integer )
+
+c#>	irco_project.dc2
+c Subroutine:	IRCO_PROJECT.
+c
+c Purpose:	Project points on celestial sphere onto a plane.
+c
+c File: 	irco_project.shl.
+c
+c Author:	85 Oct 01 Albrecht de Jonge.
+c
+c Use:
+c	call IRCO_PROJECT (
+c		PRID,	I	integer,
+c 		XYZ,	I	doubleprecision array (3,N),
+c  		X, Y,	O	doubleprecision array (n),
+c		N 	I	integer.
+c		)
+c	PRID	a projections system number (see IRCO_PRNAME),
+c	XYZ	3-dimensional coordinates on the sphere,
+c	X, Y	the corresponding coordinates on the plane,
+c	N	number of points to be projected.
+c Description:
+c     Assume the coordinates xyz give coordinates of points on the unit
+c     the unit sphere, in a right-handed system of x,y and z axes.
+c
+c     All points will be mapped on to a plane with a X-Y system.
+c     The origin of the plane system is the projection centre,
+c     and corresponds to xyz = (1,0,0).
+c     If the plane is plotted conventionally
+c     (plane X-axis horizontal left to right, plane Y-axis upwards),
+c     the picture close to the origin corresponds to a view of the sky
+c     looking outwards along the celestial +x-axis, with the
+c     celestial y-axis upwards and the celestial z-axis to the right.
+c
+c     No scale factor is inserted, close to the origin a small angle D
+c     on the sky in radians corresponds to a distance D in the plane.
+c
+c     All these projection methods have the following property:
+c     suppose xyz = ( a, b, c ) and X, Y = p, q ;
+c     if abs(b) << 1, abs(c) << 1, then 0 < 1 - a << 1
+c     and, approximately,  p = c and q = b.
+c
+c     Note that traditionally in astronomy, the x-axis is increasing to
+c     the left due to the fact that we are looking form the inside out.
+c     In these routines this fact is NOT incorporated. 
+c
+c References:
+c	IRCO_PRNAME.
+c Updates:
+c	90 Apr 24 Sjag Steensma; documentation only,
+c 	89 Jan 09 Timo Prusti, unification of versions,
+c	86 Jan 21 Albrecht de Jonge, renamed,
+c	86 Jan 21 Do Kester, one more projection.
+c	900921	DK, change in plate definition rotates xyz
+c#<
+
+        subroutine IRCO_PROJECT ( prid, xyz, x, y, n )
+        integer         prid, n
+        doubleprecision x(n), y(n), xyz(3,n), xx, yy, zz
+
+        doubleprecision r, x2, y2, cosb
+        integer         i,izzzse
+
+        for i = 1, n
+c rotation of xyz over xx, yy, zz due to redefinition of plate system.
+          zz = xyz(1,i)
+          yy = xyz(2,i)
+          xx = xyz(3,i)
+          if prid .le. 5
+          then
+            select prid
+c 'Stereographic'
+            case 1
+                r = 2 / ( 1 + zz )
+c 'Tangent plane'
+            case 2
+                r = 1 / zz
+c 'Azimuthal equidistant'
+            case 3
+                r = dacos( zz )
+                r = r / dsin( r )
+c 'Azimuthal equal area'
+            case 4
+                r = dsqrt( 2 / ( 1 + zz ) )
+c 'Orthographic'
+            case 5
+                r = 1
+            other
+            cselect
+            x2 = yy * r
+            y2 = xx * r
+          else
+c use x2 temporarily for 'longitude'
+            x2 = datan2( yy, zz )
+            select prid
+            case 6
+c 'Cylindrical equal-area'
+                y2 = xx
+            case 7
+c 'Mercator'
+                y2 = dlog( ( 1 + xx ) / ( 1 - xx ) ) / 2
+c 'Sinusoidal equal-area'
+            case 8
+                y2 = dasin( xx )
+                x2 = x2 * dcos( y2 )
+c 'Hammer-Aitoff equal area'
+            case 9
+                cosb = dsqrt( 1 - xx * xx )
+                r = 2 / dsqrt( 2 + 2 * cosb * dcos( x2 / 2 ) )
+                y2 = r * xx
+                x2 = 2 * r * cosb * dsin( x2 / 2 )
+c 'flat map'
+            case 10
+                y2 = dasin( xx )
+            other
+            cselect
+          cif
+          x(i) = x2
+          y(i) = y2
+        cfor
+
+        return
+        end
+

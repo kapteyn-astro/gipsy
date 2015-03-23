@@ -1,0 +1,1348 @@
+player.src
+
+        Copyright (c) Kapteyn Laboratorium Groningen 2003
+        All Rights Reserved.
+
+Name:         player.src
+Creator:      terlouw
+Host:         backlund
+Date:         May 22, 2003
+Contents:     player.make player.dc1 eventfile.h line.h timer.h
+              gui.h editor.h player.c eventfile.c line.c
+              timer.c gui.c editor.c
+
+#>            player.make
+#----------------------------------------------------------------------
+# Makefile for PLAYER, Apr 11, 2001 
+#
+#
+# Pack sources into player.src with:     > make -f player.make pack
+# Unpack source files with:              > $gip_exe/xfile player.src
+# Install source file with:              > p -reserve player.src
+#                                        > p -install player.src
+#
+# Local compilation for testing:         > p player.make
+#       
+# The CC_OPTS etc. are set by 'compile'
+#----------------------------------------------------------------------
+
+SHELL = /bin/sh
+
+OPTS  = $(CC_OPTS)
+COMP  = $(CC_COMP)
+LIBS  = $(CC_LIBS)
+
+.SUFFIXES: .c .o
+
+DOCUMENTS = player.dc1
+
+INCLUDES = eventfile.h line.h timer.h gui.h editor.h
+
+SOURCES   = player.c eventfile.c line.c timer.c gui.c editor.c
+
+OBJECTS   = player.o eventfile.o line.o timer.o gui.o editor.o
+
+default:: player
+
+pack::
+	$${gip_sys}/pack.csh player.src player.make \
+        $(DOCUMENTS) $(INCLUDES) $(SOURCES)
+
+.c.o:
+	@echo "$(CC_COMP) -c $(CC_OPTS) $(X11_OPTS) $< ";\
+	$(CC_COMP) -c $(CC_OPTS) $(X11_OPTS) $<
+
+player: $(OBJECTS)
+	@echo "$(CC_COMP) -o player $(OBJECTS) $(X11_LIBS) $(CC_LIBS) $(XT_LIBS)";\
+	$(CC_COMP) -o player $(OBJECTS) $(X11_LIBS) $(CC_LIBS) $(XT_LIBS)
+#<
+
+#>            player.dc1
+Program:       PLAYER
+
+#begin section overview
+
+                                  OVERVIEW
+                                  ========
+
+In GIPSY's graphical user interface, most GUI elements are connected to
+a user input keyword. If the user manipulates such an element, eventually
+the contents of the associated keyword is changed. The application will
+then react to the keyword's change and not directly to the changed GUI
+element. This approach makes it possible to bypass the GUI and control
+the program by manipulating the keywords directly. This can be done from
+the Hermes command line, but also from an other program.
+
+PLAYER is such a program. It allows the user to send a sequence of
+keyword-value pairs to other tasks. Such a sequence is contained in a
+text file which may be prepared by the user but can also be generated
+automatically. See sections "Event file" and "Recording events".
+
+The program can be run interactively, but also in "AUTO-mode". In
+AUTO-mode, it immediately starts sending keyword events to the target
+task and exits when it is finished. In this mode the user can also suppress
+PLAYER's GUI. See section "Keywords".
+
+#end section overview
+
+#begin section controls
+
+                                  CONTROLS
+                                  ========
+
+PLAYER is provided with the following GUI elements:
+
+   [FILE]       a menu from which the following services can be activated:
+                - a file browser for choosing an event file
+                - a text editor for editing an event file
+
+   [Task]       an input field for specifying the target task name and
+                optional keywords. If keywords are specified, the whole
+                input must be enclosed in back-quotes (`). These keywords
+                are used as initial keywords when a task is started using
+                the start-button or -keyword.
+
+   [START]      a button which allows the user to start the specified task.
+                It is however not necessary to start the task using this
+                button; this may also be done from outside PLAYER.
+
+   [Filename]   an input/output field for specifying and displaying the
+                event file name. May be used as a shortcut for the file
+                browser.
+
+   [Current line] an output text field displaying the current line from
+                  the event file.
+
+   [Line #]     an input/output field for specifying and displaying the
+                event file's current line number.
+
+   [REWIND]     button: go to first line.
+
+   [PREV]       button: go to previous line.
+
+   [NEXT]       button: go to next line.
+
+   [SEND]       send the current event line to the target task; then go
+                to next line.
+
+   [Delay]      input field for specifying the time interval in seconds
+                between different events when in "RUN-mode". (see below)
+
+   [RUN]        a button to switch RUN-mode on an off. When in RUN-mode,
+                PLAYER automatically will send events to the target task
+                until RUN-mode switched off, the end of the file is reached,
+                or a %STOP directive is encountered.
+
+#end section controls
+
+#begin section eventfile
+
+                             EVENT FILE FORMAT
+                             =================
+
+An event file is a simple text file containing any number of keyword-value
+pairs or special directives. The default file extionsion for these files
+is ".eve".
+
+Keyword lines
+-------------
+Such lines can contain one or more keyword-value pairs. The contents of
+every such line is sent to the target task in one operation. After
+this, PLAYER will wait until the target task has processed the event.
+
+If the keyword-value pair is preceded by a taskname, that task will be
+the target for this pair.
+
+
+Directive lines
+---------------
+Currently two directives are defined. Please note that these directives
+are all uppercase.
+
+%STOP
+            - when in RUN-mode, stop sending events and leave RUN-mode.
+              This directive makes it possible to divide a script into
+              sections. Operation can be re-started by pressing the
+              RUN-button.
+
+%DELAY <d> 
+            - when in RUN-mode, delay <d> seconds. This directive can be
+              useful or even necessary when the target task is not prepared
+              to handle the next event for some time.
+
+Comment lines
+-------------
+These are lines beginning with '#' or '!' and also empty lines. There is
+currently no possiblility for "end-of-line comments".
+
+#end section eventfile
+
+#begin section recording
+
+                              RECORDING EVENTS
+                              ================
+
+In order to make generation of event files easier, GIPSY's graphical
+user interface is capable of recording all keyword-related events originating
+from GUI elements. This can be accomplished by specifying a filename
+in the Ggi options pop-up, which can be activated by clicking the right
+mouse button in any window's background. The RECORD button can be used
+to switch recording on and off. Note that recording is initially ON whenever
+a log file is specified. If time intervals between the events need also be
+recorded, this can be specified with the button DELAYS.
+
+Events from this pop-up and other "internal" Ggi events are not recorded.
+An event is considered to be internal if the keyword begins with "GGI"
+or "_GGI".
+
+#end section recording
+
+#begin section keywords
+
+                                  KEYWORDS
+                                  ========
+
+Keywords relevant for starting PLAYER from the command line are listed below:
+
+   AUTO=         If YES, start sending events immediately.
+   GUI=          If AUTO=YES, NO will suppress PLAYER's GUI.
+   TASK=         The target task name, optionally followed by keywords.
+   START=        If YES, the specified task will be started.
+   FILENAME=     Name of the event file.
+   DELAY=        Time interval in seconds between events.
+
+
+#end section keywords
+
+#begin section about
+Purpose:       PLAYER allows the user to execute a simple script containing
+               keyword changes, or 'events' for an other task. In this way
+               it appears as if PLAYER pushes the other task's buttons, etc.
+
+Category:      USER-INTERFACE, UTILITY
+
+File:          player.src
+
+Author:        J.P. Terlouw
+
+Keywords:      See section keywords
+
+Updates:       Apr 27, 2001: JPT, Document created.
+               May  9, 2001: JPT, Some minor changes.
+               Jun 15, 2001: JPT, Fixed TASK= documentation error.
+               May 22, 2003: JPT, Added hidden keywords and alternate taskname.
+#end section about
+
+#<
+
+#>            eventfile.h
+#if !defined(_eventfile_h_)
+#define _eventfile_h_
+
+typedef void (*ChangedProc)(void);
+
+int evf_open(char *filename, ChangedProc proc);
+char *evf_current(void);
+int evf_lineno(void);
+int evf_setline(int newline);
+
+#endif
+#<
+
+#>            line.h
+#if !defined(_line_h_)
+
+#define COMMENT_LINE 0
+#define STOP_LINE    1
+#define EVENT_LINE   2
+#define DELAY_LINE   3
+int linetype(char *line);
+void set_task(char *name);
+void send_event(char *line);
+#endif
+
+#<
+
+#>            timer.h
+#if !defined(_timer_h_)
+#define _timer_h_
+
+typedef void (*StopProc)(void);
+typedef void (*StatProc)(char*);
+
+void start_timer(float interval, StopProc stop, StatProc stat);
+void stop_timer(void);
+#endif
+#<
+
+#>            gui.h
+#if !defined(_gui_h_)
+#define _gui_h_
+void gui(void);
+void gui_line(char *text);
+void gui_status(char *text);
+void gui_clobro(void);
+#endif
+#<
+
+#>            editor.h
+#if !defined(_editor_h_)
+#define _editor_h_
+ident Editor(char *key);
+#endif
+#<
+
+#>            player.c
+/* player.c -XT
+                              COPYRIGHT (c) 2001
+                        Kapteyn Astronomical Institute
+         University of Groningen  -  9700 AV Groningen, The Netherlands
+
+Author: J.P. Terlouw.
+
+*/
+
+#include "stddef.h"
+#include "gipsyc.h"
+#include "cmain.h"
+#include "init.h"
+#include "finis.h"
+#include "userfio.h"
+#include "keyevents.h"
+#include "eventfile.h"
+#include "timer.h"
+#include "line.h"
+#include "gui.h"
+#include "eventmonitor.h"
+
+static float delay=0.1;
+static bool  running=FALSE;
+static bool  autorun=FALSE;
+static bool  use_gui=TRUE;
+static char  taskcmd[CMDLEN+1];
+static char  taskname[TSKLEN+1]=" ";
+
+/* -------------------------------------------------------------------------- */
+/*                                 statcb                                     */
+/* -------------------------------------------------------------------------- */
+/*  Status callback function. Called from timer.c, but also directly
+ *  from within this source file. 
+ */
+static void statcb(char *message)
+{
+   if (use_gui) gui_status(message); else statusf(message);
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 stopcb                                     */
+/* -------------------------------------------------------------------------- */
+/*  Stop callback function. Called from timer.c when timer stops.
+ */
+static void stopcb(void)
+{
+   running = FALSE;
+   statcb("MANUAL - ready");                         /* status message     */
+   wkeyf("RUN=");                                    /* reset RUN-button   */
+   if (autorun) wkeyf("QUIT=YES");
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 quit                                       */
+/* -------------------------------------------------------------------------- */
+static void quit(ident id, char *key, int code, void *arg)
+{
+   bool button=toflog(FALSE);
+    
+   (void)userflog(&button, 1, 2, key, " ");
+   if (tobool(button)) {
+      finis_c();                                     /* terminate program  */
+   }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 line_changed                               */
+/* -------------------------------------------------------------------------- */
+/*  Callback function called by eventfile.c whenever current line has changed.
+ */
+static void line_changed(void)
+{
+   if (use_gui) gui_line(evf_current());            /* display line        */
+   wkeyf("LINENO=%d", evf_lineno()+1);              /* update input field  */
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 get_file                                   */
+/* -------------------------------------------------------------------------- */
+/*  Keyword handler for input file name.
+ */
+static void get_file(ident id, char *key, int code, void *arg)
+{
+   fchar fname;
+   char  cname[256];
+   fint  nc;
+    
+   fname.a = cname; fname.l = 255;
+   nc = userftext(fname, 2, key, " ");
+   cname[nc] = '\0';
+   if (evf_open(cname, line_changed)) {
+      rejectf(key, "Cannot open");                /* error: reject keyword */
+      statcb("Cannot open file");                 /* status message        */
+   } else {
+      statcb("File successfully read");           /* status message        */
+      if (use_gui) gui_clobro();                  /* close file browser    */
+      if (autorun) wkeyf("RUN=YES");
+   }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 set_delay                                  */
+/* -------------------------------------------------------------------------- */
+/*  Keyword handler for inter-event delay.
+ */
+static void set_delay(ident id, char *key, int code, void *arg)
+{
+   (void)userfreal(&delay, 1, 2, key, " ");
+   if (running) start_timer(delay, stopcb, statcb);      /* re-start timer */
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 run                                        */
+/* -------------------------------------------------------------------------- */
+/*  Keyword handler for "RUN"-button.
+ */
+static void run(ident id, char *key, int code, void *arg)
+{
+   bool button=toflog(FALSE);
+    
+   (void)userflog(&button, 1, 2, key, " ");
+   if (tobool(button)) {
+      start_timer(delay, stopcb, statcb);              /* start timer      */
+      running = TRUE;
+   } else {
+      stop_timer();                                    /* stop timer       */
+   }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 set_line                                   */
+/* -------------------------------------------------------------------------- */
+/*  Keyword handler for setting current line number.
+ */
+static void set_line(ident id, char *key, int code, void *arg)
+{
+   fint lineno;
+
+   if (!running) {
+      (void)userfint(&lineno, 1, 2, key, " ");
+      evf_setline(lineno-1);
+   }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 rew_file                                   */
+/* -------------------------------------------------------------------------- */
+/*  Keyword handler for going to first line.
+ */
+static void rew_file(ident id, char *key, int code, void *arg)
+{
+   bool button=toflog(FALSE);
+    
+   (void)userflog(&button, 1, 2, key, " ");
+   if (tobool(button)) {
+      if (!running) evf_setline(0);
+      wkeyf(key);
+   }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 next_line                                  */
+/* -------------------------------------------------------------------------- */
+/*  Keyword handler for going to next line.
+ */
+static void next_line(ident id, char *key, int code, void *arg)
+{
+   bool button=toflog(FALSE);
+    
+   (void)userflog(&button, 1, 2, key, " ");
+   if (tobool(button)) {
+      if (!running) evf_setline(evf_lineno()+1);
+      wkeyf(key);
+   }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 prev_line                                  */
+/* -------------------------------------------------------------------------- */
+/*  Keyword handler for going to previous line.
+ */
+static void prev_line(ident id, char *key, int code, void *arg)
+{
+   bool button=toflog(FALSE);
+    
+   (void)userflog(&button, 1, 2, key, " ");
+   if (tobool(button)) {
+      if (!running) evf_setline(evf_lineno()-1);
+      wkeyf(key);
+   }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 send_line                                  */
+/* -------------------------------------------------------------------------- */
+/*  Keyword handler for manually sending events to other task.
+ */
+static void send_line(ident id, char *key, int code, void *arg)
+{
+   bool button=toflog(FALSE);
+    
+   (void)userflog(&button, 1, 2, key, " ");
+   if (tobool(button)) {
+      wkeyf(key);
+      if (!running) {
+         statcb("MANUAL - waiting for task");
+         send_event(evf_current());
+         statcb("MANUAL - ready");
+         wkeyf("NEXT=Y");
+      }
+   }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 task_name                                  */
+/* -------------------------------------------------------------------------- */
+/*  Keyword handler for task name/command.
+ */
+static void task_name(ident id, char *key, int code, void *arg)
+{
+   fchar fname;
+   fint  nc;
+    
+   fname.a = taskcmd; fname.l = CMDLEN;
+   nc = userftext(fname, 2, key, " ");
+   taskcmd[nc] = '\0';
+   for (nc=0; nc<TSKLEN; nc++) {
+      if (!taskcmd[nc] || taskcmd[nc]==' ') break;
+      taskname[nc] = taskcmd[nc];
+   }
+   taskname[nc] = '\0';
+   set_task(taskname);
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 task_exit                                  */
+/* -------------------------------------------------------------------------- */
+/*  Keyword handler for task-exit keyword.
+ */
+static void task_exit(ident id, char *key, int code, void *arg)
+{
+   fint fate;
+   char *message;
+    
+   (void)userfint(&fate, 1, 2, key, " ");
+   switch (fate) {
+      case  1: message = "Task finished"; break;
+      case -2: message = "Task start crash"; break;
+      case -3: message = "Task fatal error"; break;
+      case -4: message = "Task crashed"; break;
+      case -5: message = "Task aborted"; break;
+      default: message = "Weird task exit";
+   }
+   statcb(message);                          /* status message             */
+   wkeyf("RUN=");                            /* stop any timer             */
+   DescheduleKeyevent(&id);                  /* handler not needed anymore */
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 start_task                                 */
+/* -------------------------------------------------------------------------- */
+/*  Keyword handler for starting task.
+ */
+static void start_task(ident id, char *key, int code, void *arg)
+{
+   bool button=toflog(FALSE);
+   fint taskstat;
+    
+   (void)userflog(&button, 1, 2, key, " ");
+   if (tobool(button)) {
+      wkeyf(key);
+      taskstat = xeqcontf("TASKFATE=", taskcmd);
+      if (taskstat) {
+         statcb("Cannot start task");
+      } else {
+         (void)ScheduleKeyevent(task_exit, "TASKFATE=", KEYCHANGE, NULL);
+         statcb("Task started");
+      }
+   }
+}
+
+/* ========================================================================== */
+/*                                 MAIN PROGRAM                               */
+/* -------------------------------------------------------------------------- */
+MAIN_PROGRAM_ENTRY
+{
+   
+   init_c();
+   
+   wkeyf("RUN=");
+
+   (void)userflog(&autorun, 1, 2, "AUTO=", " ");
+   if (autorun) (void)userflog(&use_gui, 1, 2, "GUI=", " ");
+   if (use_gui) gui();
+   
+   (void)ScheduleKeyevent(quit,       "QUIT=",     KEYCHANGE, NULL);
+   (void)ScheduleKeyevent(get_file,   "FILENAME=", KEYCHANGE, NULL);
+   (void)ScheduleKeyevent(run,        "RUN=",      KEYCHANGE, NULL);
+   (void)ScheduleKeyevent(set_delay,  "DELAY=",    KEYCHANGE, NULL);
+   (void)ScheduleKeyevent(set_line,   "LINENO=",   KEYCHANGE, NULL);
+   (void)ScheduleKeyevent(rew_file,   "REWIND=",   KEYCHANGE, NULL);
+   (void)ScheduleKeyevent(next_line,  "NEXT=",     KEYCHANGE, "LINENO=");
+   (void)ScheduleKeyevent(prev_line,  "PREV=",     KEYCHANGE, "LINENO=");
+   (void)ScheduleKeyevent(send_line,  "SEND=",     KEYCHANGE, NULL);
+   (void)ScheduleKeyevent(task_name,  "TASK=",     KEYCHANGE, NULL);
+   (void)ScheduleKeyevent(start_task, "START=",    KEYCHANGE, NULL);
+    
+   (void)TriggerKey("FILENAME=");
+   if (!TriggerKey("DELAY=")) wkeyf("DELAY=0.1");
+   (void)TriggerKey("TASK=");
+   (void)TriggerKey("START=");
+    
+    
+   (void)eventmonitor("MONITOR=", TRUE);
+   MainLoop();
+}
+#<
+
+#>            eventfile.c
+/* eventfile.c
+ */
+
+#define LINEINCR 250
+
+#include "gipsyc.h"
+#include "stdlib.h"   
+#include "string.h"
+#include "stdio.h"
+
+#include "eventfile.h"
+
+static char **lines=NULL;
+static char *filecont=NULL;
+static int  curline, numlines, maxlines=0;
+
+static ChangedProc changed=NULL;
+
+/* ========================================================================== */
+/*                                 evf_open                                   */
+/* -------------------------------------------------------------------------- */
+/*  Open and read event file.
+ */
+int evf_open(char *filename, ChangedProc proc)
+{
+   FILE  *file;
+   int  i, filesize, offset;
+
+   file = fopen(filename, "r");
+   if (!file) return -1;                         /* error: cannot open file */
+
+   if (filecont) free(filecont);                 /* release file buffer */
+   (void)fseek(file, 0, SEEK_END);
+   filesize = ftell(file);                       /* determine file length */
+   rewind(file);
+   filecont = malloc(filesize+1);                /* new file buffer */
+   filecont[filesize] = '\0';
+   for (i=0; i<filesize; i++) {
+      filecont[i] = getc(file);
+      if (filecont[i]=='\n') filecont[i] = '\0';
+   }
+   if (filecont[filesize-1]) filesize += 1;      /* for last line without \n */
+   fclose(file);                                 /* done with file */
+   numlines = 0;
+   offset = 0;
+   for (;;) {
+      if (numlines==maxlines) {        /* if necessary, adjust pointer array */
+         maxlines += LINEINCR;
+         lines = realloc(lines, maxlines*sizeof(char*));
+      }
+      lines[numlines] = filecont+offset;         /* register line */
+      offset += strlen(lines[numlines])+1;
+      if (offset>filesize) break;
+      numlines++;
+   }
+   changed = proc;
+   curline = 0;
+   if (changed) changed();
+   return 0;
+}
+
+/* ========================================================================== */
+/*                                 evf_current                                */
+/* -------------------------------------------------------------------------- */
+/*  Return pointer to current line of event file.
+ */
+char *evf_current(void)
+{
+   return numlines?lines[curline]:"";
+}
+
+/* ========================================================================== */
+/*                                 evf_lineno                                 */
+/* -------------------------------------------------------------------------- */
+/*  Return event file's current line number.
+ */
+int evf_lineno(void)
+{
+   return curline;
+}
+
+/* ========================================================================== */
+/*                                 evf_setline                                */
+/* -------------------------------------------------------------------------- */
+/*  Set event file's current line number.
+ */
+int evf_setline(int newline)
+{
+   int result, saveline=curline;
+   
+   if (newline<0) {
+      curline = 0;
+      result = -1;
+   } else if (newline>=numlines) {
+      curline = numlines-1;
+      result = -2;
+   } else {
+      curline = newline;
+      result = 0;
+   }
+   if (saveline != curline && changed) changed();
+   return result;
+}
+
+#if defined(TESTBED)
+static void proc(void)
+{
+   printf("Line number change\n");
+}
+
+void main(void)
+{
+   char filename[80];
+   int i;
+    
+   (void)scanf("%s", filename);
+   printf("evf_open: %d\n", evf_open(filename, proc));
+   for (i=0; i<numlines; i++) printf("%s\n", lines[i]);
+   for (;;) {
+      scanf("%d", &i);
+      printf("lineno:  %d\n", evf_lineno());
+      printf("setline: %d\n", evf_setline(i));
+      printf("lineno:  %d\n", evf_lineno());
+      printf("current: %s\n", evf_current());
+   }
+}
+#endif
+#<
+
+#>            line.c
+/* line.c
+ */
+ 
+#include "string.h"
+#include "stdio.h"
+#include "taskcom.h"
+#include "userfio.h"
+#include "line.h"
+
+static char taskname[TSKLEN]="";
+
+/* ========================================================================== */
+/*                                 linetype                                   */
+/* -------------------------------------------------------------------------- */
+int linetype(char *line)
+{
+   int i;
+   if (*line == '!' || *line == '#') return COMMENT_LINE;
+
+   if (!strncmp("%STOP", line, 5)) return STOP_LINE;
+   if (!strncmp("%DELAY ", line, 7)) return DELAY_LINE;
+
+   for (i=0; line[i]; i++) if (!isspace(line[i])) break;
+   if (!line[i]) return COMMENT_LINE;
+   
+   return EVENT_LINE;
+}
+
+/* ========================================================================== */
+/*                                 set_task                                   */
+/* -------------------------------------------------------------------------- */
+void set_task(char *name)
+{
+   strcpy(taskname, name);
+}
+
+/* ========================================================================== */
+/*                                 send_event                                 */
+/* -------------------------------------------------------------------------- */
+void send_event(char *line)
+{
+   char command[CMDLEN];
+   int  i, taskspec=0;
+   
+   if (linetype(line)==EVENT_LINE) {
+      for (i=0; line[i]; i++) {
+         if (line[i]=='=') {
+            break;
+         }
+         if (line[i]==' ') {
+            taskspec = 1;
+            break;
+         }
+      }
+      if (taskspec) {
+         sprintf(command, "%s", line);
+      } else {
+         sprintf(command, "%s %s", taskname, line);
+      }
+      wkeyf(command);
+   }
+}
+#<
+
+#>            timer.c
+/* timer.c
+ */
+
+#define MINDELAY 0.05
+
+#include "gipsyc.h"
+#include "stddef.h"
+#include "stdio.h"
+#include "events.h"
+#include "eventfile.h"
+#include "line.h"
+#include "timer.h"
+
+static ident timer_id=NULL;
+
+static StopProc stopproc=NULL;                 /* timer-stop callback pointer */
+static StatProc statproc=NULL;                 /* status message callback ptr */
+static float period;
+
+/* -------------------------------------------------------------------------- */
+/*                                 status                                     */
+/* -------------------------------------------------------------------------- */
+static void status(char *message)
+{
+   if (statproc) statproc(message);
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 timerproc                                  */
+/* -------------------------------------------------------------------------- */
+static void timerproc(ident id, void *arg)
+{
+   int kind;
+   char *line;
+   bool action=TRUE;
+   static int delay_count=0;
+    
+   if (delay_count) delay_count--;
+   else while (action) {
+      line = evf_current();
+      kind = linetype(line);
+      switch (kind) {
+         case EVENT_LINE: {
+            status("AUTO - waiting for task");
+            send_event(line);
+            status("AUTO - delaying");
+            action = FALSE;
+            break;
+         }
+         case STOP_LINE: {
+            stop_timer();
+            action = FALSE;
+            break;
+         }
+         case COMMENT_LINE: {
+            break;
+         }
+         case DELAY_LINE: {
+            float delay;
+            char  message[40];
+            sscanf(line+7, "%f", &delay);
+            delay_count = (int)(delay/period+0.5)-1;
+            if (delay_count<1) {
+               delay_count = 0;
+               break;
+            }
+            sprintf(message, "AUTO - delaying %.1f seconds", delay);
+            status(message);
+            action = FALSE;
+            break;
+         }
+         default: {
+            /* unrecognized */
+            break;
+         }
+      }
+      if (evf_setline(evf_lineno()+1)) {
+         stop_timer();
+         action = FALSE;
+      }
+   }
+}
+
+/* ========================================================================== */
+/*                                 start_timer                                */
+/* -------------------------------------------------------------------------- */
+void start_timer(float interval, StopProc stop, StatProc stat)
+{
+   int millisec;
+   period = interval>MINDELAY?interval:MINDELAY;
+   millisec = (int)(period*1000.0+0.5);
+   if (timer_id) Deschedule(&timer_id);
+   timer_id = ScheduleTimer(timerproc, millisec, NULL);
+   if (stop) stopproc = stop;
+   if (stat) statproc = stat;
+}
+
+/* ========================================================================== */
+/*                                 stop_timer                                 */
+/* -------------------------------------------------------------------------- */
+void stop_timer(void)
+{
+   if (timer_id) {
+      Deschedule(&timer_id);
+      if (stopproc) stopproc();
+   }
+}
+#<
+
+#>            gui.c
+/* gui.c -XT
+ */
+
+#define WIDTH 380
+
+#include "stdio.h"
+#include "stddef.h"
+#include "string.h"
+#include "gipsyc.h"
+#include "userfio.h"
+#include "ggi.h"
+#include "editor.h"
+#include "gui.h"
+
+static  char *filelabels[]={"Open event file",
+                            "Edit event file",
+                            "_LINE",
+                            "Exit",
+                            NULL};
+
+typedef enum               {FILE_OPEN,
+                            FILE_EDIT,
+                            FILE_LINE,
+                            FILE_EXIT} filechoices;
+
+
+static char *helplabels[]={"Overview",
+                           "Controls",
+                           "Event file",
+                           "Recording events",
+                           "Keywords",
+                           "About",
+                           "_LINE",
+                           "User Interface",
+                           NULL};
+
+static char *helpdocs[]=  {"player.dc1#overview",
+                           "player.dc1#controls",
+                           "player.dc1#eventfile",
+                           "player.dc1#recording",
+                           "player.dc1#keywords",
+                           "player.dc1#about",
+                            NULL,
+                           "ggi.doc"};
+
+static ident linetext, status;
+
+/* -------------------------------------------------------------------------- */
+/*                                 evf_filter                                 */
+/* -------------------------------------------------------------------------- */
+static char *evf_filter(char *name)
+{
+   int  namlen=strlen(name);
+    
+   if (namlen<5) return NULL;
+   if (strcmp(name+namlen-4, ".eve")) return NULL;
+   return name;
+}
+   
+/* -------------------------------------------------------------------------- */
+/*                                 handle_file                                */
+/* -------------------------------------------------------------------------- */
+static void handle_file(ident id, char* key, int code, void *arg)
+{
+   fint entry=0;
+    
+   if (userfint(&entry, 1, 2, key, " ")==1) {
+      switch (entry) {
+         case FILE_OPEN: {
+            ident browser;
+            browser = GgiFileBrowser(ggiIdent, "FILENAME=");
+            if (!browser) {
+               browser = GgiFileBrowser(ggiCreate,
+                                        "FILENAME=",
+                                        "Specify Event File", evf_filter);
+            }
+            break;
+         }
+         case FILE_EDIT: {
+            wkeyf("_EDITOR=Y");
+            break;
+         }
+         case FILE_EXIT: {
+            wkeyf("QUIT=Y");
+            break;
+         }
+         default: break;
+      }
+      wkeyf(key);
+   }
+}
+
+
+
+/* ========================================================================== */
+/*                                 gui                                        */
+/* -------------------------------------------------------------------------- */
+void gui(void)
+{
+   ident topbar, mainfr, filemenu, helpmenu, taskname, filename, taskstart,
+         linelab, lineno, rewfile, prevline, nextline, sendline, delay,
+         run, logo;
+
+
+
+   static char *my_resources[] = {
+      "*status.foreground: blue",
+      "*status.font: *helvetica*bold-r*14*",
+      "*curline.background: yellow",
+      NULL
+   };
+
+   GgiAutoLayout(FALSE);
+   GgiPostponeRealize(TRUE);
+   GgiSetResources(my_resources);
+    
+   topbar = GgiForm("top", 1);
+   mainfr = GgiForm("main", 1);
+   status = GgiSetLabel(GgiLabel("status"), " ", 0);
+   logo   = GgiLogo(NULL, 0, 0);
+
+   GgiSetPosition(topbar,  0, NULL,   0, NULL);
+   GgiSetPosition(mainfr,  0, NULL,   0, topbar);
+   GgiSetPosition(status, 10, NULL, GgiHeight(logo)/2, mainfr);
+   GgiSetPosition(logo, WIDTH-GgiWidth(logo), NULL, 0, mainfr);
+
+   (void)GgiUseShell(topbar);
+   filemenu = GgiMenu("FILE=", NULL, filelabels);
+   (void)ScheduleKeyevent(handle_file, "FILE=",    KEYCHANGE, NULL);
+   helpmenu = GgiHelpMenu("_HELP=", "HELP", NULL, helplabels, helpdocs);
+
+   GgiSetPosition(filemenu,  0, NULL,      0, NULL);
+   GgiSetPosition(helpmenu,  WIDTH-GgiWidth(helpmenu)-6, NULL, 0, NULL);
+
+   (void)GgiUseShell(mainfr);
+   taskname = GgiSetLabel(
+                 GgiTextField("TASK=",
+                    "Name of task to send events to", 30),
+                 "Task:", 90);
+   filename = GgiSetLabel(
+                 GgiTextField("FILENAME=",
+                    "Name of event file", 30),
+                 "Filename:", 90);
+   taskstart = GgiButton("START=", "Start specified task");
+   linelab   = GgiSetLabel(GgiLabel(" "), "Current line:", 90);
+   linetext  = GgiSetLabel(GgiLabel("curline"), " ", 0);
+   lineno    = GgiSetLabel(GgiTextField("LINENO=", "Event file line number", 5),
+                 "Line #", 90);
+   rewfile   = GgiButton("REWIND=", "Go to first line");
+   prevline  = GgiButton("PREV=", "Go to previous line");
+   nextline  = GgiButton("NEXT=", "Go to next line");
+   sendline  = GgiButton("SEND=", "Send current event to task");
+   delay     = GgiSetLabel(GgiTextField("DELAY=",
+                              "Delay between events (s)", 5),
+                              "Delay (sec.)", 90);
+   run       = GgiButton("RUN=", "Send events to task");
+
+   GgiSetPosition(taskname,  0, NULL,     0, NULL);
+   GgiSetPosition(taskstart, 0, taskname, 0, NULL);
+   GgiSetPosition(filename,  0, NULL,     0, taskname);
+   GgiSetPosition(linelab,   0, NULL,     0, filename);
+   GgiSetPosition(linetext,  0, linelab,  0, filename);
+   GgiSetPosition(lineno,    0, NULL,     0, linetext);
+   GgiSetPosition(rewfile,   0, lineno,   0, linetext);
+   GgiSetPosition(prevline,  0, rewfile,  0, linetext);
+   GgiSetPosition(nextline,  0, prevline, 0, linetext);
+   GgiSetPosition(sendline,  0, nextline, 0, linetext);   
+   GgiSetPosition(delay,     0, NULL,     0, lineno);
+   GgiSetPosition(run,       0, delay,    0, lineno);
+
+   Editor("_EDITOR=");
+    
+   GgiRealize();
+   
+}
+                           
+/* ========================================================================== */
+/*                                 gui_line                                   */
+/* -------------------------------------------------------------------------- */
+void gui_line(char *text)
+{
+   GgiSetLabel(linetext, text, 0);
+}
+
+/* ========================================================================== */
+/*                                 gui_status                                 */
+/* -------------------------------------------------------------------------- */
+void gui_status(char *text)
+{
+   GgiSetLabel(status, text, 0);
+}
+
+/* ========================================================================== */
+/*                                 gui_clobro                                 */
+/* -------------------------------------------------------------------------- */
+void gui_clobro(void)
+{
+   ident browser = GgiFileBrowser(ggiIdent, "FILENAME=");
+   if (browser) (void)GgiFileBrowser(ggiDelete, browser);
+}
+#<
+
+#>            editor.c
+/* editor.c
+ */
+ 
+#define NAME "Event File Editor"
+
+
+#include "stddef.h"
+#include "stdio.h"
+#include "string.h"
+#include "gipsyc.h"
+#include "userfio.h"
+#include "ggi.h"
+#include "gui.h"
+#include "eventfile.h"
+#include "editor.h"
+
+static char *labels[]={"Edit current file", "New file", "Save", "Save As",
+                       "_LINE", "Close", NULL};
+
+typedef enum          {CURRENTFILE, NEWFILE, SAVE, SAVEAS, LINE, CLOSE} choices;
+
+static bool  initialized=FALSE;         /* initialized flag */
+static ident s_editor, editor;          /* editor and editor shell */
+static ident l_status;
+static bool  changed=FALSE;
+static char  popkey[KEYLEN];
+
+/* -------------------------------------------------------------------------- */
+/*                                 status                                     */
+/* -------------------------------------------------------------------------- */
+static void status(char *message)
+{
+   (void)GgiSetLabel(l_status, message, 0);
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 testfile                                   */
+/* -------------------------------------------------------------------------- */
+static int testfile(char* name, char *access)
+{
+   FILE *f=fopen(name,access);
+   if (f) {
+      fclose(f);
+      return 1;
+   } else return 0;
+}
+#define readable(fn) testfile(fn, "r")
+#define writable(fn) testfile(fn, "r+")
+   
+/* -------------------------------------------------------------------------- */
+/*                                 edt_changed                                */
+/* -------------------------------------------------------------------------- */
+static void edt_changed(ident id, char* key, int code, void *arg)
+{
+   (void)userflog(&changed, 1, 2, key, " ");
+   changed = tobool(changed);
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 save_as                                    */
+/* -------------------------------------------------------------------------- */
+static void save_as(ident id, char* key, int code, void *arg)
+{
+   fint  nread;
+   fchar fname;
+   char  cname[256];
+   static bool  confirmed=FALSE;
+   bool accept=FALSE;
+    
+   fname.a = cname; fname.l = 255;
+   
+   nread = userftext(fname, 2, key, " ");
+   
+   if (nread) {
+      cname[nread] = '\0';
+      if (confirmed) {
+         accept = TRUE;
+         confirmed = FALSE;
+      } else {
+         if (readable(cname)) {
+            GgiPrompter("AGAIN", "File exists - overwrite?");
+            confirmed = TRUE;
+         } else {
+            accept = TRUE;
+         }
+      }
+      if (accept) {
+         if (testfile(cname, "w")) {
+            GgiEditorSaveAs(editor, cname);
+            GgiEditorSetSource(editor, cname, -1);
+            changed = FALSE;
+            GgiPrompter("ACCEPT", NULL);
+            wkeyf("FILENAME=%s", cname);         /* make this file current */
+            status("Saved file - is now current file");
+         } else {
+            GgiPrompter("AGAIN", "Cannot write - choose other filename");
+            confirmed = TRUE;
+         }
+      }
+   }
+}
+
+/* -------------------------------------------------------------------------- *//*                                 handle_file                                */
+/*                                 handle_file                                */
+/* -------------------------------------------------------------------------- */
+static void handle_file(ident id, char* key, int code, void *arg)
+{
+   fint entry=0;
+   fchar fname;
+   char  cname[256];
+   fint  nc;
+   
+
+   fname.a = cname; fname.l = 255;
+   
+   if (userfint(&entry, 1, 2, key, " ")==1) {
+      switch (entry) {
+         case CURRENTFILE: {
+            if (!changed ||
+                GgiVerify("Text modified - discard changes?", "YES", "NO")) {
+               nc = userftext(fname, 2, "FILENAME=", " ");
+               cname[nc] = '\0';
+               if (nc) {
+                  if (writable(cname)) {
+                     (void)GgiEditorSetSource(editor, cname, -1);
+                     changed = FALSE;
+                     status("Editing current file");
+                  } else status("Current file not writable");
+               } else status("No current file");
+            }
+            break;
+         }
+         case NEWFILE: {
+            if (!changed ||
+                GgiVerify("Text modified - discard changes?", "YES", "NO")) {
+               (void)GgiEditorSetSource(editor, "/dev/null", -1);
+               status("New file");
+            }
+            break;
+         }
+         case SAVE: {
+            char *source=GgiEditorSource(editor);
+            if (strcmp(source,  "/dev/null")) {
+               if (writable(source)) {
+                  GgiEditorSave(editor);
+                  wkeyf("FILENAME=%s", source); /* causes file to be re-read */
+                  changed = FALSE;
+                  status("Current file saved");
+                  break;
+               } else status("Cannot save current file");
+            }
+         /* SAVEAS *must* follow SAVE */
+         }
+         case SAVEAS: {
+            GgiPrompter("_SAVEAS=", "Filename:");
+            break;
+         }
+         case CLOSE: {
+            wkeyf("%sYES", popkey);
+         }
+         default: break;
+      }
+      wkeyf(key);
+   }
+}
+   
+
+/* -------------------------------------------------------------------------- */
+/*                                 createshell                                */
+/* -------------------------------------------------------------------------- */
+/*  Create the editor pop-up shell.
+ */
+static void createshell(char *key)
+{
+   ident closebut;
+   ident filemenu;
+    
+   s_editor = GgiShell(NAME);
+   (void)GgiUseShell(s_editor);
+   filemenu = GgiSetLabel(GgiMenu("_EDTMENU=", NULL, labels), "FILE", 0);
+   ScheduleKeyevent(handle_file, "_EDTMENU=", KEYCHANGE, NULL);
+   ScheduleKeyevent(save_as, "_SAVEAS=", KEYCHANGE, NULL);
+   editor = GgiEditor("_EDTCHANGED=", 500, 300, ggiEdit, "/dev/null", -1);
+   ScheduleKeyevent(edt_changed, "_EDTCHANGED=", KEYCHANGE, NULL);
+   closebut = GgiSetLabel(GgiButton(key, "Close window"), "CLOSE", 0);
+   l_status = GgiSetLabel(GgiLabel("status"), " ", 0);
+    
+   GgiSetPosition(filemenu,  0, NULL,      0, NULL);
+   GgiSetPosition(editor,    0, NULL,      0, filemenu);
+   GgiSetPosition(closebut,  0, NULL,      0, editor);
+   GgiSetPosition(l_status, 20, closebut,  0, editor);
+
+   (void)GgiUseShell(NULL);
+   initialized = TRUE;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 popshell                                   */
+/* -------------------------------------------------------------------------- */
+static void popshell(ident id, char *key, int code, void *arg)
+{
+   static bool state=FALSE;
+   bool button=FALSE;
+    
+   (void)userflog(&button, 1, 2, key, " ");
+   if (tobool(button)) {
+      wkeyf(key);
+      if (changed && state &&
+          !GgiVerify("Text modified - close anyway?", "YES", "NO")) return;
+      GgiShowShell(s_editor, !state);
+      state = !state;
+   }
+}
+
+/* ========================================================================== */
+/*                                 Editor                                     */
+/* -------------------------------------------------------------------------- */
+extern ident Editor(char *key)
+{
+   createshell(key);
+   ScheduleKeyevent(popshell, key, KEYCHANGE, NULL);
+   strcpy(popkey, key);
+   return s_editor;
+}
+#<

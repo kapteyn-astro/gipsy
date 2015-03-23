@@ -1,0 +1,33 @@
+
+Script:       f2c
+
+Purpose:      Compiles Fortran sources with the Fortran to C (f2c) compiler.
+
+Category:     MANAGEMENT
+
+File:         f2c.csh
+
+Author:       K.G. Begeman
+
+Use:          This shell script starts the Fortran to C compiler. The
+              generated C code is compiled into objects or executables.
+              It recognizes the following options:
+
+              -f2c             indicates that the following options until the
+                               next occurrence of this option are for the
+                               Fortran to C compiler.
+              -f2cC <arg>      <arg> is name of C compiler to use after
+                               conversion from Fortran to C [cc].
+              -f2cE <arg>      <arg> is the name of the Fortran to C compiler
+                               which should be used [f2c].
+              -f2cI <arg>      <arg> is the path to the directory where
+                               include files needed for the compilation of
+                               the C sources created by the Fortran to C
+                               compiler reside.
+              -f2cK            do not remove the generated C code.
+
+              All other switches (except those in between two -f2c options)
+              are passed to the C compiler.
+
+Updates:      Mar 28, 1994: KGB, Document created.
+

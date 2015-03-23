@@ -1,0 +1,98 @@
+pgview.src
+
+        Copyright (c) Kapteyn Astronomical Institute, Groningen 2012
+        All Rights Reserved.
+
+Name:         pgview.src
+Creator:      terlouw
+Host:         azarquiel
+Date:         May 18, 2012
+Contents:     pgview.make pgview.py pgview.dc1
+
+#>            pgview.make
+#
+# pgview.make
+#
+
+SHELL   = /bin/sh
+
+default:: pgview
+
+pgview : pgview.py
+	cp pgview.py pgview
+	chmod +x pgview
+
+pack::
+	$$gip_sys/pack.csh pgview.src pgview.make pgview.py \
+	pgview.dc1
+#<
+
+#>            pgview.py
+#!/usr/bin/env python
+from gipsy import *
+
+def close_cb(cb):
+   if userlog(cb.key):
+      wkey(cb.key)
+      finis()
+
+init()
+
+wx, wy = userint('XYSIZE=', 'Size', default=6, defval=(700,535), nmax=2)
+nplot  = userint('N=', 'Number of plotters', default=2, defval=1)
+
+plotters = []
+prevplot = None
+
+base = GgiBase()
+for i in range(nplot):
+   plot = base.PlotField(str(i), wx, wy)
+   plot.setPosition(0, None, 0, prevplot)
+   plotters.append(plot)
+   prevplot = plot
+   
+butn = base.Button('CLOSE=', 'Close window')
+butn.setPosition(0, None, 0, prevplot)
+base.realize()
+
+for plot in plotters:
+   plot.open()
+   plot.export()
+
+KeyCallback(close_cb, 'CLOSE=')
+
+mainloop()
+#<
+
+#>            pgview.dc1
+Program:       PGVIEW
+
+Purpose:       Create one or more PGPLOT devices for screen display.
+
+Category:      DISPLAY
+
+File:          pgview.src
+
+Author:        J.P. Terlouw
+
+Keywords:
+
+ **XYSIZE=     horizontal and vertical size in pixels [700 535].
+
+ **N=          number of devices [1].
+
+Description:   PGVIEW creates one or more temporary PGPLOT devices which
+               can be used as an alternative to the standard X11 device.
+               An advantage is the correct handling of expose events so that
+               the window's contents is not lost, e.g., when it has been
+               covered by another window.
+
+               With the hidden keyword N= more than one device can be
+               created. Multiple devices are stacked in one column and all
+               have the same size.
+
+               The devices will have names 'PGVIEW:0', 'PGVIEW:1', etc.
+
+Updates:       Apr 22, 2009: JPT, Document created.
+               May 18, 2012: JPT, XYSIZE= keyword hidden; changed default size
+#<

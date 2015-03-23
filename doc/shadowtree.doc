@@ -1,0 +1,19 @@
+
+Script:       shadowtree
+
+Purpose:      Creates a shadowtree (i.e. creates an new branch with
+              linked leaves).
+
+Category:     SYSTEM MANAGEMENT
+
+File:         shadowtree.csh
+
+Author:       K.G. Begeman
+
+Use:          shadowtree fromdir [todir]
+
+              fromdir    branch with real leaves
+              todir      branch with linked leaves [current directory]
+
+Updates:      Aug 22, 1990: KGB, Document created.
+

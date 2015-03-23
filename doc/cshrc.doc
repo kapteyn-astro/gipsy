@@ -1,0 +1,18 @@
+
+Script:       cshrc
+
+Purpose:      Sets the environment for the GIPSY directory. The user gipsy
+              must run the csh or tcsh shell.
+
+Category:     MANAGEMENT
+
+File:         cshrc.csh
+
+Author:       K.G. Begeman
+
+Use:          Define gip_root in your .cshrc and add the command:
+              source ${gip_root}/sys/cshrc.csh
+
+Updates:      Aug 17, 1991: KGB, Document created.
+              May  1, 2007: JPT, Added missing {} braces to gipenv call.
+

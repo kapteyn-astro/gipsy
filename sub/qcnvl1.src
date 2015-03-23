@@ -1,0 +1,90 @@
+qcnvl1.src
+
+	Copyright (c) Kapteyn Laboratorium Groningen 1991
+	All Rights Reserved.
+
+	This is a packed document. Before compiling, xfile has to
+        be run on this file (xfile qcnvl1.src).
+	The following files will be unpacked by xfile:
+
+	File           Architecture       Contents
+
+	qcnvl1.dc2     all types          Document
+	qcnvl1.opt     ALLIANT            Compiler options
+	qcnvl1.f       ALLIANT            Optimized fortran vector code
+	qcnvl1.f       all other types    Standard fortran code
+
+#>            qcnvl1.dc2
+
+Function:     QCNVL1
+
+Purpose:      Auxiliary routine for CONVOLVE.
+
+Category:     MATH
+
+File:         qcnvl1.src
+
+Author:       K.G. Begeman
+
+Use:          CALL QCNVL1( V1 ,           Input         REAL ARRAY
+                           V2 ,       Input/Output      REAL ARRAY
+                           CF ,           Input         REAL
+                           N )            Input         INTEGER
+
+              V1        Array contains data to be convolved.
+              V2        Array to which CF * V1 is added.
+              CF        Convolving factor.
+              N         Size of V1 and V2.
+
+Notes:        V1 and V2 may not contain BLANKS. If this is not the case,
+              use QCNVL2.
+
+Description:  The operation performed by CNVL1 is: V2 = V2 + CF * V1.
+
+Updates:      Apr 10, 1991: KGB Document created.
+
+#<
+
+#!IF    F2C
+#!ELIF  ALLIANT
+
+#>    qcnvl1.opt
+fortran -c -Ogv qcnvl1.f
+#<
+
+#!ENDIF
+
+#>    qcnvl1.f
+C
+C     C to Fortran interface:
+C
+C@    subroutine qcnvl1( real, real, real, integer )
+C
+      SUBROUTINE QCNVL1( V1 , V2 , CF , N )
+C
+C     Declaration of arguments:
+C
+      REAL    V1(*), V2(*), CF
+      INTEGER N
+C
+C     Local variables:
+C
+      INTEGER I
+C
+C     Executable code:
+C
+#!IF    F2C
+      DO 1 I = 1, N
+         V2(I) = V2(I) + CF * V1(I)
+    1 CONTINUE
+#!ELIF  ALLIANT
+      V2(1:N) = V2(1:N) + CF * V1(1:N)
+#!ELSE
+      DO 1 I = 1, N
+         V2(I) = V2(I) + CF * V1(I)
+    1 CONTINUE
+#!ENDIF
+C     RETURN TO CALLER
+      RETURN
+      END
+#<

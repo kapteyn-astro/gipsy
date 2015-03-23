@@ -1,0 +1,23 @@
+
+Script:       getarch
+
+Purpose:      Determines architecture of host.
+
+Category:     MANAGEMENT
+
+File:         getarch.csh
+
+Author:       K.G. Begeman
+
+Use:          getarch.csh
+
+Description:  getarch.csh tries to determine the architecture of
+              the host and displays the result.
+
+Updates:      Jan  8, 1993: KGB Document created.
+              Apr 30, 1994: KGB New version for LINUX.
+              Apr 18, 1996: KGB New version for FreeBSD.
+              May  1, 2007: JPT Added Apple Mac.
+              Aug 27, 2007: JPT Fixed Mac Power PC bug.
+              May 29, 2009: JPT Added 64-bit Linux.
+

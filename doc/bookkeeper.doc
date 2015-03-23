@@ -1,0 +1,35 @@
+
+Document:     bookkeeper
+
+Purpose:      The file bookkeeper which resides in the gip_sys directory,
+              does the bookkeeping of GIPSY procedures and applications for
+              all architectures.
+
+Category:     MANAGEMENT
+
+File:         bookkeeper.doc
+
+Author:       K.G. Begeman
+
+Description:  This file list only the compilables. It maintains the
+              status of the sources for all achitectures. The first
+              uncommented line in this document contains the names
+              of all the architectures, separated by colons.
+              Each source has a one line entry with 5 fields, separated
+              by colons (:). The different fields have the following
+              meaning:
+
+              Field #      Meaning
+                 1         Name of source.
+                 2         Type of source ("sub" or "tsk" ).
+                 3         Update bit mask. If the bit is set for
+                           a particular architecture, it is up to date.
+                 4         Delete flag. Non-zero indicates that it is
+                           queued for deletion.
+                 5         Error bit mask. If the bit is set for
+                           a particular architecture, it could not be
+                           compiled.
+
+Related Docs: archreset.csh mkbookkeeper.csh
+
+Updates:      Jun 22, 1991: KGB Document created.

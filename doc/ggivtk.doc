@@ -1,0 +1,19 @@
+Document:     ggivtk
+
+Purpose:      Python module implementing the VtkField Ggi element for pygipsy.
+
+Category:     SYSTEM
+
+File:         ggivtk.src
+
+Author:       J.P. Terlouw
+
+Description:  ggivtk is a pre-compiled module which augments the
+              standard Python module gipsy. It implements the _VtkField
+              class and a factory method for _Container.
+
+Use:          The module is automatically imported by the gipsy module.
+
+Updates:      Jul 18, 2007: JPT, Document created.
+              Feb 28, 2010: JPT, added -fPIC switch to compilations
+              Sep  3, 2012: JPT, conditional code for different VTK versions

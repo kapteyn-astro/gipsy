@@ -1,0 +1,1223 @@
+hiflux.src
+
+        Copyright (c) Kapteyn Laboratorium Groningen 1996
+        All Rights Reserved.
+
+Name:         hiflux.src
+Creator:      do
+Host:         hermes
+Date:         Oct 22, 1996
+Contents:     hiflux.dc1 irmf_hiflux.c irmf_readset.c irmf_interact.c irmf_gids.c
+              irmf_overlay.c irmf_readheader.c irmf_cursor.c irmf_position.c hiflux.h
+              hiflux.make
+
+#>            hiflux.dc1
+
+Program:        HIFLUX
+
+Purpose:        derive fluxes and standard deviations from HIRAS images
+
+File:           hiflux.src
+
+Category:       IRAS
+
+Author:         Do Kester
+
+Keywords:       
+*** MAPS=	Max number of maps to be processed simultaneously [4]
+		All maps should be of the same size, and presumably of 
+		the same field.
+
+*** FILE=	Name of output file [none]
+		The results are also written to the file.
+
+    INSET=      Name of a set for which fluxes need to be determined [quit]
+		The program is written with sets in mind which were made 
+		with HIRAS. There is no reason however that it would not 
+		work with other datasets.
+
+    CLIP=       As in VIEW (Actually VIEW is deputied.) [calculated]
+
+    BACKGROUND= Number to be subtracted from the flux [from INSET]
+                All sets made with HIRAS v5.0 and up, have the background 
+		written as keyword ZEROLEVL in the header. 
+		When LOCAL=y the value of the global background is overruled
+		by the locally calculated one.
+
+*** COLIND=     Color index for plot colours [standard]
+
+*** LOCAL=	Calculate local background [No]
+		The background is determined as the median of the points
+		within the form selected with SELECT=.  
+		It is the users responsibility that the form is taken 
+		large enough that more than half of the points fall in 
+		the background. (But see also RADIUS=). 
+		
+*** COOR=	Transform positions to this coordinate system [from inset]
+		The coordinate system can be
+		  EQUatorial <epoch>
+		  ECLiptic   <epoch>
+		  GALactic
+		  SUPergalactic
+		The first 3 letters are significant (case insensitive)
+
+    SELECT=     The form of the area over which a flux is requested. [F]
+                  P     Point source, a form of fixed size of which only
+                        the center is asked.
+                  C     Circle, a center and a radius is needed
+                  E     Ellipse, a center, two axes and a twist angle is
+                        needed.
+                  F     Free form, defined by points entered by the user.
+                The keyword is case insensitive.
+
+*** RADIUS=     Radius of the point source in pixels [5.0]
+                When two numbers are given, the point source form will
+                be an ellipse with the given numbers as semi-axes.
+		When LOCAL=y the default for RADIUS is 10.0
+
+*** ANGLE=      Twist angle of the pointsource ellipse [0.0]
+		This keyword has effect only when radius is supplied with
+		two numbers.
+                It is measured counterclockwise from the horizontal axis
+                to the first item from RADIUS.
+
+Description:
+        The program is written to calculate fluxes from maps made by
+        HIRAS, accompanied by the standard deviation of that flux.
+        Due to internal (anti)correlation between pixels on all
+        kind of scales, it is not possible to just add the pixels
+        from the standard deviation map quadratically. The standard
+        deviation map gives standard deviations for single pixels only.
+
+        To derive standard deviations for the areas where a flux is 
+        requested, it is necessary that there is also a set containing 
+        the 25 movie-sample-maps needed to make the standard deviation map.
+        The name of this set is <name>_m
+        It is made by HIRAS when to the keyword MAPS= is added the 
+        combination `mk' (= Keep Movie sample maps )
+        So the HIRAS keyword should be answered with e.g. MAPS= rsil; mk ;
+
+        Note that previously I thought one needed the the standard deviation 
+        in the hidden space pyramids. THIS WAS JUST PLAINLY WRONG.
+        This present version of HIFLUX does not work any more on maps with
+        names like <name>_s_h. I apologize for any inconveniences...
+
+        When started the program will ask for (a number of) set(s) which 
+        will be displayed with VIEW. The last one will stay there to work on.
+	For each of the maps a background will be asked (BACKGROUND=).
+	And it is checked whether moviesample maps are present.
+	As all processing is done exactly the same way on all supplied 
+	maps, it is possible to measure fluxes in all (IRAS) bands 
+	simultaneously, using the same pixel locations throughout.
+
+        A cursor in the form of a cross (+) will appear on the display.
+        With the mouse the cursor can be moved to a position and one of
+	the following actions can be taken.
+	  left button: 	add the position to the list
+	  mid button: 	undo the previous button (if possible)
+	  right button: add the position to the list and close the list.
+	  'q' or 'Q'	add nothing and close the list.
+	  'x' or 'X'	discard the list and close
+	  'n' or 'N'	discard the list and start anew (with another form)
+
+        What the points in the list mean, depend on the form which is
+        chosen with SELECT. For a point source (SELECT=P) only one
+        point in the list (the first) is relevant: it defines the center.
+        For a circle (SELECT=C) two points are needed: the first is
+        the center and the distance between the two defines the radius.
+        For an ellipse (SELECT=E) three points are needed: the center 
+        and two distances which define the semi-axes. The direction 
+        of the first semi-axis also defines the twist angle of the ellips. 
+        In case of a free form (SELECT=F, default) the points are 
+        connected into a loop, the last one connecting to the first, 
+        and the inside of the loop is used. Crossing loops make funny insides.
+
+        With the keywords RADIUS and ANGLE the shape of a point source 
+        can be changed. ANGLE only has effect when RADIUS is supplied 
+	with 2 different numbers.
+
+        When there are no points in the list the program ends. Otherwise
+        it loops, asking new positions etc. The selected form can be 
+        changed at any moment by typing an 'n'.
+
+        The form is transformed into a mask, with the size of the map,
+        containing ones inside and zeroes outside the form. 
+        The flux is calculated by convolving the mask and the maps and
+        adding the pixels together, for each map separately. 
+        The size of the pixels is taken in account and the result is
+        presented in Jansky, provided that the original map is in MJy/sr.
+
+	The positions which are reported are the position of the pixel 
+	with the highest flux within the form, deprojected and transformed 
+	to the coordinate system of choice.
+
+	When LOCAL=y the median over all points within the form is taken 
+	as the (local) background. Multiplied by the number of points in 
+	the form it is subtracted from the flux.
+
+        For the standard deviation of the flux contained in the form
+        the mask is used on each of the movie sample maps. The variation 
+        in the resulting fluxes defines the standard deviation in the 
+        usual way. This standard deviation might seem to be low but 
+        remember that it only reflects the internal inconsistency in the 
+        data. Nothing can be calculated about systematic errors in the
+        calibration. For this I refer to the IRAS Explanatory Supplement.
+
+	When no moviesample maps are present and LOCAL=y then the
+	standard deviation is equal to 1.5 times the distance of the 
+	median to the lower quartile, multiplied by the sqrt of the number
+	of points in the form. This latter standard deviation should be 
+	interpreted with the utmost care as it only reflects variations
+	in the background. It has no information at all about the source 
+	itself. For that movie sample maps are necessary.
+
+
+Updates: 1.0    06 Oct 1993     Do Kester.
+         2.0    31 Jan 1995     Do Kester, now working more properly on
+                                movie sample maps.
+	 3.0    07 Oct 1996     DK, added multiple maps, local background,
+				better mouse handling, file output.
+	 3.1    22 Oct 1996     DK, option for coordinate system of choice
+				flux conversion corrected (was wrong in v3.0)
+#<
+
+#>            irmf_hiflux.c
+/* irmf_hiflux.c
+
+	   Copyright (c) 1993
+  Laboratory for Space Research Groningen
+       Kapteyn Laboratory Groningen
+	   All Rights Reserved.
+
+Function:     	irma_hiflux
+
+Purpose:	find flux and stdev in HIRAS maps
+
+Category:     	IRAS
+
+Author:		Do Kester
+
+Use:
+
+returns:
+
+Updates: 1.0	6 Oct 1993 DK: first draft.
+	 2.0   23 Nov 1994 DK: Use movie maps in stead of stdev maps of HSP
+	 2.1   18 Sep 1995 DK: pick up ZEROLEVL from map as background	  
+	 3.0   03 Oct 1996 DK: extension to more than one map
+	 			provision for local background
+	 3.1   22 Oct 1996 DK: forgotten to convert MJy/sr -> Jy
+	 			option for coordinate transformation
+*/
+
+#include "hiflux.h"
+#include "cmain.h"	/* defines MAIN_PROGRAM_ENTRY and IDENTIFCATION */
+#include "init.h"
+#include "finis.h"
+#include "userfio.h"
+#include "gds_exist.h"
+#include "sortra.h"
+
+/* identification */
+#define VERSION 	  "3.1" 		/* version number */
+#define PROGRAM 	"HIFLUX" 		/* program name */
+#define MAPS		4			/* default nr of maps */
+#define RADIUS		5	/* pointsource radius */
+#define LBG_RADIUS	10	/* pointsource radius using local background */
+
+MAIN_PROGRAM_ENTRY
+{
+
+    fint		nitem, length = 0, local, plane, *msplanes, ierr ;
+    long		maps = MAPS, m = 0, msp, ll ;
+    static char		sdum[81], mdum[81], keys[121], bdum[41], fdum[81] ;
+    static fchar	set = { sdum, 80 }, mset = { mdum, 80 } ;
+    static fchar	bunit = {bdum, 40 }, fname = { fdum, 80 } ;
+    long		pixels, npoints, i, k, msexist, movies = 1 ;
+    float		**pArea, **pMS, *pRF, *pM, *pA, *pR, mf, smf, s2m ;
+    float		flux, stdev, *bg, *pSort, *pS, lbg, lsd, radius ;
+    double		cd2 ;
+    char		mess[80], *line ;
+    FILE		*fp = NULL ;
+
+    init_c( );					/* hello HERMES */
+    IDENTIFICATION( PROGRAM , VERSION ) ;	/* who are we */
+
+    nitem = userfint( &maps, 1, DFLT_HIDD, "MAPS=", "Max number of maps [4]" ) ;
+    LONG_INIT( msplanes, maps ) ;
+    FLOAT_INIT( bg, maps ) ;
+    pArea = (float**)calloc( maps, sizeof( float* ) ) ; assert( pArea ) ;
+    pMS   = (float**)calloc( maps, sizeof( float* ) ) ; assert( pMS ) ;
+
+/* write to optional file */
+    if ( userfchar( fname, 1, DFLT_HIDD, "FILE=", "Name of output file" ) ) {
+      sprintf( mess, "%.*s", nelc_c( fname ), fname.a ) ;
+      fp = fopen( mess, "w" ) ;
+      if ( fp == 0 )  errorf( SERIOUS, "Cannot open %s", mess ) ;
+    }
+
+/* ask which set to process and display it */
+    sprintf( mess, "Set to work on [quit]" ) ; 
+    while ( userfchar( set, 1, DFLT_DEF, "INSET=", mess ) ) {
+      sprintf( keys, "INSET=%.*s ANYOUT=16", nelc_c( set ), set.a ) ;
+      wkey_c( tofchar( keys ) ) ;
+      deputy_c( tofchar( "view" ), &ierr ) ;
+
+/* read the set and the MS planes */
+      plane = 1 ;
+      if ( irmf_readset( set, &pArea[m], &length, &plane ) ) {
+	cancel_c( tofchar( "INSET=" ) ) ;
+	continue ;
+      }
+
+      sprintf( mdum, "%.*s_m", nelc_c( set ), set.a ) ;  /* MS maps */
+      if ( ( msexist = gds_exist_c( mset, &ierr ) ) ) {
+    	irmf_readset( mset, &pMS[m], &length, &msplanes[m] ) ;
+	anyoutf( ANYOUT_TST, "MS length = %d planes = %d", length, msplanes[m] ) ;
+      } else errorf( WARNING, "No Moviesample map for %s", mdum ) ;
+      movies &= msexist ;
+
+      irmf_readheader( set, &cd2, bunit, &bg[m] ) ;
+
+      if ( fp ) fprintf( fp, "Set nr %2d : %.*s  background = %9.3f  %s\n", 
+      			m+1, nelc_c( set ), set.a, bg[m], 
+      			( msexist ) ? "with movie maps" : "no movie maps" ) ;
+
+      if ( ++m >= maps ) break ;
+      cancel_c( tofchar( "INSET=" ) ) ;
+      cancel_c( tofchar( "CLIP=" ) ) ;
+      sprintf( mess, "Next set to work on [cont]" ) ;
+    }
+    maps = m ;
+    if ( maps == 0 ) return( 0 ) ;
+
+    irmf_overlay( ) ;
+
+    nitem = userflog( &local, 1, DFLT_HIDD, "LOCAL=", 
+    			"Calculate local background [no]" ) ;
+    if ( local ) radius = LBG_RADIUS ; else radius = RADIUS ;
+
+    ll = 24 + 11 * ( 1 + maps * ( 1 + ( local || movies ) ) ) ;
+    line = (char*)calloc( ll, sizeof( char ) ) ; assert( line ) ;
+    sprintf( line, "%s%s", irmf_initpos( set, mess ), "   npt" ) ;
+    for ( m = 0 ; m < maps ; m++ ) 
+      	sprintf( &line[strlen( line )], "%s%s", "      flux", 
+      		( movies ) ? "   std.dev" : ( local ) ? "   sdv_bkg" : "  " ) ;
+    anyoutf( ANYOUT_DEF, "%s", line ) ; 
+    if ( fp ) fprintf( fp, "%s\n", line ) ;
+
+/* start looping over user supplied forms */
+    pixels = length * length ;
+    FLOAT_INIT( pRF, pixels ) ;
+    while ( ( npoints = irmf_interact( length, pRF, radius ) ) ) {
+      FLOAT_INIT( pSort, npoints ) ;
+      sprintf( line, "%s %5d", irmf_position( set, pRF, pArea[maps-1], mess ), 
+      				npoints ) ;
+      for ( m = 0 ; m < maps ; m++ ) {
+      	pA = pArea[m] ; pR = pRF ; pS = pSort ;
+/* calculate flux inside the form */
+	for ( flux = i = 0 ; i < pixels ; i++ )
+		if ( *pR++ ) flux += *pS++ = pA[i] - bg[m] ;  
+	flux *= cd2 ;
+	if ( local ) {
+	  sortra_c( pSort, &npoints ) ;
+	  lbg = pSort[npoints/2] ;		 /* local background */
+	  lsd = (lbg - pSort[npoints/4]) * 1.5 ; /* stdev =~ (med-quart)*1.5 */
+	  lbg *= cd2 ;
+	  lsd *= cd2 ;
+	  anyoutf( ANYOUT_TST, "%3d sumf = %10.3f  local bg = %10.3f +- %10.3f", 
+	  		m+1, flux, lbg, lsd ) ;
+	  lbg *= npoints ;
+	  lsd *= sqrt( npoints ) ;
+	  flux -= lbg ;
+	  anyoutf( ANYOUT_TST, "    flux = %10.3f  total bg = %10.3f +- %10.3f", 
+	  		flux, lbg, lsd ) ;
+	} else lbg = 0 ;
+/* calculate the standard deviation over the movie planes */
+	pM = pMS[m] ; 
+	if ( pM ) {
+	  msp = msplanes[m] ;
+	  for ( smf = s2m = k = 0 ; k < msp ; k++ ) {
+	    pR = pRF ;
+	    for ( mf = i = 0 ; i < pixels ; i++ ) mf += *pR++ * *pM++ ;
+	    smf += mf ;
+	    s2m += SQR( mf ) ;
+	  }
+	  smf /= msp ;
+	  s2m /= msp ;
+	  stdev = sqrt( s2m - SQR( smf ) ) * cd2 ;
+	  anyoutf( ANYOUT_TST, "%3d flux = %10.3f  movie fl = %10.3f +- %10.3f",
+	    		m+1, flux, smf - lbg, stdev ) ;
+	} else if ( local ) stdev = lsd ; else stdev = 0 ;
+
+	sprintf( &line[strlen( line )], "%10.3f", flux ) ;
+	if ( pM || local ) sprintf( &line[strlen( line )], "%10.3f", stdev ) ;
+      }
+
+/* display results */
+      anyoutf( ANYOUT_DEF, "%s", line ) ; 
+      if ( fp ) fprintf( fp, "%s\n", line ) ;
+
+      FREE( pSort ) ;
+
+    }
+
+    if ( fp ) fclose( fp ) ;
+    finis_c( ) ;
+    return( 0 ) ;
+}
+
+ 
+#<
+
+#>            irmf_readset.c
+/* irmf_readset.c
+
+           Copyright (c) 1993
+  Laboratory for Space Research Groningen 
+       Kapteyn Laboratory Groningen 
+           All Rights Reserved.
+
+Function:     irmf_readset
+
+Purpose:      read a set into an area
+
+Category:     IRAS
+
+Author:       Do Kester
+
+Use:  
+int irmf_readset(
+	fchar		set,
+	float		**pRF,
+	long		*length,
+	long		*plane )
+
+returns: 	0  succes
+		-1 wrong size
+		-2 problems reading the data
+
+Description : it only checks the size.
+
+Updates:      06 May 1993: DK, Creation date
+
+*/
+
+#include "hiflux.h"
+#include "userfio.h"
+#include "gdsc_range.h"
+#include "gdsd_rint.h"
+#include "gdsi_read.h"
+#include "gds_close.h"
+
+
+int irmf_readset(
+	fchar		set,
+	float		**pRF,
+	long		*length,
+	long		*plane )
+{
+	fint		i, ierr, level = 0, naxis1, naxis2, naxis3, npix ;
+	fint		subset = 0, cwlo, cwhi, nread, p_as = 3, pskip ;
+	float		*pF ;
+
+        ierr = OK ;
+        GDSD_RINT(  set, "NAXIS1", level, &naxis1, &ierr ) ;
+        GDSD_RINT(  set, "NAXIS2", level, &naxis2, &ierr ) ;
+        if ( naxis1 != naxis2 || ( *length > 0 && naxis2 != *length ) ) {
+        	errorf( SERIOUS, "Wrong size of set %d,%d should be %d",
+                        naxis1, naxis2, *length ) ;
+                return( -1 ) ;
+        }
+        *length = naxis1 ;
+        GDSD_RINT(  set, "NAXIS3", level, &naxis3, &ierr ) ;
+	if ( ierr < 0 && *plane != 1 ) {
+		errorf( SERIOUS, "Wrong plane %d", *plane ) ;
+		return( -3 ) ;
+	}
+	if ( ierr >= OK ) *plane = MAX( 1, naxis3 ) ; else naxis3 = 0 ;
+        npix = naxis1 * naxis2 ;
+        FLOAT_INIT( *pRF, npix * *plane ) ;
+	pF = *pRF ;
+	for ( i = 0 ; i < *plane ; i++ ) {
+          ierr = OK ;
+          pskip = i + 1 ;
+	  subset = 0 ;
+	  if ( naxis3 ) subset = gdsc_word_c( set, &p_as, &pskip, 
+	  			&subset, &ierr ) ;
+          ierr = OK ;
+          gdsc_range_c( set, &subset, &cwlo, &cwhi, &ierr ) ;
+          ierr = OK ;
+	  nread = 0 ;
+	  do {
+            gdsi_read_c( set, &cwlo, &cwhi, pF, &npix, &nread, &ierr ) ;
+            if ( ierr < 0 ) {
+              errorf( SERIOUS, "Problems reading set; nread=%d npix=%d ierr=%d",
+            		nread, npix, ierr ) ;
+              return( -2 ) ;
+            }
+	  } while ( ierr > 0 ) ;
+          pF += npix ;
+        } 
+
+	gds_close_c( set, &ierr ) ;
+
+	return 0 ;
+
+}
+#<
+
+#>            irmf_interact.c
+/* irmf_interact.c
+
+           Copyright (c) 1993
+  Laboratory for Space Research Groningen 
+       Kapteyn Laboratory Groningen 
+           All Rights Reserved.
+
+Function:     irmf_interact
+
+Purpose:      make a mask interactively
+
+Category:     IRAS
+
+Author:       Do Kester
+
+Use:  
+int irmf_interact( 
+	long	length,
+	float	*pRF ) 
+
+returns: 
+
+Updates:      29 Sep 1993: DK, Creation date
+
+*/
+
+#include "hiflux.h"
+#include "userfio.h"
+#include "pgplot.h"
+
+#define NPT	100		/* max nr of points in a free form */
+
+int irmf_interact(
+	long	length,
+	float	*pRF,
+	float	radius ) 
+{
+	long		nitem, i, j, k, ist, ien, kst, ken, npt, nps ;
+	long		sym = 1, one = 1, two = 2, klo, khi ;
+	int		inside ;
+	float		*pF, jj[NPT], kk[NPT], xx, dx, u, v, theta, dth ;
+	float		cosp, sinp ;
+	float		X[NPT], Y[NPT], *pX, *pY, r1, r2, phi, rad[2] ;
+	static char	dum[81], chdum[2] ;
+	static fchar	select = { dum, 80 }, ch = { chdum, 1 } ;
+	static float	xc, yc ;
+	static long	first = TRUE ;
+
+	if ( first ) {
+	  xc = yc = length / 2 ;
+	  first = FALSE ;
+	}
+
+	do {
+	  nitem = userfcharu( select, 1, DFLT_DEF, "SELECT=", 
+		"Pointsource, Circle, Ellips or Freeform [F]" ) ;
+	  if ( ! nitem ) dum[0] = 'F' ;
+	  switch ( dum[0] ) {
+	    case 'P' : 
+		statusf( "Pointsource: define 1 point, the center" ) ;
+		npt = 1 ;
+		break ;
+	    case 'C' : 
+		statusf( "Circle: define 2 points, center, radius" ) ;
+		npt = 2 ;
+		break ;
+	    case 'E' : 
+		statusf( "Ellipse: define 3 points center, 2 semiaxes" ) ;
+		npt = 3 ;
+		break ;
+	    case 'F' : 
+		statusf( "Freeform: define more (2<N<%d) points", NPT ) ;
+		npt = NPT - 1 ;
+		break ;
+	    default  : 
+	        errorf( WARNING, "Unknown item selected : %.*s", 
+	        		nelc_c( select ), select.a ) ;
+		npt = 0 ;
+		break ;
+	  }
+
+	  X[0] = xc ; Y[0] = yc ;	/* start at center cq last point */
+	  pX = X ; pY = Y ;
+	  nps = irmf_cursor( npt, X, Y, 2 ) ;	/* get points from cursor */
+
+	  if ( nps < 0 ) cancel_c( tofchar( "SELECT=" ) ) ;
+	} while ( nps < 0 ) ;
+
+	if ( nps == 0 ) return ( 0 ) ;
+
+/* plot the selected area */	
+	npt = abs( npt ) ;
+	xc = X[0] ; yc = Y[0] ;
+	r1 = r2 = radius ; phi = 0.0 ;
+	nitem = userfreal( rad, 2, DFLT_HIDD, "RADIUS=", 
+		"1 for circular, 2 for eliptical PS [%.1f]", r1 ) ;
+	if ( nitem == 2 ) { r1 = rad[0] ; r2 = rad[1] ; }
+	else if ( nitem == 1 ) r1 = r2 = rad[0] ;
+	nitem = userfreal( &phi, 1, DFLT_HIDD, "ANGLE=",
+		"angle of the 1st radius ccw from x [0]" ) ; 
+	phi *= D2R ;
+	switch ( npt ) {
+	    case 3 :
+	    case 2 :
+		r1 = sqrt( SQR( xc - X[1] ) + SQR( yc - Y[1] ) ) ;
+		r2 = sqrt( SQR( xc - X[npt-1] ) + SQR( yc - Y[npt-1] ) ) ;
+		phi = atan2( ( yc - Y[1] ) / r1, ( xc - X[1] ) / r1 ) ;
+	    case 1 : 
+		nps = (int)( 2 * ( r1 + r2 ) ) ;
+		nps = MIN( NPT - 1, nps ) ;
+		theta = 0 ; dth = TWOPI / nps ;
+		nps += 1 ;			/* to close the loop */
+		cosp = cos( phi ) ;
+		sinp = sin( phi ) ;
+		for ( i = 0 ; i < nps ; i++ ) {
+			u = r1 * cos( theta ) ;
+			v = r2 * sin( theta ) ;
+			X[i] = xc - u * cosp - v * sinp ;
+			Y[i] = yc - u * sinp + v * cosp ;
+			theta += dth ;
+		}
+		if ( r1 == r2 ) anyoutf( ANYOUT_TST,
+			"Circle at (%.1f,%.1f) with radius %.1f", xc,yc,r1 ) ;
+		else anyoutf( ANYOUT_TST, "Ellipse at (%.1f,%.1f) with axes "
+			"(%.1f,%.1f) and angle %.1f",xc,yc,r1,r2,phi/D2R ) ;
+		break ;
+	    default : 
+		X[nps] = X[0] ; Y[nps] = Y[0] ; nps += 1 ;
+		anyoutf( ANYOUT_TST, "Free form with %d points", nps ) ;
+		for ( i = 0 ; i < nps ; i++ ) 
+			anyoutf( ANYOUT_TST, "   %.1f %.1f", X[i], Y[i] ) ;
+		break ;
+	}
+	pgline_c( &nps, X, Y ) ;
+
+/* Fill the RF with 1.0 inside the area and 0 outside */
+	for ( i = 0 ; i < length * length ; i++ ) pRF[i] = 0.0 ;
+
+	nps-- ; klo = length ; khi = 0 ;
+	for ( i = 0 ; i < nps ; i++ ) {
+	    if ( Y[i] < Y[i+1] ) {
+		kst = ROUND( MAX( Y[i], 0 ) ) ;
+		ken = ROUND( MIN( Y[i+1], length ) ) ;
+		xx  = X[i] ;
+	    } else {
+		kst = ROUND( MAX( Y[i+1], 0 ) ) ;
+		ken = ROUND( MIN( Y[i], length ) ) ;
+	    	xx = X[i+1] ;
+	    }
+	    if ( kst < ken ) {
+	    	dx = ( X[i+1] - X[i] ) / ( Y[i+1] - Y[i] ) ;
+	    } 
+	    if ( kst < klo ) klo = kst ;
+	    if ( ken > khi ) khi = ken ;
+	    for ( k = kst ; k < ken ; k++ ) {
+		j = ROUND( xx ) ;
+		j = MAX( j, 0 ) ;
+		j = MIN( j, length - 1 ) ;
+		pRF[k*length+j] += 1.0 ;	/* allow multiple points */
+		xx += dx ;			/*  for in/outside free form */
+	    }
+	}
+
+	pF = pRF ;
+	inside = FALSE ;
+	npt = nps = 0 ;
+	for ( k = klo ; k < khi ; k++ ) {
+	    pF = pRF + k * length ;
+	    for ( i = 0 ; i < length ; i++, pF++ ) {
+	    	xx = *pF ;
+	    	while ( xx > 0.5 ) {		/* address multiple points */
+	    		xx -= 1.0 ;
+	    		inside = ! inside ;
+	    	}
+	    	if ( inside || *pF > 0.5 ) { 
+	    		*pF = 1.0 ; 
+		    	kk[npt] = k ;
+		    	jj[npt] = i ; 
+	    		npt++ ; nps++ ; 
+	    	}
+	    	if ( npt == NPT ) {
+	    		pgpt_c( &npt, jj, kk, &sym ) ;
+	    		npt = 0 ;
+	    	}
+	    }
+	}
+	if ( npt ) pgpt_c( &npt, jj, kk, &sym ) ;
+
+	return ( nps ) ;
+}		
+#<
+
+#>            irmf_gids.c
+#include "hiflux.h"
+#include "userfio.h"
+#include "gdi_open.h"
+#include "gdi_iinfo.h"
+#include "gdi_frame.h"
+#include "gdi_close.h"
+
+int irmf_gids( 
+   fint         *imagelo,
+   fint         *imagehi,       
+   float        *framelo,                         /* Corners of GIDS area */
+   float        *framehi )        
+	
+/*-------------------------------------------------------*/
+/* Check whether a GIDS window is open and a set is      */
+/* displayed. Get info about size and position of the    */
+/* displayed image. Calculate the offset (from lower     */
+/* left corner) in mm                                    */
+/*-------------------------------------------------------*/
+{
+   fint         display_stat;                       /* display operation status */
+   fint         setdim;
+   fint         iax;
+   fint         r1, r2;
+   int          i;
+   fint         grid;
+   static char  adum[21], gdum[81] ;
+   static fchar Axisname = { adum, 20 } ;
+   fint         GIDSdisplay_id = -1;                /* id of display */      
+   static fchar GIDSset = { gdum, 80 } ;
+   fint         GIDSsubset;         
+       
+      
+   GIDSdisplay_id = gdi_open_c( tofchar(" ") );     /* open display device */
+   if (GIDSdisplay_id < 0) {                        /* error opening display */
+      errorf( SERIOUS, "Could not open display!");
+      return( 0 );
+   }                    
+
+   display_stat = gdi_iinfo_c( &GIDSdisplay_id ,    /* id of display */
+                               GIDSset ,            /* name of set */
+                               &GIDSsubset ,        /* subset level */
+                               imagelo,             /* lower left frame boundary */
+                               imagehi );           /* upper right frame boundary */
+                               
+   if (display_stat < 0) {                          /* error obtaining info */
+      errorf( SERIOUS, "No image loaded! Use application VIEW!");
+      return( 0 );
+   }
+   anyoutf( ANYOUT_TST, "Displayed set [%.*s]", nelc_c(GIDSset), GIDSset.a );
+   anyoutf( ANYOUT_TST, "Box  : [%6d %6d %6d %6d]",                   
+                   imagelo[0], imagelo[1], imagehi[0], imagehi[1] );            
+
+   r1 = gdi_frame_c( &GIDSdisplay_id ,    /* id of display */
+                     framelo,             /* lower left frame boundary of total GIDS area... */
+                     framehi );           /* ...  in (floating) grids */
+   if (r1 != 0) {
+      errorf( SERIOUS, 
+         "Cannot obtain info about frame currently on display! (err=%d)", r1 );
+      return( 0 );
+   }   
+   anyoutf( ANYOUT_TST, "Frame: [%6.1f %6.1f %6.1f %6.1f]",                   
+                   framelo[0], framelo[1], framehi[0], framehi[1] );            
+
+   display_stat = gdi_close_c( &GIDSdisplay_id );   /* close display */
+
+   return( 0 ) ;
+}
+
+#<
+
+#>            irmf_overlay.c
+/* irmf_overlay.c
+
+	   Copyright (c) 1996
+  Laboratory for Space Research Groningen
+       Kapteyn Laboratory Groningen
+	   All Rights Reserved.
+
+Function:     	irmf_overlay
+
+Purpose:	defines plot overlay on gids
+
+Category:     	IRAS
+
+Author:		Do Kester
+
+Use:		void irmf_overlay( )
+
+
+returns:
+
+Updates: 1.0	03 Oct 1996 DK: first draft.
+*/
+
+#include "hiflux.h"
+#include "userfio.h"
+#include "pgplot.h"
+
+void irmf_overlay( )
+{
+    long		imlo[2], imhi[2], n0 = 0, n1 = 1, colind = 1 ; 
+    float		frlo[2], frhi[2], nul = 0, one = 1, xl, xh, yl, yh ;
+    
+/* make overlay on gids window for plotting */
+    irmf_gids( imlo, imhi, frlo, frhi ) ;
+    pgbeg_c( &n0, tofchar( "gids//append" ), &n1, &n1 ) ;
+    pgpage_c( ) ;
+    pgsvp_c(  &nul, &one, &nul, &one ) ;
+    xl = frlo[0] - imlo[0] ;
+    xh = frhi[0] - imlo[0] ;
+    yl = frlo[1] - imlo[1] ;
+    yh = frhi[1] - imlo[1] ;
+    anyoutf( ANYOUT_TST, "Window [%6.1f %6.1f %6.1f %6.1f]", xl, xh, yl, yh ) ; 
+    pgswin_c( &xl, &xh, &yl, &yh ) ;
+
+/* set color index for plotting */
+    (void)userfint( &colind, 1, DFLT_HIDD, "COLIND=", "Set color index" ) ;
+    pgsci_c( &colind ) ;
+
+    return ;
+}
+
+#<
+
+#>            irmf_readheader.c
+/* irmf_readheader.c
+
+	   Copyright (c) 1996
+  Laboratory for Space Research Groningen
+       Kapteyn Laboratory Groningen
+	   All Rights Reserved.
+
+Function:     	irma_readheader
+
+Purpose:	read some header items
+
+Category:     	IRAS
+
+Author:		Do Kester
+
+Use:		void irmf_readheader( 
+		    fchar	set, 		set name
+		    double	*cd2, 		angle of a pixel in sterad
+		    fchar	bunit, 		unit of flux: Jy
+		    float	*bg ) 		background level in map
+
+returns:
+
+Updates: 1.0   03 Oct 1996 DK: first draft.
+*/
+
+#include "hiflux.h"
+#include "userfio.h"
+#include "gdsd_rdble.h"
+#include "gdsd_rchar.h"
+#include "gdsd_rreal.h"
+#include "gds_close.h"
+
+void irmf_readheader( 
+    fchar	set, 
+    double	*cd2, 
+    fchar	bunit, 
+    float	*bg ) 
+{
+    long	level = 0, ierr = OK, nitem ;
+    
+/* get pixel size and units of the map */
+    GDSD_RDBLE( set, "CDELT2", level, cd2, &ierr ) ;
+    *cd2 = SQR( *cd2 * D2R ) ;
+    GDSD_RCHAR( set, "BUNIT",  level, bunit, &ierr ) ;
+    if ( strncmp( bunit.a, "MJY/SR", 6 ) == 0 ) {
+    	*cd2 *= 1.0e6 ;
+    	sprintf( bunit.a, "Jy" ) ;
+    } else errorf( SERIOUS, "Cannot recognize bunit : %.*s", 
+   		nelc_c( bunit ), bunit.a ) ;
+
+/* fetch the users idea of the background level in the map */
+    *bg = 0 ;
+    GDSD_RREAL( set, "ZEROLEVL", level, bg, &ierr ) ;
+    if ( ierr < 0 ) errorf( WARNING, "No ZEROLEVL in this map" ) ;
+    nitem = userfreal( bg, 1, DFLT_DEF, "BACKGROUND=", 
+   		"Background level in this map [%5.2f]", *bg ) ;
+    cancel_c( tofchar( "BACKGROUND=" ) ) ;
+
+    ierr = OK ;
+    gds_close_c( set, &ierr ) ;
+    
+    return ;
+}
+
+#<
+
+#>            irmf_cursor.c
+/* irmf_interact.c
+
+       Copyright (c) 1996
+  Laboratory for Space Research Groningen
+     Kapteyn Laboratory Groningen
+       All Rights Reserved.
+
+Function:     irmf_interact
+
+Purpose:      read cursor position
+
+Category:     IRAS
+
+Author:       Do Kester
+
+Use:		int irmf_cursor( 
+			long	maxpt,
+			float 	*xpos,
+			float 	*ypos,
+			long	symbol )
+
+
+returns:	>= 0 	number of points read
+		-1	user wants new form.
+
+Updates:	7 Oct 1996: DK, Creation date
+
+*/ 
+
+#include "hiflux.h"
+#include "userfio.h"
+#include "pgplot.h"
+
+int irmf_cursor( 
+	long	maxpt,
+	float 	*xpos,
+	float 	*ypos,
+	long	symbol )
+{
+   static char		cdum[2], chr, upchr ;
+   static fchar   	Ch = { cdum, 1 };
+   fint    		one  = 1, ci, cib = 0, nps = 0 ;
+   float		x, y ;
+
+   x = *xpos ; y = *ypos ;
+   pgqci_c( &ci ) ;
+   while ( nps < maxpt ) {
+      pgcurs_c( &x, &y, Ch );
+      chr = Ch.a[0] ;
+      upchr = toupper( chr );
+      if ( upchr == 'Q' ) return nps ;
+      if ( chr == LEF || chr == RIG ) {		/* select point */
+          xpos[nps] = x ;
+          ypos[nps] = y ;
+          nps++ ;
+	  pgpt_c( &one, &x, &y, &symbol );
+	  if ( chr == RIG ) return nps ;	/* return */
+      } else if ( chr == MID ) {		/* undo previous point */
+          if ( nps > 0 ) nps-- ;
+	  pgsci_c( &cib ) ;			/* colorindex 0 to erase */
+	  x = xpos[nps] ; y = ypos[nps] ;	/*   previous point */
+	  pgpt_c( &one, &x, &y, &symbol );
+	  pgsci_c( &ci ) ;			/* restore color index */
+      } else if ( upchr == 'N' ) {		/* undo all to start anew */
+	  if ( nps ) {
+	    pgsci_c( &cib ) ;			/* colorindex 0 to erase */
+	    pgpt_c( &nps, xpos, ypos, &symbol );
+	    pgsci_c( &ci ) ;			/* restore color index */
+	  }
+	  return -1 ;
+      } else if ( upchr == 'X' ) {		/* undo all and return */
+	  if ( nps ) {
+	    pgsci_c( &cib ) ;			/* colorindex 0 to erase */
+	    pgpt_c( &nps, xpos, ypos, &symbol );
+	    pgsci_c( &ci ) ;			/* restore color index */
+	  }
+	  return 0 ;
+      } 
+   }
+   return nps ;
+}
+
+
+#<
+
+#>            irmf_position.c
+/* irmf_position.c
+
+	   Copyright (c) 1996
+  Laboratory for Space Research Groningen
+       Kapteyn Laboratory Groningen
+	   All Rights Reserved.
+
+Function:     	irma_position and irmf_initpos
+
+Purpose:	write coordsys cq the position of a RF-mask to a string
+
+Category:     	IRAS
+
+Author:		Do Kester
+
+Use:		char *irmf_initpos( 
+			fchar	set, 
+			char	*lbmes )
+
+Use:		char *irmf_position( 
+			fchar	set, 
+			float	*pRF, 
+			char	*lbmes )
+
+returns:	pointer to lbmes
+
+Updates: 1.0	7 Oct 1996 DK: first draft.
+*/
+
+#include "hiflux.h"
+#include "userfio.h"
+#include "gdsd_rchar.h"
+#include "gdsd_rint.h"
+#include "gdsd_rdble.h"
+#include "gdsd_rreal.h"
+#include "irco.h"
+#include "irus_coor.h"
+#include "gds_close.h"
+
+static double	crpix1, crpix2, cdelt1, cdelt2, center[2] ;
+static long	length, prid, crid, cridnew, plate ;
+
+char *irmf_initpos( 
+	fchar	set, 
+	char	*lbmes )
+{
+    long		level = 0, ierr, acrd, cr1 = 1, deflev = DFLT_HIDD ;
+    float		epoch ;
+    char		nam[4], *names = "EQUGALECLSUPSUN", *pc ;
+    static char 	pdum[81], cdum[81] ;
+    static fchar	prname = { pdum, 80 }, coname = { cdum, 80 } ;
+
+    ierr = OK ;
+    GDSD_RINT(  set, "NAXIS1", level, &length, &ierr ) ;
+    GDSD_RCHAR( set, "COORDSYS", level, coname, &ierr ) ;
+    GDSD_RCHAR( set, "PROJTYPE", level, prname, &ierr ) ;
+    GDSD_RREAL( set, "EPOCH", level, &epoch, &ierr ) ;
+    GDSD_RDBLE( set, "CRPIX1", level, &crpix1, &ierr ) ;
+    GDSD_RDBLE( set, "CRPIX2", level, &crpix2, &ierr ) ;
+    GDSD_RDBLE( set, "CDELT1", level, &cdelt1, &ierr ) ;
+    GDSD_RDBLE( set, "CDELT2", level, &cdelt2, &ierr ) ;
+    GDSD_RDBLE( set, "CRVAL1", level, &center[0], &ierr ) ;
+    GDSD_RDBLE( set, "CRVAL2", level, &center[1], &ierr ) ;
+    prid = irco_prnumber_c( prname ) ;
+    crid = irco_number_c( coname, &epoch ) ;
+    acrd = abs( crid ) ;
+    if ( acrd != crid ) {
+	crid = 0 ;
+      	irco_precess_c( &acrd, &epoch, &crid ) ;
+      	irco_connect_c( &cr1, &crid ) ;
+    }
+
+    center[0] *= D2R ; center[1] *= D2R ; 
+    irco_plate_c( &crid, center, tofchar( "plate" ), &plate ) ;
+
+    cridnew = irus_coor_c( &crid, &deflev, tofchar( "COOR=" ) ) ;
+
+    if ( cridnew != crid ) {
+      irco_namepoch_c( &cridnew, coname, &epoch ) ;
+      strncpy( nam, coname.a, 3 ) ;
+      if ( ( pc = strstr( names, nam ) ) ) acrd = 1 + ( pc - names ) / 3 ;
+      else acrd = 5 ;
+    }
+      
+    if ( acrd == 1 ) 
+    	sprintf( lbmes, "   RA (%6.1f) Dec  ", epoch ) ;
+    else if ( acrd == 2 )
+    	sprintf( lbmes, "   l  Galactic  b   " ) ;  
+    else if ( acrd == 3 ) 
+    	sprintf( lbmes, "   l Ecl(%6.1f) b  ", epoch ) ;
+    else if ( acrd == 4 )
+    	sprintf( lbmes, "   l  SuperGal  b   " ) ;  
+    else 
+    	sprintf( lbmes, "   l  Unknown   b   " ) ;  
+
+    return lbmes ;
+}
+                     
+char *irmf_position( 
+	fchar	set, 
+	float	*pRF, 
+	float	*pMap,
+	char	*lbmes )
+{
+    long		i, one = 1, h, m, d, p, sg, s, q ;
+    double		x, y, maxflux, xyz[3] ;
+
+    x = y = maxflux = -1 ;
+    for ( i = 0 ; i < length * length ; i++, pMap++ )
+      if ( *pRF++ && *pMap > maxflux ) {
+        x = i % length ; 
+        y = i / length ; 
+        maxflux = *pMap ;
+      }
+    x -= crpix1 ; x *= cdelt1 * D2R ;
+    y -= crpix2 ; y *= cdelt2 * D2R ;
+    irco_deproject_c( &prid, &x, &y, xyz, &one ) ;
+    irco_transform_c( xyz, &plate, xyz, &cridnew, &one ) ;
+    irco_tospher_c( xyz, &x, &y, &one ) ;
+    x /= D2R ; y /= D2R ; 
+    if ( x < 0 ) x += 360 ;
+    if ( cridnew == 1 || cridnew == 3 || cridnew > 5 ) {
+      x /= 15 ;
+      h = floor( x ) ; 
+      m = floor( ( x - h ) * 60 ) ;
+      s = floor( ( x - h - m / 60.0 ) * 3600 + 0.5 ) ;
+      sg = y < 0 ; 
+      y = fabs( y ) ;
+      d = floor( y ) ;
+      p = floor( ( y - d ) * 60 ) ;
+      q = floor( ( y - d - p / 60.0 ) * 3600 + 0.5 ) ;
+      sprintf( lbmes, "%2dh%2dm%2ds %c%2dd%2dm%2ds",
+         		h, m, s, ( sg ) ? '-' : ' ', d, p, q ) ;
+    } else
+      sprintf( lbmes, "%10.4f%10.4f", x, y ) ;
+    
+    return lbmes ;
+}
+
+
+#<
+
+#>            hiflux.h
+/* hiflux.h
+
+                            COPYRIGHT (c) 1992
+            Kapteyn Astronomical Institute - University of Groningen
+                P.O. Box 800, 9700 AV Groningen, The Netherlands
+
+Includefile:  HIRAS
+
+Purpose:      Constants, typedefs and predefinitions of functions
+
+File:         hiflux.h
+
+Author:       Do Kester
+
+
+Updates: 1.0	07 May 1992: DK.
+         2.0    07 Dec 1992: DK, pyramids removed from visible space
+
+*/
+
+
+#include "gipsyc.h"
+#include "stdio.h"
+#include "string.h"
+#include "ctype.h"
+#include "stdlib.h"
+#include "assert.h"
+#include "math.h"
+#include "nelc.h"
+
+#define MIN( a, b )	( ( (a) < (b) ) ? (a) : (b) )
+#define MAX( a, b )	( ( (a) > (b) ) ? (a) : (b) )
+#define ROUND( a ) 	( (long)(a + 0.5) )
+#define SQR( a )	( ( a ) * ( a ) )
+
+#define IFOK( e )       if ( *(e) >= OK && ! ( *(e) = OK ) )
+#define GDSD_RCHAR( a, b, c, d, e ) \
+        IFOK( e ) gdsd_rchar_c( (a), tofchar(b), &(c), (d), (e) )
+#define GDSD_RINT( a, b, c, d, e ) \
+        IFOK( e ) gdsd_rint_c( (a), tofchar(b), &(c), (d), (e) )
+#define GDSD_RDBLE( a, b, c, d, e ) \
+        IFOK( e ) gdsd_rdble_c( (a), tofchar(b), &(c), (d), (e) )
+#define GDSD_RREAL( a, b, c, d, e ) \
+        IFOK( e ) gdsd_rreal_c( (a), tofchar(b), &(c), (d), (e) )
+
+#define LONG_INIT( f, n ) \
+        { f = (long*)calloc( ( n ), sizeof( float ) ) ; assert( f ) ; }
+#define FLOAT_INIT( f, n ) \
+        { f = (float*)calloc( ( n ), sizeof( float ) ) ; assert( f ) ; }
+#define FREE( f )	{ free( f ) ; f = NULL ; }
+
+/* miscellaneous definitions */
+#define OK		0
+#define	PI		3.14159265358979	/* Value of pi	*/
+#define D2R		0.01745325292		/* degree to radian	*/
+#define MAXTXTLEN	80			/* length of line */
+#define TWOPI		( 2 * PI )
+#define	LEF		0x31			/* left mouse button */
+#define	MID		0x32			/* middle mouse button */
+#define	RIG		0x33			/* right mouse button */
+
+int  irmf_hiflux( void ) ;
+int  irmf_readset( fchar, float**, long*, long* ) ;
+void irmf_readheader( fchar, double*, fchar, float* ) ;
+int  irmf_interact( long, float*, float ) ; 
+int  irmf_gids( fint*, fint*, float*, float* ) ;
+void irmf_overlay( void ) ;
+int  irmf_cursor( long, float*, float*, long ) ;
+char *irmf_initpos( fchar, char* ) ;
+char *irmf_position( fchar, float*, float*, char* ) ;
+
+#<
+
+#>            hiflux.make
+# makefile for gipsy tasks, written in C
+# fill in 
+#   PROG : the file name that contains the program-statement
+#   SUBS : the file names containing the subroutines belonging to PROG
+#   EXE  : the name to be assigned to the task; 
+#	   it should be different from PROG
+#
+# For the program `image'
+EXE  =  hiflux
+OBJ1 = 	irmf_hiflux.o 
+OBJ2 =	irmf_readset.o irmf_interact.o irmf_gids.o irmf_overlay.o \
+	irmf_readheader.o irmf_cursor.o irmf_position.o
+
+# if (temporarily, for debugging) more objectfiles have to be linked,
+#   fill them in here. Otherwise leave empty.
+MOREOBJ = 
+
+# define the source files
+PROG =  $(OBJ1:.o=.c) $(OBJ2:.o=.c)
+# define all headerfiles
+HEDR =  hiflux.h 
+#define all object files
+OBJ  =  $(OBJ1) $(OBJ2) $(MOREOBJ)
+
+# define makefile
+MAK  =  $(EXE).make
+# define documantation file(s)
+DOC  =  $(EXE).dc1 
+# define the source files to be bundled 
+SRC  =  $(DOC) $(PROG) $(HEDR) $(MAK)
+# define the name of the bundle
+TASK =  $(EXE).src
+#define the sourcefiles to be printed
+PRNT =  $(DOC) $(PROG) $(HEDR) 
+
+CSRC = $(PROG) $(MOREOBJ:.o=.c)
+HSRC = $(HEDR) os.h memsys5.h vector.h
+
+# rules to make .o files
+.c.o		: 
+	$(CC_COMP) -c $(CC_OPTS) $<
+
+# make a local task with the name EXE
+$(EXE)		: $(OBJ)
+	$(CC_COMP) -o $(EXE) $(OBJ) $(CC_LIBS)
+
+
+# bundle the sources and the makefile
+$(TASK)		: $(SRC) 
+	$(gip_sys)/pack.csh $(TASK) $(SRC)
+
+# clean up the files created in compilation
+clean		: 
+	-rmchild -f $(SRC) 2> /dev/null
+	-rm -i $(SRC) 
+
+# print the source files on the laserjet
+print		: $(PRNT)
+	qmsprint $?
+	@touch print
+
+
+#<

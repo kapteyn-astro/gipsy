@@ -1,0 +1,21 @@
+
+Document:     offspring
+
+Purpose:      The file offspring, which resides in the gip_sys directory,
+              maintains a list off files originating from GIPSY source
+              files.
+
+Category:     MANAGEMENT
+
+File:         offspring.doc
+
+Author:       K.G. Begeman
+
+Description:  Each file originating from a GIPSY source file has a one line
+              entry, consisiting of two fields separated by a colon (:).
+              The first field contains the name of the GIPSY source file,
+              the second field the name of the file originating from this
+              source. This file is updated by compile.
+
+Updates:      Jul  3, 1991: KGB, Document created.
+

@@ -1,0 +1,70 @@
+Document:     pygipsy
+
+Purpose:      Python module interfacing with GIPSY
+
+Category:     SYSTEM
+
+File:         pygipsy.src
+
+Author:       J.P. Terlouw
+
+Description:  pygipsy implements a pre-compiled module which can be
+              used for writing GIPSY tasks in Python.  Prerequisites are a
+              supported architecture (now Linux or MacOS), Python 2.3 or
+              higher, and NumPy.  If these requirements are not met, the
+              installation procedure will produce a non-functional dummy
+              module. When the requirements are met afterwards, the module
+              can be built with 'p -rebuild pygipsy.src'.
+              Pygipsy is fully documented in GIPSY's web pages.
+
+Use:          From an executable Python program: "import gipsy"
+              or "from gipsy import ...".
+
+Updates:      Jul 11, 2007: JPT, Document created.
+              Aug 23, 2007: JPT, Bug in Set.wminmax() fixed and
+                                 make procedure improved.
+              Aug 29, 2007: JPT, Import ggivtk only when necessary.
+              Sep 19, 2007: JPT, Fixed cotrans bug, added userangle() and
+                                 allow None for Ggi elements' help message.
+              May 22, 2008: JPT, Moved from Pyrex to Cython and non-existing
+                                 header items now raise KeyError exception. 
+              Jun  5, 2008: JPT, Various improvements and extensions.
+              Oct 28, 2008: JPT, Threading support for event driven tasks.
+              Nov 24, 2008: JPT, Modified for gfortran.
+              Jan 27, 2009: JPT, Added Set methods word(), read() and write().
+              Feb 19, 2009: JPT, Implemented FITS pseudo sets.
+              Feb 26, 2009: JPT, Allow multiple views per set.
+              Mar  6, 2009: JPT, Implemented external event handling, PyQt4
+                                 connection and the functions evalexpr()
+                                 and unitfactor().
+              Mar 20, 2009: JPT, Implemented QtLink class.
+              Apr  8, 2009: JPT, QtLink improvements; removed PostScript doc.
+              Apr 27, 2009: JPT, Implemented alternative WCS headers.
+              Jun  8, 2009: JPT, Explicit numpy.int32 in polymask & ellipsemask.
+              Feb 28, 2010: JPT, Added gipsy_logo(), returning a QLabel object.
+              Aug 23, 2010: JPT, Implemented GTK- and Tk-connections.
+              Nov 11, 2010: JPT, Implemented typecli() function.
+              Mar  4, 2011: JPT, Added Set.max_cword, largest coordinate word.
+              Apr 11, 2011: JPT, Added method Set.tablis().
+              Apr 18, 2011: JPT, Added function aborttask(); added attribute
+                                 'compare' to class QtLink.
+              Apr 21, 2011: JPT, Fixed problem with new Cython's (0.14.1)
+                                 handling of freed char* strings.
+              May  9, 2011: JPT, Temporarily reverted to Cython 0.11.2 because
+                                 of more problems with char* conversions.
+              May 10, 2011: JPT, Fixed more char* string problems.
+              May 18, 2011: JPT, Fixed string-related bug in Set header access.
+              Jun  7, 2011: JPT, Fixed bug in CHAR-typed table column reading.
+              Jun 20, 2011: JPT, Added alternative WCS to FITS pseudo set spec.
+              Jul 18, 2011: JPT, Improved alternative WCS interaction.
+              Jul 31, 2012: JPT, Fixed bug in FITS pseudo set logic.
+              Aug 16, 2012: JPT, Suppress exception message from Set.__del__().
+              Oct 14, 2012: JPT, Implement TimeCallback for Qt4 and GTK.
+              Oct 30, 2012: JPT, Improved keyword reject alert for PyQt4.
+              Nov  7, 2012: JPT, New class QtMessage (for keyword reject alerts)
+              Dec 14, 2012: JPT, New class InputCallback.
+              Dec 27, 2012: JPT, Handle keyword rejects in InputCallback.
+              Jan 19, 2013: JPT, Added 'active' argument to InputCallback.
+              Mar  6, 2013: JPT, Added functions decodeint() and decodefloat().
+              Mar 24, 2013: JPT, Use gcc option -iquote instead of -I-.
+              Sep 19, 2014: JPT, Support for pyfits v3 and astropy.io.fits

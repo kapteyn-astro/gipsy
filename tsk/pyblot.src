@@ -1,0 +1,1882 @@
+pyblot.src
+
+        Copyright (c) Kapteyn Astronomical Institute, Groningen 2013
+        All Rights Reserved.
+
+Name:         pyblot.src
+Creator:      hans
+Host:         sokoban
+Date:         Oct 3, 2013
+Contents:     pyblot.make pyblot.py pyblot.dc1
+
+#>            pyblot.make
+#
+# pyblot.make
+#
+
+SHELL   = /bin/sh
+
+default:: pyblot
+
+pyblot : pyblot.py
+	cp pyblot.py pyblot
+	chmod +x pyblot
+
+pack::
+	$$gip_sys/pack.csh pyblot.src pyblot.make pyblot.py pyblot.dc1
+#<
+
+#>            pyblot.py
+#!/usr/bin/env python
+import copy
+import numpy
+from gipsy import *
+from time import *
+from math import *
+
+# ========================= global variables =================================
+
+NCI     =  200      # number of color indices for plot field
+tabname = 'BLOT'    # name of table with shape columns
+
+# ============================================================================
+
+# ----------------------------------------------------------------------------
+#                                  dist2
+# ----------------------------------------------------------------------------
+#   Utility to obtain the square of the distance between two points.
+#
+def dist2(a, b):
+   dx = a[0]-b[0]
+   dy = a[1]-b[1]
+   return (dx*dx)+(dy*dy)
+
+# ----------------------------------------------------------------------------
+#                                pgstate
+# ----------------------------------------------------------------------------
+#   Save and restore some PGPLOT parameters.
+#
+def pgstate(state=None):
+   if state:
+      pgsci(state[0])
+      pgslw(state[1])
+      pgsfs(state[2])
+      pgsch(state[3])
+   else:
+      ci=[0]; lw=[0]; fs=[0]; ch=[0]
+      ci = pgqci()
+      lw = pgqlw()
+      fs = pgqfs()
+      ch = pgqch()
+      return (ci, lw, fs, ch)
+
+# ============================================================================
+#                                 Shape
+# ----------------------------------------------------------------------------
+#   Abstract superclass for all shapes.
+#
+#   All shapes have the following attribute:
+#      center          - a 2-tuple containing the coordinates of the center.
+#
+#   All shapes define the following methods:
+#      store()         - stores the shape as a column the table 'BLOT'
+#                        in the specified set and subset.
+#      draw()          - draws the shape.
+#      nearest_ctrl()  - returns a 3-tuple containing the shape itself,
+#                        the index of the nearest point in the shape
+#                        (-1 designates the center) and the square
+#                        of the distance between this point and the
+#                        specified point.
+#      movepoint()     - changes the coordinates of the point to those
+#                        of the specified point.
+#
+class Shape:
+   types = ['rect', 'elli', 'poly', 'spli'] # NOTE: *must* match MaxId names
+
+   t_rectangle =  0
+   t_ellipse   =  1
+   t_polygon   =  2
+   t_spline    =  3
+
+   delfromset  = False # indicates whether delete also applies to shapes in set
+
+   txtcolor    =  5  # text color
+   addcolor    =  7  # outline color
+   subcolor    =  2  # outline color for subtracted shapes
+   color       =  8  # base hatch color
+   selcolor    = 10  # selected hatch color
+
+   def __init__(self, type, id, mode):
+      self.id   = id
+      self.name = "%s%d" % (self.types[type], id)
+      self.mode = mode
+      self.type = type
+      self.set  = None
+      self.hide = False
+   def __del__(self):
+      if self.delfromset:
+         try:
+            self.set.delcol(tabname, self.name, subset=self.sub)
+         except:
+            pass
+   def insertpoint(self, index):
+      pass
+   def delpoint(self, index):
+      pass
+
+# ----------------------------------------------------------------------------
+#                                Rectangle
+# ----------------------------------------------------------------------------
+class Rectangle(Shape):
+   def __init__(self, id, mode, low, high):
+      Shape.__init__(self, self.t_rectangle, id, mode)
+      self.xlo = low[0]
+      self.ylo = low[1]
+      self.xhi = high[0]
+      self.yhi = high[1]
+   def __getattr__(self, attr):
+      if attr=='center':
+         return ((self.xhi+self.xlo)/2.0, (self.yhi+self.ylo)/2.0)
+      else:
+         raise AttributeError, "No attribute %s" % attr
+   def __setattr__(self, attr, value):
+      if attr=='center':
+         xc, yc = self.center
+         dx = value[0]-xc
+         dy = value[1]-yc
+         self.xlo += dx
+         self.ylo += dy
+         self.xhi += dx
+         self.yhi += dy
+      else:
+         self.__dict__[attr] = value
+   def store(self, set=None, sub=None):
+      if set is None:
+         set = self.set
+      if sub is None:
+         sub = self.sub
+      try:
+         set.delcol(tabname, self.name, subset=sub)
+      except:
+         pass
+      set.crecol(tabname, self.name, 'DBLE', subset=sub)
+      params = [4.0,
+                float(self.id),
+                float(self.type),
+                float(self.mode),
+                self.xlo, self.ylo, self.xhi, self.yhi]
+      set[sub, tabname, self.name,  :] = params
+      self.set = set
+      self.sub = sub
+   def draw(self):
+      if self.hide: return
+      if abs(self.xhi-self.xlo)<1.5 and abs(self.yhi-self.ylo)<1.5:
+         pgs = pgstate()
+         pgslw(1)
+         pgsci(self.color)
+         pgsfs(1)
+         pgrect(self.xlo, self.xhi, self.ylo, self.yhi)
+         pgstate(pgs)
+         return
+      bcolor = [self.addcolor, self.subcolor][self.mode] # border color
+      pgs = pgstate()
+      pgsci(self.color)
+      pgslw(1)
+      pgsfs(4)
+      pgrect(self.xlo, self.xhi, self.ylo, self.yhi)
+      pgslw(4)
+      pgsfs(2)
+      pgsci(bcolor)
+      pgrect(self.xlo, self.xhi, self.ylo, self.yhi)
+      xc, yc = self.center
+      pgsci(self.txtcolor)
+###      pgsch(1)
+###      pgtext(xc, yc, '  '+self.name)
+      pgsch(2)
+      xmark = [self.xlo,       xc, self.xhi,       xc]
+      ymark = [      yc, self.yhi,       yc, self.ylo]
+      pgpt(xmark, ymark, 2)
+      pgpt(xc, yc, 18)
+      pgsch(1)
+      pgstate(pgs)
+   def nearest_ctrl(self, point):
+      xc, yc = self.center
+      ctrls  = [(self.xlo, yc),
+                (self.xhi, yc),
+                (xc, self.ylo),
+                (xc, self.yhi)]
+      index = -1
+      dist  = dist2((xc, yc), point)
+      i = 0
+      for curr in ctrls:
+         currdist = dist2(curr, point)
+         if currdist<dist:
+            dist = currdist
+            index = i
+         i += 1
+      return (self, index, dist)
+   def movepoint(self, index, point):
+      if index==-1:
+         self.center = point
+      elif index==0:
+         self.xlo = point[0]
+      elif index==1:
+         self.xhi = point[0]
+      elif index==2:
+         self.ylo = point[1]
+      elif index==3:
+         self.yhi = point[1]
+
+# ----------------------------------------------------------------------------
+#                                  Ellipse
+# ----------------------------------------------------------------------------
+class Ellipse(Shape):
+   def __init__(self, id, mode, center, major, minor, pa):
+      Shape.__init__(self, self.t_ellipse, id, mode)
+      self.center = center
+      self.major  = major
+      self.minor  = minor
+      self.pa     = pa
+   def store(self, set=None, sub=None):
+      if set is None:
+         set = self.set
+      if sub is None:
+         sub = self.sub
+      try:
+         set.delcol(tabname, self.name, subset=sub)
+      except:
+         pass
+      set.crecol(tabname, self.name, 'DBLE', subset=sub)
+      xc, yc = self.center
+      set[sub, tabname, self.name,  :] = [4.0, float(self.id), float(self.type), float(self.mode)]
+      set[sub, tabname, self.name, 4:] = [xc, yc, self.major, self.minor, self.pa]
+      self.set = set
+      self.sub = sub
+   def __ends(self):
+      xc, yc = self.center
+      major  = self.major  
+      minor  = self.minor
+      pa     = self.pa   
+      majorx = xc +  major*cos(pa*pi/180.0)
+      majory = yc +  major*sin(pa*pi/180.0)
+      minorx = xc +  minor*sin(pa*pi/180.0)
+      minory = yc + -minor*cos(pa*pi/180.0)
+      return (majorx, majory, minorx, minory)
+   def nearest_ctrl(self, point):
+      xc, yc = self.center
+      majorx, majory, minorx, minory = self.__ends()
+      ctrls  = [(majorx, majory), (minorx, minory)]
+      index = -1
+      dist  = dist2((xc, yc), point)
+      i = 0
+      for curr in ctrls:
+         currdist = dist2(curr, point)
+         if currdist<dist:
+            dist = currdist
+            index = i
+         i += 1
+      return (self, index, dist)
+   def movepoint(self, index, point):
+      if index==-1:
+         self.center = point
+      elif index==0:
+         xc, yc = self.center
+         self.major = sqrt(dist2(self.center, point))
+         self.pa = atan2(point[1]-yc, point[0]-xc)/pi*180
+      elif index==1:
+         self.minor = sqrt(dist2(self.center, point))
+   def draw(self):
+      if self.hide: return
+      bcolor = [self.addcolor, self.subcolor][self.mode] # border color
+      major = self.major
+      minor = self.minor
+      pa    = self.pa
+      pgs = pgstate()
+      pgslw(4)
+      pgsfs(2)
+      pgsci(bcolor)
+      xc, yc = self.center
+      pgellipse(xc, yc, major, minor, pa, 0, 360 , 1)
+      pgsch(1)
+      pgsci(self.color)
+      majorx, majory, minorx, minory = self.__ends()
+      pgarro(xc, yc, majorx, majory)
+      pgarro(xc, yc, minorx, minory)
+      pgsci(self.txtcolor)
+###      pgsch(1)
+###      pgtext(xc, yc, '  '+self.name)
+      pgsch(2)
+      pgpt( [majorx, minorx], [majory, minory], 2)
+      pgpt(xc, yc, 18)
+      pgstate(pgs)
+
+# ----------------------------------------------------------------------------
+#                                  PolySpli
+# ----------------------------------------------------------------------------
+#   Abstract superclass for Polygon and Spline
+#
+class PolySpli(Shape):
+   def __init__(self, xvals, yvals):
+      self.xvals = xvals[0:]
+      self.yvals = yvals[0:]
+   def __getattr__(self, attr):
+      if attr=='center':
+         return ((max(self.xvals)+min(self.xvals))/2.0,
+                 (max(self.yvals)+min(self.yvals))/2.0)
+      else:
+         raise AttributeError, "No attribute %s" % attr
+   def __setattr__(self, attr, value):
+      if attr=='center':
+         xc, yc = self.center
+         dx = value[0]-xc
+         dy = value[1]-yc
+         self.xvals = map(lambda x: x+dx, self.xvals)
+         self.yvals = map(lambda y: y+dy, self.yvals)
+      else:
+         self.__dict__[attr] = value
+   def addpoint(self, point):
+      self.xvals.append(point[0])
+      self.yvals.append(point[1])
+   def insertpoint(self, index, point):
+      self.xvals.insert(index, point[0])
+      self.yvals.insert(index, point[1])
+   def delpoint(self, index):
+      if index>-1:
+         del self.xvals[index]
+         del self.yvals[index]
+   def movepoint(self, index, point):
+      if index==-1:
+         self.center = point
+      else:
+         self.xvals[index], self.yvals[index] = point
+   def store(self, set=None, sub=None):
+      if set is None:
+         set = self.set
+      if sub is None:
+         sub = self.sub
+      try:
+         set.delcol(tabname, self.name, subset=sub)
+      except:
+         pass
+      set.crecol(tabname, self.name, 'DBLE', subset=sub)
+      header = [4.0, float(self.id), float(self.type), float(self.mode)]
+      set[sub, tabname, self.name, :] = header + self.xvals + self.yvals
+      self.set = set
+      self.sub = sub
+   def nearest_ctrl(self, point):
+      xc, yc = self.center
+      index = -1
+      dist  = dist2((xc, yc), point)
+      i = 0
+      for x in self.xvals:
+         currdist = dist2((x,self.yvals[i]), point)
+         if currdist<dist:
+            dist = currdist
+            index = i
+         i += 1
+      return (self, index, dist)
+   def insertionpoint(self, point):
+      xv = self.xvals
+      yv = self.yvals
+      index = 0
+      npoints = len(xv)
+      if npoints>2:
+         d2 = 10000000.0           # larger than can be expected in a map?
+         for i in range(npoints):
+            x0 = self.xvals[i-1]   # previous point
+            y0 = self.yvals[i-1]   #    ,,     ,,
+            x1 = self.xvals[i]     # current   ,,
+            y1 = self.yvals[i]     #    ,,     ,,
+            xp, yp = point         # position of point to be inserted
+            dx = x1-x0
+            dy = y1-y0
+            det = -dx*dx - dy*dy
+            c1 = dx*y0 - dy*x0
+            c2 = dx*xp + dy*yp
+            xi = (-dx*c2 + c1*dy)/det  # point of intersection with normal
+            yi = (-c1*dx - dy*c2)/det  #  ,,   ,,      ,,       ,,    ,,
+            xmin, ymin = min(x0, x1), min(y0, y1)
+            xmax, ymax = max(x0, x1), max(y0, y1)
+            if xi>=xmin and xi<=xmax and yi>=ymin and yi<=ymax:  # on edge?
+               curd2 = dist2(point, (xi, yi))
+               if curd2<d2:
+                  d2 = curd2
+                  index = i
+      return index
+
+# ----------------------------------------------------------------------------
+#                                  Polygon
+# ----------------------------------------------------------------------------
+class Polygon(PolySpli):
+   def __init__(self, id, mode, xvals, yvals):
+      Shape.__init__(self, self.t_polygon, id, mode)
+      PolySpli.__init__(self, xvals, yvals)
+   def draw(self):
+      xvals = self.xvals
+      yvals = self.yvals
+      npoints = len(xvals)
+      if self.hide or npoints==0: return
+      bcolor = [self.addcolor, self.subcolor][self.mode] # border color
+      pgs = pgstate()
+      pgsci(self.color)
+      pgslw(4)
+      if npoints == 1:
+         pgsci(self.txtcolor)
+         pgsch(1)
+         pgtext(xvals[0], yvals[0], self.name)
+         pgsch(2)
+         pgpt(xvals, yvals, 2)
+      else:
+         pgslw(1)
+         pgsfs(4)
+         pgpoly(xvals, yvals)
+         pgslw(4)
+         pgsfs(2)
+         pgsci(bcolor)
+         pgpoly(xvals, yvals)
+         pgsci(self.txtcolor)
+###         pgsch(1)
+###         pgtext(xvals[0], yvals[0], '  '+self.name) 
+         pgsch(2)
+         pgpt(xvals, yvals, 2)
+         xc, yc = self.center
+         pgpt(xc, yc, 18)
+      pgstate(pgs)
+      
+# ----------------------------------------------------------------------------
+#                                  Spline
+# ----------------------------------------------------------------------------
+class Spline(PolySpli):
+   def __init__(self, id, mode, xvals, yvals):
+      Shape.__init__(self, self.t_spline, id, mode)
+      PolySpli.__init__(self, xvals, yvals)
+   def draw(self):
+      xvals = self.xvals
+      yvals = self.yvals
+      npoints = len(xvals)
+      if self.hide or npoints==0: return
+      bcolor = [self.addcolor, self.subcolor][self.mode] # border color
+      pgs = pgstate()
+      pgsci(self.color)
+      pgslw(4)
+      if npoints == 1:
+         pgsci(self.txtcolor)
+         pgsch(1)
+         pgtext(xvals[0], yvals[0], self.name)
+         pgsch(2)
+         pgpt(xvals, yvals, 2)
+      else:
+         pgslw(1)
+         pgsfs(4)
+         r = cubicspline(xvals+xvals[:1], yvals+yvals[:1], 0.1)
+         pgpoly(r[0], r[1])
+         pgslw(4)
+         pgsfs(2)
+         pgsci(bcolor)
+         pgpoly(r[0], r[1])
+         pgsci(self.txtcolor)
+###         pgsch(1)
+###         pgtext(xvals[0], yvals[0], '  '+self.name) 
+         pgsch(2)
+         pgpt(xvals, yvals, 2)
+         xc, yc = self.center
+         pgpt(xc, yc, 18)
+      pgstate(pgs)
+
+# ============================================================================
+#                                  BlotSet
+# ----------------------------------------------------------------------------
+#   Extends class Set with blot-related functionality.
+#
+#   Attributes:
+#      selected         - index of currently selected subset.
+#
+#   Methods:
+#      shapes()         - return subset's list of shapes.
+#      nearest_shape()  - return index of nearest shape.
+#      select_shape()   - select and return shape designated by index.
+#      draw()           - draw all selected subset's shapes.
+#      store()          - store all selected subset's shapes.
+#      storeall()       - store all shapes in all subsets.
+#      Rectangle()      - create and return a Rectangle within selected subset.
+#      Ellipse()        - create and return a Ellipse within selected subset.
+#      Polygon()        - create and return a Polygon within selected subset.
+#      Spline()         - create and return a Spline within selected subset.
+#      addshape()       - add a shape to the selected subset.
+#      delshapes()      - delete all shapes from the selected subset.
+#      delallshapes()   - delete all shapes from all subsets.
+#      loadshapes()     - load shapes from set.
+#      mask()           - return the selected subset's mask.
+#      maskedimage()    - return the selected subset's masked image.
+#
+class BlotSet(Set):
+   class MaxId:
+      def __init__(self):
+         # NOTE: the '...rect', etc. parts of these attribute names
+         # *must* match the items of Shape.types.
+         self.maxrect = -1
+         self.maxelli = -1
+         self.maxpoly = -1
+         self.maxspli = -1
+   def __init__(self, setspec):
+      Set.__init__(self, setspec, write=True)
+      self.shapelists = []                      #  lists of subset shapes
+      self.maxlist    = []                      #  list of MaxId objects
+      self.outside    = []                      #  list of outside flags
+      self.selected   = 0                       #  currently selected subset
+      try:
+         self.outside = self[tabname, 'outside', 0][0]
+      except:
+         self.outside = False
+      for index in range(len(self.subsets)):
+         self.shapelists.append(None)
+         self.maxlist.append(None)
+         self.loadshapes(index)
+   def copy(self, outset):
+      parts = self.spec.split()
+      xeq("COPY INSET=%s BOX= OUTSET=%s" % (parts[0], outset) )
+      parts[0] = outset
+      newspec = ' '.join(parts)
+      return Set(newspec, write=True)
+      
+   def loadshapes(self, index=None):
+      if index is None:                                  # subset index
+         index = self.selected
+      subset = self.subsets[index]
+      shapes = []
+      self.shapelists[index] = shapes
+      self.maxlist[index] = self.MaxId()
+      for name in self.tabinq(tabname, subset, nitems=1000):
+         if name != 'outside':
+            shapes.append(self.__retrieveshape(subset, name))
+   def __retrieveshape(self, subset, name):
+      maxid = self.maxlist[self.subsets.index(subset)]
+      params = self[subset, tabname, name, :]
+      hlen = int(params[0])
+      id   = int(params[1])
+      type = int(params[2])
+      mode = int(params[3])
+      data = params[hlen:]
+      if type==Shape.t_rectangle:
+         low  = data[0:2]
+         high = data[2:4]
+         shape = Rectangle(id, mode, low, high)
+         maxid.maxrect = max(maxid.maxrect, id)
+      elif type==Shape.t_ellipse:
+         center = data[0:2]
+         major  = data[2]
+         minor  = data[3]
+         pa     = data[4]
+         shape = Ellipse(id, mode, center, major, minor, pa)
+         maxid.maxelli = max(maxid.maxelli, id)
+      elif type==Shape.t_polygon:
+         npoints = len(data)/2
+         xvals = data[:npoints]
+         yvals = data[npoints:]
+         shape = Polygon(id, mode, xvals, yvals)
+         maxid.maxpoly = max(maxid.maxpoly, id)
+      elif type==Shape.t_spline:
+         npoints = len(data)/2
+         xvals = data[:npoints]
+         yvals = data[npoints:]
+         shape = Spline(id, mode, xvals, yvals)
+         maxid.maxspli = max(maxid.maxspli, id)
+      else:
+         raise GipsyError, "Bad shape type: %d" % type
+      shape.set = self
+      shape.sub = subset
+      return shape
+   def shapes(self, index=None):
+      if index is None:                                  # subset index
+         index = self.selected
+      return self.shapelists[index]
+   def nearest_shape(self, point, index=None):
+      shapes = self.shapes(index)                      # subset index
+      try:
+         nearest = shapes[0].nearest_ctrl(point)
+         result  = 0
+      except:
+         return None
+      index = 1
+      for shape in shapes[1:]:
+         current = shape.nearest_ctrl(point)
+         if current[2]<nearest[2]:
+            nearest = current
+            result = index
+         index += 1
+      return result
+   def select_shape(self, index):
+      shapes = self.shapes()
+      for shape in shapes:
+         shape.color = Shape.color
+      shape = shapes[index]                    # shape index in selected subset
+      shape.color = Shape.selcolor
+      return shape
+   def deselect_shape(self):
+      for shape in self.shapes():
+         shape.color = Shape.color
+   def draw(self):
+      for shape in self.shapes():
+         shape.draw()
+   def store(self, index=None):
+      if index is None:
+         index = self.selected
+      sub = self.subsets[index]
+      try:
+         self.deltab(tabname, subset=sub)
+      except:
+         pass 
+      try:
+         self.crecol(tabname, 'outside', 'LOG')
+      except:
+         pass
+      self[tabname, 'outside', 0] = self.outside
+      for shape in self.shapes(index):
+         shape.store()
+   def storeall(self):
+      for index in range(len(self.subsets)):
+         self.store(index)
+   def Rectangle(self, mode, low, high):
+      shape = Rectangle(0, mode, low, high)
+      self.addshape(shape)
+      return shape
+   def Ellipse(self, mode, center, major, minor, pa):
+      shape = Ellipse(0, mode, center, major, minor, pa)
+      self.addshape(shape)
+      return shape
+   def Polygon(self, mode, xvals, yvals):
+      shape = Polygon(0, mode, xvals, yvals)
+      self.addshape(shape)
+      return shape
+   def Spline(self, mode, xvals, yvals):
+      shape = Spline(0, mode, xvals, yvals)
+      self.addshape(shape)
+      return shape
+   def addshape(self, shape):
+      maxid = self.maxlist[self.selected]
+      attrname = 'max' + Shape.types[shape.type]
+      maxid.__dict__[attrname] += 1
+      shape.id   = maxid.__dict__[attrname]
+      shape.name = "%s%d" % (Shape.types[shape.type], shape.id)
+      shape.set  = self
+      shape.sub  = self.subsets[self.selected]
+      self.shapes().append(shape)
+   def delshapes(self, fromset=False, index=None):
+      if index is None:
+         index = self.selected
+      shapes = self.shapes(index)
+      prv_fromset = Shape.delfromset
+      Shape.delfromset = fromset
+      while shapes:
+         del shapes[0]
+      Shape.delfromset = prv_fromset
+      self.maxlist[index] = self.MaxId()
+   def delallshapes(self, fromset=False):
+      for index in range(len(self.subsets)):
+         self.delshapes(fromset, index)
+   def mask(self, index=None):
+      if index is None:
+         index = self.selected
+      shapes = self.shapes(index)
+      if not shapes: return None
+      subimage = self.subimage(self.subsets[index])
+      mask = numpy.zeros(shape=subimage.shape, dtype=int)
+      ilo = self.blo[0]
+      jlo = self.blo[1]
+      ihi = self.bhi[0]
+      jhi = self.bhi[1]
+      for mode in [0,1]:
+         for shape in shapes:
+            if shape.mode!=mode:
+               continue
+            if shape.type==Shape.t_rectangle:
+               xvals = [shape.xlo, shape.xlo, shape.xhi, shape.xhi]
+               yvals = [shape.ylo, shape.yhi, shape.yhi, shape.ylo]
+            elif shape.type==Shape.t_polygon:
+               xvals = shape.xvals
+               yvals = shape.yvals
+            elif shape.type==Shape.t_spline:
+               r = cubicspline(shape.xvals+shape.xvals[:1],
+                                     shape.yvals+shape.yvals[:1], 0.1)
+               xvals = r[0]
+               yvals = r[1]
+            if shape.type==Shape.t_ellipse:
+               ellpar = [shape.center[0], shape.center[1],
+                                        shape.major, shape.minor, shape.pa]
+               shmask = ellipsemask(ilo, jlo, ihi, jhi, ellpar)
+            else:
+               shmask = polymask(ilo, jlo, ihi, jhi, xvals, yvals)
+            if mode==0:
+               mask = mask | shmask
+            else:
+               mask = mask & numpy.logical_not(shmask)
+      return mask
+   def maskedimage(self, index=None):
+      if index is None:
+         index = self.selected
+      mask = self.mask(index)
+      if mask is None:
+         if self.outside:
+            result = self.subimage(self.subsets[index]).copy()
+         else:
+            result = numpy.zeros_like(self.subimage(self.subsets[index])) \
+                     + blankpixel
+      elif self.outside:
+         result = numpy.where(numpy.logical_not(self.mask(index)),
+                              self.subimage(self.subsets[index]), blankpixel)
+      else:
+         result = numpy.where(self.mask(index),
+                              self.subimage(self.subsets[index]), blankpixel)
+      return result
+
+# ----------------------------------------------------------------------------
+#                                  nint
+# ----------------------------------------------------------------------------
+#  nearest integer of argument.
+#
+def nint(a):
+    return (int)(floor((a)+0.5))
+#   if (a) < 0:
+#      return (int)((a)-0.5)
+#   else:
+#      return (int)((a)+0.5)
+
+def triggerkey(key, value=None):
+   wkey("%s%s" % (key, usertext(key, default=2, defval=value)))
+
+# ----------------------------------------------------------------------------
+#                                  newsflash
+# ----------------------------------------------------------------------------
+def newsflash(message, time=3.0):
+   def remover(cb):
+      cb.message.setLabel(' ')
+      cb.deschedule()
+   label = messagelb
+   label.setLabel('Message: %s' % message)
+   TimeCallback(remover, time, message=label)
+   
+# ============================================================================
+#                                  Frame
+# ----------------------------------------------------------------------------
+class Frame:
+   def __init__(self, plot):
+      self.plot  = plot   # PlotField object
+      self.pid   = 0      # PGPLOT device id
+      self.saved = None   # saved shape
+      self.info  = None   # Ggi coordinate information label
+      self.shinfo = None  # Shape information label
+      self.shmode = 0     # Shape mode. 0: add, 1: subtract
+      self.shape_index = None  # selected shape
+      self.outset = None  # current output set object
+      a = self.__dict__   # attribute dictionary to bypass __setattr__()
+      a['mode']  = 0      # 0: draw image + shapes, 1: masked image, 2: mask
+      a['aspr']  = True   # respect aspect ratio
+      a['labax'] = True   # label axes
+      a['intp']  = False  # True: interpolate images (except mask)
+      a['inset'] = None   # current input Set object
+      a['index'] = 0      # current subset index
+      a['hatch'] = 2.0    # hatch spacing
+      a['hide']  = False  # hide shapes
+   def __setattr__(self, attr, value):
+      if   'index'  == attr:
+         if self.inset:
+            if value<0:
+               value = 0
+            elif value>len(self.inset.subsets)-1:
+               value = len(self.inset.subsets)-1
+            self.__dict__[attr] = value
+            self.inset.selected = value
+            self.select_shape(None)
+            self.draw()
+            self.showpos()
+      elif 'intp'   == attr or\
+           'mode'   == attr or\
+           'aspr'   == attr or\
+           'labax'  == attr or\
+           'minmax' == attr:
+         self.__dict__[attr] = value
+         self.draw()
+      elif 'hatch'  == attr:
+         if self.pid:
+            pgshs(45.0, value, 0.0)
+            self.update()
+         else:
+            self.__dict__[attr] = value
+      elif 'hide'   == attr:
+         self.__dict__[attr] = value
+         self.update()
+      elif 'inset'==attr:
+         self.__dict__[attr] = value
+         minmax = None
+         if userlog("FIX="):
+            minmax = userreal("CLIP=", default=6, defval=None, nmax=2)
+         if minmax:
+            self.__dict__['minmax'] = minmax
+         else:
+            try:
+               imgmin = value['DATAMIN']
+               imgmax = value['DATAMAX']
+            except:
+               imgmin = None
+               imgmax = None
+               for subset in value.subsets:
+                  image = value.subimage(subset)
+                  curmin, curmax, curnbl = minmax3(image)
+                  if imgmax is None:
+                     imgmax = curmax
+                     imgmin = curmin
+                  else:
+                     imgmin = min(imgmin, curmin)
+                     imgmax = max(imgmax, curmax)
+            self.__dict__['minmax'] = (float(imgmin), float(imgmax))
+            wkey("CLIP=%f %f" % (imgmin, imgmax))
+      else:
+         self.__dict__[attr] = value    # "catch-all" for other attributes
+   def select_shape(self, shape):
+      Interact.mode = Interact()        # cancel any previous new shape
+      if shape is None:
+          self.shape_index = None
+          self.inset.deselect_shape()
+          self.shinfo.setLabel('No current shape.')
+      else:
+         if type(shape)==types.IntType:
+             self.shape_index = shape
+         else:
+             self.shape_index = self.inset.shapes().index(shape)
+         self.inset.select_shape(self.shape_index)
+         shape = self.inset.shapes()[self.shape_index]
+         self.shinfo.setLabel('Current shape: %s (%s)' % 
+                              (shape.name, ['add', 'subtract'][shape.mode]))
+   def draw(self):
+      if self.inset!=None:
+         inset = self.inset
+         if not self.pid:               # one-time initialization
+            self.pid = self.plot.open()
+            self.plot.frames(1)         # backup frame for "static" image
+            pgsbci(16)
+            pgscir(17, NCI)
+            pgeras()
+            pgshs(45.0, self.hatch, 0.0)
+            coled.limits(self.minmax[0], self.minmax[1])
+            try:
+               coled.units(str(inset['BUNIT']))
+            except:
+               coled.units('?')
+            wkey('CE_RESET1=YES')
+         pgeras()
+         pgvstd()
+         inset.setbox(self.zoombox) # temporarily trick Set object
+         if self.aspr:
+            if not self.labax:
+               pgsvp(0.0, 1.0, 0.0, 1.0)
+            pgwnad(inset.blo[0]-0.5, inset.bhi[0]+0.5,
+                     inset.blo[1]-0.5, inset.bhi[1]+0.5)
+         else:
+            if not self.labax:
+               pgsvp(0.0, 1.0, 0.0, 1.0)
+            pgswin(inset.blo[0]-0.5, inset.bhi[0]+0.5,
+                     inset.blo[1]-0.5, inset.bhi[1]+0.5)
+         inset.setbox(self.defbox) # reset Set object trick
+         if self.mode==0:
+            pgsimi(self.intp)
+            image = inset.subimage(inset.subsets[self.index])
+            imgmin, imgmax = self.minmax
+         elif self.mode==1:
+            pgsimi(self.intp)
+            image = inset.maskedimage()
+            imgmin, imgmax = self.minmax
+         elif self.mode==2:
+            mask = inset.mask()
+            if mask is None:
+               pgeras()
+               pgmtxt('T', -20, 0.5, 0.5, 'No mask defined')
+               return
+            pgsimi(False)
+            image = numpy.logical_not(mask).astype('Float32')
+            imgmin, imgmax = 0.0, 1.0
+         tr = [inset.blo[0]-1, 1, 0.0, inset.blo[1]-1, 0.0, 1]
+         jdim, idim = image.shape
+         pgimag(image, idim, jdim, 1, idim, 1, jdim, imgmin, imgmax, tr)
+         if self.labax:
+            pgbox('BCINST', 0, 0, 'BCINST', 0, 0)
+         else:
+            pgbox('BC', 0, 0, 'BC', 0, 0)
+         plotf.record(0)
+         if self.mode==0 and not self.hide:
+            inset.draw()
+   def update(self):
+      if self.inset and self.mode==0:
+         self.plot.show(0)
+         if not self.hide: self.inset.draw()
+   def showpos(self):
+      if self.info:
+         level = self.inset.subsets[self.index]
+         axes = self.inset.axes(level, mode='outside')
+         message = ''
+         comma   = ''
+         phys = self.inset.tophys(level=level, mode='outside')
+         iphys = 0
+         for axis in axes:
+            axname = axis.name
+            axgrid = self.inset.grid(axis.axnum, level)
+            message += "%s%s=%d" % (comma, axname, axgrid)
+            message += " (%.4g %s)" % (phys[iphys], axis.cunit)
+            iphys += 1
+            comma = ', '
+         self.info.setLabel(message)
+
+# ============================================================================
+#                                  Interact
+# ----------------------------------------------------------------------------
+#   Left cursor button interaction class.
+#
+class Interact:
+   mode = None              # the only instance of Interact and its subclasses.
+   def __init__(self):
+      self.shape = None
+   def down(self, pos):
+      index = frame.shape_index
+      if index!=None:
+         shape = frame.inset.shapes()[index]
+         if shape.type==shape.t_polygon or shape.type==shape.t_spline:
+            self.shape = shape
+            shape.addpoint(pos)
+            frame.update()
+   def move(self, pos):
+      shape = self.shape
+      if shape:
+         shape.movepoint(len(shape.xvals)-1, pos)
+         frame.update()
+   def up(self, pos):
+      Interact.mode = Interact()
+
+class Interact_RE(Interact):
+   def down(self, pos):
+      self.pos = pos
+   def move(self, pos):
+      frame.update()
+      pgsfs(2)
+      pgrect(self.pos[0], pos[0], self.pos[1], pos[1])
+      pgsfs(4)
+
+class Interact_rect(Interact_RE):
+   def __init__(self):
+      self.info.setLabel('New shape: rectangle.')
+   def up(self, pos):
+      lo = [min(self.pos[0], pos[0]), min(self.pos[1], pos[1])]
+      hi = [max(self.pos[0], pos[0]), max(self.pos[1], pos[1])]
+      if (hi[0]-lo[0])<1.0 and (hi[1]-lo[1]<1.0):
+         lo[0] = float(nint(lo[0]))-0.5; hi[0] = lo[0]+1.0
+         lo[1] = float(nint(lo[1]))-0.5; hi[1] = lo[1]+1.0
+      shape = frame.inset.Rectangle(frame.shmode, lo, hi)
+      frame.update()
+
+class Interact_elli(Interact_RE):
+   def __init__(self):
+      self.info.setLabel('New shape: ellipse.')
+   def up(self, pos):
+      xlo, ylo = min(self.pos[0], pos[0]), min(self.pos[1], pos[1])
+      xhi, yhi = max(self.pos[0], pos[0]), max(self.pos[1], pos[1])
+      xc = (xhi+xlo)/2.0
+      yc = (yhi+ylo)/2.0
+      dx = xhi-xlo
+      dy = yhi-ylo
+      pa = 0.0
+      if dy>dx: pa = 90.0
+      ma = max(dx, dy)
+      mi = min(dx, dy)
+      shape = frame.inset.Ellipse(frame.shmode, (xc, yc), ma/2.0, mi/2.0, pa)
+      frame.update()
+
+class Interact_PS(Interact):
+   def move(self, pos):
+      self.shape.center = pos
+      frame.update()
+   def up(self, pos):
+      Interact.mode = Interact()
+
+class Interact_poly(Interact_PS):
+   def __init__(self):
+      self.info.setLabel('New shape: polygon.')
+   def down(self, pos):
+      self.shape = frame.inset.Polygon(frame.shmode, [pos[0]], [pos[1]])
+      frame.select_shape(self.shape)
+      frame.update()
+
+class Interact_spli(Interact_PS):
+   def __init__(self):
+      self.info.setLabel('New shape: spline.')
+   def down(self, pos):
+      self.shape = frame.inset.Spline(frame.shmode, [pos[0]], [pos[1]])
+      frame.select_shape(self.shape)
+      frame.update()
+
+
+# ----------------------------------------------------------------------------
+#                                  apply_mask
+# ----------------------------------------------------------------------------
+def apply_mask(all=False):
+   outset = frame.outset
+   if outset!=None:
+      inset = frame.inset
+      if all:
+         indices = range(len(inset.subsets))
+      else:
+         indices = [frame.index]
+      for index in indices:
+         outset.subimage(inset.subsets[index])[:] = inset.maskedimage(index)
+      if all:
+         newsflash('all subset masks applied to outset')
+      else:
+         newsflash('This subset\'s mask applied to outset')
+   else:
+      newsflash('No outset - cannot apply mask(s)')
+
+# ----------------------------------------------------------------------------
+#                                  file_cb
+# ----------------------------------------------------------------------------
+#   FILE= keyword handler
+def file_cb(cb):
+   choice = userint(cb.key, defval=-1)
+   if frame.inset:
+      if GgiBase().verify('Do you wish to save your work on this set?', 'Yes', 'No'):
+         wkey('EDIT=1')
+         GgiBase().handleEvents()
+   if choice == 0:      # open inset
+      insetwindow = GgiBase.base.Inset('SETNAME=', 'SET=', 'BOX=').ndims(2)
+      insetwindow.closeOnOK()
+   elif choice == 1:    # exit program
+      finis()
+
+# ----------------------------------------------------------------------------
+#                                  edit_cb
+# ----------------------------------------------------------------------------
+def edit_cb(cb):
+   inset = frame.inset
+   if inset:
+      choice = userint(cb.key, defval=-1)
+      if choice==0:
+         inset.store()
+      elif choice==1:
+         inset.storeall()
+      elif choice==2:
+         if GgiBase().verify('OK to clear all shapes on this frame?', 'Yes', 'No'):
+            inset.delshapes(fromset=False)
+            frame.update()
+      elif choice==3:
+         if GgiBase().verify('OK to reload shapes from subset?', 'Yes', 'No'):
+            inset.loadshapes()
+            frame.update()
+      elif choice==4:
+         if GgiBase().verify('OK to delete all shapes from this subset?', 'Yes', 'No'):
+            inset.delshapes(fromset=True)
+            frame.update()
+      elif choice==5:
+         if GgiBase().verify('OK to delete all shapes on all subsets?', 'Yes', 'No'):
+            inset.delallshapes(fromset=True)
+            frame.update()
+      elif choice==6:
+         apply_mask(all=True)
+
+# ----------------------------------------------------------------------------
+#                                  inset_cb
+# ----------------------------------------------------------------------------
+def inset_cb(cb):
+   try:
+      frame.inset.close()           # close any set that might still be opened
+      wkey('OUTSET=')               # clear any current output set
+   except:
+      pass
+   frame.inset = BlotSet(usertext(cb.key))
+   wkey("FRAME=0")
+   cb.info.setLabel('(0 ... %d)' % (len(frame.inset.subsets)-1))
+   cb.outside.setLabel(['inside', 'outside'][frame.inset.outside])
+
+# ----------------------------------------------------------------------------
+#                                  box_cb
+# ----------------------------------------------------------------------------
+def box_cb(cb):
+   inset = frame.inset
+   frame.defbox = usertext(cb.key, defval='%d %d %d %d'
+               % ( inset.blo[0], inset.blo[1], inset.bhi[0], inset.bhi[1]))
+   frame.zoombox = frame.defbox
+   inset.setbox(frame.defbox)
+   frame.draw()
+
+# ----------------------------------------------------------------------------
+#                                  frame_cb
+# ----------------------------------------------------------------------------
+def frame_cb(cb):
+   frame.index = userint(cb.key)
+
+# ----------------------------------------------------------------------------
+#                                  intp_cb
+# ----------------------------------------------------------------------------
+def intp_cb(cb):
+   frame.intp = userlog(cb.key)
+
+# ----------------------------------------------------------------------------
+#                                  aspr_cb
+# ----------------------------------------------------------------------------
+def aspr_cb(cb):
+   frame.aspr = not userlog(cb.key)
+
+# ----------------------------------------------------------------------------
+#                                  labax_cb
+# ----------------------------------------------------------------------------
+def labax_cb(cb):
+   frame.labax = not userlog(cb.key)
+
+# ----------------------------------------------------------------------------
+#                                  viewmode_cb
+# ----------------------------------------------------------------------------
+def viewmode_cb(cb):
+   frame.mode = userint(cb.key)
+
+# ----------------------------------------------------------------------------
+#                                  new_cb
+# ----------------------------------------------------------------------------
+def new_cb(cb):
+   choice = userint(cb.key)
+   if choice==0:
+      Interact.mode=Interact_spli()
+   elif choice==1:
+      Interact.mode=Interact_poly()
+   elif choice==2:
+      Interact.mode=Interact_rect()
+   elif choice==3:
+      Interact.mode=Interact_elli()
+
+# ----------------------------------------------------------------------------
+#                                  hatch_cb
+# ----------------------------------------------------------------------------
+def hatch_cb(cb):
+   frame.hatch = userreal(cb.key)
+
+# ----------------------------------------------------------------------------
+#                                  clip_cb
+# ----------------------------------------------------------------------------
+def clip_cb(cb):
+   minmax = userreal(cb.key, default=4, defval=None, nmax=2)
+   if minmax!=None:
+      frame.minmax = minmax
+      coled.limits(minmax[0], minmax[1])
+
+# ----------------------------------------------------------------------------
+#                                  addsub_cb
+# ----------------------------------------------------------------------------
+def addsub_cb(cb):
+   if userlog(cb.key):
+      wkey(cb.key)
+      cb.mode = not cb.mode
+      cb.button.setLabel(['ADD', 'SUB'][cb.mode])
+      frame.shmode = cb.mode
+
+# ----------------------------------------------------------------------------
+#                                  hide_cb
+# ----------------------------------------------------------------------------
+def hide_cb(cb):
+   frame.hide = userlog(cb.key)
+
+# ----------------------------------------------------------------------------
+#                                  outside_cb
+# ----------------------------------------------------------------------------
+def outside_cb(cb):
+   if userlog(cb.key):
+      wkey(cb.key)
+      frame.inset.outside = not frame.inset.outside
+      cb.button.setLabel(['inside ', 'outside'][frame.inset.outside])
+      if frame.mode==1: # blotted image
+         frame.draw()
+
+# ----------------------------------------------------------------------------
+#                                  stepper_cb
+# ----------------------------------------------------------------------------
+def stepper_cb(cb):
+   if frame.inset is None: return
+   if userlog(cb.key):
+      wkey(cb.key)
+      current = userint('FRAME=')
+      if cb.end==0:
+         current = 0
+      elif cb.end==1:
+         current = len(frame.inset.subsets)-1
+      else:
+         current += cb.incr
+         current = min(max(0, current), len(frame.inset.subsets)-1)
+      wkey('FRAME=%d' % current)
+
+# ----------------------------------------------------------------------------
+#                                  outset_cb
+# ----------------------------------------------------------------------------
+def outset_cb(cb):
+   if not frame.inset: return
+   try:
+      frame.outset.close()
+   except:
+      pass
+   frame.outset = None
+   cb.apply.active(False)
+   cb.label.setLabel('No current outset.')
+   name = usertext(cb.key)
+   if name:
+      try:
+         inparts = frame.inset.spec.split()
+         inparts[0] = name
+         outspec = ' '.join(inparts)
+         outset = Set(outspec, write=True)
+         if outset.image.shape != frame.inset.image.shape:
+             reject(cb.key, 'Incompatible output set')
+             outset.close()
+         else:
+            if GgiBase().verify('Set %s already exists,\nOK to modify?'%name,
+                                 'Yes', 'No'):
+               frame.outset = outset
+            else:
+               outset.close()
+      except:
+         try:
+            newsflash('creating output set')
+            frame.outset = frame.inset.copy(name)
+            status('output set created')
+         except:
+            status('Cannot copy inset to %s' % name)
+            error(1, 'Cannot copy inset to %s' % name)
+      if frame.outset:
+         cb.apply.active(True)
+         cb.label.setLabel('Current outset: %s' % name)
+         frame.outset.setbox(frame.defbox)
+
+# ----------------------------------------------------------------------------
+#                                  apply_cb
+# ----------------------------------------------------------------------------
+def apply_cb(cb):
+   if userlog(cb.key):
+      wkey(cb.key)
+      apply_mask()
+      newsflash('this frame\'s mask applied to output set')
+
+# ----------------------------------------------------------------------------
+#                                  save_cb
+# ----------------------------------------------------------------------------
+def save_cb(cb):
+   if userlog(cb.key):
+      wkey(cb.key)
+      frame.inset.store()
+      newsflash('shapes stored')
+
+# ----------------------------------------------------------------------------
+#                                  autosave_cb
+# ----------------------------------------------------------------------------
+def autosave_cb(cb):
+   def saver(tcb):
+      try:
+         newsflash('autosave: storing all shapes')
+         frame.inset.storeall()
+         newsflash('autosave: shapes stored')
+      except:
+         newsflash('autosave: can NOT store shapes')
+   if userlog(cb.key):
+      try:
+         cb.timer.schedule()
+      except:
+         cb.timer = TimeCallback(saver, 60.0)
+   else:
+      try:
+         cb.timer.deschedule()
+      except:
+         pass
+
+# ----------------------------------------------------------------------------
+#                                  cursor_cb
+# ----------------------------------------------------------------------------
+def cursor_cb(cb):
+   inset = frame.inset
+   if not inset: return
+   if frame.mode==0 and not frame.hide:
+      if cb.button==1 and cb.state==0:       # --- press left button
+         Interact.mode.down((cb.x, cb.y))
+      elif cb.button==0 and cb.state==1:     # --- move left button
+         Interact.mode.move((cb.x, cb.y))
+      elif cb.button==1 and cb.state==1:     # --- release left button
+         Interact.mode.up((cb.x, cb.y))
+      elif cb.button==2 and cb.state==0:     # --- press middle button
+         index = frame.shape_index
+         if index!=None:
+            shape = frame.inset.shapes()[index]
+            if shape.type==shape.t_polygon or shape.type==shape.t_spline:
+               cb.shape = shape
+               point = (cb.x, cb.y)
+               cb.index = shape.insertionpoint(point)
+               shape.insertpoint(cb.index, point)
+               frame.update()
+      elif cb.button==0 and cb.state==2:     # --- move middle button
+         if cb.shape!=None:
+            cb.shape.movepoint(cb.index, (cb.x, cb.y))
+            frame.update()
+      elif cb.button==2 and cb.state==2:     # --- release middle button
+         cb.shape = None
+      elif cb.button==4 and cb.state==0:     # --- press right button
+         point = (cb.x, cb.y)
+         frame.select_shape(inset.nearest_shape(point))
+         if frame.shape_index!=None:
+            cb.shape = inset.shapes()[frame.shape_index]
+            cb.index = cb.shape.nearest_ctrl(point)[1]
+            frame.update()
+      elif cb.button==0 and cb.state==4:     # --- move right button
+         if cb.shape!=None:
+            cb.shape.movepoint(cb.index, (cb.x, cb.y))
+            frame.update()
+      elif cb.button==4 and cb.state==4:     # --- release right button
+         cb.shape = None
+      elif cb.button==1 and cb.state==16:  # --- CTRL-click: select shape
+         point = (cb.x, cb.y)
+         frame.select_shape(inset.nearest_shape(point))
+         frame.update()
+# ---------------------------------  Shapes  ----------------------------------
+      elif cb.key=='\x03':                   # --- CTRL-C: copy shape
+         if frame.shape_index!=None:
+            shapes = inset.shapes()
+            shape = shapes[frame.shape_index]
+            savset = shape.set
+            shape.set = None    # (copy should not contain set)
+            frame.saved = copy.deepcopy(shape)
+            shape.set = savset
+      elif cb.key=='\x09':                   # --- TAB: step through shapes
+         shapes = inset.shapes()
+         if shapes:
+            if frame.shape_index is None:
+               frame.shape_index = 0
+            else:
+               frame.shape_index = (frame.shape_index+1)%len(shapes)
+            frame.select_shape(frame.shape_index)
+            frame.update()
+      elif cb.key=='\x16':                   # --- CTRL-V: paste shape
+         if frame.saved:
+            inset.addshape(copy.deepcopy(frame.saved))
+            frame.select_shape(len(inset.shapes())-1)
+            frame.update()
+      elif cb.key in ['\x7f', '\x18']:       # --- DEL, CTRL-X: delete shape
+         if frame.shape_index!=None:
+            shapes = inset.shapes()
+            shape = shapes[frame.shape_index]
+            shape.set = None
+            frame.saved = copy.deepcopy(shape)
+            del shapes[frame.shape_index]
+            frame.select_shape(None)
+            frame.update()
+      elif cb.key in ['D', 'd']:             # --- 'D': delete point
+### restrict to selected shape?
+         point = (cb.x, cb.y)
+         shindex = inset.nearest_shape(point)
+         if shindex!=None:
+            ctrl = inset.shapes()[shindex].nearest_ctrl(point)
+            ctrl[0].delpoint(ctrl[1])
+            frame.select_shape(shindex)
+            frame.update()
+      elif cb.key in ['M', 'm']:             # --- switch add/subtract
+         shindex = inset.nearest_shape((cb.x, cb.y))
+         if shindex!=None:
+            shape = inset.shapes()[shindex]
+            shape.mode = not shape.mode
+            frame.select_shape(shindex)
+            frame.update()
+      elif cb.key in ['R', 'r']:             # --- 'R': new rectangle
+         Interact.mode = Interact_rect()
+      elif cb.key in ['E', 'e']:             # --- 'E': new ellipse
+         Interact.mode = Interact_elli()
+      elif cb.key in ['P', 'p']:             # --- 'P': new polygon
+         Interact.mode = Interact_poly()
+      elif cb.key in ['S', 's']:             # --- 'S': new spline
+         Interact.mode = Interact_spli()
+# ---------------------------------  Zooming  --------------------------------
+   if cb.key in ['+', '=']:               # --- zoom in
+      inset.setbox(frame.zoombox)   # trick Set object ...
+      hwx = max(2.0, abs(inset.bhi[0]-inset.blo[0])/4.0)
+      hwy = max(2.0, abs(inset.bhi[1]-inset.blo[1])/4.0)
+      frame.zoombox = "%d %d %d %d" % (int(cb.x-hwx), int(cb.y-hwy),
+                                   int(cb.x+hwx), int(cb.y+hwy))
+      inset.setbox(frame.defbox)    # ... untrick
+      frame.draw()
+   elif cb.key in ['-', '_']:             # --- zoom out
+      inset.setbox(frame.zoombox)   # trick Set object ...
+      hwx = (inset.bhi[0]-inset.blo[0])
+      hwy = (inset.bhi[1]-inset.blo[1])
+      cx  = (inset.bhi[0]+inset.blo[0])/2.0
+      cy  = (inset.bhi[1]+inset.blo[1])/2.0
+      box = (int(cx-hwx), int(cy-hwy), int(cx+hwx), int(cy+hwy))
+      frame.zoombox = "%d %d %d %d" % box
+      inset.setbox(frame.defbox)    # ... untrick
+      frame.draw()
+   elif cb.key in ['9', '(']:             # --- pan
+      inset.setbox(frame.zoombox)   # trick Set object ...
+      hwx = abs(inset.bhi[0]-inset.blo[0])/2.0
+      hwy = abs(inset.bhi[1]-inset.blo[1])/2.0
+      frame.zoombox = "%d %d %d %d" % (int(cb.x-hwx), int(cb.y-hwy),
+                                   int(cb.x+hwx), int(cb.y+hwy))
+      inset.setbox(frame.defbox)    # ... untrick
+      frame.draw()
+   elif cb.key=='0':                      # --- zoom back
+      frame.zoombox = frame.defbox
+      frame.draw()
+   elif cb.button==1 and cb.state==8:     # --- start zoom rectangle
+      cb.px, cb.py = cb.x, cb.y
+   elif cb.button==0 and cb.state==(1+8): # --- adjust zoom rectangle
+      frame.update()
+      pgsfs(2)
+      pgrect(cb.px, cb.x, cb.py, cb.y)
+      pgsfs(4)
+   elif cb.button==1 and cb.state==(1+8): # --- finish zoom rectangle
+      xlo, ylo = min(cb.px, cb.x), min(cb.py, cb.y)
+      xhi, yhi = max(cb.px, cb.x), max(cb.py, cb.y)
+      frame.zoombox = "%f %f %f %f" % (xlo, ylo, xhi, yhi)
+      frame.draw()
+# -----------------------------  Miscellanea  ---------------------------------
+   elif cb.key in ['H', 'h']:             # --- hide/unhide shapes
+      wkey("HIDE=%s" % ['YES','NO'][userlog("HIDE=")])
+   elif cb.key=='\xd1':
+      wkey('PREVIOUS=Y')
+   elif cb.key=='\xd3':
+      wkey('NEXT=Y')
+# --------------------------  Value and Position  -----------------------------
+   if cb.state==0 and\
+      cb.button==0 and\
+      cb.x>inset.blo[0] and\
+      cb.x<inset.bhi[0] and\
+      cb.y>inset.blo[1] and\
+      cb.y<inset.bhi[1]:
+      subset = inset.subsets[inset.selected]
+      try:
+         value = inset.subimage(subset)[nint(cb.y)-inset.blo[1],nint(cb.x)-inset.blo[0]]
+         status('X, Y: %d, %d I: %f' % ( nint(cb.x), nint(cb.y), value))
+      except:
+         status('outside image')
+
+# ============================================================================
+#                              Program Start
+# ----------------------------------------------------------------------------
+init()
+base = GgiBase()
+coled = base.ColorEditor(17, NCI-1, 16)     # Color manipulation element
+
+# ----------------------------------------------------------------------------
+#                          viewports and layout
+# ----------------------------------------------------------------------------
+
+# keywords WIDTH= and HEIGHT= affect complete window size
+vp1 = base.Viewport('viewport1', userint(keyword='WIDTH=', defval=760), 31)
+vp2 = base.Viewport('viewport2', userint(keyword='WIDTH=', defval=760),
+                                 userint(keyword='HEIGHT=', defval=819)-215)
+vp3 = base.Viewport('viewport3', userint(keyword='WIDTH=', defval=760)-480, 192)
+vp4 = base.Viewport('viewport4', userint(keyword='WIDTH=', defval=760), 50)
+vp5 = base.Viewport('viewport5', 144, 192)
+
+vp1.setPosition(0, None, 0, None)
+vp2.setPosition(0, None, 0, vp1)
+coled.setPosition(0, None, 0, vp2)
+vp3.setPosition(0, coled, 0, vp2)
+vp4.setPosition(0, None, 0, coled)
+vp5.setPosition(0, vp3, 0, vp2)
+
+# ----------------------------------------------------------------------------
+#                          viewport 1 contents
+# ----------------------------------------------------------------------------
+file = vp1.Menu('FILE=', 'File menu', ['Input set', 'Exit'])
+edit = vp1.Menu('EDIT=', 'Save/delete/restore/apply',
+                         ['Save shapes on frame',
+                          'Save shapes on all frames',
+                          'Clear shapes from frame',
+                          'Reload shapes from subset',
+                          'Delete shapes from frame and subset',
+                          'Delete shapes from all subsets',
+                          'Apply all masks to outset'])
+intp       = vp1.Button('INTERPOL=', 'Image interpolation').setLabel('INTP')
+cliptf     = vp1.TextField('CLIP=', 'Clip colormap', 15).setLabel('CLIP:')
+fix        = vp1.Button('FIX=', 'Lock clip values').setLabel('FIX')
+asprbutton = vp1.Button('ASPR=', 'Release aspect ratio').setLabel('ASP')
+labxbutton = vp1.Button('LABAX=', 'Suppress axis labelling').setLabel('LBL')
+shapemenu  = vp1.Menu('NEW=', 'Create new shape',
+                                ['Spline', 'Polygon',
+                                 'Rectangle', 'Ellipse']).setLabel('SHAPE')
+modemenu = vp1.Menu('DPYMODE=', 'Display mode',
+                                ['Image+Shapes','Result image',
+                                 'Mask']).setLabel('MODE')
+hatchdens = vp1.Gauge('HATCH=', 'Shape hatching density', 100, 1, 10).setLabel('Hatch:')
+help = vp1.HelpMenu('HELP=', 'HELP', 'PYBLOT documentation',
+                             ['Overview', 'Keywords', 'User Interface',
+                              'Keyboard and Mouse', 'HowTo'"'"'s', 'About'],
+                              ['pyblot.dc1#overview', 'pyblot.dc1#keywords',
+                               'pyblot.dc1#userinterface',
+                               'pyblot.dc1#keyboard',
+                               'pyblot.dc1#howto', 'pyblot.dc1#about'])
+
+file.setPosition(0, None, 0, None)
+edit.setPosition(0,file, 0, None)
+intp.setPosition(0, edit, 0, None)
+cliptf.setPosition(0, intp, 0, None)
+fix.setPosition(0, cliptf, 0, None)
+asprbutton.setPosition(0, fix, 0, None)
+labxbutton.setPosition(0, asprbutton, 0, None)
+shapemenu.setPosition(0, labxbutton, 0, None)
+modemenu.setPosition(0, shapemenu, 0, None)
+hatchdens.setPosition(0, modemenu, 0, None)
+help.setPosition(vp1.width-help.width-15, None, 0, None)
+
+# ----------------------------------------------------------------------------
+#                          viewport 2 contents
+# ----------------------------------------------------------------------------
+# keywords WIDTH= and HEIGHT= affect complete window size
+plotf = vp2.PlotField('PLOTTER', userint(keyword='WIDTH=', defval=760)-8, userint('HEIGHT=', defval=819)-223)
+
+plotf.colors(16+NCI+1, False)         # allocate colors
+plotf.setPosition(0, None, 0, None)
+
+# ----------------------------------------------------------------------------
+#                          viewport 3 contents
+# ----------------------------------------------------------------------------
+frame      = vp3.TextField('FRAME=', 'frame', 3).setLabel('Frame:')
+first      = vp3.Button('FIRST=', 'move to first frame').setLabel('<<')
+previous   = vp3.Button('PREVIOUS=', 'move to previous frame').setLabel('<')
+next       = vp3.Button('NEXT=', 'move to next frame').setLabel('>')
+last       = vp3.Button('LAST=', 'move to last frame').setLabel('>>')
+nsub       = vp3.Label(' ')
+poslabel   = vp3.Label(' ')
+shapelabel = vp3.Label(' ')
+outsidelb1 = vp3.Label('Transfer data')
+outsidebtn = vp3.Button('OUTSIDE=', 'Blot mode').setLabel('  ???  ')
+outsidelb2 = vp3.Label('mask.')
+modelabel  = vp3.Label('Default shape mode: ')
+modebutton = vp3.Button('ADDSUB=', 'Add to or subtract from mask').setLabel('ADD')
+outsettf   = vp3.TextField('OUTSET=', 'Name of output set', 15).setLabel('Outset:')
+outsetlb   = vp3.Label('No current outset.')
+
+frame.setPosition(0, None, 0, None)
+first.setPosition(0, frame, 0, None)
+previous.setPosition(0, first, 0, None)
+next.setPosition(0, previous, 0, None)
+last.setPosition(0, next, 0, None)
+nsub.setPosition(5, last, 0, None)
+poslabel.setPosition(0, None, 0, first)
+outsidelb1.setPosition(0, None, 0, poslabel)
+outsidebtn.setPosition(0, outsidelb1, 0, poslabel)
+outsidelb2.setPosition(0, outsidebtn, 0, poslabel)
+modelabel.setPosition(0, None, 10, outsidebtn)
+modebutton.setPosition(0, modelabel, 10, outsidebtn)
+shapelabel.setPosition(0, None, 0, modebutton)
+outsettf.setPosition(0, None, 0, shapelabel)
+outsetlb.setPosition(0, None, 0, outsettf)
+
+# ----------------------------------------------------------------------------
+#                          viewport 4 contents
+# ----------------------------------------------------------------------------
+messagelb = vp4.Label(' ')
+messagelb.setPosition(0, None, 0, None)
+
+# ----------------------------------------------------------------------------
+#                          viewport 5 contents
+# ----------------------------------------------------------------------------
+hidebutton = vp5.Button('HIDE=',     'Hide/Show shapes')
+applybtn   = vp5.Button('APPLY=',    'Apply mask to outset').active(False)
+savebtn    = vp5.Button('SAVE=',     'Save shapes in inset')
+autobtn    = vp5.Button('AUTOSAVE=', 'Every minute: save all shapes')
+logo       = vp5.Logo()
+
+hidebutton.setPosition(0, None, 0, None)
+applybtn.setPosition  (0, None, 0, hidebutton)
+savebtn.setPosition   (0, None, 0, applybtn)
+autobtn.setPosition   (0, None, 0, savebtn)
+logo.setPosition      (0, None, vp3.height-logo.height-10, None)
+
+# ----------------------------------------------------------------------------
+#                          event handler registration
+# ----------------------------------------------------------------------------
+KeyCallback(file_cb,     'FILE=')
+KeyCallback(edit_cb,     'EDIT=')
+KeyCallback(inset_cb,    'SET=', info=nsub, outside=outsidebtn)
+KeyCallback(box_cb,      'BOX=')
+KeyCallback(frame_cb,    'FRAME=')
+KeyCallback(viewmode_cb, 'DPYMODE=')
+KeyCallback(intp_cb,     'INTERPOL=')
+KeyCallback(aspr_cb,     'ASPR=')
+KeyCallback(labax_cb,    'LABAX=')
+KeyCallback(new_cb,      'NEW=')
+KeyCallback(addsub_cb,   'ADDSUB=',  button=modebutton, mode=False)
+KeyCallback(outside_cb,  'OUTSIDE=', button=outsidebtn, mode=False)
+KeyCallback(hatch_cb,    'HATCH=')
+KeyCallback(hide_cb,     'HIDE=')
+KeyCallback(clip_cb,     'CLIP=')
+KeyCallback(stepper_cb,  'FIRST=',    end=0)
+KeyCallback(stepper_cb,  'PREVIOUS=', end=None, incr=-1)
+KeyCallback(stepper_cb,  'NEXT=',     end=None, incr=+1)
+KeyCallback(stepper_cb,  'LAST=',     end=1)
+KeyCallback(outset_cb,   'OUTSET=',   apply=applybtn, label=outsetlb)
+KeyCallback(apply_cb,    'APPLY=')
+KeyCallback(save_cb,     'SAVE=')
+KeyCallback(autosave_cb, 'AUTOSAVE=')
+
+plotf.CursorCallback(cursor_cb, shape=None)
+
+# ----------------------------------------------------------------------------
+#                    create and initialize some objects
+# ----------------------------------------------------------------------------
+frame         = Frame(plotf)
+frame.info    = poslabel       # where frame object shows subset position
+frame.shinfo  = shapelabel     # where frame object shows shape info
+Interact.info = shapelabel     # where Interact class shows shape info
+Interact.mode = Interact()     # start with default interaction
+
+# ----------------------------------------------------------------------------
+#                    initialize some keywords
+# ----------------------------------------------------------------------------
+triggerkey('ADD=',        '0')
+triggerkey('INTERPOL=',  'NO')
+triggerkey('ASPR=',      'NO')
+triggerkey('LABAX=',     'NO')
+triggerkey('HATCH=',    '2.0')
+triggerkey('AUTOSAVE=',  'NO')
+
+# ----------------------------------------------------------------------------
+#                              Action!
+# ----------------------------------------------------------------------------
+mainloop()
+#<
+
+#>            pyblot.dc1
+Program:       PYBLOT
+
+
+#begin section overview
+                                  OVERVIEW
+                                  ========
+
+PYBLOT is a program to transfer data to an output set under certain
+conditions set by one or more blotch regions.  It is a follow-up of the
+GIPSY program BLOT which runs only in 8-bit pseudo color mode.  The
+program was written in Python as a first excercise in writing a
+complete interactive graphical application.  PYBLOT is applied in those
+cases where a filter based on an algorithm (CLIP, CONDIT, OBJECTS) is
+not suitable.  Filtering individual pixels can be done with the GIPSY
+application EDITSET.
+
+The blotch areas are defined by polygons, splines, ellipses or
+rectangles or any combination of them.  The definitions of the shapes
+can be stored in the header of the input set.  This allows for multiple
+blot sessions.  The definitions are stored on subset level.
+
+To start PYBLOT on a TrueColor display,
+type on the Hermes command line:
+
+    pyblot ggiopt=fixcol   
+
+If you omit the ggiopt= keyword, then you may start the application in
+direct color which may cause color flashing between windows.
+
+The size of the canvas can be altered at startup with keywords WIDTH=
+and HEIGHT= (See section 'keywords'). 
+
+#end section overview
+
+
+
+
+
+#begin section keywords
+                                  KEYWORDS
+                                  ========
+
+WIDTH=		Call this keyword when you want to open PYBLOT with a
+		different width. This value will affect the entire
+		windowwidth, but mainly the plotwindow will grow/shrink.
+
+HEIGHT=		Call this keyword when you want to open PYBLOT with a
+		different height.This value will affect the entire
+		windowheigth, but mainly the plotwindow will grow/shrink.
+
+#end section keywords
+
+#begin section userinterface
+                                  USER INTERFACE
+                                  ==============
+
+Menu:
+-----
+  FILE:  Load set/subsets.
+
+  EDIT:  Write/delete shape data to header of input set;
+         apply shapes to output set.
+
+  INTP:  Set display to bilinear interpolation, just for viewing.
+
+  CLIP:change the color look-up  Set ranges for the colour map.  Default the values are read from the
+         header of the input set at top level.  If they are not present, these
+         values will be calculated which may be more time-consuming.
+         Run program MNMX on set level to set the values DATAMIN and DATAMAX in
+         the header. 
+
+  FIX:   Fix these clip values so that new data will not result in
+         recalculating the default clip values.
+
+  ASP:   If you are not interested in square pixels but want to use the maximum 
+         area on the canvas, then press this toggle.
+
+  LBL:   Pressing this button causes axis labelling to be suppressed so that
+         the image will be as large as possible.
+ 
+  SHAPE: Select the type of shape to be created next: Spline, Polygon,
+         Rectangle or Ellipse. Instead of this menu it is also possible to
+         use the keyboard letters S, P, R or E.
+
+  MODE:  The display mode: 'Image+Shapes', 'Result Image' or 'Mask'.
+
+  HATCH: Each shape, except an ellipse, is hatched. This slider sets the
+         distance between hatch lines to create visual effects of opacity.
+         If you want the shapes to disappear, press the 'HIDE' button which
+         toggles between hiding and showing the shapes.
+  
+
+Plot window:
+-----------
+  The plot window shows your current (sub)set, a frame with grid labels
+  and shapes from previous sessions, if any. In the plot window you
+  can draw and edit your blotting shapes. See section 'Keyboard and Mouse'.
+
+Color wedge:
+------------
+  Displays the current ranges of displayed values and their units and
+  allows to change the color map.
+
+Controls frame 1:
+-----------------
+  This frame contains controls for choosing of and stepping through
+  the specified subsets, for choosing whether data inside or outside
+  the mask is transferred to the output set, for choosing whether
+  newly created shapes will be added to or subtracted from the mask.
+  It also contains an input field in which the output set can be
+  specified.
+
+Controls frame 2:
+-----------------
+  This frame contains buttons for hiding the shapes, applying the current
+  subset's mask to the output set, for saving this subset's shapes and
+  finally a button for setting the auto-save mode.
+
+
+
+#end section userinterface
+
+
+#begin section keyboard
+                                  KEYBOARD and MOUSE
+                                  ==================
+
+NOTICE: keyboard shortcuts currently only work when the keyboard focus is
+        explicitly moved to the plot window by clicking in it.
+
+Abbreviations:
+        LMB: left mouse button, MMB middle m. b., RMB: right m. b.
+
+Shapes:
+-------
+S       - create a new spline
+P       - create a new polygon
+LMB     - add point to spline or polygon
+MMB     - insert point between points of spline or polygon
+
+R       - create a new rectangle
+E       - create a new ellipse
+LMB     - dragging defines the rectangle or the ellipse outline
+
+RMB     - dragging allows to move any shape's point or its center
+
+D       - delete the last point from a spline or polygon
+M       - switch the add/subtract mode for the selected shape
+
+H       - hides/unhides all shapes
+
+TAB     - step through the shapes to select one
+
+CTRL-C  - copy a shape to the buffer
+CTRL-V  - paste a shape from the buffer
+
+CTRL-X
+DEL     - delete a shape and save it in the buffer
+
+CTRL-LMB - select shape
+
+Image:
+------
++       - zoom in at mouse position
+-       - zoom out
+0       - reset zoom
+9       - center on cursor position
+
+SHIFT-LMB - draw zooming area rectangle
+
+Subsets:
+--------
+The left- and right arrow keys can be used to step through the subsets.
+
+#end section keyboard
+
+#begin section howto
+                                  HOWTO'S
+                                  =======
+
+How to start the program?
+-----------------------------------------------
+See the Overview
+
+How to blot a ring?
+-------------------
+Create the outer contour and make sure its mode is 'ADD' (the default).
+Then draw the inner shape and set its mode to 'SUB'. This can be done
+by selecting it and pressing 'M' on the keyboard. Alternatively the shape
+mode can be set with the ADD/SUB button before creating the shape.
+
+How to save your results?
+-------------------------
+Shapes can be saved by pressing the SAVE button, by choosing an
+appropriate option from the EDIT menu, or using the saving pop-up at
+program exit (not recommended).  The resulting masks can be applied to
+the output set with the APPLY button or with an option from the EDIT
+menu.  If an existing output set is used, its shape should be compatible
+with the input set.  If it does not exist, PYBLOT will create a copy of
+the input set. 
+
+#end section howto
+
+#begin section about
+Purpose:       Conditional transfer of maps using blotch region.
+
+Category:      ANALYSIS, DISPLAY
+
+File:          pyblot.src
+
+Author:        J.P. Terlouw
+
+Keywords:      See section keywords
+
+Acknowledgements:
+               This program is a complete rewrite of XBLOT developed
+               by Ronnie Waijer, a Hanzehogeschool 'stagiair', under
+               the supervision of Martin Vogelaar.
+               The availablity of XBLOT was very useful in developing
+               PYBLOT.
+
+Version:       1.0
+
+Updates:       Oct 18, 2004: JPT, Document created.
+               Mar  9, 2005: JPT, Set copy bug fixed.
+               Sep 22, 2005: JPT, explicit path /Software eliminated.
+               Jul 12, 2007: JPT, changed for new Python module gipsy.
+               May 27, 2008: JPT, changed for modified header access.
+               Apr 15, 2009: VOG, Changed definition of function nint()
+                                  so that it is compatible with 
+                                  coordinate routines in the system.
+               Apr 29, 2009: JPT, Fixed syntax error introduced by previous
+                                  change.
+               Oct  3, 2013: JPT, Corrected behaviour for maps with no
+                                  mask defined.
+                                  
+#end section about
+#<

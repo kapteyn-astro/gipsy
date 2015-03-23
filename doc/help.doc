@@ -1,0 +1,156 @@
+
+                            COPYRIGHT (c) 1992
+                      Kapteyn Astronomical Institute
+                University of Groningen, The Netherlands
+                           All Rights Reserved.
+
+
+Document:     help
+
+Purpose:      Categories for tasks and subroutines
+
+Category:     DOCUMENTATION
+
+File:         help.doc
+
+Author:       M.G.R. Vogelaar
+
+Use:          Part of this documentation is used in HELP to display
+              general information about a subject. A field starts with
+              #startn where n is the number of a field. The field is
+              closed with #end
+
+Description:  This document provides the text that HELP displays for
+              certain subjects. The contents can be updated when
+              needed. 
+
+Updates:      Dec  2, 1992: VOG, Document created.
+
+
+
+#start1
+
+                       GENERAL HELP ABOUT HERMES
+                       =========================
+
+If you started tHermes, pressing <TAB> will display the documentation (i.e. the 
+dc1 document) of the task name that is present in the user command area. If 
+there is also a keyword present, then the display is positioned at the first
+occurrence of the keyword in the document. When <TAB> is pressed for the second 
+time, the help display will disappear. If the user command area is empty, you 
+get a help screen with key definitions for Hermes (not available in xHermes).
+You can browse through the documentation using the <pgup> and <pgdown> keys 
+(or ^V and ^Z). There is a chapter about Hermes in the GIPSY User Guide. In 
+tHermes you quit by pressing ^Q (or typing END or QUIT or CTRL-X CTRL-C or 
+ESC Z). Then you are prompted with:    
+
+Quit? Press: Y. 
+
+If you press Y and there are still tasks running you get the message 
+'Wait for tasks to finish...'. Tasks can be aborted with ^C
+
+#end
+#start2
+
+                      GENERAL HELP ABOUT APPLICATIONS
+                      ===============================
+                
+All applications have a document that is displayed when pressing <TAB> in Hermes 
+while there is a task name in the user command area. The application NEWS 
+displays the GIPSY news which you have not yet seen. This news can contain 
+important information about new releases, fixed bugs etc.
+BUG is a program to report application bugs. 
+All task documents can be send to printer (HELP SUBJECT=4).
+
+
+INPUT EXAMPLES (see input.doc for more detailed description):
+==============
+
+1) Input of set and subsets:
+
+   The structure AURORA is 3-d and has axes RA,DEC and FREQ 
+   with sizes:
+
+   RA            from   -63 to    64
+   DEC           from   -63 to    64 
+   FREQ          from     1 to    32
+
+   INSET=AURORA FREQ 10:18 24  or
+   INSET=AURORA F 10:18 24     or
+   INSET=AURORA 10:18 24
+   gives 2-d planes (RA,DEC) for values of FREQ 10 to 18 and 24
+
+   INSET=AURORA F      or
+   INSET=AURORA 1:32
+   gives 2-d planes (RA,DEC) for values of FREQ 1 to 32
+
+   INSET=AURORA DEC 5:10 FREQ 10 
+   gives 1-d lines (RA) for values of DEC 5 to 10 at FREQ 10
+
+   INSET=AURORA                   
+   gives the whole 3-d cube
+
+   INSET=AURORA DEC 1           
+   gives 2-d plane (RA,FREQ) for a value of DEC 1
+
+   INSET=AURORA RA 0 DEC 0 FREQ 1
+   gives a pixel at (RA, DEC, FREQ) = (0, 0, 1)
+
+        
+2. Input of floating point or integer numbers         
+
+   1 2 3/3  sin(pi)      yields       1.0 2.0 1.0 0.0
+   log(10)::4            yields       1.0 1.0 1.0 1.0
+   log(10):log(100):2/4  yields       1.0 1.5 2.0
+   10**[0 1 5]           yields       1 10 100000
+   10**[0:3]             yields       1 10 100 1000
+
+   Suppose an inclination at keyword INCL= must be given in 
+   degrees, but you want the input in axis ratio.
+
+                  INCL=DEG(ACOS([0.3 0.5]))
+                  
+   Between square brackets (the list facility) are the 
+   arguments 0.3 and 0.5. The expression evaluates twice
+   the value for the ACOS en converts these values to 
+   degrees. The result is that the values 0.3 and 0.5
+   are converted to the angles 72.5424 and 60.0 deg.
+                 
+
+3. Input of positions:
+
+   POS=* 10 12 8 * -67 8 9.6      
+   RA = 10 hour, 12 min, 8 sec, DEC = -67 deg, 8 min, 9.6 sec.,
+   in a 2-d area and in the epoch as found in the header of the set.
+
+   POS=*2000.0 3 14 38.02 *2000.0 41 13 54.84        
+   Input of RA  3 h 14 m 38.02 s, DEC 41 d 13 m 54.84 s in
+   epoch 2000.0
+
+   BOX=G 56.7 G 9.89 D 12 ARCSEC 10 ARCSEC
+   An area centered on galactic coord. 56.7 longitude, 9.89 latitude 
+   with a size of 12 by 10 seconds of arc.
+
+#end
+#start3                
+
+                      HOW TO GET DOCUMENTATION
+                      ========================
+                
+               
+In this program (HELP) you can obtain documentation about:
+                
+-GIPSY tasks (.dc1)                       HELP SUBJECT=4 DOCTYPE=1
+-GIPSY subroutines (.dc2/.dc3)            HELP SUBJECT=4 DOCTYPE=2 or 3
+-GIPSY Miscellaneous (.doc)               HELP SUBJECT=4 DOCTYPE=4
+                
+If there is no copy of the GIPSY user guide around, you can create one by 
+processing and printing the laTeX file manual.tex in the directory associated 
+with the shell variable gip_doc . For instance on a HP machine try:
+                
+> cp $gip_doc/manual.tex .   | Copy manual to your current directory
+> latex manual.tex           | Create .dvi file  
+> latex manual.tex           | Rerun to get references right
+> dvips manual               | Print it
+
+#end

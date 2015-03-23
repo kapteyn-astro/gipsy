@@ -1,0 +1,24 @@
+
+Script:       findx
+
+Purpose:      Searches for paths to the X11 include files and the
+              X11 library and when found produces the appropriate
+              compiler switches.
+
+Category:     SYSTEM
+
+File:         findx.sh
+
+Author:       K.G. Begeman
+
+Use:          findx.sh includes    produces the compiler switches to
+                                   include the X11 include files.
+              findx.sh library     produces the compiler switches to
+                                   link with the X11 library.
+              findx.sh libraries   produces the compiler switches to
+                                   link with X-Toolkit libraries.
+
+Updates:      Dec  5, 1994: KGB, Document created.
+              Dec  7, 1994: KGB, Revision for openwin.
+              Jul 29, 1997: KGB, search for X-Toolkit libraries.
+

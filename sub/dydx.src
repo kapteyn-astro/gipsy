@@ -1,0 +1,3187 @@
+dydx.src
+
+        Copyright (c) Kapteyn Laboratorium Groningen 1999
+        All Rights Reserved.
+
+Name:         dydx.src
+Creator:      terlouw
+Host:         magellan
+Date:         Sep 2, 1999
+Contents:     Makedydx dydx.dc2 dydx.y dydxscan.l dydxcom.h
+              dydx.c dydxtab.h dydxscan.c dydx_parse.dc3 dydxYback.dc3
+              dydxYoutput.dc3 dydx_init.dc3 dydxYinput.dc3 dydxYunput.dc3 dydx_lex.dc3
+              dydxYlook.dc3 dydxYwrap.dc3
+
+#>            Makedydx
+#
+# Makedydx
+#
+# Utility makefile for generating dydx.src :
+#       make -f Makedydx pack
+#
+# and for processing/compiling the pristine sources dydx.y and dydxscan.l :
+#       make -f Makedydx compile
+#
+# Generating .c files from the .y and .l files may be system-dependent.
+# The procedure below works for HP-UX 10 systems.
+# Special care has been taken to rename externals with names "yy-something"
+# to avoid name clashes in the GIPSY library.
+#
+
+
+SHELL   = /bin/sh
+
+pack::
+	$$gip_sys/pack.csh dydx.src Makedydx \
+        dydx.dc2 \
+	dydx.y dydxscan.l dydxcom.h \
+	dydx.c dydxtab.h dydxscan.c \
+	dydx_parse.dc3 dydxYback.dc3 dydxYoutput.dc3 \
+	dydx_init.dc3 dydxYinput.dc3 dydxYunput.dc3 \
+	dydx_lex.dc3 dydxYlook.dc3 dydxYwrap.dc3
+
+compile : dydx.o dydxscan.o
+	touch objects
+
+dydx.o : dydx.c dydxcom.h
+	$$gip_exe/compile -c dydx.c
+
+dydxscan.o : dydxscan.c dydxcom.h dydxtab.h
+	$$gip_exe/compile -c dydxscan.c
+
+dydx.c dydxtab.h : dydx.y
+	yacc -d dydx.y; sed -e's/yy/dydxY/g' < y.tab.c  > dydx.c ;\
+	mv y.tab.h dydxtab.h
+
+dydxscan.c : dydxscan.l
+	lex -t dydxscan.l |  sed -e's/yy/dydxY/g' -e's/stdin/NULL/g' -e's/stdout/NULL/g' > dydxscan.c
+
+#<
+
+#>            dydx.dc2
+Function:     DYDX
+
+Purpose:      Determine derivative of a mathematical expression.
+
+Category:     MATH
+
+File:         dydx.src
+
+Author:       J.P. Terlouw
+
+Use:          INTEGER DYDX( INEXPR,           Input   character
+                            VARIABLE,         Input   character
+                            OUTEXPR,          Output  character
+                            DERIVATIVE,       Output  character
+                            CONSTANTS,        Output  character array
+                            MAXCONST,         Input   integer
+                            NUMCONST )        Output  integer
+
+              DYDX       status return code:
+                            0 success
+                           -1 syntax error
+                           -2 syntax error
+                           -3 unknown function
+                           -4 function too large for output argument
+                           -5 derivative too large for output argument
+                           -6 constant name too long for output argument
+                           -7 too many constants for output argument
+              INEXPR     expression to be differentiated.
+              VARIABLE   variable with respect to which will be differentiated.
+              OUTEXPR    DYDX's interpretation of INEXPR.
+              DERIVATIVE derivative of INEXPR with respect to VARIABLE.
+              CONSTANTS  names of constants appearing in INEXPR (in any order).
+              MAXCONST   number of elements of CONSTANTS.
+              NUMCONST   number of constants found.
+
+Description:  DYDX determines the derivative of the expression given 
+              in the first argument using symbolic differentiation.
+              All expressions involved (should) follow the same syntax as
+              described in fie.dc2.
+
+              DYDX recognizes all functions supported by FIE, except functions
+              with a variable number of arguments.
+
+              Function names are case-insensitive; variables and constants
+              are case-sensitive.
+              Functions which are not strictly differentiable, such as abs,
+              sign and rect, produce a practical 'derivative'. E.g. abs(x)
+              results in sign(x), and rect(x) results in 0.
+              Other non-differentiable functions produce 'BLANK'.
+              
+              Constants can be enclosed in braces ( { } ). After DYDX has
+              removed the braces, they are treated in the same way as other
+              constants, with the exception that braced constants do not
+              appear in the output argument CONSTANTS. This is a way to
+              separate fixed symbolic constants and free parameters.
+              Note that in this case the input expression is not compatible
+              with FIE. The output expressions are compatible, however.
+
+Example:      INTEGER      DYDX
+              CHARACTER*80 OUT, DERIV
+              CHARACTER*10 C(5)
+
+              ICODE = DYDX('sin(a*x)**b', 'x', OUT, DERIV, C, 5, NC)
+
+              Upon return ICODE will be zero, OUT will contain the string
+              'SIN((a*x))**b', DERIV '((a*COS((a*x)))*(b*SIN((a*x))**(b-1)))',
+              NC will be 2 and the first 2 elements of C will contain
+              'b' and 'a'.
+
+Updates:      Feb  3, 1997: JPT document created.
+              Jun 15, 1998: JPT added functions abs and sign.
+              Jul  1, 1998: JPT added Bessel functions bj, by, bi, bk.
+              Aug 26, 1998: JPT added functions recently introduced in fie.
+              Dec 22, 1998: JPT added 3- and 4-arg. non-differentiable fnctns.
+              Feb 16, 1999: JPT fixed bug in Fun4
+#<
+
+#>            dydx.y
+%{
+/* dydx.y
+
+   
+                              COPYRIGHT (c) 1997
+                        Kapteyn Astronomical Institute
+         University of Groningen  -  9700 AV Groningen, The Netherlands
+      
+Symbolic differentiation routine.
+Author: J.P. Terlouw
+
+*/
+
+#include "stddef.h"
+#include "stdlib.h"
+#include "ctype.h"
+#include "stdio.h"
+#include "gipsyc.h"
+#include "dydxcom.h"
+
+#define  CX 0  /* longer (sub)expressions may be simplified in some cases */
+
+#ifndef	NULL
+#define  NULL 0
+#endif
+#define  ERRCHK if (errcode) {  YYERROR; }
+#define  SETERR(n) if (!errcode) errcode = n
+#define  yyparse dydx_parse             /* define own name */
+#define  yyerror dydx_error
+
+#define New(type) ((type *)calloc(1,sizeof(type)))
+#define NNew(n,type) ((type *)calloc(n,sizeof(type)))
+#define Delete(x)  {free(x); x=NULL;}
+
+#define Digit(x) (strlen(x)==1 && (*x)>='0' && (*x)<='9')
+
+typedef struct {
+   char *fname;     /* function name */
+   int  nargs;      /* number of times argument is referenced in derivative */
+   char *deriv;     /* derivative of function */
+} fundef;
+
+typedef struct _identifier {
+   struct _identifier *next;
+   char   *name;
+} _identifier, *identifier;
+
+static char   *Var;
+static int    errcode=0;
+static expr   resval;
+static identifier names=NULL;
+
+static fundef functions[]={
+   {"SQRT",   1,  "(1/(2*SQRT(%s)))"},
+   {"RAD",    0,  "0.0174532925"},
+   {"DEG",    0,  "57.2957795"},
+   {"SIN",    1,  "COS(%s)"},
+   {"COS",    1,  "(-SIN(%s))"},
+   {"ASIN",   1,  "(1/SQRT(1-(%s)**2))"},
+   {"ACOS",   1,  "(-1/SQRT(1-(%s)**2))"},
+   {"TAN",    1,  "(1/((COS(%s)**2)))"},
+   {"ATAN",   1,  "(1/(1+(%s)**2))"},
+   {"EXP",    1,  "EXP(%s)"},
+   {"SINH",   1,  "COSH(%s)"},
+   {"LN",     1,  "(1/%s)"},
+   {"COSH",   1,  "SINH(%s)"},
+   {"LOG",    1,  "(0.434294482/%s)"},
+   {"TANH",   1,  "(1-TANH(%s)**2)"},
+   {"SINC",   4,  "(((%s*COS(%s))-SIN(%s))/(%s)**2)"},
+   {"ABS",    1,  "SIGN(%s)"},
+   {"SIGN",   0,  "0"},
+   {"ERF",    0,  "BLANK"},
+   {"ERFC",   0,  "BLANK"},
+   {"INT",    0,  "0"},
+   {"NINT",   0,  "0"},
+   {"RANP",   0,  "BLANK"},
+   {"SEC",    2,  "((-(-SIN(%s)))/COS(%s)**2)"},
+   {"CSC",    2,  "((-COS(%s))/SIN(%s)**2)"},
+   {"COT",    2,  "((-(1/((COS(%s)**2))))/TAN(%s)**2)"},
+   {"SECH",   2,  "(-SECH(%s)*TANH(%s))"},
+   {"CSCH",   2,  "(-CSCH(%s)*COTH(%s))"},
+   {"COTH",   2,  "(-CSCH(%s)**2)"},
+   {"ASINH",  1,  "(1/SQRT(1+%s**2))"},
+   {"ACOSH",  1,  "(1/SQRT(%s**2-1))"},
+   {"ATANH",  1,  "(1/(1-%s**2))"},
+   {"STEP",   0,  "0"},
+   {"RECT",   0,  "0"}
+};
+
+%}
+ 
+%start derive;
+ 
+%union {
+       char *text;
+       expr value;
+       }
+
+%token <value> NUMBER IDENTIFIER
+%token         POWER LEXERR UMINUS
+
+%type <value> expr
+
+%left   '+' '-'
+%left   '*' '/'
+%left   UMINUS
+%right  POWER
+
+%%
+
+derive : expr '\n'
+            { resval = $1; return 0;}
+       | error '\n'
+            {
+               int result=errcode;
+               errcode = 0;
+               yyerrok;
+               return result;
+            }
+       ;
+
+/* ---------------------------   EXPRESSION       --------------------------- */
+expr   : '(' expr ')'                       /* parenthesized expression      */
+            { $$ = $2; }
+       | expr '+' expr                      /* addition                      */
+            { $$ = Add( $1, $3); ERRCHK }
+       | expr '-' expr                      /* subtraction                   */
+            { $$ = Sub( $1, $3); ERRCHK }
+       | expr '*' expr                      /* multiplication                */
+            { $$ = Mul( $1, $3); ERRCHK }
+       | expr '/' expr                      /* division                      */
+            { $$ = Div( $1, $3); ERRCHK }
+       | expr POWER expr                    /* exponentiation                */
+            { $$ = Pwr( $1, $3); ERRCHK }
+       | IDENTIFIER '(' expr ')'            /* function                      */
+            { $$ = Fun($<text>1, $3); ERRCHK }
+       | IDENTIFIER '(' expr ',' expr ')'   /* "Indexed" function            */
+            { $$ = IxFun($<text>1, $3, $5); ERRCHK }
+       | IDENTIFIER '(' expr ',' expr ',' expr ')'   /* 3-argument function  */
+            { $$ = Fun3($<text>1, $3, $5, $7); ERRCHK }
+       | IDENTIFIER '(' expr ',' expr ',' expr ',' expr ')'  /* 4 arguments  */
+            { $$ = Fun4($<text>1, $3, $5, $7, $9); ERRCHK }
+       | '-' expr %prec UMINUS              /* unary minus                   */
+            { $$ = Neg( $2 ); ERRCHK }
+       | '+' expr %prec UMINUS              /* unary plus                    */ 
+            { $$ = $2;  }
+       | NUMBER                             /* number                        */
+            { $$ = NewExpr($<text>1); }
+       | IDENTIFIER                         /* variable                      */
+            { RegName($<text>1); $$ = NewExpr($<text>1); }
+       | '{' IDENTIFIER '}'                 /* constant                      */
+            { $$ = NewExpr($<text>2); }
+       | LEXERR                             /* error detected by scanner     */
+            { errcode = DYDXBADSSYN; ERRCHK }
+       ;
+
+%%
+
+/* -------------------------------------------------------------------------- */
+/*                                StrDup                                      */
+/* -------------------------------------------------------------------------- */
+static char *StrDup (char *orig)
+{
+   char *result=NNew(strlen(orig)+1,char);
+   strcpy(result,orig);
+   return result;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                StrFun                                      */
+/* -------------------------------------------------------------------------- */
+static char *StrFun(char *a, char *b)
+{
+   char *result;
+
+   if (!strcmp(b,"1") && !strcmp(a,"LN") ) {
+      result = StrDup("0");
+   } else {
+      result = NNew(strlen(a)+strlen(b)+2+1,char);
+      sprintf(result,"%s(%s)",a,b);
+   }
+   return result;
+}
+
+
+/* -------------------------------------------------------------------------- */
+/*                                StrNeg                                      */
+/* -------------------------------------------------------------------------- */
+static char *StrNeg(char *a)
+{
+   char *result;  
+    
+   if (!strcmp(a,"0")) {
+      result = StrDup(a);
+   } else {
+      result = NNew(strlen(a)+3+1,char);
+      sprintf(result,"(-%s)",a);
+   }
+   return result;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                StrPwr                                      */
+/* -------------------------------------------------------------------------- */
+static char *StrPwr(char *a, char *b)
+{
+   char *result;
+    
+   if (!strcmp(b,"1")) {
+      result = StrDup(a);
+   } else if (!strcmp(b,"0")) {
+      result = StrDup("1");
+   } else if (!strcmp(a,"1")) {
+      result = StrDup("1");
+   } else {
+      result = NNew(strlen(a)+strlen(b)+2+1,char);
+      sprintf(result,"%s**%s",a,b);
+   }
+   return result;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                StrMul                                      */
+/* -------------------------------------------------------------------------- */
+static char *StrMul(char *a, char *b)
+{
+   char *result;
+   
+   if (strcmp(a,"0") && strcmp(b,"0")) {
+      if (!strcmp(a,"1")) {
+         result = StrDup(b);
+      } else if (!strcmp(b,"1")) {
+         result = StrDup(a);
+      } else if (!strcmp(a,b) && strlen(a)>CX) {
+         result = StrPwr(a,"2");
+      } else {
+         result = NNew(strlen(a)+strlen(b)+3+1,char);
+         sprintf(result,"(%s*%s)",a,b);
+      }
+   } else {
+      result = StrDup("0");
+   }
+   return result;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                StrDiv                                      */
+/* -------------------------------------------------------------------------- */
+static char *StrDiv(char *a, char *b)
+{
+   char *result;
+    
+   if (!strcmp(a,"0")) {
+      result = StrDup("0");
+   } else if (!strcmp(a,b)) {
+      result = StrDup("1");
+   } else {
+      result = NNew(strlen(a)+strlen(b)+3+1,char);
+      sprintf(result,"(%s/%s)",a,b);
+   }
+   return result;
+}
+      
+
+/* -------------------------------------------------------------------------- */
+/*                                StrAdd                                      */
+/* -------------------------------------------------------------------------- */
+static char *StrAdd(char *a, char *b)
+{
+   char *result;  
+    
+   if (!strcmp(a,"0")) {
+      result = StrDup(b);
+   } else if (!strcmp(b,"0")) {
+      result = StrDup(a);
+   } else if (!strcmp(a,b) && strlen(a)>CX) {
+      result = StrMul("2",a);
+   } else {
+      result = NNew(strlen(a)+strlen(b)+3+1,char);
+      sprintf(result,"(%s+%s)",a,b);
+   }
+   return result;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                StrSub                                      */
+/* -------------------------------------------------------------------------- */
+static char *StrSub(char *a, char *b)
+{
+   char *result;  
+    
+   if (Digit(a)&&Digit(b)) {
+      int ia=atoi(a), ib=atoi(b), ir;
+      ir = ia-ib;
+      if (ir<0) {
+         result = NNew(5,char);
+         sprintf(result,"(%d)",ir);
+      } else {
+         result = NNew(3,char);
+         sprintf(result,"%d",ir);
+      }
+   } else {
+      if (!strcmp(a,"0")) {
+         if (!strcmp(b,"0")) {
+            result = StrDup("0");
+         } else {
+            result = StrNeg(b);
+         }
+      } else if (!strcmp(b,"0")) {
+         result = StrDup(a);
+      } else if (!strcmp(a,b)) {
+      result = StrDup("0");
+      } else {
+         result = NNew(strlen(a)+strlen(b)+3+1,char);
+         sprintf(result,"(%s-%s)",a,b);
+      }
+   }
+   return result;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                NewExpr                                     */
+/* -------------------------------------------------------------------------- */
+static expr NewExpr(char *name)
+{
+   expr current=New(_expr);
+   
+   current->expr = StrDup(name);
+   if (strcmp(name,Var)) {
+      current->deriv = StrDup("0");
+   } else {
+      current->deriv = StrDup("1");
+      current->var   = 1;
+   }
+   Delete(name);
+   return current;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                DeleteExpr                                  */
+/* -------------------------------------------------------------------------- */
+static void DeleteExpr(expr current)
+{
+   free(current->expr);
+   free(current->deriv);
+   free(current);
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                Add                                         */
+/* -------------------------------------------------------------------------- */
+static expr Add(expr op1, expr op2)
+{
+   expr result=New(_expr);
+
+   result->expr =  StrAdd(op1->expr,op2->expr);
+   result->deriv = StrAdd(op1->deriv,op2->deriv);
+   if (op1->var || op2->var) result->var = 1;
+   DeleteExpr(op1);
+   DeleteExpr(op2);
+   return result;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                Sub                                         */
+/* -------------------------------------------------------------------------- */
+static expr Sub(expr op1, expr op2)
+{
+   expr result=New(_expr);
+ 
+   result->expr  = StrSub(op1->expr,op2->expr);
+   result->deriv = StrSub(op1->deriv,op2->deriv);
+   if (op1->var || op2->var) result->var = 1;
+   DeleteExpr(op1);
+   DeleteExpr(op2);
+   return result;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                Mul                                         */
+/* -------------------------------------------------------------------------- */
+static expr Mul(expr op1, expr op2)
+{
+   char *p1, *p2;
+   expr result=New(_expr);
+
+   result->expr = StrMul(op1->expr,op2->expr);
+   p1 = StrMul(op1->expr, op2->deriv);
+   p2 = StrMul(op2->expr, op1->deriv);
+   result->deriv  = StrAdd(p1,p2);
+   Delete(p1); Delete(p2);
+   if (op1->var || op2->var) result->var = 1;
+   DeleteExpr(op1);
+   DeleteExpr(op2);
+   return result;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                Div                                         */
+/* -------------------------------------------------------------------------- */
+static expr Div(expr op1, expr op2)
+{
+   char *p1, *p2, *p3, *d1;
+   expr result=New(_expr);
+   
+   result->expr = StrDiv(op1->expr,op2->expr);
+   p1 = StrMul(op2->expr, op1->deriv);
+   p2 = StrMul(op1->expr, op2->deriv);
+   d1 = StrSub(p1,p2);
+   p3 = StrMul(op2->expr, op2->expr);
+   result->deriv = StrDiv(d1,p3);
+   Delete(p1); Delete(p2); Delete(p3); Delete(d1);
+   if (op1->var || op2->var) result->var = 1;
+   DeleteExpr(op1);
+   DeleteExpr(op2);
+   return result;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                Neg                                         */
+/* -------------------------------------------------------------------------- */
+static expr Neg(expr op1)
+{
+   expr result=New(_expr);
+
+   result->expr  = StrNeg(op1->expr);
+   result->deriv = StrNeg(op1->deriv);
+   result->var   = op1->var;
+   DeleteExpr(op1);
+   return result;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                Pwr                                         */
+/* -------------------------------------------------------------------------- */
+static expr Pwr(expr op1, expr op2)
+{
+   expr result=New(_expr);
+   char *t1, *t2, *t3, *t4, *t5;
+   char *f=op1->expr, *df=op1->deriv, *g=op2->expr, *dg=op2->deriv;
+
+   result->expr = StrPwr(op1->expr,op2->expr);
+   if (op2->var) {
+      t1 = StrFun("LN",f);
+      t2 = StrMul(dg,t1);
+      t3 = StrMul(df,g);
+      t4 = StrDiv(t3,f);
+      t5 = StrAdd(t4,t2);
+      result->deriv = StrMul(result->expr,t5);
+      Delete(t1); Delete(t2); Delete(t3); Delete(t4); Delete(t5);
+   } else {
+      t1 = StrSub(op2->expr,"1");
+      t2 = StrPwr(op1->expr,t1);
+      t3 = StrMul(op2->expr,t2);
+      result->deriv = StrMul(op1->deriv,t3);
+      Delete(t1); Delete(t2); Delete(t3);
+   }
+   if (op1->var || op2->var) result->var = 1;
+   DeleteExpr(op1);
+   DeleteExpr(op2);
+   return result;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                Fun                                         */
+/* -------------------------------------------------------------------------- */
+static expr Fun(char *name, expr op1)
+{
+   int  i, nfuns=sizeof(functions)/sizeof(fundef);
+   expr result=New(_expr);
+
+   for (i=0; name[i]; i++) name[i] = toupper(name[i]);
+   for (i=0; i<nfuns; i++) {
+      if (!strcmp(functions[i].fname,name)) {
+         char *funbuf;
+         int  buflen;
+          
+         buflen = strlen(functions[i].deriv) +
+                  strlen(op1->expr)*functions[i].nargs + 1;
+         funbuf = NNew(buflen, char);
+         result->expr = StrFun(name,op1->expr);
+         switch (functions[i].nargs) {
+            case 0: sprintf(funbuf,functions[i].deriv);
+                    break;
+            case 1: sprintf(funbuf,functions[i].deriv,op1->expr);
+                    break;
+            case 2: sprintf(funbuf,functions[i].deriv,op1->expr,op1->expr);
+                    break;
+            case 3: sprintf(funbuf,functions[i].deriv,
+                            op1->expr,op1->expr,op1->expr);
+                    break;
+            case 4: sprintf(funbuf,functions[i].deriv,
+                            op1->expr,op1->expr,op1->expr,op1->expr);
+                    break;
+            case 5: sprintf(funbuf,functions[i].deriv,
+                            op1->expr,op1->expr,op1->expr,op1->expr,op1->expr);
+                    break;
+            default: SETERR(DYDXBADFUNC);
+         }
+         result->deriv = StrMul(op1->deriv, funbuf);     /* chain rule */  
+         Delete(funbuf);
+         if (op1->var) result->var = 1;
+         break;
+      }
+   }
+   if (i==nfuns) SETERR(DYDXBADFUNC);
+   DeleteExpr(op1);
+   Delete(name);
+   return result;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                               IxFun                                        */
+/* -------------------------------------------------------------------------- */
+static expr IxFun(char *name, expr op1, expr op2)
+{
+   int i, buflen;
+   char *term2, *quot, *prod, *deriv, *sum;
+   expr result=New(_expr);
+
+   for (i=0; name[i]; i++) name[i] = toupper(name[i]);
+   if ( !strcmp(name,"BJ") ||                           /* Bessel functions */
+        !strcmp(name,"BY") ||
+        !strcmp(name,"BI") ||
+        !strcmp(name,"BK")  )  {
+      buflen =  strlen(name) +
+                strlen(op1->expr) +
+                strlen(op2->expr) + 3 + 1;
+      result->expr = NNew(buflen, char);
+      sprintf(result->expr, "%s(%s,%s)", name, op1->expr, op2->expr);
+      quot = StrDiv(op1->expr, op2->expr);
+      prod = StrMul(quot, result->expr);
+      sum  = StrAdd(op1->expr, "1");
+      buflen =  strlen(name) +
+                strlen(sum) +
+                strlen(op2->expr) + 3 + 1;
+      term2 = NNew(buflen, char);
+      sprintf(term2, "%s(%s,%s)", name, sum, op2->expr);
+      if (!strcmp(name,"BI")) {
+         deriv = StrAdd(prod,term2);
+      } else {
+         deriv = StrSub(prod,term2);
+      }
+      result->deriv = StrMul(op2->deriv, deriv);         /* chain rule */  
+      Delete(term2);
+      Delete(quot);
+      Delete(prod);
+      Delete(deriv);
+      Delete(sum);
+      if (op2->var) result->var = 1;
+   } else if ( !strcmp(name,"ATAN2") ||
+               !strcmp(name,"MOD"  ) ||
+               !strcmp(name,"RANU" ) ||
+               !strcmp(name,"RANG" )  ) {
+      buflen =  strlen(name) +
+                strlen(op1->expr) +
+                strlen(op2->expr) + 3 + 1;
+      result->expr = NNew(buflen, char);
+      sprintf(result->expr, "%s(%s,%s)", name, op1->expr, op2->expr);
+      result->deriv = StrDup("BLANK");
+   } else {
+      SETERR(DYDXBADFUNC);
+   }
+   DeleteExpr(op1);
+   DeleteExpr(op2);
+   return result;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                               Fun3                                         */
+/* -------------------------------------------------------------------------- */
+static expr Fun3(char *name, expr op1, expr op2, expr op3)
+{
+   int i, buflen;
+   expr result=New(_expr);
+
+   for (i=0; name[i]; i++) name[i] = toupper(name[i]);
+   if ( !strcmp(name,"IFBLANK") ) {
+      buflen =  strlen(name) +
+                strlen(op1->expr) +
+                strlen(op2->expr) + 
+                strlen(op3->expr) + 4 + 1;
+      result->expr = NNew(buflen, char);
+      sprintf(result->expr, "%s(%s,%s,%s)",
+                             name, op1->expr, op2->expr, op3->expr);
+      result->deriv = StrDup("BLANK");
+   } else {
+      SETERR(DYDXBADFUNC);
+   }
+   DeleteExpr(op1);
+   DeleteExpr(op2);
+   DeleteExpr(op3);
+   return result;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                               Fun4                                         */
+/* -------------------------------------------------------------------------- */
+static expr Fun4(char *name, expr op1, expr op2, expr op3,  expr op4)
+{
+   int i, buflen;
+   expr result=New(_expr);
+
+   for (i=0; name[i]; i++) name[i] = toupper(name[i]);
+   if ( !strcmp(name,"IFEQ") ||
+        !strcmp(name,"IFNE") ||
+        !strcmp(name,"IFGT") ||
+        !strcmp(name,"IFGE") ||
+        !strcmp(name,"IFLT") ||
+        !strcmp(name,"IFLE")  ) {
+      buflen =  strlen(name) +
+                strlen(op1->expr) +
+                strlen(op2->expr) + 
+                strlen(op3->expr) +
+                strlen(op4->expr) + 4 + 1;
+      result->expr = NNew(buflen, char);
+      sprintf(result->expr, "%s(%s,%s,%s,%s)",
+                             name, op1->expr, op2->expr, op3->expr, op4->expr);
+      result->deriv = StrDup("BLANK");
+   } else {
+      SETERR(DYDXBADFUNC);
+   }
+   DeleteExpr(op1);
+   DeleteExpr(op2);
+   DeleteExpr(op3);
+   DeleteExpr(op4);
+   return result;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                              RegName                                       */
+/* -------------------------------------------------------------------------- */
+static void RegName(char *name)
+{
+   identifier current;
+    
+   if (!strcmp(name,Var)) return;
+   for (current=names; current; current = current->next) {
+      if (!strcmp(name,current->name)) return;
+   }
+   current = New(_identifier);
+   current->name = StrDup(name);
+   current->next = names;
+   names = current;
+}
+
+static void yyerror (char *s)
+{
+   errcode = DYDXBADPSYN;
+}           
+
+/*
+Fortran to C interface:
+
+@ integer function dydx ( character,
+@                         character,
+@                         character,
+@                         character,
+@                         character,
+@                         integer  ,
+@                         integer  )
+
+*/
+/* ========================================================================== */
+/*                                   dydx                                     */
+/* -------------------------------------------------------------------------- */
+fint dydx_c(fchar inexpr, fchar variable, fchar outexpr, fchar derivative,
+            fchar constants, fint *maxconst, fint *numconst)
+{
+   fint result;
+   identifier current;
+   int  i, mxconst;
+   char *Func;
+    
+   Var  = NNew(variable.l+1,char);
+   (void)char2str(variable, Var, variable.l+1);
+   for (i=variable.l-1; i&&Var[i]==' '; i--) Var[i] = '\0';
+   Func = NNew(inexpr.l+2,char);
+   (void)char2str(inexpr, Func, inexpr.l+1);
+   Func[inexpr.l] = '\n';
+   dydx_init(Func);
+   result = (fint)yyparse();
+   if (!result) {
+      str2char(resval->expr, outexpr);
+      if (strlen(resval->expr)>outexpr.l) result = DYDXFUNCLEN;
+      str2char(resval->deriv, derivative);
+      if (strlen(resval->deriv)>derivative.l) result = DYDXTOOLARGE;
+      mxconst = *maxconst;
+      *numconst = 0;
+      while (names) {
+         (*numconst)++;
+         current = names;
+         if (mxconst) {
+            str2char(current->name,constants);
+            if (strlen(current->name)>constants.l) result = DYDXCONSTLEN;
+            constants.a += constants.l;
+            mxconst--;
+         } else result = DYDXTOOMANY;
+         Delete(current->name);
+         names = current->next;
+         Delete(current);
+      }
+      DeleteExpr(resval);
+   }
+   Delete(Var); Delete(Func);
+   return result;
+}
+#<
+
+#>            dydxscan.l
+%{
+/* dydxscan.l
+                              COPYRIGHT (c) 1997
+                        Kapteyn Astronomical Institute
+         University of Groningen  -  9700 AV Groningen, The Netherlands
+
+Lexical scanner for differentiator routine.
+Author: J.P. Terlouw
+*/
+
+#include "dydxcom.h"
+#include "dydxtab.h"                /* = y.tab.h generated by yacc -d */
+
+#define New(type) ((type *)calloc(1,sizeof(type)))
+#define NNew(n,type) ((type *)calloc(n,sizeof(type)))
+#define Delete(x)  {free(x); x=NULL;}
+
+#undef   input                    /* defined internally */
+#undef   unput                    /* defined internally */
+#undef   output                   /* defined internally */
+#define  output(x)                /* no-op */
+#define token(x)  return x
+
+static int identifier();
+static int number();
+static char input(void);
+static void unput(char);
+
+static char  *bufptr;
+static char  ustack[YYLMAX];
+static int   stkptr=0;
+
+%}
+
+D     [0-9]
+E     [DdEe][-+]?{D}+
+OP    [\,\(\)\{\}\*\/+-]
+
+%%
+{D}+(\.{D}*)?({E})?     {token(number()); }
+\.{D}+({E})?            {token(number()); }
+[A-Za-z][A-Za-z0-9]*    {token(identifier()); }
+{OP}                    {token(*yytext); }
+"**"                    {token(POWER); }
+[ ]*                    {}
+\n                      {token('\n');  }
+.                       {token(LEXERR); }
+%%
+
+
+extern void dydx_init(char *text)
+{
+   bufptr = text;
+   stkptr = 0;
+}
+
+static char input(void)
+{
+   if (stkptr) {
+      return ustack[--stkptr];
+   }
+   if (!*(bufptr)) {
+      return '\n';
+   } 
+   return *(bufptr++);
+}
+ 
+static void unput(char c)
+{
+   if (stkptr<YYLMAX) {
+      ustack[stkptr++] = c;
+   }
+}
+
+static char *StrDup (char *orig)  
+{
+   char *result=NNew(strlen(orig)+1,char);
+   strcpy(result,orig);
+   return result;
+} 
+
+static int identifier()
+{
+   yylval.text = StrDup((char*)yytext);
+   return IDENTIFIER;
+}
+
+static int number()
+{
+   yylval.text = StrDup((char*)yytext);
+   return NUMBER;
+}
+
+extern int yywrap()
+{
+   return 1;
+}
+#<
+
+#>            dydxcom.h
+#if !defined (_dydxcom_h_)
+#define _dydxcom_h_
+
+                             /* rename externals */
+#define yylval     dydx_val
+#define dydxYlval  dydx_val
+#define yyparse    dydx_parse
+#define yylex      dydx_lex
+#define dydxYlex   dydx_lex
+#define main       dydx_lex  /* prevent undefined external reference ... */
+
+                             /* error codes */
+                             
+#define DYDXBADSSYN  -1  /* scanner syntax error */
+#define DYDXBADPSYN  -2  /* parser syntax error */
+#define DYDXBADFUNC  -3  /* function has not been implemented */
+#define DYDXFUNCLEN  -4  /* function too large for output argument */
+#define DYDXTOOLARGE -5  /* derivative too large for output argument */
+#define DYDXCONSTLEN -6  /* constant name too long */
+#define DYDXTOOMANY  -7  /* too many constants for output argument */
+
+typedef struct {
+   int  var;         /* indicates variable involved */
+   char *expr;
+   char *deriv;
+} _expr, *expr;
+
+extern void dydx_init(char *);
+
+#endif /* _dydxcom_h_ */
+#<
+
+#>            dydx.c
+
+# line 2 "dydx.y"
+/* dydx.y
+
+   
+                              COPYRIGHT (c) 1997
+                        Kapteyn Astronomical Institute
+         University of Groningen  -  9700 AV Groningen, The Netherlands
+      
+Symbolic differentiation routine.
+Author: J.P. Terlouw
+
+*/
+
+#include "stddef.h"
+#include "stdlib.h"
+#include "ctype.h"
+#include "stdio.h"
+#include "gipsyc.h"
+#include "dydxcom.h"
+
+#define  CX 0  /* longer (sub)expressions may be simplified in some cases */
+
+#ifndef	NULL
+#define  NULL 0
+#endif
+#define  ERRCHK if (errcode) {  YYERROR; }
+#define  SETERR(n) if (!errcode) errcode = n
+#define  dydxYparse dydx_parse             /* define own name */
+#define  dydxYerror dydx_error
+
+#define New(type) ((type *)calloc(1,sizeof(type)))
+#define NNew(n,type) ((type *)calloc(n,sizeof(type)))
+#define Delete(x)  {free(x); x=NULL;}
+
+#define Digit(x) (strlen(x)==1 && (*x)>='0' && (*x)<='9')
+
+typedef struct {
+   char *fname;     /* function name */
+   int  nargs;      /* number of times argument is referenced in derivative */
+   char *deriv;     /* derivative of function */
+} fundef;
+
+typedef struct _identifier {
+   struct _identifier *next;
+   char   *name;
+} _identifier, *identifier;
+
+static char   *Var;
+static int    errcode=0;
+static expr   resval;
+static identifier names=NULL;
+
+static fundef functions[]={
+   {"SQRT",   1,  "(1/(2*SQRT(%s)))"},
+   {"RAD",    0,  "0.0174532925"},
+   {"DEG",    0,  "57.2957795"},
+   {"SIN",    1,  "COS(%s)"},
+   {"COS",    1,  "(-SIN(%s))"},
+   {"ASIN",   1,  "(1/SQRT(1-(%s)**2))"},
+   {"ACOS",   1,  "(-1/SQRT(1-(%s)**2))"},
+   {"TAN",    1,  "(1/((COS(%s)**2)))"},
+   {"ATAN",   1,  "(1/(1+(%s)**2))"},
+   {"EXP",    1,  "EXP(%s)"},
+   {"SINH",   1,  "COSH(%s)"},
+   {"LN",     1,  "(1/%s)"},
+   {"COSH",   1,  "SINH(%s)"},
+   {"LOG",    1,  "(0.434294482/%s)"},
+   {"TANH",   1,  "(1-TANH(%s)**2)"},
+   {"SINC",   4,  "(((%s*COS(%s))-SIN(%s))/(%s)**2)"},
+   {"ABS",    1,  "SIGN(%s)"},
+   {"SIGN",   0,  "0"},
+   {"ERF",    0,  "BLANK"},
+   {"ERFC",   0,  "BLANK"},
+   {"INT",    0,  "0"},
+   {"NINT",   0,  "0"},
+   {"RANP",   0,  "BLANK"},
+   {"SEC",    2,  "((-(-SIN(%s)))/COS(%s)**2)"},
+   {"CSC",    2,  "((-COS(%s))/SIN(%s)**2)"},
+   {"COT",    2,  "((-(1/((COS(%s)**2))))/TAN(%s)**2)"},
+   {"SECH",   2,  "(-SECH(%s)*TANH(%s))"},
+   {"CSCH",   2,  "(-CSCH(%s)*COTH(%s))"},
+   {"COTH",   2,  "(-CSCH(%s)**2)"},
+   {"ASINH",  1,  "(1/SQRT(1+%s**2))"},
+   {"ACOSH",  1,  "(1/SQRT(%s**2-1))"},
+   {"ATANH",  1,  "(1/(1-%s**2))"},
+   {"STEP",   0,  "0"},
+   {"RECT",   0,  "0"}
+};
+
+
+# line 94 "dydx.y"
+typedef union  {
+       char *text;
+       expr value;
+       } YYSTYPE;
+#ifdef __cplusplus
+#  include <stdio.h>
+#  include <yacc.h>
+#endif	/* __cplusplus */ 
+# define NUMBER 257
+# define IDENTIFIER 258
+# define POWER 259
+# define LEXERR 260
+# define UMINUS 261
+#define dydxYclearin dydxYchar = -1
+#define dydxYerrok dydxYerrflag = 0
+extern int dydxYchar;
+#ifndef YYMAXDEPTH
+#define YYMAXDEPTH 150
+#endif
+
+/* __YYSCLASS defines the scoping/storage class for global objects
+ * that are NOT renamed by the -p option.  By default these names
+ * are going to be 'static' so that multi-definition errors
+ * will not occur with multiple parsers.
+ * If you want (unsupported) access to internal names you need
+ * to define this to be null so it implies 'extern' scope.
+ * This should not be used in conjunction with -p.
+ */
+#ifndef __YYSCLASS
+# define __YYSCLASS static
+#endif
+YYSTYPE dydxYlval;
+__YYSCLASS YYSTYPE dydxYval;
+typedef int dydxYtabelem;
+# define YYERRCODE 256
+
+# line 157 "dydx.y"
+
+
+/* -------------------------------------------------------------------------- */
+/*                                StrDup                                      */
+/* -------------------------------------------------------------------------- */
+static char *StrDup (char *orig)
+{
+   char *result=NNew(strlen(orig)+1,char);
+   strcpy(result,orig);
+   return result;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                StrFun                                      */
+/* -------------------------------------------------------------------------- */
+static char *StrFun(char *a, char *b)
+{
+   char *result;
+
+   if (!strcmp(b,"1") && !strcmp(a,"LN") ) {
+      result = StrDup("0");
+   } else {
+      result = NNew(strlen(a)+strlen(b)+2+1,char);
+      sprintf(result,"%s(%s)",a,b);
+   }
+   return result;
+}
+
+
+/* -------------------------------------------------------------------------- */
+/*                                StrNeg                                      */
+/* -------------------------------------------------------------------------- */
+static char *StrNeg(char *a)
+{
+   char *result;  
+    
+   if (!strcmp(a,"0")) {
+      result = StrDup(a);
+   } else {
+      result = NNew(strlen(a)+3+1,char);
+      sprintf(result,"(-%s)",a);
+   }
+   return result;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                StrPwr                                      */
+/* -------------------------------------------------------------------------- */
+static char *StrPwr(char *a, char *b)
+{
+   char *result;
+    
+   if (!strcmp(b,"1")) {
+      result = StrDup(a);
+   } else if (!strcmp(b,"0")) {
+      result = StrDup("1");
+   } else if (!strcmp(a,"1")) {
+      result = StrDup("1");
+   } else {
+      result = NNew(strlen(a)+strlen(b)+2+1,char);
+      sprintf(result,"%s**%s",a,b);
+   }
+   return result;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                StrMul                                      */
+/* -------------------------------------------------------------------------- */
+static char *StrMul(char *a, char *b)
+{
+   char *result;
+   
+   if (strcmp(a,"0") && strcmp(b,"0")) {
+      if (!strcmp(a,"1")) {
+         result = StrDup(b);
+      } else if (!strcmp(b,"1")) {
+         result = StrDup(a);
+      } else if (!strcmp(a,b) && strlen(a)>CX) {
+         result = StrPwr(a,"2");
+      } else {
+         result = NNew(strlen(a)+strlen(b)+3+1,char);
+         sprintf(result,"(%s*%s)",a,b);
+      }
+   } else {
+      result = StrDup("0");
+   }
+   return result;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                StrDiv                                      */
+/* -------------------------------------------------------------------------- */
+static char *StrDiv(char *a, char *b)
+{
+   char *result;
+    
+   if (!strcmp(a,"0")) {
+      result = StrDup("0");
+   } else if (!strcmp(a,b)) {
+      result = StrDup("1");
+   } else {
+      result = NNew(strlen(a)+strlen(b)+3+1,char);
+      sprintf(result,"(%s/%s)",a,b);
+   }
+   return result;
+}
+      
+
+/* -------------------------------------------------------------------------- */
+/*                                StrAdd                                      */
+/* -------------------------------------------------------------------------- */
+static char *StrAdd(char *a, char *b)
+{
+   char *result;  
+    
+   if (!strcmp(a,"0")) {
+      result = StrDup(b);
+   } else if (!strcmp(b,"0")) {
+      result = StrDup(a);
+   } else if (!strcmp(a,b) && strlen(a)>CX) {
+      result = StrMul("2",a);
+   } else {
+      result = NNew(strlen(a)+strlen(b)+3+1,char);
+      sprintf(result,"(%s+%s)",a,b);
+   }
+   return result;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                StrSub                                      */
+/* -------------------------------------------------------------------------- */
+static char *StrSub(char *a, char *b)
+{
+   char *result;  
+    
+   if (Digit(a)&&Digit(b)) {
+      int ia=atoi(a), ib=atoi(b), ir;
+      ir = ia-ib;
+      if (ir<0) {
+         result = NNew(5,char);
+         sprintf(result,"(%d)",ir);
+      } else {
+         result = NNew(3,char);
+         sprintf(result,"%d",ir);
+      }
+   } else {
+      if (!strcmp(a,"0")) {
+         if (!strcmp(b,"0")) {
+            result = StrDup("0");
+         } else {
+            result = StrNeg(b);
+         }
+      } else if (!strcmp(b,"0")) {
+         result = StrDup(a);
+      } else if (!strcmp(a,b)) {
+      result = StrDup("0");
+      } else {
+         result = NNew(strlen(a)+strlen(b)+3+1,char);
+         sprintf(result,"(%s-%s)",a,b);
+      }
+   }
+   return result;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                NewExpr                                     */
+/* -------------------------------------------------------------------------- */
+static expr NewExpr(char *name)
+{
+   expr current=New(_expr);
+   
+   current->expr = StrDup(name);
+   if (strcmp(name,Var)) {
+      current->deriv = StrDup("0");
+   } else {
+      current->deriv = StrDup("1");
+      current->var   = 1;
+   }
+   Delete(name);
+   return current;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                DeleteExpr                                  */
+/* -------------------------------------------------------------------------- */
+static void DeleteExpr(expr current)
+{
+   free(current->expr);
+   free(current->deriv);
+   free(current);
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                Add                                         */
+/* -------------------------------------------------------------------------- */
+static expr Add(expr op1, expr op2)
+{
+   expr result=New(_expr);
+
+   result->expr =  StrAdd(op1->expr,op2->expr);
+   result->deriv = StrAdd(op1->deriv,op2->deriv);
+   if (op1->var || op2->var) result->var = 1;
+   DeleteExpr(op1);
+   DeleteExpr(op2);
+   return result;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                Sub                                         */
+/* -------------------------------------------------------------------------- */
+static expr Sub(expr op1, expr op2)
+{
+   expr result=New(_expr);
+ 
+   result->expr  = StrSub(op1->expr,op2->expr);
+   result->deriv = StrSub(op1->deriv,op2->deriv);
+   if (op1->var || op2->var) result->var = 1;
+   DeleteExpr(op1);
+   DeleteExpr(op2);
+   return result;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                Mul                                         */
+/* -------------------------------------------------------------------------- */
+static expr Mul(expr op1, expr op2)
+{
+   char *p1, *p2;
+   expr result=New(_expr);
+
+   result->expr = StrMul(op1->expr,op2->expr);
+   p1 = StrMul(op1->expr, op2->deriv);
+   p2 = StrMul(op2->expr, op1->deriv);
+   result->deriv  = StrAdd(p1,p2);
+   Delete(p1); Delete(p2);
+   if (op1->var || op2->var) result->var = 1;
+   DeleteExpr(op1);
+   DeleteExpr(op2);
+   return result;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                Div                                         */
+/* -------------------------------------------------------------------------- */
+static expr Div(expr op1, expr op2)
+{
+   char *p1, *p2, *p3, *d1;
+   expr result=New(_expr);
+   
+   result->expr = StrDiv(op1->expr,op2->expr);
+   p1 = StrMul(op2->expr, op1->deriv);
+   p2 = StrMul(op1->expr, op2->deriv);
+   d1 = StrSub(p1,p2);
+   p3 = StrMul(op2->expr, op2->expr);
+   result->deriv = StrDiv(d1,p3);
+   Delete(p1); Delete(p2); Delete(p3); Delete(d1);
+   if (op1->var || op2->var) result->var = 1;
+   DeleteExpr(op1);
+   DeleteExpr(op2);
+   return result;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                Neg                                         */
+/* -------------------------------------------------------------------------- */
+static expr Neg(expr op1)
+{
+   expr result=New(_expr);
+
+   result->expr  = StrNeg(op1->expr);
+   result->deriv = StrNeg(op1->deriv);
+   result->var   = op1->var;
+   DeleteExpr(op1);
+   return result;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                Pwr                                         */
+/* -------------------------------------------------------------------------- */
+static expr Pwr(expr op1, expr op2)
+{
+   expr result=New(_expr);
+   char *t1, *t2, *t3, *t4, *t5;
+   char *f=op1->expr, *df=op1->deriv, *g=op2->expr, *dg=op2->deriv;
+
+   result->expr = StrPwr(op1->expr,op2->expr);
+   if (op2->var) {
+      t1 = StrFun("LN",f);
+      t2 = StrMul(dg,t1);
+      t3 = StrMul(df,g);
+      t4 = StrDiv(t3,f);
+      t5 = StrAdd(t4,t2);
+      result->deriv = StrMul(result->expr,t5);
+      Delete(t1); Delete(t2); Delete(t3); Delete(t4); Delete(t5);
+   } else {
+      t1 = StrSub(op2->expr,"1");
+      t2 = StrPwr(op1->expr,t1);
+      t3 = StrMul(op2->expr,t2);
+      result->deriv = StrMul(op1->deriv,t3);
+      Delete(t1); Delete(t2); Delete(t3);
+   }
+   if (op1->var || op2->var) result->var = 1;
+   DeleteExpr(op1);
+   DeleteExpr(op2);
+   return result;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                Fun                                         */
+/* -------------------------------------------------------------------------- */
+static expr Fun(char *name, expr op1)
+{
+   int  i, nfuns=sizeof(functions)/sizeof(fundef);
+   expr result=New(_expr);
+
+   for (i=0; name[i]; i++) name[i] = toupper(name[i]);
+   for (i=0; i<nfuns; i++) {
+      if (!strcmp(functions[i].fname,name)) {
+         char *funbuf;
+         int  buflen;
+          
+         buflen = strlen(functions[i].deriv) +
+                  strlen(op1->expr)*functions[i].nargs + 1;
+         funbuf = NNew(buflen, char);
+         result->expr = StrFun(name,op1->expr);
+         switch (functions[i].nargs) {
+            case 0: sprintf(funbuf,functions[i].deriv);
+                    break;
+            case 1: sprintf(funbuf,functions[i].deriv,op1->expr);
+                    break;
+            case 2: sprintf(funbuf,functions[i].deriv,op1->expr,op1->expr);
+                    break;
+            case 3: sprintf(funbuf,functions[i].deriv,
+                            op1->expr,op1->expr,op1->expr);
+                    break;
+            case 4: sprintf(funbuf,functions[i].deriv,
+                            op1->expr,op1->expr,op1->expr,op1->expr);
+                    break;
+            case 5: sprintf(funbuf,functions[i].deriv,
+                            op1->expr,op1->expr,op1->expr,op1->expr,op1->expr);
+                    break;
+            default: SETERR(DYDXBADFUNC);
+         }
+         result->deriv = StrMul(op1->deriv, funbuf);     /* chain rule */  
+         Delete(funbuf);
+         if (op1->var) result->var = 1;
+         break;
+      }
+   }
+   if (i==nfuns) SETERR(DYDXBADFUNC);
+   DeleteExpr(op1);
+   Delete(name);
+   return result;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                               IxFun                                        */
+/* -------------------------------------------------------------------------- */
+static expr IxFun(char *name, expr op1, expr op2)
+{
+   int i, buflen;
+   char *term2, *quot, *prod, *deriv, *sum;
+   expr result=New(_expr);
+
+   for (i=0; name[i]; i++) name[i] = toupper(name[i]);
+   if ( !strcmp(name,"BJ") ||                           /* Bessel functions */
+        !strcmp(name,"BY") ||
+        !strcmp(name,"BI") ||
+        !strcmp(name,"BK")  )  {
+      buflen =  strlen(name) +
+                strlen(op1->expr) +
+                strlen(op2->expr) + 3 + 1;
+      result->expr = NNew(buflen, char);
+      sprintf(result->expr, "%s(%s,%s)", name, op1->expr, op2->expr);
+      quot = StrDiv(op1->expr, op2->expr);
+      prod = StrMul(quot, result->expr);
+      sum  = StrAdd(op1->expr, "1");
+      buflen =  strlen(name) +
+                strlen(sum) +
+                strlen(op2->expr) + 3 + 1;
+      term2 = NNew(buflen, char);
+      sprintf(term2, "%s(%s,%s)", name, sum, op2->expr);
+      if (!strcmp(name,"BI")) {
+         deriv = StrAdd(prod,term2);
+      } else {
+         deriv = StrSub(prod,term2);
+      }
+      result->deriv = StrMul(op2->deriv, deriv);         /* chain rule */  
+      Delete(term2);
+      Delete(quot);
+      Delete(prod);
+      Delete(deriv);
+      Delete(sum);
+      if (op2->var) result->var = 1;
+   } else if ( !strcmp(name,"ATAN2") ||
+               !strcmp(name,"MOD"  ) ||
+               !strcmp(name,"RANU" ) ||
+               !strcmp(name,"RANG" )  ) {
+      buflen =  strlen(name) +
+                strlen(op1->expr) +
+                strlen(op2->expr) + 3 + 1;
+      result->expr = NNew(buflen, char);
+      sprintf(result->expr, "%s(%s,%s)", name, op1->expr, op2->expr);
+      result->deriv = StrDup("BLANK");
+   } else {
+      SETERR(DYDXBADFUNC);
+   }
+   DeleteExpr(op1);
+   DeleteExpr(op2);
+   return result;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                               Fun3                                         */
+/* -------------------------------------------------------------------------- */
+static expr Fun3(char *name, expr op1, expr op2, expr op3)
+{
+   int i, buflen;
+   expr result=New(_expr);
+
+   for (i=0; name[i]; i++) name[i] = toupper(name[i]);
+   if ( !strcmp(name,"IFBLANK") ) {
+      buflen =  strlen(name) +
+                strlen(op1->expr) +
+                strlen(op2->expr) + 
+                strlen(op3->expr) + 4 + 1;
+      result->expr = NNew(buflen, char);
+      sprintf(result->expr, "%s(%s,%s,%s)",
+                             name, op1->expr, op2->expr, op3->expr);
+      result->deriv = StrDup("BLANK");
+   } else {
+      SETERR(DYDXBADFUNC);
+   }
+   DeleteExpr(op1);
+   DeleteExpr(op2);
+   DeleteExpr(op3);
+   return result;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                               Fun4                                         */
+/* -------------------------------------------------------------------------- */
+static expr Fun4(char *name, expr op1, expr op2, expr op3,  expr op4)
+{
+   int i, buflen;
+   expr result=New(_expr);
+
+   for (i=0; name[i]; i++) name[i] = toupper(name[i]);
+   if ( !strcmp(name,"IFEQ") ||
+        !strcmp(name,"IFNE") ||
+        !strcmp(name,"IFGT") ||
+        !strcmp(name,"IFGE") ||
+        !strcmp(name,"IFLT") ||
+        !strcmp(name,"IFLE")  ) {
+      buflen =  strlen(name) +
+                strlen(op1->expr) +
+                strlen(op2->expr) + 
+                strlen(op3->expr) +
+                strlen(op4->expr) + 4 + 1;
+      result->expr = NNew(buflen, char);
+      sprintf(result->expr, "%s(%s,%s,%s,%s)",
+                             name, op1->expr, op2->expr, op3->expr, op4->expr);
+      result->deriv = StrDup("BLANK");
+   } else {
+      SETERR(DYDXBADFUNC);
+   }
+   DeleteExpr(op1);
+   DeleteExpr(op2);
+   DeleteExpr(op3);
+   DeleteExpr(op4);
+   return result;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                              RegName                                       */
+/* -------------------------------------------------------------------------- */
+static void RegName(char *name)
+{
+   identifier current;
+    
+   if (!strcmp(name,Var)) return;
+   for (current=names; current; current = current->next) {
+      if (!strcmp(name,current->name)) return;
+   }
+   current = New(_identifier);
+   current->name = StrDup(name);
+   current->next = names;
+   names = current;
+}
+
+static void dydxYerror (char *s)
+{
+   errcode = DYDXBADPSYN;
+}           
+
+/*
+Fortran to C interface:
+
+@ integer function dydx ( character,
+@                         character,
+@                         character,
+@                         character,
+@                         character,
+@                         integer  ,
+@                         integer  )
+
+*/
+/* ========================================================================== */
+/*                                   dydx                                     */
+/* -------------------------------------------------------------------------- */
+fint dydx_c(fchar inexpr, fchar variable, fchar outexpr, fchar derivative,
+            fchar constants, fint *maxconst, fint *numconst)
+{
+   fint result;
+   identifier current;
+   int  i, mxconst;
+   char *Func;
+    
+   Var  = NNew(variable.l+1,char);
+   (void)char2str(variable, Var, variable.l+1);
+   for (i=variable.l-1; i&&Var[i]==' '; i--) Var[i] = '\0';
+   Func = NNew(inexpr.l+2,char);
+   (void)char2str(inexpr, Func, inexpr.l+1);
+   Func[inexpr.l] = '\n';
+   dydx_init(Func);
+   result = (fint)dydxYparse();
+   if (!result) {
+      str2char(resval->expr, outexpr);
+      if (strlen(resval->expr)>outexpr.l) result = DYDXFUNCLEN;
+      str2char(resval->deriv, derivative);
+      if (strlen(resval->deriv)>derivative.l) result = DYDXTOOLARGE;
+      mxconst = *maxconst;
+      *numconst = 0;
+      while (names) {
+         (*numconst)++;
+         current = names;
+         if (mxconst) {
+            str2char(current->name,constants);
+            if (strlen(current->name)>constants.l) result = DYDXCONSTLEN;
+            constants.a += constants.l;
+            mxconst--;
+         } else result = DYDXTOOMANY;
+         Delete(current->name);
+         names = current->next;
+         Delete(current);
+      }
+      DeleteExpr(resval);
+   }
+   Delete(Var); Delete(Func);
+   return result;
+}
+__YYSCLASS dydxYtabelem dydxYexca[] ={
+-1, 1,
+	0, -1,
+	-2, 0,
+	};
+# define YYNPROD 19
+# define YYLAST 265
+__YYSCLASS dydxYtabelem dydxYact[]={
+
+     4,    16,    22,     7,     4,     6,    30,     7,    19,     6,
+    37,    14,    12,    38,    13,    11,    15,    34,    14,    12,
+    35,    13,    17,    15,    31,    14,    12,    32,    13,    14,
+    15,    40,    14,    12,    15,    13,     1,    15,    28,    14,
+    12,     0,    13,     0,    15,     0,     2,    14,    12,     0,
+    13,    18,    15,    20,    21,     0,     0,     0,     0,    23,
+    24,    25,    26,    27,     0,     0,    29,     0,     0,     0,
+     0,     0,     0,     0,     0,     0,     0,     0,     0,    33,
+     0,     0,    36,     9,     0,    39,     0,     9,     0,     0,
+     0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
+     0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
+     0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
+     0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
+     0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
+     0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
+     0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
+     0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
+     0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
+     0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
+     0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
+     0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
+     0,     0,     0,     0,     0,     0,     3,     8,     5,     0,
+    10,     8,     5,     0,    10,     0,     0,     0,    16,     0,
+     0,     0,     0,     0,     0,    16,     0,     0,     0,     0,
+     0,     0,    16,     0,     0,     0,    16,     0,     0,    16,
+     0,     0,     0,     0,     0,     0,    16,     0,     0,     0,
+     0,     0,     0,     0,    16 };
+__YYSCLASS dydxYtabelem dydxYpact[]={
+
+   -40, -3000,     5,    12,   -36,   -32,   -36,   -36, -3000,  -256,
+ -3000, -3000,   -36,   -36,   -36,   -36,   -36, -3000,    -3,   -36,
+  -258,  -258,  -119,   -13,   -13,  -258,  -258,  -258, -3000,   -17,
+ -3000, -3000,   -36,   -24, -3000,   -36,   -31, -3000,   -36,   -10,
+ -3000 };
+__YYSCLASS dydxYtabelem dydxYpgo[]={
+
+     0,    36,    46 };
+__YYSCLASS dydxYtabelem dydxYr1[]={
+
+     0,     1,     1,     2,     2,     2,     2,     2,     2,     2,
+     2,     2,     2,     2,     2,     2,     2,     2,     2 };
+__YYSCLASS dydxYtabelem dydxYr2[]={
+
+     0,     5,     5,     7,     7,     7,     7,     7,     7,     9,
+    13,    17,    21,     5,     5,     3,     3,     7,     3 };
+__YYSCLASS dydxYtabelem dydxYchk[]={
+
+ -3000,    -1,    -2,   256,    40,   258,    45,    43,   257,   123,
+   260,    10,    43,    45,    42,    47,   259,    10,    -2,    40,
+    -2,    -2,   258,    -2,    -2,    -2,    -2,    -2,    41,    -2,
+   125,    41,    44,    -2,    41,    44,    -2,    41,    44,    -2,
+    41 };
+__YYSCLASS dydxYtabelem dydxYdef[]={
+
+     0,    -2,     0,     0,     0,    16,     0,     0,    15,     0,
+    18,     1,     0,     0,     0,     0,     0,     2,     0,     0,
+    13,    14,     0,     4,     5,     6,     7,     8,     3,     0,
+    17,     9,     0,     0,    10,     0,     0,    11,     0,     0,
+    12 };
+typedef struct { char *t_name; int t_val; } dydxYtoktype;
+#ifndef YYDEBUG
+#	define YYDEBUG	0	/* don't allow debugging */
+#endif
+
+#if YYDEBUG
+
+__YYSCLASS dydxYtoktype dydxYtoks[] =
+{
+	"NUMBER",	257,
+	"IDENTIFIER",	258,
+	"POWER",	259,
+	"LEXERR",	260,
+	"UMINUS",	261,
+	"+",	43,
+	"-",	45,
+	"*",	42,
+	"/",	47,
+	"-unknown-",	-1	/* ends search */
+};
+
+__YYSCLASS char * dydxYreds[] =
+{
+	"-no such reduction-",
+	"derive : expr '\n'",
+	"derive : error '\n'",
+	"expr : '(' expr ')'",
+	"expr : expr '+' expr",
+	"expr : expr '-' expr",
+	"expr : expr '*' expr",
+	"expr : expr '/' expr",
+	"expr : expr POWER expr",
+	"expr : IDENTIFIER '(' expr ')'",
+	"expr : IDENTIFIER '(' expr ',' expr ')'",
+	"expr : IDENTIFIER '(' expr ',' expr ',' expr ')'",
+	"expr : IDENTIFIER '(' expr ',' expr ',' expr ',' expr ')'",
+	"expr : '-' expr",
+	"expr : '+' expr",
+	"expr : NUMBER",
+	"expr : IDENTIFIER",
+	"expr : '{' IDENTIFIER '}'",
+	"expr : LEXERR",
+};
+#endif /* YYDEBUG */
+#define YYFLAG  (-3000)
+/* @(#) $Revision: 70.7 $ */    
+
+/*
+** Skeleton parser driver for yacc output
+*/
+
+#if defined(NLS) && !defined(NL_SETN)
+#include <msgbuf.h>
+#endif
+
+#ifndef nl_msg
+#define nl_msg(i,s) (s)
+#endif
+
+/*
+** yacc user known macros and defines
+*/
+#define YYERROR		goto dydxYerrlab
+
+#ifndef __RUNTIME_YYMAXDEPTH
+#define YYACCEPT	return(0)
+#define YYABORT		return(1)
+#else
+#define YYACCEPT	{free_stacks(); return(0);}
+#define YYABORT		{free_stacks(); return(1);}
+#endif
+
+#define YYBACKUP( newtoken, newvalue )\
+{\
+	if ( dydxYchar >= 0 || ( dydxYr2[ dydxYtmp ] >> 1 ) != 1 )\
+	{\
+		dydxYerror( (nl_msg(30001,"syntax error - cannot backup")) );\
+		goto dydxYerrlab;\
+	}\
+	dydxYchar = newtoken;\
+	dydxYstate = *dydxYps;\
+	dydxYlval = newvalue;\
+	goto dydxYnewstate;\
+}
+#define YYRECOVERING()	(!!dydxYerrflag)
+#ifndef YYDEBUG
+#	define YYDEBUG	1	/* make debugging available */
+#endif
+
+/*
+** user known globals
+*/
+int dydxYdebug;			/* set to 1 to get debugging */
+
+/*
+** driver internal defines
+*/
+/* define for YYFLAG now generated by yacc program. */
+/*#define YYFLAG		(FLAGVAL)*/
+
+/*
+** global variables used by the parser
+*/
+# ifndef __RUNTIME_YYMAXDEPTH
+__YYSCLASS YYSTYPE dydxYv[ YYMAXDEPTH ];	/* value stack */
+__YYSCLASS int dydxYs[ YYMAXDEPTH ];		/* state stack */
+# else
+__YYSCLASS YYSTYPE *dydxYv;			/* pointer to malloc'ed value stack */
+__YYSCLASS int *dydxYs;			/* pointer to malloc'ed stack stack */
+
+#if defined(__STDC__) || defined (__cplusplus)
+#include <stdlib.h>
+#else
+	extern char *malloc();
+	extern char *realloc();
+	extern void free();
+#endif /* __STDC__ or __cplusplus */
+
+
+static int allocate_stacks(); 
+static void free_stacks();
+# ifndef YYINCREMENT
+# define YYINCREMENT (YYMAXDEPTH/2) + 10
+# endif
+# endif	/* __RUNTIME_YYMAXDEPTH */
+long  dydxYmaxdepth = YYMAXDEPTH;
+
+__YYSCLASS YYSTYPE *dydxYpv;			/* top of value stack */
+__YYSCLASS int *dydxYps;			/* top of state stack */
+
+__YYSCLASS int dydxYstate;			/* current state */
+__YYSCLASS int dydxYtmp;			/* extra var (lasts between blocks) */
+
+int dydxYnerrs;			/* number of errors */
+__YYSCLASS int dydxYerrflag;			/* error recovery flag */
+int dydxYchar;			/* current input token number */
+
+
+
+/*
+** dydxYparse - return 0 if worked, 1 if syntax error not recovered from
+*/
+int
+dydxYparse()
+{
+	register YYSTYPE *dydxYpvt;	/* top of value stack for $vars */
+
+	/*
+	** Initialize externals - dydxYparse may be called more than once
+	*/
+# ifdef __RUNTIME_YYMAXDEPTH
+	if (allocate_stacks()) YYABORT;
+# endif
+	dydxYpv = &dydxYv[-1];
+	dydxYps = &dydxYs[-1];
+	dydxYstate = 0;
+	dydxYtmp = 0;
+	dydxYnerrs = 0;
+	dydxYerrflag = 0;
+	dydxYchar = -1;
+
+	goto dydxYstack;
+	{
+		register YYSTYPE *dydxY_pv;	/* top of value stack */
+		register int *dydxY_ps;		/* top of state stack */
+		register int dydxY_state;		/* current state */
+		register int  dydxY_n;		/* internal state number info */
+
+		/*
+		** get globals into registers.
+		** branch to here only if YYBACKUP was called.
+		*/
+	dydxYnewstate:
+		dydxY_pv = dydxYpv;
+		dydxY_ps = dydxYps;
+		dydxY_state = dydxYstate;
+		goto dydxY_newstate;
+
+		/*
+		** get globals into registers.
+		** either we just started, or we just finished a reduction
+		*/
+	dydxYstack:
+		dydxY_pv = dydxYpv;
+		dydxY_ps = dydxYps;
+		dydxY_state = dydxYstate;
+
+		/*
+		** top of for (;;) loop while no reductions done
+		*/
+	dydxY_stack:
+		/*
+		** put a state and value onto the stacks
+		*/
+#if YYDEBUG
+		/*
+		** if debugging, look up token value in list of value vs.
+		** name pairs.  0 and negative (-1) are special values.
+		** Note: linear search is used since time is not a real
+		** consideration while debugging.
+		*/
+		if ( dydxYdebug )
+		{
+			register int dydxY_i;
+
+			printf( "State %d, token ", dydxY_state );
+			if ( dydxYchar == 0 )
+				printf( "end-of-file\n" );
+			else if ( dydxYchar < 0 )
+				printf( "-none-\n" );
+			else
+			{
+				for ( dydxY_i = 0; dydxYtoks[dydxY_i].t_val >= 0;
+					dydxY_i++ )
+				{
+					if ( dydxYtoks[dydxY_i].t_val == dydxYchar )
+						break;
+				}
+				printf( "%s\n", dydxYtoks[dydxY_i].t_name );
+			}
+		}
+#endif /* YYDEBUG */
+		if ( ++dydxY_ps >= &dydxYs[ dydxYmaxdepth ] )	/* room on stack? */
+		{
+# ifndef __RUNTIME_YYMAXDEPTH
+			dydxYerror( (nl_msg(30002,"yacc stack overflow")) );
+			YYABORT;
+# else
+			/* save old stack bases to recalculate pointers */
+			YYSTYPE * dydxYv_old = dydxYv;
+			int * dydxYs_old = dydxYs;
+			dydxYmaxdepth += YYINCREMENT;
+			dydxYs = (int *) realloc(dydxYs, dydxYmaxdepth * sizeof(int));
+			dydxYv = (YYSTYPE *) realloc(dydxYv, dydxYmaxdepth * sizeof(YYSTYPE));
+			if (dydxYs==0 || dydxYv==0) {
+			    dydxYerror( (nl_msg(30002,"yacc stack overflow")) );
+			    YYABORT;
+			    }
+			/* Reset pointers into stack */
+			dydxY_ps = (dydxY_ps - dydxYs_old) + dydxYs;
+			dydxYps = (dydxYps - dydxYs_old) + dydxYs;
+			dydxY_pv = (dydxY_pv - dydxYv_old) + dydxYv;
+			dydxYpv = (dydxYpv - dydxYv_old) + dydxYv;
+# endif
+
+		}
+		*dydxY_ps = dydxY_state;
+		*++dydxY_pv = dydxYval;
+
+		/*
+		** we have a new state - find out what to do
+		*/
+	dydxY_newstate:
+		if ( ( dydxY_n = dydxYpact[ dydxY_state ] ) <= YYFLAG )
+			goto dydxYdefault;		/* simple state */
+#if YYDEBUG
+		/*
+		** if debugging, need to mark whether new token grabbed
+		*/
+		dydxYtmp = dydxYchar < 0;
+#endif
+		if ( ( dydxYchar < 0 ) && ( ( dydxYchar = dydxYlex() ) < 0 ) )
+			dydxYchar = 0;		/* reached EOF */
+#if YYDEBUG
+		if ( dydxYdebug && dydxYtmp )
+		{
+			register int dydxY_i;
+
+			printf( "Received token " );
+			if ( dydxYchar == 0 )
+				printf( "end-of-file\n" );
+			else if ( dydxYchar < 0 )
+				printf( "-none-\n" );
+			else
+			{
+				for ( dydxY_i = 0; dydxYtoks[dydxY_i].t_val >= 0;
+					dydxY_i++ )
+				{
+					if ( dydxYtoks[dydxY_i].t_val == dydxYchar )
+						break;
+				}
+				printf( "%s\n", dydxYtoks[dydxY_i].t_name );
+			}
+		}
+#endif /* YYDEBUG */
+		if ( ( ( dydxY_n += dydxYchar ) < 0 ) || ( dydxY_n >= YYLAST ) )
+			goto dydxYdefault;
+		if ( dydxYchk[ dydxY_n = dydxYact[ dydxY_n ] ] == dydxYchar )	/*valid shift*/
+		{
+			dydxYchar = -1;
+			dydxYval = dydxYlval;
+			dydxY_state = dydxY_n;
+			if ( dydxYerrflag > 0 )
+				dydxYerrflag--;
+			goto dydxY_stack;
+		}
+
+	dydxYdefault:
+		if ( ( dydxY_n = dydxYdef[ dydxY_state ] ) == -2 )
+		{
+#if YYDEBUG
+			dydxYtmp = dydxYchar < 0;
+#endif
+			if ( ( dydxYchar < 0 ) && ( ( dydxYchar = dydxYlex() ) < 0 ) )
+				dydxYchar = 0;		/* reached EOF */
+#if YYDEBUG
+			if ( dydxYdebug && dydxYtmp )
+			{
+				register int dydxY_i;
+
+				printf( "Received token " );
+				if ( dydxYchar == 0 )
+					printf( "end-of-file\n" );
+				else if ( dydxYchar < 0 )
+					printf( "-none-\n" );
+				else
+				{
+					for ( dydxY_i = 0;
+						dydxYtoks[dydxY_i].t_val >= 0;
+						dydxY_i++ )
+					{
+						if ( dydxYtoks[dydxY_i].t_val
+							== dydxYchar )
+						{
+							break;
+						}
+					}
+					printf( "%s\n", dydxYtoks[dydxY_i].t_name );
+				}
+			}
+#endif /* YYDEBUG */
+			/*
+			** look through exception table
+			*/
+			{
+				register int *dydxYxi = dydxYexca;
+
+				while ( ( *dydxYxi != -1 ) ||
+					( dydxYxi[1] != dydxY_state ) )
+				{
+					dydxYxi += 2;
+				}
+				while ( ( *(dydxYxi += 2) >= 0 ) &&
+					( *dydxYxi != dydxYchar ) )
+					;
+				if ( ( dydxY_n = dydxYxi[1] ) < 0 )
+					YYACCEPT;
+			}
+		}
+
+		/*
+		** check for syntax error
+		*/
+		if ( dydxY_n == 0 )	/* have an error */
+		{
+			/* no worry about speed here! */
+			switch ( dydxYerrflag )
+			{
+			case 0:		/* new error */
+				dydxYerror( (nl_msg(30003,"syntax error")) );
+				dydxYnerrs++;
+				goto skip_init;
+			dydxYerrlab:
+				/*
+				** get globals into registers.
+				** we have a user generated syntax type error
+				*/
+				dydxY_pv = dydxYpv;
+				dydxY_ps = dydxYps;
+				dydxY_state = dydxYstate;
+				dydxYnerrs++;
+			skip_init:
+			case 1:
+			case 2:		/* incompletely recovered error */
+					/* try again... */
+				dydxYerrflag = 3;
+				/*
+				** find state where "error" is a legal
+				** shift action
+				*/
+				while ( dydxY_ps >= dydxYs )
+				{
+					dydxY_n = dydxYpact[ *dydxY_ps ] + YYERRCODE;
+					if ( dydxY_n >= 0 && dydxY_n < YYLAST &&
+						dydxYchk[dydxYact[dydxY_n]] == YYERRCODE)					{
+						/*
+						** simulate shift of "error"
+						*/
+						dydxY_state = dydxYact[ dydxY_n ];
+						goto dydxY_stack;
+					}
+					/*
+					** current state has no shift on
+					** "error", pop stack
+					*/
+#if YYDEBUG
+#	define _POP_ "Error recovery pops state %d, uncovers state %d\n"
+					if ( dydxYdebug )
+						printf( _POP_, *dydxY_ps,
+							dydxY_ps[-1] );
+#	undef _POP_
+#endif
+					dydxY_ps--;
+					dydxY_pv--;
+				}
+				/*
+				** there is no state on stack with "error" as
+				** a valid shift.  give up.
+				*/
+				YYABORT;
+			case 3:		/* no shift yet; eat a token */
+#if YYDEBUG
+				/*
+				** if debugging, look up token in list of
+				** pairs.  0 and negative shouldn't occur,
+				** but since timing doesn't matter when
+				** debugging, it doesn't hurt to leave the
+				** tests here.
+				*/
+				if ( dydxYdebug )
+				{
+					register int dydxY_i;
+
+					printf( "Error recovery discards " );
+					if ( dydxYchar == 0 )
+						printf( "token end-of-file\n" );
+					else if ( dydxYchar < 0 )
+						printf( "token -none-\n" );
+					else
+					{
+						for ( dydxY_i = 0;
+							dydxYtoks[dydxY_i].t_val >= 0;
+							dydxY_i++ )
+						{
+							if ( dydxYtoks[dydxY_i].t_val
+								== dydxYchar )
+							{
+								break;
+							}
+						}
+						printf( "token %s\n",
+							dydxYtoks[dydxY_i].t_name );
+					}
+				}
+#endif /* YYDEBUG */
+				if ( dydxYchar == 0 )	/* reached EOF. quit */
+					YYABORT;
+				dydxYchar = -1;
+				goto dydxY_newstate;
+			}
+		}/* end if ( dydxY_n == 0 ) */
+		/*
+		** reduction by production dydxY_n
+		** put stack tops, etc. so things right after switch
+		*/
+#if YYDEBUG
+		/*
+		** if debugging, print the string that is the user's
+		** specification of the reduction which is just about
+		** to be done.
+		*/
+		if ( dydxYdebug )
+			printf( "Reduce by (%d) \"%s\"\n",
+				dydxY_n, dydxYreds[ dydxY_n ] );
+#endif
+		dydxYtmp = dydxY_n;			/* value to switch over */
+		dydxYpvt = dydxY_pv;			/* $vars top of value stack */
+		/*
+		** Look in goto table for next state
+		** Sorry about using dydxY_state here as temporary
+		** register variable, but why not, if it works...
+		** If dydxYr2[ dydxY_n ] doesn't have the low order bit
+		** set, then there is no action to be done for
+		** this reduction.  So, no saving & unsaving of
+		** registers done.  The only difference between the
+		** code just after the if and the body of the if is
+		** the goto dydxY_stack in the body.  This way the test
+		** can be made before the choice of what to do is needed.
+		*/
+		{
+			/* length of production doubled with extra bit */
+			register int dydxY_len = dydxYr2[ dydxY_n ];
+
+			if ( !( dydxY_len & 01 ) )
+			{
+				dydxY_len >>= 1;
+				dydxYval = ( dydxY_pv -= dydxY_len )[1];	/* $$ = $1 */
+				dydxY_state = dydxYpgo[ dydxY_n = dydxYr1[ dydxY_n ] ] +
+					*( dydxY_ps -= dydxY_len ) + 1;
+				if ( dydxY_state >= YYLAST ||
+					dydxYchk[ dydxY_state =
+					dydxYact[ dydxY_state ] ] != -dydxY_n )
+				{
+					dydxY_state = dydxYact[ dydxYpgo[ dydxY_n ] ];
+				}
+				goto dydxY_stack;
+			}
+			dydxY_len >>= 1;
+			dydxYval = ( dydxY_pv -= dydxY_len )[1];	/* $$ = $1 */
+			dydxY_state = dydxYpgo[ dydxY_n = dydxYr1[ dydxY_n ] ] +
+				*( dydxY_ps -= dydxY_len ) + 1;
+			if ( dydxY_state >= YYLAST ||
+				dydxYchk[ dydxY_state = dydxYact[ dydxY_state ] ] != -dydxY_n )
+			{
+				dydxY_state = dydxYact[ dydxYpgo[ dydxY_n ] ];
+			}
+		}
+					/* save until reenter driver code */
+		dydxYstate = dydxY_state;
+		dydxYps = dydxY_ps;
+		dydxYpv = dydxY_pv;
+	}
+	/*
+	** code supplied by user is placed in this switch
+	*/
+	switch( dydxYtmp )
+	{
+		
+case 1:
+# line 112 "dydx.y"
+{ resval = dydxYpvt[-1].value; return 0;} break;
+case 2:
+# line 114 "dydx.y"
+{
+               int result=errcode;
+               errcode = 0;
+               dydxYerrok;
+               return result;
+            } break;
+case 3:
+# line 124 "dydx.y"
+{ dydxYval.value = dydxYpvt[-1].value; } break;
+case 4:
+# line 126 "dydx.y"
+{ dydxYval.value = Add( dydxYpvt[-2].value, dydxYpvt[-0].value); ERRCHK } break;
+case 5:
+# line 128 "dydx.y"
+{ dydxYval.value = Sub( dydxYpvt[-2].value, dydxYpvt[-0].value); ERRCHK } break;
+case 6:
+# line 130 "dydx.y"
+{ dydxYval.value = Mul( dydxYpvt[-2].value, dydxYpvt[-0].value); ERRCHK } break;
+case 7:
+# line 132 "dydx.y"
+{ dydxYval.value = Div( dydxYpvt[-2].value, dydxYpvt[-0].value); ERRCHK } break;
+case 8:
+# line 134 "dydx.y"
+{ dydxYval.value = Pwr( dydxYpvt[-2].value, dydxYpvt[-0].value); ERRCHK } break;
+case 9:
+# line 136 "dydx.y"
+{ dydxYval.value = Fun(dydxYpvt[-3].text, dydxYpvt[-1].value); ERRCHK } break;
+case 10:
+# line 138 "dydx.y"
+{ dydxYval.value = IxFun(dydxYpvt[-5].text, dydxYpvt[-3].value, dydxYpvt[-1].value); ERRCHK } break;
+case 11:
+# line 140 "dydx.y"
+{ dydxYval.value = Fun3(dydxYpvt[-7].text, dydxYpvt[-5].value, dydxYpvt[-3].value, dydxYpvt[-1].value); ERRCHK } break;
+case 12:
+# line 142 "dydx.y"
+{ dydxYval.value = Fun4(dydxYpvt[-9].text, dydxYpvt[-7].value, dydxYpvt[-5].value, dydxYpvt[-3].value, dydxYpvt[-1].value); ERRCHK } break;
+case 13:
+# line 144 "dydx.y"
+{ dydxYval.value = Neg( dydxYpvt[-0].value ); ERRCHK } break;
+case 14:
+# line 146 "dydx.y"
+{ dydxYval.value = dydxYpvt[-0].value;  } break;
+case 15:
+# line 148 "dydx.y"
+{ dydxYval.value = NewExpr(dydxYpvt[-0].text); } break;
+case 16:
+# line 150 "dydx.y"
+{ RegName(dydxYpvt[-0].text); dydxYval.value = NewExpr(dydxYpvt[-0].text); } break;
+case 17:
+# line 152 "dydx.y"
+{ dydxYval.value = NewExpr(dydxYpvt[-1].text); } break;
+case 18:
+# line 154 "dydx.y"
+{ errcode = DYDXBADSSYN; ERRCHK } break;
+	}
+	goto dydxYstack;		/* reset registers in driver code */
+}
+
+# ifdef __RUNTIME_YYMAXDEPTH
+
+static int allocate_stacks() {
+	/* allocate the dydxYs and dydxYv stacks */
+	dydxYs = (int *) malloc(dydxYmaxdepth * sizeof(int));
+	dydxYv = (YYSTYPE *) malloc(dydxYmaxdepth * sizeof(YYSTYPE));
+
+	if (dydxYs==0 || dydxYv==0) {
+	   dydxYerror( (nl_msg(30004,"unable to allocate space for yacc stacks")) );
+	   return(1);
+	   }
+	else return(0);
+
+}
+
+
+static void free_stacks() {
+	if (dydxYs!=0) free((char *) dydxYs);
+	if (dydxYv!=0) free((char *) dydxYv);
+}
+
+# endif  /* defined(__RUNTIME_YYMAXDEPTH) */
+
+#<
+
+#>            dydxtab.h
+
+typedef union  {
+       char *text;
+       expr value;
+       } YYSTYPE;
+extern YYSTYPE yylval;
+# define NUMBER 257
+# define IDENTIFIER 258
+# define POWER 259
+# define LEXERR 260
+# define UMINUS 261
+#<
+
+#>            dydxscan.c
+# include "stdio.h"
+#if defined(__cplusplus)
+   extern "C" {
+#endif
+#if (defined(__cplusplus) || defined(__STDC__))
+     extern int dydxYreject();
+     extern int dydxYwrap();
+     extern int dydxYlook();
+     extern int dydxYback(int *, int);
+     extern int dydxYinput();
+     extern void dydxYoutput(int);
+     extern void dydxYunput(int);
+     extern int dydxYlex();
+     extern int dydxYless(int);
+#ifdef LEXDEBUG
+     extern void allprint();
+     extern void sprint();
+#endif
+#if defined(__cplusplus)
+   }
+#endif
+#endif	/* __cplusplus or __STDC__ */
+# define U(x) x
+# define NLSTATE dydxYprevious=YYNEWLINE
+# define BEGIN dydxYbgin = dydxYsvec + 1 +
+# define INITIAL 0
+# define YYLERR dydxYsvec
+# define YYSTATE (dydxYestate-dydxYsvec-1)
+# define YYOPTIM 1
+# define YYLMAX 200
+# define output(c) putc(c,dydxYout)
+# define input() (((dydxYtchar=dydxYsptr>dydxYsbuf?U(*--dydxYsptr):getc(dydxYin))==10?(dydxYlineno++,dydxYtchar):dydxYtchar)==EOF?0:dydxYtchar)
+# define unput(c) {dydxYtchar= (c);if(dydxYtchar=='\n')dydxYlineno--;*dydxYsptr++=dydxYtchar;}
+# define dydxYmore() (dydxYmorfg=1)
+# define ECHO fprintf(dydxYout, "%s",dydxYtext)
+# define REJECT { nstr = dydxYreject(); goto dydxYfussy;}
+int dydxYleng;
+int dydxYlenguc;
+extern unsigned char dydxYtextarr[];
+# ifdef YYCHAR_ARRAY
+extern char dydxYtext[];
+# else
+extern unsigned char dydxYtext[];
+# endif
+int dydxYposix_point=0;
+int dydxYnls16=0;
+int dydxYnls_wchar=0;
+char *dydxYlocale = "C C C C C C";
+int dydxYmorfg;
+extern unsigned char *dydxYsptr, dydxYsbuf[];
+int dydxYtchar;
+FILE *dydxYin = {NULL}, *dydxYout = {NULL};
+extern int dydxYlineno;
+struct dydxYsvf { 
+	int dydxYstoff;
+	struct dydxYsvf *dydxYother;
+	int *dydxYstops;};
+struct dydxYsvf *dydxYestate;
+extern struct dydxYsvf dydxYsvec[], *dydxYbgin;
+/* dydxscan.l
+                              COPYRIGHT (c) 1997
+                        Kapteyn Astronomical Institute
+         University of Groningen  -  9700 AV Groningen, The Netherlands
+
+Lexical scanner for differentiator routine.
+Author: J.P. Terlouw
+*/
+
+#include "dydxcom.h"
+#include "dydxtab.h"                /* = y.tab.h generated by yacc -d */
+
+#define New(type) ((type *)calloc(1,sizeof(type)))
+#define NNew(n,type) ((type *)calloc(n,sizeof(type)))
+#define Delete(x)  {free(x); x=NULL;}
+
+#undef   input                    /* defined internally */
+#undef   unput                    /* defined internally */
+#undef   output                   /* defined internally */
+#define  output(x)                /* no-op */
+#define token(x)  return x
+
+static int identifier();
+static int number();
+static char input(void);
+static void unput(char);
+
+static char  *bufptr;
+static char  ustack[YYLMAX];
+static int   stkptr=0;
+
+# define YYNEWLINE 10
+dydxYlex(){
+   int nstr; extern int dydxYprevious;
+   while((nstr = dydxYlook()) >= 0)
+dydxYfussy: switch(nstr){
+case 0:
+   if(dydxYwrap()) return(0); break;
+case 1:
+    {token(number()); }
+break;
+case 2:
+           {token(number()); }
+break;
+case 3:
+   {token(identifier()); }
+break;
+case 4:
+                   {token(*dydxYtext); }
+break;
+case 5:
+                   {token(POWER); }
+break;
+case 6:
+                   {}
+break;
+case 7:
+                     {token('\n');  }
+break;
+case 8:
+                      {token(LEXERR); }
+break;
+case -1:
+break;
+default:
+   fprintf(dydxYout,"bad switch dydxYlook %d",nstr);
+} return(0); }
+/* end of dydxYlex */
+
+#ifndef __cplusplus
+static void __dydxY__unused() { main(); }
+#endif
+
+
+extern void dydx_init(char *text)
+{
+   bufptr = text;
+   stkptr = 0;
+}
+
+static char input(void)
+{
+   if (stkptr) {
+      return ustack[--stkptr];
+   }
+   if (!*(bufptr)) {
+      return '\n';
+   } 
+   return *(bufptr++);
+}
+ 
+static void unput(char c)
+{
+   if (stkptr<YYLMAX) {
+      ustack[stkptr++] = c;
+   }
+}
+
+static char *StrDup (char *orig)  
+{
+   char *result=NNew(strlen(orig)+1,char);
+   strcpy(result,orig);
+   return result;
+} 
+
+static int identifier()
+{
+   dydxYlval.text = StrDup((char*)dydxYtext);
+   return IDENTIFIER;
+}
+
+static int number()
+{
+   dydxYlval.text = StrDup((char*)dydxYtext);
+   return NUMBER;
+}
+
+extern int dydxYwrap()
+{
+   return 1;
+}
+int dydxYvstop[] = {
+0,
+
+6,
+0,
+
+6,
+0,
+
+8,
+0,
+
+7,
+0,
+
+6,
+8,
+0,
+
+4,
+8,
+0,
+
+4,
+8,
+0,
+
+8,
+0,
+
+1,
+8,
+0,
+
+3,
+8,
+0,
+
+6,
+0,
+
+5,
+0,
+
+2,
+0,
+
+1,
+0,
+
+1,
+0,
+
+3,
+0,
+
+1,
+0,
+
+2,
+0,
+0};
+# define YYTYPE unsigned char
+struct dydxYwork { YYTYPE verify, advance; } dydxYcrank[] = {
+{0,0},	{0,0},	{1,3},	{0,0},	
+{0,0},	{0,0},	{0,0},	{0,0},	
+{0,0},	{0,0},	{0,0},	{1,4},	
+{0,0},	{0,0},	{0,0},	{0,0},	
+{0,0},	{0,0},	{0,0},	{0,0},	
+{0,0},	{0,0},	{0,0},	{0,0},	
+{0,0},	{0,0},	{0,0},	{0,0},	
+{0,0},	{0,0},	{0,0},	{0,0},	
+{0,0},	{1,5},	{5,11},	{0,0},	
+{0,0},	{0,0},	{0,0},	{0,0},	
+{0,0},	{1,6},	{0,0},	{1,7},	
+{1,6},	{7,12},	{2,7},	{1,8},	
+{0,0},	{1,9},	{2,8},	{8,13},	
+{8,13},	{8,13},	{8,13},	{8,13},	
+{8,13},	{8,13},	{8,13},	{8,13},	
+{8,13},	{0,0},	{0,0},	{0,0},	
+{0,0},	{0,0},	{1,10},	{0,0},	
+{9,14},	{1,10},	{9,15},	{9,15},	
+{9,15},	{9,15},	{9,15},	{9,15},	
+{9,15},	{9,15},	{9,15},	{9,15},	
+{0,0},	{0,0},	{0,0},	{0,0},	
+{0,0},	{13,18},	{13,18},	{16,19},	
+{0,0},	{16,19},	{9,16},	{9,16},	
+{16,20},	{16,20},	{16,20},	{16,20},	
+{16,20},	{16,20},	{16,20},	{16,20},	
+{16,20},	{16,20},	{0,0},	{0,0},	
+{0,0},	{0,0},	{0,0},	{10,17},	
+{10,17},	{10,17},	{10,17},	{10,17},	
+{10,17},	{10,17},	{10,17},	{10,17},	
+{10,17},	{13,18},	{13,18},	{0,0},	
+{0,0},	{0,0},	{9,16},	{9,16},	
+{10,17},	{10,17},	{10,17},	{10,17},	
+{10,17},	{10,17},	{10,17},	{10,17},	
+{10,17},	{10,17},	{10,17},	{10,17},	
+{10,17},	{10,17},	{10,17},	{10,17},	
+{10,17},	{10,17},	{10,17},	{10,17},	
+{10,17},	{10,17},	{10,17},	{10,17},	
+{10,17},	{10,17},	{0,0},	{0,0},	
+{0,0},	{0,0},	{0,0},	{0,0},	
+{10,17},	{10,17},	{10,17},	{10,17},	
+{10,17},	{10,17},	{10,17},	{10,17},	
+{10,17},	{10,17},	{10,17},	{10,17},	
+{10,17},	{10,17},	{10,17},	{10,17},	
+{10,17},	{10,17},	{10,17},	{10,17},	
+{10,17},	{10,17},	{10,17},	{10,17},	
+{10,17},	{10,17},	{14,14},	{14,14},	
+{14,14},	{14,14},	{14,14},	{14,14},	
+{14,14},	{14,14},	{14,14},	{14,14},	
+{0,0},	{0,0},	{0,0},	{0,0},	
+{0,0},	{0,0},	{0,0},	{18,21},	
+{0,0},	{18,21},	{14,16},	{14,16},	
+{18,22},	{18,22},	{18,22},	{18,22},	
+{18,22},	{18,22},	{18,22},	{18,22},	
+{18,22},	{18,22},	{19,20},	{19,20},	
+{19,20},	{19,20},	{19,20},	{19,20},	
+{19,20},	{19,20},	{19,20},	{19,20},	
+{21,22},	{21,22},	{21,22},	{21,22},	
+{21,22},	{21,22},	{21,22},	{21,22},	
+{21,22},	{21,22},	{14,16},	{14,16},	
+{0,0}};
+struct dydxYsvf dydxYsvec[] = {
+{0,	0,	0},
+{-1,	0,		dydxYvstop+1},
+{-4,	dydxYsvec+1,	dydxYvstop+3},
+{0,	0,		dydxYvstop+5},
+{0,	0,		dydxYvstop+7},
+{2,	0,		dydxYvstop+9},
+{0,	0,		dydxYvstop+12},
+{3,	0,		dydxYvstop+15},
+{3,	0,		dydxYvstop+18},
+{22,	0,		dydxYvstop+20},
+{59,	0,		dydxYvstop+23},
+{0,	dydxYsvec+5,	dydxYvstop+26},
+{0,	0,		dydxYvstop+28},
+{17,	dydxYsvec+8,	dydxYvstop+30},
+{134,	0,		dydxYvstop+32},
+{0,	dydxYsvec+9,	dydxYvstop+34},
+{44,	0,		0},	
+{0,	dydxYsvec+10,	dydxYvstop+36},
+{156,	0,		0},	
+{166,	0,		0},	
+{0,	dydxYsvec+19,	dydxYvstop+38},
+{176,	0,		0},	
+{0,	dydxYsvec+21,	dydxYvstop+40},
+{0,	0,	0}};
+struct dydxYwork *dydxYtop = dydxYcrank+235;
+struct dydxYsvf *dydxYbgin = dydxYsvec+1;
+unsigned char dydxYmatch[] = {
+00  ,01  ,01  ,01  ,01  ,01  ,01  ,01  ,
+01  ,01  ,012 ,01  ,01  ,01  ,01  ,01  ,
+01  ,01  ,01  ,01  ,01  ,01  ,01  ,01  ,
+01  ,01  ,01  ,01  ,01  ,01  ,01  ,01  ,
+040 ,01  ,01  ,01  ,01  ,01  ,01  ,01  ,
+'(' ,'(' ,'(' ,'+' ,'(' ,'+' ,01  ,'(' ,
+'0' ,'0' ,'0' ,'0' ,'0' ,'0' ,'0' ,'0' ,
+'0' ,'0' ,01  ,01  ,01  ,01  ,01  ,01  ,
+01  ,'A' ,'A' ,'A' ,'D' ,'D' ,'A' ,'A' ,
+'A' ,'A' ,'A' ,'A' ,'A' ,'A' ,'A' ,'A' ,
+'A' ,'A' ,'A' ,'A' ,'A' ,'A' ,'A' ,'A' ,
+'A' ,'A' ,'A' ,01  ,01  ,01  ,01  ,01  ,
+01  ,'A' ,'A' ,'A' ,'D' ,'D' ,'A' ,'A' ,
+'A' ,'A' ,'A' ,'A' ,'A' ,'A' ,'A' ,'A' ,
+'A' ,'A' ,'A' ,'A' ,'A' ,'A' ,'A' ,'A' ,
+'A' ,'A' ,'A' ,'(' ,01  ,'(' ,01  ,01  ,
+01  ,01  ,01  ,01  ,01  ,01  ,01  ,01  ,
+01  ,01  ,01  ,01  ,01  ,01  ,01  ,01  ,
+01  ,01  ,01  ,01  ,01  ,01  ,01  ,01  ,
+01  ,01  ,01  ,01  ,01  ,01  ,01  ,01  ,
+01  ,01  ,01  ,01  ,01  ,01  ,01  ,01  ,
+01  ,01  ,01  ,01  ,01  ,01  ,01  ,01  ,
+01  ,01  ,01  ,01  ,01  ,01  ,01  ,01  ,
+01  ,01  ,01  ,01  ,01  ,01  ,01  ,01  ,
+01  ,01  ,01  ,01  ,01  ,01  ,01  ,01  ,
+01  ,01  ,01  ,01  ,01  ,01  ,01  ,01  ,
+01  ,01  ,01  ,01  ,01  ,01  ,01  ,01  ,
+01  ,01  ,01  ,01  ,01  ,01  ,01  ,01  ,
+01  ,01  ,01  ,01  ,01  ,01  ,01  ,01  ,
+01  ,01  ,01  ,01  ,01  ,01  ,01  ,01  ,
+01  ,01  ,01  ,01  ,01  ,01  ,01  ,01  ,
+01  ,01  ,01  ,01  ,01  ,01  ,01  ,01  ,
+0};
+unsigned char dydxYextra[] = {
+0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,
+0};
+/* @(#) A.10.32.03 HP C LANGUAGE TOOL (NCFORM) 960517 $      */
+int dydxYlineno =1;
+# define YYU(x) x
+# define NLSTATE dydxYprevious=YYNEWLINE
+ 
+#ifdef YYNLS16_WCHAR
+unsigned char dydxYtextuc[YYLMAX * sizeof(wchar_t)];
+# ifdef YY_PCT_POINT /* for %pointer */
+wchar_t dydxYtextarr[YYLMAX];
+wchar_t *dydxYtext;
+# else               /* %array */
+wchar_t dydxYtextarr[1];
+wchar_t dydxYtext[YYLMAX];
+# endif
+#else
+unsigned char dydxYtextuc;
+# ifdef YY_PCT_POINT /* for %pointer */
+unsigned char dydxYtextarr[YYLMAX];
+unsigned char *dydxYtext;
+# else               /* %array */
+unsigned char dydxYtextarr[1];
+# ifdef YYCHAR_ARRAY
+char dydxYtext[YYLMAX];
+# else
+unsigned char dydxYtext[YYLMAX];
+# endif
+# endif
+#endif
+
+struct dydxYsvf *dydxYlstate [YYLMAX], **dydxYlsp, **dydxYolsp;
+unsigned char dydxYsbuf[YYLMAX];
+unsigned char *dydxYsptr = dydxYsbuf;
+int *dydxYfnd;
+extern struct dydxYsvf *dydxYestate;
+int dydxYprevious = YYNEWLINE;
+dydxYlook(){
+	register struct dydxYsvf *dydxYstate, **lsp;
+	register struct dydxYwork *dydxYt;
+	struct dydxYsvf *dydxYz;
+	int dydxYch, dydxYfirst;
+	struct dydxYwork *dydxYr;
+# ifdef LEXDEBUG
+	int debug;
+# endif
+/*	char *dydxYlastch;
+ * ***** nls8 ***** */
+	unsigned char *dydxYlastch, sec, third, fourth;
+	/* start off machines */
+# ifdef LEXDEBUG
+	debug = 0;
+# endif
+	dydxYfirst=1;
+	if (!dydxYmorfg)
+#ifdef YYNLS16_WCHAR
+		dydxYlastch = dydxYtextuc;
+#else
+# ifdef YYCHAR_ARRAY
+		dydxYlastch = (unsigned char *)dydxYtext;
+# else
+		dydxYlastch = dydxYtext;
+# endif
+#endif
+	else {
+		dydxYmorfg=0;
+#ifdef YYNLS16_WCHAR
+		dydxYlastch = dydxYtextuc+dydxYlenguc;
+#else
+# ifdef YYCHAR_ARRAY
+		dydxYlastch = (unsigned char *)dydxYtext+dydxYleng;
+# else
+		dydxYlastch = dydxYtext+dydxYleng;
+# endif
+#endif
+		}
+	for(;;){
+		lsp = dydxYlstate;
+		dydxYestate = dydxYstate = dydxYbgin;
+		if (dydxYprevious==YYNEWLINE) dydxYstate++;
+		for (;;){
+# ifdef LEXDEBUG
+			if(debug)fprintf(dydxYout,"state %d\n",dydxYstate-dydxYsvec-1);
+# endif
+			dydxYt = &dydxYcrank[dydxYstate->dydxYstoff];
+			if(dydxYt == dydxYcrank && !dydxYfirst){  /* may not be any transitions */
+				dydxYz = dydxYstate->dydxYother;
+				if(dydxYz == 0)break;
+				if(dydxYz->dydxYstoff == 0)break;
+				}
+			*dydxYlastch++ = dydxYch = input();
+			dydxYfirst=0;
+		tryagain:
+# ifdef LEXDEBUG
+			if(debug){
+				fprintf(dydxYout,"char ");
+				allprint(dydxYch);
+				putchar('\n');
+				}
+# endif
+			dydxYr = dydxYt;
+			if ( (int)dydxYt > (int)dydxYcrank){
+				dydxYt = dydxYr + dydxYch;
+				if (dydxYt <= dydxYtop && dydxYt->verify+dydxYsvec == dydxYstate){
+					if(dydxYt->advance+dydxYsvec == YYLERR)	/* error transitions */
+						{unput(*--dydxYlastch);break;}
+					*lsp++ = dydxYstate = dydxYt->advance+dydxYsvec;
+					goto contin;
+					}
+				}
+# ifdef YYOPTIM
+			else if((int)dydxYt < (int)dydxYcrank) {		/* r < dydxYcrank */
+				dydxYt = dydxYr = dydxYcrank+(dydxYcrank-dydxYt);
+# ifdef LEXDEBUG
+				if(debug)fprintf(dydxYout,"compressed state\n");
+# endif
+				dydxYt = dydxYt + dydxYch;
+				if(dydxYt <= dydxYtop && dydxYt->verify+dydxYsvec == dydxYstate){
+					if(dydxYt->advance+dydxYsvec == YYLERR)	/* error transitions */
+						{unput(*--dydxYlastch);break;}
+					*lsp++ = dydxYstate = dydxYt->advance+dydxYsvec;
+					goto contin;
+					}
+				dydxYt = dydxYr + YYU(dydxYmatch[dydxYch]);
+# ifdef LEXDEBUG
+				if(debug){
+					fprintf(dydxYout,"try fall back character ");
+					allprint(YYU(dydxYmatch[dydxYch]));
+					putchar('\n');
+					}
+# endif
+				if(dydxYt <= dydxYtop && dydxYt->verify+dydxYsvec == dydxYstate){
+					if(dydxYt->advance+dydxYsvec == YYLERR)	/* error transition */
+						{unput(*--dydxYlastch);break;}
+					*lsp++ = dydxYstate = dydxYt->advance+dydxYsvec;
+					goto contin;
+					}
+				}
+			if ((dydxYstate = dydxYstate->dydxYother) && (dydxYt = &dydxYcrank[dydxYstate->dydxYstoff]) != dydxYcrank){
+# ifdef LEXDEBUG
+				if(debug)fprintf(dydxYout,"fall back to state %d\n",dydxYstate-dydxYsvec-1);
+# endif
+				goto tryagain;
+				}
+# endif
+			else
+				{unput(*--dydxYlastch);break;}
+		contin:
+# ifdef LEXDEBUG
+			if(debug){
+				fprintf(dydxYout,"state %d char ",dydxYstate-dydxYsvec-1);
+				allprint(dydxYch);
+				putchar('\n');
+				}
+# endif
+			;
+			}
+# ifdef LEXDEBUG
+		if(debug){
+			fprintf(dydxYout,"stopped at %d with ",*(lsp-1)-dydxYsvec-1);
+			allprint(dydxYch);
+			putchar('\n');
+			}
+# endif
+		while (lsp-- > dydxYlstate){
+			*dydxYlastch-- = 0;
+			if (*lsp != 0 && (dydxYfnd= (*lsp)->dydxYstops) && *dydxYfnd > 0){
+				dydxYolsp = lsp;
+				if(dydxYextra[*dydxYfnd]){		/* must backup */
+					while(dydxYback((*lsp)->dydxYstops,-*dydxYfnd) != 1 && lsp > dydxYlstate){
+						lsp--;
+						unput(*dydxYlastch--);
+						}
+					}
+				dydxYprevious = YYU(*dydxYlastch);
+				dydxYlsp = lsp;
+#ifdef YYNLS16_WCHAR
+				dydxYlenguc = dydxYlastch-dydxYtextuc+1;
+				dydxYtextuc[dydxYlenguc] = 0;
+#else
+# ifdef YYCHAR_ARRAY
+				dydxYleng = dydxYlastch-(unsigned char*)dydxYtext+1;
+# else
+				dydxYleng = dydxYlastch-dydxYtext+1;
+# endif
+				dydxYtext[dydxYleng] = 0;
+#endif
+# ifdef LEXDEBUG
+				if(debug){
+					fprintf(dydxYout,"\nmatch ");
+#ifdef YYNLS16_WCHAR
+					sprint(dydxYtextuc);
+#else
+					sprint(dydxYtext);
+#endif
+					fprintf(dydxYout," action %d\n",*dydxYfnd);
+					}
+# endif
+				return(*dydxYfnd++);
+				}
+			unput(*dydxYlastch);
+			}
+#ifdef YYNLS16_WCHAR
+		if (dydxYtextuc[0] == 0  /* && feof(dydxYin) */)
+#else
+		if (dydxYtext[0] == 0  /* && feof(dydxYin) */)
+#endif
+			{
+			dydxYsptr=dydxYsbuf;
+			return(0);
+			}
+#ifdef YYNLS16_WCHAR
+		dydxYprevious = dydxYtextuc[0] = input();
+#else
+		dydxYprevious = dydxYtext[0] = input();
+#endif
+		if (dydxYprevious>0) {
+			output(dydxYprevious);
+#ifdef YYNLS16
+                        if (dydxYnls16) {
+			int noBytes;
+                        sec = input();
+                        third = input();
+                        fourth = input();
+#ifdef YYNLS16_WCHAR
+                        noBytes = MultiByte(dydxYtextuc[0],sec,third,fourth);
+#else 
+                        noBytes = MultiByte(dydxYtext[0],sec,third,fourth);
+#endif          
+     					switch(noBytes) {
+     					case 2:
+#ifdef YYNLS16_WCHAR
+ 						output(dydxYprevious=dydxYtextuc[0]=sec);
+#else
+ 						output(dydxYprevious=dydxYtext[0]=sec);
+#endif
+                                                 unput(fourth);
+                                                 unput(third);
+                                                 break;
+     					case 3:
+#ifdef YYNLS16_WCHAR
+ 						output(dydxYprevious=dydxYtextuc[0]=sec);
+ 						output(dydxYprevious=dydxYtextuc[0]=third);
+#else
+ 						output(dydxYprevious=dydxYtext[0]=sec);
+ 						output(dydxYprevious=dydxYtext[0]=third);
+#endif
+                                                 unput(fourth);
+                                                 break; 
+                                         case 4:
+#ifdef YYNLS16_WCHAR
+ 						output(dydxYprevious=dydxYtextuc[0]=sec);
+ 						output(dydxYprevious=dydxYtextuc[0]=third);
+ 						output(dydxYprevious=dydxYtextuc[0]=fourth);
+#else
+ 						output(dydxYprevious=dydxYtext[0]=sec);
+ 						output(dydxYprevious=dydxYtext[0]=third);
+ 						output(dydxYprevious=dydxYtext[0]=fourth);
+#endif
+                                                 break;                                                                                            
+					default:
+					        unput(fourth);
+					        unput(third);
+						unput(sec);
+						break;
+						}
+					}
+#endif
+                }
+#ifdef YYNLS16_WCHAR
+		dydxYlastch=dydxYtextuc;
+#else
+# ifdef YYCHAR_ARRAY
+		dydxYlastch=(unsigned char*)dydxYtext;
+# else
+		dydxYlastch=dydxYtext;
+# endif
+#endif
+# ifdef LEXDEBUG
+		if(debug)putchar('\n');
+# endif
+		}
+	}
+
+# ifdef __cplusplus
+dydxYback(int *p, int m)
+# else
+dydxYback(p, m)
+	int *p;
+# endif
+{
+if (p==0) return(0);
+while (*p)
+	{
+	if (*p++ == m)
+		return(1);
+	}
+return(0);
+}
+	/* the following are only used in the lex library */
+dydxYinput(){
+	return(input());
+	
+	}
+
+#if (defined(__cplusplus) || defined(__STDC__))
+void dydxYoutput(int c)
+#else
+dydxYoutput(c)
+  int c;
+# endif
+{
+	output(c);
+}
+
+#if (defined(__cplusplus) || defined(__STDC__))
+void dydxYunput(int c)
+#else
+dydxYunput(c)
+   int c;
+#endif
+{
+	unput(c);
+}
+#<
+
+#>            dydx_parse.dc3
+Name:         dydx_parse
+
+Purpose:      Private. Defined in dydx routines - no other purpose
+
+Category:     MATH
+
+File:         dydx.src
+
+Author:       J.P. Terlouw
+
+Use:          Private. Used by DYDX only.
+
+Updates:      Feb  4, 1997: JPT Document created.
+#<
+
+#>            dydxYback.dc3
+Name:         dydxYback
+
+Purpose:      Private. Defined in dydx routines - no other purpose
+
+Category:     MATH
+
+File:         dydx.src
+
+Author:       J.P. Terlouw
+
+Use:          Private. Used by DYDX only.
+
+Updates:      Feb  4, 1997: JPT Document created.
+#<
+
+#>            dydxYoutput.dc3
+Name:         dydxYoutput
+
+Purpose:      Private. Defined in dydx routines - no other purpose
+
+Category:     MATH
+
+File:         dydx.src
+
+Author:       J.P. Terlouw
+
+Use:          Private. Used by DYDX only.
+
+Updates:      Feb  4, 1997: JPT Document created.
+#<
+
+#>            dydx_init.dc3
+Name:         dydx_init
+
+Purpose:      Private. Defined in dydx routines - no other purpose
+
+Category:     MATH
+
+File:         dydx.src
+
+Author:       J.P. Terlouw
+
+Use:          Private. Used by DYDX only.
+
+Updates:      Feb  4, 1997: JPT Document created.
+#<
+
+#>            dydxYinput.dc3
+Name:         dydxYinput
+
+Purpose:      Private. Defined in dydx routines - no other purpose
+
+Category:     MATH
+
+File:         dydx.src
+
+Author:       J.P. Terlouw
+
+Use:          Private. Used by DYDX only.
+
+Updates:      Feb  4, 1997: JPT Document created.
+#<
+
+#>            dydxYunput.dc3
+Name:         dydxYunput
+
+Purpose:      Private. Defined in dydx routines - no other purpose
+
+Category:     MATH
+
+File:         dydx.src
+
+Author:       J.P. Terlouw
+
+Use:          Private. Used by DYDX only.
+
+Updates:      Feb  4, 1997: JPT Document created.
+#<
+
+#>            dydx_lex.dc3
+Name:         dydx_lex
+
+Purpose:      Private. Defined in dydx routines - no other purpose
+
+Category:     MATH
+
+File:         dydx.src
+
+Author:       J.P. Terlouw
+
+Use:          Private. Used by DYDX only.
+
+Updates:      Feb  4, 1997: JPT Document created.
+#<
+
+#>            dydxYlook.dc3
+Name:         dydxYlook
+
+Purpose:      Private. Defined in dydx routines - no other purpose
+
+Category:     MATH
+
+File:         dydx.src
+
+Author:       J.P. Terlouw
+
+Use:          Private. Used by DYDX only.
+
+Updates:      Feb  4, 1997: JPT Document created.
+#<
+
+#>            dydxYwrap.dc3
+Name:         dydxYwrap
+
+Purpose:      Private. Defined in dydx routines - no other purpose
+
+Category:     MATH
+
+File:         dydx.src
+
+Author:       J.P. Terlouw
+
+Use:          Private. Used by DYDX only.
+
+Updates:      Feb  4, 1997: JPT Document created.
+#<

@@ -1,0 +1,17 @@
+
+Document:     contents
+
+Purpose:      The file contents, which resides in the gip_lib directory,
+              lists the modules defined in the GIPSY library.
+
+Category:     MANAGEMENT
+
+File:         contents.doc
+
+Author:       K.G. Begeman
+
+Description:  Each line contains a module name and the GIPSY source name,
+              separated by a colon. The file is update by compile.
+
+Updates:      Oct 13, 1991: Document created
+

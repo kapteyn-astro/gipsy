@@ -1,0 +1,99 @@
+
+Program:      xfile
+
+Purpose:      General file extractor.
+
+Category:     SYSTEM MANAGEMENT
+
+File:         xfile.c
+
+Author:       J.P. Terlouw
+
+
+Use:          xfile <fn> [-d<sym>] [-u<sym>] [-p<path>]  [-n<name>] [-w<wc>]
+              <fn>        input file from which to extract files
+              <path>      path to where extracted files will be written
+              <sym>       symbol to be (un)defined
+              <name>      only file names matching name will be extracted.
+                          Wildcards are allowed. Default all files will
+                          be extracted.
+              <wc>        set the wildcard in <name>. Default is *.
+
+Description:  Xfile extracts files from its input file. Files to be
+              extracted are indicated by:  #>name  or %#>name at the
+              beginning of an input line. The % in the second form can be
+              any character. This character is then used as a flag
+              character which must be the first character in subsequent
+              lines belonging to this file. It is not copied to the
+              output file, i.e. it is stripped off. Lines without the
+              flag character are simply discarded. The end of a file to be
+              extracted is indicated by #< or %#< .
+              The input file can contain any number of files to be
+              extracted which can also be nested. The names of the
+              extracted files are written to standard output and are
+              exactly (!) the same as stated in the input file.
+              Conditional file extraction is also possible. A line
+              containing a conditional statement is indicated by:
+              #!<statement> or %#!<statement> at the beginning of an input
+              line. The % in the second form can be any character. This
+              character is NOT a flag character! The conditional statements
+              allowed are: IF   <symbol> [<symbol> [...] ]
+                           ELIF <symbol> [<symbol> [...] ]
+                           ELSE
+                           ENDIF
+
+              A symbol can be any name (not containing white space) which
+              can be defined by the system (ALLIANT, CONVEX, SUN etc.) or
+              by the user on the command line.
+
+Example:      File to be processed by xfile:
+
+              0a
+              #>    xfile.ou1
+              1a
+              *#>   xfile.ou2
+              *2a
+              *2b
+              2b'
+              *2c
+              #<
+              1b
+              1c
+              #<
+              ##>   xfile.ou3
+              #1A
+              #1B
+              #1C
+              1C'
+              #1D
+              ##<
+              0b
+              0c
+
+              Resulting files:
+
+              (xfile.ou1:)
+              1a
+              1b
+              1c
+
+              (xfile.ou2:)
+              2a
+              2b
+              2c
+
+              (xfile.ou3:)
+              1A
+              1B
+              1C
+              1D
+
+Updates:      Sep 23, 1989: JPT, original document.
+              Oct 11, 1989: KGB, option -d and -t implemented.
+              Apr 13, 1991: KGB, conditional file extraction implemented.
+              Sep 16, 1991: KGB, unrecognized directives are skipped.
+              Jan 14, 1993: KGB, Bug in -n switch repaired.
+              Jan 14, 1998: JPT, Bug in checkLine repaired.
+              Jun 20, 2007: JPT, Drastic increase in maximum line length.
+              Feb 26, 2010: JPT, Maximum line length increased to 262143.
+

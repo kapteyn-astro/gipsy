@@ -1,0 +1,663 @@
+C                           COPYRIGHT (c) 1990
+C                     Kapteyn Astronomical Institute
+C                University of Groningen, The Netherlands
+C                           All Rights Reserved.
+C
+C
+C Create 'synonym' files from contents of aid.syn:
+C
+C#> aid.syn
+Csub
+Cmul 
+Cdiv
+Cadd
+C#<
+C
+C#>            aid.dc1
+C
+CProgram:      AID
+C
+CPurpose:      Selects one of the tasks SUB, MUL, ADD, or DIV 
+C
+CCategory:     COMBINATION
+C
+CFile:         aid.shl
+C
+CAuthor:       M. Vogelaar
+C
+CKeywords:
+C
+C    TASK=     Select task: SUB/MUL/ADD/DIV:                       [SUB]
+C
+CDescription:  The programs ADD, SUB, MUL, and DIV perform the respective 
+C              arithmetic operations of addition, subtraction, multipli-
+C              cation, and division. The first operand is a series of 
+C              subsets and the second operand is one subset or another
+C              series of subsets. The programs are similar in structure. 
+C              They start with requesting an input set and a series of 
+C              subsets (INSET=). Then, a frame can be given for which 
+C              the operation applies to the input subsets (BOX=). Next, 
+C              the second operand is asked for (SETX=). If needed, the 
+C              specification of a frame is requested (BOXX=). Furthermore,
+C              an output set is requested (OUTSET=).
+C
+C              To start one of these programs, give the appropriate 
+C              program name. 
+C
+CRemarks:      To get corresponding help info in Xhermes, select one 
+C              of the tasks SUB, MUL, ADD, or DIV instead of AID.
+C              
+C
+CUpdates:      Feb 22, 1990: MV, Document created.
+C
+C#<
+C
+C#>            sub.dc1
+C
+CProgram:      SUB
+C
+CPurpose:      Subtract one or a series of subsets from another 
+C              series of subsets.              
+C
+CCategory:     COMBINATION
+C
+CFile:         aid.shl
+C
+CAuthor:       M. Vogelaar
+C
+CKeywords:
+C
+C    INSET=    Input set (and subsets). Maximum number of subsets
+C              is 2048.
+C              
+C    BOX=      Frame for input subsets:                   [entire subset]
+C
+C
+C    SETX=     Set name and subset(s) which operate on the input set.
+C              SUB subtracts subsets in two different modes:
+C              A: One 'SETX' subset works one all 'SET' subsets   
+C              B: All given 'SETX' subsets work pairwise on all
+C                 subsets of 'SET'
+C                 
+C              Depending on the number of user given 'SETX' subsets,
+C              the program selects the mode of operation.
+C
+C    BOXX=     The axis sizes of the subset box of 'SET' have to be 
+C              equal to the axis sizes of the subset box of 'SETX'.
+C              If using comparable subsets (i.e. same axis names, 
+C              same grids and origins), this keyword is hidden. 
+C
+C    OUTSET=   Output set and subset(s) for the result.            
+C              The number of output subsets is the same as the
+C              number of input subsets.
+C
+CUpdates:      Feb 22, 1990: MV, Document created.
+C
+C#<
+C
+C#>            add.dc1
+C
+CProgram:      ADD
+C
+CPurpose:      Add a series of input subsets and one or another 
+C              series of subsets.              
+C
+CCategory:     COMBINATION
+C
+CFile:         aid.shl
+C
+CAuthor:       M. Vogelaar
+C
+CKeywords:
+C
+C    INSET=    Input set (and subsets). Maximum number of subsets
+C              is 2048.
+C              
+C    BOX=      Frame for input subsets.            [entire subset]
+C
+C    SETX=     Set name and subset(s) which operate on the input set.
+C              ADD adds subsets in two different modes:
+C              A: One 'SETX' subset works on all 'SET' subsets   
+C              B: All given 'SETX' subsets work pairwise on all
+C                 subsets of 'SET'
+C                 
+C              Depending on the number of user given 'SETX' subsets,
+C              the program selects the mode of operation.
+C
+C    BOXX=     The axis sizes of the subset box of 'SET' have to be 
+C              equal to the axis sizes of the subset box of 'SETX'.
+C              If using comparable subsets (i.e. same axis names, 
+C              same grids and origins), this keyword is hidden. 
+C
+C    OUTSET=   Output set and subset(s) for the result.            
+C              The number of output subsets is the same as the
+C              number of input subsets.
+C
+CUpdates:      Feb 22, 1990: MV, Document created.
+C
+C#<
+C
+C#>            mul.dc1
+C
+CProgram:      MUL
+C
+CPurpose:      Multiplies a series of input subsets with one or 
+C              another series of subsets.              
+C
+CCategory:     COMBINATION
+C
+CFile:         aid.shl
+C
+CAuthor:       M. Vogelaar
+C
+CKeywords:
+C
+C    INSET=    Input set (and subsets). Maximum number of subsets
+C              is 2048.
+C              
+C    BOX=      Frame for input subsets.            [entire subset]
+C
+C    SETX=     Set name and subset(s) which operate on the input set.
+C              MUL multiplies subsets in two different modes:
+C              A: One 'SETX' subset works one all 'SET' subsets   
+C              B: All given 'SETX' subsets work pairwise on all
+C                 subsets of 'SET'
+C                 
+C              Depending on the number of user given 'SETX' subsets,
+C              the program selects the mode of operation.
+C
+C    BOXX=     The axis sizes of the subset box of 'SET' have to be 
+C              equal to the axis sizes of the subset box of 'SETX'.
+C              If using comparable subsets (i.e. same axis names, 
+C              same grids and origins), this keyword is hidden. 
+C
+C    OUTSET=   Output set and subset(s) for the result.            
+C              The number of output subsets is the same as the
+C              number of input subsets.
+C    
+CUpdates:      Feb 22, 1990: MV, Document created.
+C
+C#<
+C
+C#>            div.dc1
+C
+CProgram:      DIV
+C
+CPurpose:      Divides a series of input subsets by one or another 
+C              series of subsets.              
+C
+CCategory:     COMBINATION
+C
+CFile:         aid.shl
+C
+CAuthor:       M. Vogelaar
+C
+CKeywords:
+C
+C    INSET=    Input set (and subsets). Maximum number of subsets
+C              is 2048.
+C              
+C    BOX=      Frame for input subsets.            [entire subset]
+C
+C    SETX=     Set name and subset(s) which operate on the input set.
+C              DIV divides subsets in two different modes:
+C              A: One 'SETX' subset works one all 'SET' subsets   
+C              B: All given 'SETX' subsets work pairwise on all
+C                 subsets of 'SET'
+C                 
+C              Depending on the number of user given 'SETX' subsets,
+C              the program selects the mode of operation.
+C
+C    BOXX=     The axis sizes of the subset box of 'SET' have to be 
+C              equal to the axis sizes of the subset box of 'SETX'.
+C              If using comparable subsets (i.e. same axis names, 
+C              same grids and origins), this keyword is hidden. 
+C
+C    OUTSET=   Output set and subset(s) for the result.            
+C              The number of output subsets is the same as the
+C              number of input subsets.
+C    
+CUpdates:      Feb 22, 1990: MV, Document created.
+C
+C#<
+C
+CUpdates:      Feb 28, 1990: MV, Document created.
+C              Jun 30, 1993: MV, TID's in arrays, usertext replaced
+C                                by usercharu
+C
+C#<
+C
+E     ***** Program SUB *****
+      PROGRAM SUB
+
+C     Declaration of parameters:
+
+      CHARACTER*(*)  ident
+      PARAMETER    ( ident = ' Version 1.1  Oct 31, 1994 ' )
+      INTEGER        maxsubsets
+      PARAMETER    ( maxsubsets = 2048 )
+      INTEGER        maxaxes
+      PARAMETER    ( maxaxes = 10 )
+N     Default options for use in USERxxx() routines      
+      INTEGER        none, request, hidden
+      PARAMETER    ( none    = 0 )
+      PARAMETER    ( request = 1 )
+      PARAMETER    ( hidden  = 2 )
+N     Buffer size for I/O      
+      INTEGER        maxIObuf
+      PARAMETER    ( maxIObuf = 4096 )
+N     Remove with 'WMINMAX' old minmax descriptors
+      INTEGER        remove 
+      PARAMETER    ( remove = 1 )
+      
+C     Declarations for GDSINP:
+
+      INTEGER        GDSINP
+N     Array containing subset coordinate words      
+      INTEGER        subsets1( maxsubsets ), subsetsX( maxsubsets )      
+N     Number of subsets in first and second set
+      INTEGER        nsubs1, nsubsX      
+      INTEGER        dfault
+N     Number of output device [0..16]      
+      INTEGER        devicenum      
+      CHARACTER*80   setname1, setnameX      
+      CHARACTER*10   keyword
+      CHARACTER*40   message
+      INTEGER        axperm1(  maxaxes ), axpermX(  maxaxes )
+      INTEGER        axcount1( maxaxes ), axcountX( maxaxes )
+      INTEGER        class
+      INTEGER        dimofsubsets
+      
+C     Declarations for GDSBOX:
+
+N     Grid vectors of sub frames
+      INTEGER        BedgeLO1( maxaxes ), BedgeHI1( maxaxes )
+      INTEGER        BedgeLOX( maxaxes ), BedgeHIX( maxaxes )
+N     Grid vectors of entire frames 
+      INTEGER        FedgeLO1( maxaxes ), FedgeHI1( maxaxes )
+      INTEGER        FedgeLOX( maxaxes ), FedgeHIX( maxaxes )      
+      INTEGER        FedgeLOO( maxaxes ), FedgeHIO( maxaxes )
+N     What's the default in GDSBOX      
+      INTEGER        option
+
+C     Declarations for GDSOUT:
+
+      INTEGER        GDSOUT
+      INTEGER        nsubsO
+      INTEGER        subsetsO( maxsubsets )
+      INTEGER        axpermO(  maxaxes )
+      INTEGER        axcountO( maxaxes )
+      CHARACTER*80   setnameO
+      
+C     Functions:
+
+N     Returns dimension of a set
+      INTEGER        GDSC_NDIMS
+N     Extracts grid coordinate from coord. word      
+      INTEGER        GDSC_GRID
+N     Returns coordinate word
+      INTEGER        GDSC_FILL
+N     Returns .TRUE. if inside defined sub frame      
+      LOGICAL        OUTSIDEPTR
+N     Returns .TRUE. if outside defined sub frame            
+      LOGICAL        INSIDEPTR
+N     Determine length of string
+      INTEGER        NELC  
+N     Obtain the name under which a GIPSY task runs
+      CHARACTER*9    MYNAME
+
+      
+      
+C     Variables for the algorithms:
+
+      INTEGER        m
+N     There are totpixels in one subset      
+      INTEGER        totpixels
+N     Transfer identifications for read/write      
+      INTEGER        tidX( maxsubsets )
+N     Array version of transfer id's
+      INTEGER        tids1(  maxsubsets )
+      INTEGER        tidsO(  maxsubsets )
+      INTEGER        mcount( maxsubsets ) 
+      INTEGER        ptrcount 
+      INTEGER        stilltowrite 
+N     Coordinate words for total & sub frame      
+      INTEGER        Fcwlo1, Fcwhi1
+      INTEGER        BcwloX( maxsubsets ), BcwhiX( maxsubsets )
+N     Array version of Bcwlo1, Bcwhi1
+      INTEGER        Bcwlo1( maxsubsets ), Bcwhi1( maxsubsets )
+N     Array version of FcwloO, FcwhiO
+      INTEGER        FcwloO( maxsubsets ), FcwhiO( maxsubsets )
+N     For use in INSIDEPTR/OUTSIDEPTR      
+      INTEGER        bufptr
+N     Length of the pointer buffer      
+      INTEGER        ptrbuflen
+      INTEGER        numinreadbuf
+N     # of pixels inside ptr buf. & sub frame      
+      INTEGER        totinside
+N     Number of elements inside/outside sub frame
+      INTEGER        numin
+      INTEGER        numout      
+      INTEGER        pixelsdone
+      INTEGER        start
+N     Number of elements already calculated      
+      INTEGER        done
+      INTEGER        numpixels1, numpixelsX
+N     How far we proceeded, used in mode A      
+      INTEGER        curval
+N     For updating number of blanks      
+      INTEGER        nblanks( maxsubsets )      
+N     For updating minimum and maximum of subset      
+      REAL           minval(  maxsubsets  ), maxval( maxsubsets )
+      REAL           data1(   maxIObuf  ), dataX(  maxIObuf )
+      REAL           dataO(   maxIObuf )      
+      INTEGER        R1
+      INTEGER        USERREAL
+      
+         
+C     Miscellaneous:
+
+      INTEGER        dimofset
+N     Error codes for Range and Grid routines      
+      INTEGER        Rerror, Gerror
+N     Coordinate words to determine total range      
+      INTEGER        cwlo, cwhi
+N     One of the names SUB, ADD, MUL or DIV
+      CHARACTER*9    task
+N     Arithmetic operator (+,-,* or /)       
+      CHARACTER*1    operator
+N     Is .TRUE. if one 'SETX' subset was given
+      LOGICAL        onesubsx
+N     True when grids of input edges are equal
+      LOGICAL        equalgrids
+      LOGICAL        agreed, ok
+
+
+C  Since the five programs SUB, ADD MUL and DIV use essentially
+C  the same code this program was created to avoid overlap.
+C  It is supplied by four other entry points: MUL, DIV, ADD and SUB.
+C  The entry (=taskname) determines which operation
+C  will be executed on the inputs. 
+C  For ANYOUT, device number 8 is selected. It is possible to disable
+C  output with HERMES' switch /MODE 0. 
+C  +1 is output to terminal.
+C  +2 is output to HERMES' logfile
+
+E     Main       
+      CALL INIT
+N     Get task name
+      task = MYNAME()
+      IF (task(1:3) .EQ. 'AID')
+      THEN
+        dfault = request
+        task = 'SUB'
+      ELSE
+        dfault = hidden
+      CIF
+      REPEAT
+        CALL USERCHARU( task, 1, dfault, 'TASK=', 
+     #                'SUB/MUL/ADD/DIV:     [SUB]' )
+        ok = ( (task .EQ. 'SUB') .OR.
+     #         (INDEX( task, 'SUB_') .EQ. 1) .OR.
+     #         (task .EQ. 'MUL') .OR.
+     #         (INDEX( task, 'MUL_') .EQ. 1) .OR.
+     #         (task .EQ. 'DIV') .OR.
+     #         (INDEX( task, 'DIV_') .EQ. 1) .OR.
+     #         (task .EQ. 'ADD') .OR.
+     #         (INDEX( task, 'ADD_') .EQ. 1) )
+        IF .NOT. ok
+        THEN
+          CALL REJECT( 'TASK=', 'Unknown task!' )
+          dfault = request
+          task = 'SUB'
+        CIF
+      UNTIL ok          
+      
+N     Show task and version number      
+      CALL ANYOUT( 8, ( task( :NELC(task) ) // ident) )
+      operator = '-'      
+N     Task is ADD: addition
+      IF task .EQ. 'ADD'
+      THEN
+        operator = '+'
+N       Task is MUL: multiplication
+        ELSEIF task .EQ. 'MUL'
+        THEN
+          operator = '*'
+N         Task is DIV: division
+        ELSEIF task .EQ. 'DIV'
+        THEN
+          operator = '/'
+      CIF
+N     Prepare for GDSINP for first set      
+      dfault       = none      
+      keyword      ='INSET='
+      message      ='Give input set(subsets) to work on:'
+N     Application repeats operation for each subset      
+      class        = 1
+      dimofsubsets = 0
+      devicenum    = 3
+      nsubs1 = GDSINP( setname1, subsets1, maxsubsets, dfault,
+     #                 keyword, message, devicenum, axperm1,
+     #                 axcount1, maxaxes, class, 
+     #                 dimofsubsets )
+
+N     Determine the edges of this set
+C     The size of the input set will be copied to the output set.
+C     It is possible to work on a smaller area. Therefore we need
+C     the grid coordinates of the frame ('Fedge') and 
+C     the coordinates of the user defined box ('Bedge').
+
+      Rerror = 0
+      Gerror = 0
+      totpixels = 1
+      CALL GDSC_RANGE( setname1, 0, cwlo, cwhi, Rerror )
+      FOR m = 1, dimofsubsets
+        FedgeLO1(m) = GDSC_GRID( setname1, axperm1(m), cwlo, Gerror )
+        FedgeHI1(m) = GDSC_GRID( setname1, axperm1(m), cwhi, Gerror )
+N       Calculate number of pixels per subset
+        totpixels   = totpixels * ( FedgeHI1(m) - FedgeLO1(m) + 1 )
+      CFOR
+
+C     Options in GDSBOX:
+C     1 box may exceed subset size
+C     2 default is in BLO
+C     4 default is in BHI
+C     8 box restricted to size defined in BHI
+C     These codes work additive. 
+
+N     Prepare for a frame for first set     
+      dfault    = request
+      keyword   = 'BOX='
+      message   = ' '
+N     Default is entire subset      
+      option    = 0
+      devicenum = 3
+      CALL GDSBOX( BedgeLO1, BedgeHI1, setname1, subsets1,
+     #             dfault, keyword, message, devicenum, option )
+      
+      
+N     Prepare for GDSINP for second set
+      dfault = request      
+N     Application repeats operation for each subset      
+      class  = 1
+N    'dimofsubsets' has value of previous GDSINP
+      message = 'Enter mask set(subsets):'
+      REPEAT   
+        onesubsx  =.TRUE.
+        keyword   ='SETX='
+N       nsubsX <= nsubsX
+        devicenum = 3
+        nsubsX     = GDSINP( setnameX, subsetsX, nsubs1,
+     #                       dfault, keyword,
+     #                       message, devicenum, axpermX,
+     #                       axcountX, maxaxes, class, 
+     #                       dimofsubsets )
+        IF ( nsubsX .EQ. nsubs1 ) .OR.
+     #     ( nsubsX .EQ. 1 )
+        THEN
+          agreed = .TRUE.
+          IF ( nsubsX .NE. 1 )
+          THEN
+N           Then operate in mode B          
+            onesubsx = .FALSE.
+          CIF
+        ELSE
+N         Output to terminal only        
+          devicenum = 1
+          agreed  = .FALSE.
+          message =' Number of subsets has to be equal to 1'
+          CALL ANYOUT( devicenum, message )
+          message = ' or eq. to first number of input subsets'
+          CALL ANYOUT( devicenum, message )
+          CALL CANCEL( keyword )
+          message = ' Try again; set, subsets: '
+        CIF
+      UNTIL agreed
+
+      Rerror = 0
+      Gerror = 0
+      CALL GDSC_RANGE( setnameX, 0, cwlo, cwhi, Rerror )
+      FOR m = 1, dimofsubsets
+        FedgeLOX(m) = GDSC_GRID( setnameX, axpermX(m), cwlo, Gerror )
+        FedgeHIX(m) = GDSC_GRID( setnameX, axpermX(m), cwhi, Gerror )
+      CFOR
+
+N     Are first and second subsets comparable? 
+      equalgrids = .TRUE. 
+      FOR m = 1, dimofsubsets
+        equalgrids = ( equalgrids .AND.
+     #                 ( FedgeLOX(m) .EQ. FedgeLO1(m) ) .AND.
+     #                 ( FedgeHIX(m) .EQ. FedgeHI1(m) ) 
+     #               ) 
+      CFOR
+      
+N     Prepare for a frame for second set     
+      IF equalgrids
+      THEN
+N       Fill arrays with GRIDS for GDSBOX            
+        FOR m = 1, dimofsubsets
+          BedgeHIX(m) = BedgeHI1(m) 
+          BedgeLOX(m) = BedgeLO1(m) 
+        CFOR                     
+        dfault = hidden
+N       Defaults in BedgeHIX/LOX
+        option = 6 
+      ELSE
+N       Fill arrays with SIZES for GDSBOX      
+        FOR m = 1, dimofsubsets
+          BedgeHIX(m) = BedgeHI1(m) - BedgeLO1(m) + 1
+        CFOR             
+        dfault = request
+N       GDSBOX has a special option for sizes        
+        option = ( 8 + 4 )
+      CIF
+      
+      keyword   ='BOXX='
+      message   =' '
+      devicenum = 3
+N     Box restricted to size defined in BedgeHI
+      CALL GDSBOX( BedgeLOX, BedgeHIX, setnameX, subsetsX,
+     #             dfault, keyword, message, devicenum, option )
+N     Assign GDSINP buffer to GDSOUT
+N     Output set will get same coordinate-
+N     system as first input set
+      keyword  ='OUTSET='
+      dimofset = GDSC_NDIMS( setname1, 0 )       
+
+      CALL GDSASN( 'INSET=', keyword, class )
+      dfault    = none
+      message   ='Give output set (and subsets):'
+      devicenum = 3
+      nsubsO    = GDSOUT( setnameO, subsetsO, nsubs1,
+     #                    dfault, keyword, message, devicenum,
+     #                    axpermO, axcountO, maxaxes )
+
+      Rerror = 0
+      Gerror = 0
+      CALL GDSC_RANGE( setnameO, 0, cwlo, cwhi, Rerror )
+      FOR m = 1, dimofsubsets
+        FedgeLOO(m) = GDSC_GRID( setnameO, axpermO(m), cwlo, Gerror )
+        FedgeHIO(m) = GDSC_GRID( setnameO, axpermO(m), cwhi, Gerror )
+      CFOR
+                 
+N     cw=coordinate word, lo=lower, hi=upper
+N     F=Frame, B=Box      
+      FOR m = 1, nsubsO
+        tids1( m) = 0
+        tidsO( m) = 0
+        tidX(  m) = 0        
+        mcount(m) = 0
+        Bcwlo1(m) = GDSC_FILL( setname1, subsets1(m), BedgeLO1 )
+        Bcwhi1(m) = GDSC_FILL( setname1, subsets1(m), BedgeHI1 )
+        FcwloO(m) = GDSC_FILL( setnameO, subsetsO(m), FedgeLOO )
+        FcwhiO(m) = GDSC_FILL( setnameO, subsetsO(m), FedgeHIO )
+        IF onesubsx
+        THEN
+           BcwloX(m) = GDSC_FILL( setnameX, subsetsX(1), BedgeLOX )        
+           BcwhiX(m) = GDSC_FILL( setnameX, subsetsX(1), BedgeHIX )
+        ELSE
+           BcwloX(m) = GDSC_FILL( setnameX, subsetsX(m), BedgeLOX )
+           BcwhiX(m) = GDSC_FILL( setnameX, subsetsX(m), BedgeHIX )
+        CIF
+      CFOR
+
+
+      ptrcount  = 0
+      stilltowrite = totpixels
+      REPEAT
+N       Update needed for STABAR        
+        curval = totpixels - stilltowrite
+N       Bufferlength never exceeds len. of write buf.          
+        ptrbuflen = MIN( maxIObuf, stilltowrite )
+        stilltowrite  = stilltowrite - ptrbuflen
+N       Only scan in the first subset of SET          
+        CALL INITPTR( FedgeLO1, FedgeHI1, BedgeLO1, BedgeHI1,
+     #                dimofsubsets, ptrbuflen, ptrcount )
+     
+        totinside = 0          
+        WHILE ( INSIDEPTR( bufptr, numin ) )
+N         Find # in pointer buffer & inside subframe               
+          totinside = totinside + numin
+        CWHILE          
+        FOR m = 1, nsubsO
+N         Prepare a message about how far we proceeded                  
+          CALL STABAR( 0.0, FLOAT( totpixels ),  
+     #                 FLOAT( curval + ( m/nsubsO ) * ptrbuflen ) ) 
+          WHILE ( OUTSIDEPTR( bufptr, numout ) )
+N           Fill array with blanks            
+            CALL SETNFBLANK( dataO( bufptr+1 ), numout )
+          CWHILE                        
+          IF ( totinside .GT. 0 )
+          THEN
+            CALL GDSI_READ( setname1, Bcwlo1(m), Bcwhi1(m),
+     #                      data1, totinside, totinside, tids1(m) )
+            CALL GDSI_READ( setnameX, BcwloX(m), BcwhiX(m),
+     #                      dataX, totinside, totinside, tidX(m) )
+            start = 1
+            WHILE ( INSIDEPTR( bufptr, numin ) )
+N             bufptr is an offset, start is an index!              
+              CALL ARITH( data1( start ), operator, 
+     #                    dataX( start ), dataO( bufptr+1 ), numin )
+              start = start + numin
+            CWHILE
+              
+          CIF
+          pixelsdone = ptrbuflen
+          CALL GDSI_WRITE( setnameO, FcwloO(m), FcwhiO(m),
+     #                     dataO, ptrbuflen, pixelsdone, tidsO(m) )
+N         For all ssets, you have to store the counter
+          CALL MINMAX3( dataO, ptrbuflen, minval(m), maxval(m),
+     #                  nblanks(m), mcount(m) )
+           
+        CFOR
+      UNTIL ( stilltowrite .EQ. 0 )
+
+N     min max always change, ==> update min, max      
+      CALL WMINMAX( setnameO, subsetsO, minval, maxval, nblanks,
+     #              nsubsO, remove )
+     
+      CALL FINIS
+      
+      STOP
+      END

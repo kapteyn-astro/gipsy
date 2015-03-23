@@ -1,0 +1,60 @@
+
+c@ subroutine irco_tospher( double precision, double precision, 
+c@			    double precision, integer )
+c
+c#>             irco_tospher.dc2
+c
+c Subroutine:	IRCO_TOSPHER.
+c
+c Purpose:	Transform from rectangular to spherical coordinates.
+c
+c Category	WORLD COORDINATES, IRAS
+c
+c File:		irco.shl
+c
+c Author:	90 Apr 03 Binne Viersen.
+c
+c Use:
+c	call IRCO_TOSPHER (
+c		xyz	  I	doubleprecision array (3,n),
+c		lon, lat  O	doubleprecision arrays (n),
+c		n	  I	integer.
+c		)
+c	xyz	  array of rectangular coordinates,
+c	lon, lat  (in radians:) longitudes and latitudes,
+c	n 	  number of vectors to be transformed.
+c Description:
+c	This module does the opposite of IRCO_TORECT. A vector of length 
+c	zero will give a latitude and a longitude of 0.0.
+c	If x and y are zero then it is a pole and the longitude will be 0.0.
+c Updates:
+c	90 Apr 24 Sjag Steensma; documentation only.
+c#<
+
+	subroutine IRCO_TOSPHER ( xyz, lon, lat, n )
+
+        doubleprecision xyz(3,n), lon(n), lat(n)
+	integer		n
+
+        integer 	i
+
+        for i = 1, n
+          if xyz(3,i) .eq. 0.0
+          then
+            lat(i) = 0.0
+          else
+            lat(i) = datan2( xyz(3,i), dsqrt( xyz(1,i)**2 +
+     &                      xyz(2,i)**2 ) )
+          cif
+          if xyz(1,i) .ne. 0.0 .or. xyz(2,i) .ne. 0.0
+          then
+            lon(i) = datan2( xyz(2,i), xyz(1,i) )
+          else
+n brrr, this is a pole
+            lon(i) = 0.0
+          cif
+        cfor
+
+        return
+        end
+

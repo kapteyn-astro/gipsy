@@ -1,0 +1,185 @@
+c	irpl_untab.shl
+c
+c	Copyright (c) Kapteyn Laboratorium Groningen 1990
+c	All Rights Reserved.
+c
+c@ subroutine irpl_untab( character, integer )
+c
+c#>irpl_untab.dc2
+c		
+c Subroutine:   IRPL_UNTAB
+c 
+c Purpose:      put corrupted data around an outage to blank
+c 
+c Category:	IRAS
+c
+c File:         irpl_untab.shl
+c 
+c Author:       Do Kester	do@guspace.rug.nl
+c 
+c Use: call irpl_untab(
+c 	irds,		I	character*(*)
+c	status )	O	integer
+c 	
+c 	irds	name of irds to find corrupt data in
+c	status  0 : ok
+c		-1: cannot open `untabfile'
+c 	
+c 	
+c Description:  
+c 	The file containing the scans which may have corrupt data
+c 	is searched in parallel with the irds. It is assumed that the 
+c 	irds is ordered according to sop att, as a proper irds should.
+c 	When a snip in the irds is found in the file, the relevant
+c 	parts of the snip, if present in this irds, are set to blank
+c 	for all detectors, even for those which are not known to be 
+c 	affected.
+c 
+c 
+c Externals:    
+c 
+c Updates:      17 Feb 1992 DK, creation
+c		19 Mar 1992 FL, new interface to irds_enquire_snip
+c#<
+
+	subroutine irpl_untab( irds, status )
+
+	character*(*)	irds
+	integer		status
+	character*20	object, instru, coor
+	integer		naxis, axes(4)
+	doubleprecision	center(2), size(2)
+	real 		epoch, blank(16), psi, psirate, theta
+	integer		snip, sdet, tick, sop, obs, att
+	integer		band, usab, isab
+	integer		scancal, scandur, snipcal, snipdur, NELC
+	integer		sopattb, usop, uatt, uband, usat, IRCC_BANDNR
+	integer		lun, ios, rootlen, IRAS_ROOT, SERIOUS, nfound
+	parameter	( SERIOUS = 3 )
+	integer		nsamp, ndets, nsnip, pre, post
+	character	untabfile*80, flnm*30, mess*80, scantype*20
+	integer		nitem, USERCHAR, USERLOG, anydef
+	logical		check
+
+	data	flnm	/ 'outage/corrupt_times' /
+	data	check, anydef	/ .false., 16 /
+
+	sopattb( sop, att, band ) = 10000 * sop + 10 * att + band
+
+	nitem = userlog( check, 1, 2, 'CHECK=', 
+     #			'check only; do NOT correct [no]' )
+c check whether relevant
+	call IRDS_ENQUIRE( irds, object, instru, naxis, axes, center, 
+     #			size, coor, epoch, status )
+	if status .ne. 0
+	then
+	  call ANYOUT( 0, 'The set does not exist or is not an irds' )
+	  return
+	cif
+	band = IRCC_BANDNR( instru )
+	nsamp = axes(1)
+	ndets = axes(3)
+	nsnip = axes(4)
+	if check
+	then
+	  ndets = 0
+	  anydef = 0
+	cif
+
+	if band .gt. 4
+	then
+c not relevant for LRS or BPHF
+	  call ANYOUT( anydef, 'No corrupt data exist in ' // 
+     #			instru(:NELC( instru )) )
+	  return
+	cif
+
+c find free unit number
+	lun = 0
+	call REQLUN( lun )
+c construct filename and open it
+	rootlen = IRAS_ROOT( untabfile )
+	untabfile(rootlen+1:) = flnm
+	nitem = userchar( untabfile, 1, 2, 'CORRUPT=', 
+     #			'Give file with times of corrupt data' )
+	OPEN( lun, file = untabfile, form = 'formatted', status='old', 
+     #			iostat = ios )
+	if ( ios .ne. 0 )
+	then
+	  call ERROR( SERIOUS, 'Cannot open file ' // untabfile )
+	  status = -1
+	  return
+	else
+	  write( mess, '(2a)' ) untabfile(:NELC( untabfile )),
+     #			' succesfully opened'
+	  call ANYOUT( anydef, mess )
+	cif
+
+	call SETNFBLANK( blank, nsamp )
+	usab = 0
+	nfound = 0
+	for snip = 1, nsnip
+	  call IRDS_ENQUIRE_SNIP( irds, snip, sop, obs, att,
+     #		scantype, scancal, scandur, snipcal, snipdur,
+     #		psi, psirate, theta, status )
+	  isab = sopattb( sop, att, band )
+	  repeat
+c search through file whether the scan is in the list
+	    while ( usab .lt. isab )
+	      read( lun, '(3i4,i5,2i4)', end = xrepeat )
+     #			usop, uatt, uband, usat, pre, post
+	      usab = sopattb( usop, uatt, uband )
+	    cwhile
+c if found, put the corrupt ticks to blank
+	    if ( isab .eq. usab ) 
+	    then
+	      write( mess, '(3(a,i4),a,i10)' ) 'sop', sop, ', att', att, 
+     #		', band', band, ': corrupt around satcal ', scancal+usat
+	      call ANYOUT( anydef, mess )
+	      pre =  max( usat + pre  - snipcal, 1 )
+	      post = min( usat + post - snipcal, snipdur )
+	      if pre .le. post
+	      then
+	        nfound = nfound + 1
+	        write( mess, '(2(a,i5))' ) 'snip corrupt from tick ',
+     #			pre, ' to tick ', post
+	      else
+	        write( mess, '(a)' ) 'corrupt part NOT in this snip'
+	      cif
+	      call ANYOUT( anydef, mess )
+	      for sdet = 1, ndets
+	        for tick = pre, post
+	          call IRDS_WR_SAMPLES( irds, snip, sdet, tick, 
+     #			blank, nsamp, status )
+	        cfor
+	      cfor
+c look for another outage in the same snip
+	      read( lun, '(3i4,i5,2i4)', end = xrepeat )
+     #			usop, uatt, uband, usat, pre, post
+	      usab = sopattb( usop, uatt, uband )
+	    cif
+	  until usab .gt. isab
+	cfor
+
+c signal if some corrupt data is found
+	if nfound .gt. 0
+	then
+	  if .not. check
+	  then
+	    write( mess, '(i4,a)' ) nfound, 
+     #			' snips (partly) blanked due to corrupt data'
+	  else
+	    write( mess, '(i4,a)' ) nfound, 
+     #			' snips found with corrupt data'
+	  cif
+	  call ANYOUT( 0, mess )
+	else
+	  call ANYOUT( anydef, 'No corrupt data found' )
+	cif
+
+c clean up
+	close( lun )
+	call RELLUN( lun )
+
+	return
+	end

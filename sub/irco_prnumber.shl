@@ -1,0 +1,69 @@
+
+c@ integer function IRCO_PRNUMBER ( character )
+c
+c#>	irco_prnumber.dc2
+c Subroutine:	IRCO_PRNUMBER.
+c
+c Purpose: 	Return number of plate projection system 'name'.
+c
+c File: 	irco_project.shl.
+c
+c Author:	90 Apr 25 Sjag Steensma.
+c
+c Use:	<int> = IRCO_PRNUMBER (
+c		prname   I	character * (*)
+c		)
+c	<int>	(function result) number (1..10) of plate
+c		projection system.
+c	prname	Name of plate projection system. Should at least
+c		contain idlen characters.
+c Description:
+c	Returns number of plate projection system by comparing first
+c	idlen characters of prname to those, for every number, given
+c	by function IRCO_PRNAME.
+c	If prname is unknown or prname contains less than idlen characters,
+c	0 is returned.
+c Externals:
+c	IRCO_PRNAME.
+c Updates:
+c	
+c#<
+
+        integer function IRCO_PRNUMBER ( prname )
+
+        character * (*) prname
+
+	integer	  	id, MXPRID, IDLEN
+c Number of projection methods used:	
+	parameter 	( MXPRID = 10 )
+c Number of characters tested to identify name:	
+	parameter 	( IDLEN  =  5 )	
+	character*(IDLEN) IRCO_PRNAME
+
+c Initialize - assume name unknown:
+	IRCO_PRNUMBER = 0
+c Check length of prname - if less than IDLEN quit:
+	if len( prname ) .LT. IDLEN
+	then
+	  return
+	cif
+
+c Start with first name:
+	id = 1
+
+c Compare name with names given by IRCO_PRNAME:
+	while prname(:IDLEN) .NE. IRCO_PRNAME( id  )
+c No match found, quit if last name tested, otherwise try next name
+	  if id .GE. MXPRID
+	  then
+	    return
+	  cif
+	  id = id + 1
+	cwhile
+
+c Id <= MXPRID, matching number found!	
+	IRCO_PRNUMBER = id	
+
+        return
+        end
+

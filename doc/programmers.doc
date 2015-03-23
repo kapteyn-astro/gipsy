@@ -1,0 +1,21 @@
+
+Document:     programmers
+
+Purpose:      Maintains a list of all users who are allowed to
+              install GIPSY software.
+
+Category:     MANAGEMENT
+
+File:         programmers.mgr
+
+Author:       K.G. Begeman
+
+Description:  Each privileged user has a one line entry in this file.
+              This line has three fields, separated by colons (:).
+              Field       Contents
+                1         contains the logname of the user.
+                2         mail address of user.
+                3         full name of user.
+
+Updates:      Jun 20, 1991: KGB Document created.
+

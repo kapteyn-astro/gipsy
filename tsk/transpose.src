@@ -1,0 +1,150 @@
+transpose.src
+
+        Copyright (c) Kapteyn Laboratorium Groningen 2009
+        All Rights Reserved.
+
+Name:         transpose.src
+Creator:      terlouw
+Host:         azarquiel
+Date:         Jan 27, 2009
+Contents:     transpose.make transpose.py transpose.dc1
+
+#>            transpose.make
+#
+# transpose.make
+#
+
+SHELL   = /bin/sh
+
+default:: transpose
+
+transpose : transpose.py
+	cp transpose.py transpose
+	chmod +x transpose
+
+pack::
+	$$gip_sys/pack.csh transpose.src transpose.make transpose.py \
+	transpose.dc1
+#<
+
+#>            transpose.py
+#!/usr/bin/python
+
+from gipsy import *
+import string
+
+init()
+
+while True:
+   try:
+      setname = usertext('INSET=', 'Give input set')
+      inset = Set(setname)
+      break
+   except:
+      reject('INSET=', 'cannot open set')
+      
+anyout('Set %s has %d axes' % (setname, inset.naxis))
+for axis in inset.axes():
+   anyout('%s\tfrom %6d to %6d' % (axis.ctype, axis.slo, axis.shi))
+
+while True:
+   try:
+      outname = usertext('OUTSET=', 'Give output set')
+      outset = Set(outname, create=True, write=True)
+      break;
+   except:
+      reject('OUTSET=', 'cannot create set')
+
+while True:
+   axperm = userchar('AXPERM=', 'Give new axis order', 4, nmax=inset.naxis)
+   axord = []
+   for inname in axperm:
+      for axno, axname in enumerate(inset.axnames):
+         if axno not in axord:
+            if string.find(string.upper(axname), string.upper(inname))==0:
+               axord.append(axno)
+   if len(axord)!=inset.naxis:
+      reject('AXPERM=', 'Invalid axis permutation')
+   else:
+      break
+
+perm = []
+done = ['NAXIS']
+for newax in range(inset.naxis):
+   oldax = axord[newax]
+   perm.insert(0, inset.naxis-oldax-1)
+   inax = inset.axes()[oldax]
+   outset.extend(inax.ctype, inset.axorigin(oldax), inset.axsize(oldax))
+   done.append('CTYPE%d' % (newax+1))
+   done.append('NAXIS%d' % (newax+1))
+   done.append('CRPIX%d' % (newax+1))
+   for axkey in ['CUNIT', 'CDELT', 'CRVAL', 'CROTA', 'DUNIT', 'DRVAL'
+                 'DRPIX', 'DROTA', 'DDELT', 'DTYPE']:
+      try:
+         newkey = '%s%d' % (axkey, newax+1)
+         outset[newkey] = inset['%s%d' % (axkey, oldax+1)]
+         done.append(newkey)
+      except:
+         pass
+
+for level, key in inset.keys(None):
+   descr = inset.read(key, level)
+   if (level != 0) or (key not in done):
+      ingrids  = inset.grids(level)
+      outgrids = []
+      for i in axord:
+         outgrids.append(ingrids[i])
+      outset.write(key, outset.word(outgrids), descr)
+
+outset.image[:] = inset.image.transpose(tuple(perm))
+
+outset.update()
+
+finis()
+#<
+
+#>            transpose.dc1
+Program:       TRANSPOSE
+
+Purpose:       Copy a input set to an output set of which the axis
+               order may be different. This task may be an alternative
+               for AXSWAP.
+
+Category:      MANIPULATION, HEADER
+
+File:          transpose.src
+
+Author:        J.P. Terlouw
+
+Keywords:
+
+   INSET=      Give input set:
+               The name of the input set.
+
+   OUTSET=     Give output set:
+               The name of the output set. If this set already exists,
+               an error message is displayed and another opportunity is
+               given to enter the output set name.
+
+   AXPERM=     Give new axis order:
+               The axis names in their new order. The input is
+               case-insensitive and minimal matching is supported.
+
+Description:   The program transposes a set according to the specifications
+               given in the keywords. All descriptor items are transferred
+               to their correct position in the output set.
+
+Example:
+               <USER> transpose
+               <USER> TRANSPOSE INSET=aurora
+               Set aurora has 3 axes
+               RA---NCP        from    -50 to     49
+               DEC--NCP        from    -50 to     49
+               VELO-HEL        from     21 to    121
+               <USER> TRANSPOSE OUTSET=eos
+               <USER> TRANSPOSE AXPERM=vel ra dec
+               <STATUS>  TRANSPOSE   +++ FINISHED +++
+
+Updates:       Jan 27, 2009: JPT, Document created.
+
+#<

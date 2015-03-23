@@ -1,0 +1,59 @@
+c#> irco_transpose.dc2
+c Subroutine:   IRCO_TRANSPOSE
+c 
+c Purpose:      transposes a matrix
+c 
+c Category	WORLD COORDINATES, IRAS
+c
+c File:         irco.shl
+c 
+c Author:       Do Kester
+c 
+c Person resp.: Do Kester
+c 
+c Address:      guspace!do or rugfx4!do         (uucp)
+c 
+c Use: call irco_transpose(
+c 	mats,		I	double precision array(3,3)
+c 	konum,		I	integer
+c 	connect,	I/O	integer array(konum,konum)
+c 	kk1,		I	integer
+c 	kk2 )		I	integer
+c 
+c Description:  
+c Checks if matrix MATS is fit for transformation from kk1 to kk2.
+c If not it transposes the matrix and chnages the connection matrix
+c accordingly
+c 
+c Externals:    
+c 
+c Updates:      5 jan 1990 DK, documentation only
+c#<
+
+	subroutine IRCO_TRANSPOSE( mats, konum, connect, kk1, kk2 )
+
+	integer		kmat, konum, kk1, kk2, connect(konum,konum)
+	double precision mats(3,3), t
+
+	kmat = connect(kk1,kk2)
+c test whether to transpose
+	if kmat .lt. 0
+	then
+c change the connection matrix
+	  connect(kk2,kk1) = kmat
+	  connect(kk1,kk2) = -kmat
+c transpose the matrix
+	  t = mats(3,1)
+	  mats(3,1) = mats(1,3)
+	  mats(1,3) = t
+	  t = mats(3,2)
+	  mats(3,2) = mats(2,3)
+	  mats(2,3) = t
+	  t = mats(2,1)
+	  mats(2,1) = mats(1,2)
+	  mats(1,2) = t
+	cif
+
+	return
+	end
+

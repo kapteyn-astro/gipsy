@@ -1,0 +1,97 @@
+c vector_prod.shl
+c
+c#>            vector_prod.dc3
+c
+cDocument:     VECTOR_PROD
+c
+cPurpose:      Contains the IRAS vector_*prod routines.
+c
+cCategory:     IRAS
+c
+cFile:         vector_prod.shl
+c
+cAuthor:       D. Kester
+c
+cDescription:  Refer to original documents. At the moment the modules
+c              contained are vector_inprod and vector_outprod.
+c
+cUpdates:      Jul 15, 1991: KGB, Document created.
+c
+c#<
+c
+c@ double precision function vector_inprod( double precision, 
+c@					    double precision )
+c@ subroutine vector_outprod( double precision, double precision,
+c@			      double precision )
+
+c#>             vector_inprod.dc2
+c Function:	VECTOR_INPROD
+c
+c Purpose:      Compute Vector Inner Product
+c
+c File:		vector_prod.shl
+c
+c Class:	Math
+c
+cAuthor:       Albrecht de Jonge
+c
+c Use: doubleprecision function VECTOR_INPROD( 
+c	X,	I	doubleprecision
+c	Y )  	I	doubleprecision
+c
+c       X, Y            two 3-dimensional vectors
+c       VECTOR_INPROD   the inner product ( X dot Y )
+c 
+c       Mainly meant as a shorthand for
+c               P = X(1) * Y(1) + X(2) * Y(2) + X(3) * Y(3)
+c 
+c Update        901113 DK, adapted to GIPSY
+c#<
+
+        doubleprecision function VECTOR_INPROD( X, Y )
+
+	doubleprecision X(3), Y(3)
+
+	VECTOR_INPROD = X(1) * Y(1) + X(2) * Y(2) + X(3) * Y(3)
+
+	return
+	end
+
+c#>             vector_outprod.dc2
+c Subroutine:	VECTOR_OUTPROD
+c
+c Purpose:      Compute Vector Outer Product
+c
+c File:		vector_prod.shl
+c
+c Class:	Math
+c
+cAuthor:	 Albrecht de Jonge
+c
+c Use: subroutine VECTOR_OUTPROD( 
+c	X, Y, 	I	doubleprecision(3)
+c	Z )	O	doubleprecision(3)
+c
+c       X, Y   	two 3-dimensional vectors
+c       Z      	the outer product ( X cross Y )
+c 
+c       Mainly meant as a shorthand for
+c               Z(1) = X(2) * Y(3) - X(3) * Y(2)
+c               Z(2) = X(3) * Y(1) - X(1) * Y(3)
+c               Z(3) = X(1) * Y(2) - X(2) * Y(1)
+c 
+c       The arguments may not share storage.
+c 
+c Update        901113 DK, adapted to GIPSY
+c#<
+
+       	subroutine VECTOR_OUTPROD( X, Y, Z )
+
+	doubleprecision X(3), Y(3), Z(3)
+
+	Z(1) = X(2) * Y(3) - X(3) * Y(2)
+	Z(2) = X(3) * Y(1) - X(1) * Y(3)
+	Z(3) = X(1) * Y(2) - X(2) * Y(1)
+
+	return
+	end

@@ -1,0 +1,180 @@
+C     invmat.shl
+C
+C     Copyright (c) Kapteyn Laboratorium Groningen 1991
+C     All Rights Reserved.
+C
+C#>            invmat.dc2
+C
+CFunction:     INVMAT
+C
+CPurpose:      INVMAT is a routine for inverting a matrix. The algorithm used
+C              is the Gauss-Jordan algorithm described in Stoer, Numerische
+C              Matematik, 1 Teil.
+C
+CCategory:     MATH
+C
+CFile:         invmat.shl
+C
+CAuthor:       K.G. Begeman
+C
+CUse:          INTEGER INVMAT( MATRIX ,    Input/Output    REAL ARRAY
+C                              MATDIM ,       Input        INTEGER
+C                              DECDIM )       Input        INTEGER
+C
+C
+C              INVMAT       Returns 0 on success, 1 when matrix cannot be
+C                           inverted.
+C              MATRIX       On input contains matrix to be inverted,
+C                           on output the inverted matrix.
+C              MATDIM       Actual size of matrix.
+C                           Note: maximum value for MATDIM is 512.
+C              DECDIM       Size of MATRIX as declared in main program if
+C                           MATRIX was declared as a two dimensional array.
+C                           If MATRIX was declared one dimensional, DECDIM
+C                           should be equal to MATDIM.
+C
+CUpdates:      Jul  14, 1991: KGB, Document created.
+C
+C#<
+C
+C     C to Fortran interface:
+C
+C@    integer function invmat( real, integer, integer )
+C
+E
+      INTEGER FUNCTION INVMAT( MATRIX, MATDIM, DECDIM )
+C
+C     Parameters:
+C
+N     Maximum size of matrix
+      INTEGER MAXDIM
+      PARAMETER (MAXDIM = 512)
+C
+C     Arguments:
+C
+N     Declared dimension of matrix
+      INTEGER DECDIM
+N     Matrix to be inverted
+      REAL    MATRIX(DECDIM,DECDIM)
+N     Dimension of matrix
+      INTEGER MATDIM
+C
+C     Local variables:
+C
+N     Various counters:
+      INTEGER I, J, K
+N     Row number
+      INTEGER ROW
+N
+      INTEGER EVIN
+N     Permutations
+      INTEGER PER(MAXDIM)
+N     Row maximum
+      REAL    ROWMAX
+N
+      REAL    EVEN
+N     Holds row
+      REAL    HV(MAXDIM)
+N     Matrix(j,k)
+      REAL    MJK
+C
+C     Executable code:
+C
+N     In case of normal end
+      INVMAT = 0
+N     set permutation array
+      FOR I = 1, MATDIM
+        PER(I) = I
+      CFOR
+N     In j-th column, determine row with largest element
+      FOR J = 1, MATDIM
+        ROWMAX = ABS(MATRIX(J,J))
+        ROW = J
+        I = J + 1
+        WHILE (I .LE. MATDIM)
+          IF (ABS(MATRIX(I,J)) .GT. ROWMAX)
+          THEN
+            ROWMAX = ABS(MATRIX(I,J))
+            ROW = I
+          CIF
+          I = I + 1
+        CWHILE
+N       Determinant zero ?
+        IF (MATRIX(ROW,J) .EQ. 0.0)
+        THEN
+N         No solution possible
+          INVMAT = 1
+N         No normal end
+          RETURN
+        CIF
+N       If largest element not on diagonal:
+        IF (ROW .GT. J)
+N       Then permute rows
+        THEN
+N         Permutation loop
+          FOR K = 1, MATDIM
+            EVEN = MATRIX(J,K)
+            MATRIX(J,K) = MATRIX(ROW,K)
+            MATRIX(ROW,K) = EVEN
+          CFOR
+N         Keep track of permutation
+          EVIN = PER(J)
+          PER(J) = PER(ROW)
+          PER(ROW) = EVIN
+        CIF
+N       Modify column
+        EVEN = 1.0 / MATRIX(J,J)
+        FOR I = 1, MATDIM
+          MATRIX(I,J) = EVEN * MATRIX(I,J)
+        CFOR
+        MATRIX(J,J) = EVEN
+N       Modify rest of matrix
+        K = 1
+        WHILE (K .LT. J)
+          MJK = MATRIX(J,K)
+          I = 1
+          WHILE (I .LT. J)
+            MATRIX(I,K) = MATRIX(I,K) - MATRIX(I,J) * MJK
+            I = I + 1
+          CWHILE
+          I = J + 1
+          WHILE (I .LE. MATDIM)
+            MATRIX(I,K) = MATRIX(I,K) - MATRIX(I,J) * MJK
+            I = I + 1
+          CWHILE
+          MATRIX(J,K) = -EVEN * MJK
+          K = K + 1
+        CWHILE
+        K = J + 1
+        WHILE (K .LE. MATDIM)
+          MJK = MATRIX(J,K)
+          I = 1
+          WHILE (I .LT. J)
+            MATRIX(I,K) = MATRIX(I,K) - MATRIX(I,J) * MJK
+            I = I + 1
+          CWHILE
+          I = J + 1
+          WHILE (I .LE. MATDIM)
+            MATRIX(I,K) = MATRIX(I,K) - MATRIX(I,J) * MJK
+            I = I + 1
+          CWHILE
+          MATRIX(J,K) = -EVEN * MJK
+          K = K + 1
+        CWHILE
+N     End of loop through columns
+      CFOR
+
+N     Finally, repermute columns
+      FOR I = 1, MATDIM
+        FOR K = 1, MATDIM
+          HV(PER(K)) =  MATRIX(I,K)
+        CFOR
+        FOR K = 1, MATDIM
+          MATRIX(I,K) = HV(K)
+        CFOR
+      CFOR
+C
+C     Return to sender:
+C
+      RETURN
+      END

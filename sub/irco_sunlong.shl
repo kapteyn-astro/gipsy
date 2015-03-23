@@ -1,0 +1,69 @@
+
+c@ double precision function irco_sunlong( integer )
+c
+c#>             irco_sunlong.dc2
+c
+c Function	IRCO_SUNLONG
+c 
+c Purpose    calculate approximate ecliptic longitude of the sun from satcal
+c 
+c Author	850927 A.R.W.de Jonge
+c
+c Category	IRAS, WORLD COORDINATES
+c
+c File		irco.shl
+c 
+c Use doubleprecision function IRCO_SUNLONG( 
+c	satcal )	I	integer
+c
+c 	satcal  	satcal clock time in ticks
+c 
+c Description
+c	The routine calculates the approximate ecliptic longitude
+c       of the sun from the time given in IRAS satellite clock ticks.
+c 
+c       The ecliptic longitude of the sun is in radian with reference 
+c       to the ecliptic of date
+c 
+c       The accuracy is to about 30 arcsec.
+c 
+c Update	DK adapted for Gipsy; satcal is now an integer
+c#<
+
+      doubleprecision function IRCO_SUNLONG( satcal )
+
+      integer	satcal
+
+      doubleprecision	PI, CIRCLE, RAD, SUN0, SUN1
+      doubleprecision	EARTH0, EARTH1, EQOC0, EQOC1
+      parameter 	( PI = 3.141526535897932384 )
+      parameter 	( CIRCLE = 2 * PI )
+      parameter 	( RAD = PI / 180.0 )
+      parameter 	( SUN0 = 279.10303475 * RAD )
+      parameter 	( SUN1 =   0.98564735 * RAD )
+      parameter 	( EARTH0 = 356.45501990 * RAD )
+      parameter 	( EARTH1 =   0.98560026 * RAD )
+      parameter 	( EQOC0  = 1.915476 * RAD )
+      parameter 	( EQOC1  = 0.020010 * RAD )
+
+      doubleprecision	et, eqoc, slong, anom
+
+c convert satcal to ephemeris time in days since 0 jan 1983, 0hr ET
+      et = ( satcal + 53 ) * 1.0000526 / 86400  +  26
+c mean solar longitude (uniform movement)
+      slong = SUN0 + SUN1 * et
+c mean anomaly
+      anom   = EARTH0 + EARTH1 * et
+c equation of centre
+      eqoc = EQOC0 * sin( anom ) + EQOC1 * sin( 2 * anom )
+c add and normalise
+      slong = slong + eqoc
+      while slong .gt. circle
+	 slong = slong - circle
+      cwhile
+
+      IRCO_SUNLONG = slong
+
+      return
+      end
+

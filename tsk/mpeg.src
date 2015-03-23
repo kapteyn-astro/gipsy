@@ -1,0 +1,119 @@
+mpeg.src
+
+        Copyright (c) Kapteyn Laboratorium Groningen 2007
+        All Rights Reserved.
+
+Name:         mpeg.src
+Creator:      terlouw
+Host:         azarquiel
+Date:         Jul 12, 2007
+Contents:     mpeg.make mpeg.dc1 mpeg.py
+
+#>            mpeg.make
+#
+# mpeg.make
+#
+
+SHELL   = /bin/sh
+
+default:: mpeg
+
+mpeg : mpeg.py
+	cp mpeg.py mpeg
+	chmod +x mpeg
+
+pack::
+	$$gip_sys/pack.csh mpeg.src mpeg.make mpeg.dc1 mpeg.py
+#<
+
+#>            mpeg.dc1
+Program:      MPEG
+
+Purpose:      Record a series of window snapshots and combine these
+              in an MPEG movie.
+
+Category:     UTILITY
+
+File:         mpeg.src
+
+Author:       J.P. Terlouw
+
+Keywords:
+
+    WINDOW=   X11 window ID.
+
+**  FILE=     MPEG movie filename [gipsy.mpg].
+
+**  GUI=      start with GUI [Y].
+
+    NEXT=     no value required. When given, a snapshot will be taken.
+
+    STOP=     no value required. When given, compose movie and exit.
+
+Description:  This program is written in Python and requires GIPSY's
+              Python binding to be present. It records a series of X11 window
+              snapshots and combines these in an MPEG movie. For this
+              purpose it uses the utilities import (from ImageMagick) and
+              ppmtompeg which also must be available.
+
+Updates:      Dec  8, 2004: JPT Document created.
+              Jul 12, 2007: JPT, changed for new Python module gipsy.
+#<
+
+#>            mpeg.py
+#!/usr/bin/env python
+import os
+from gipsy import *
+
+def next(cb):
+   os.system('import -window %s frame%04d.ppm' % (window, cb.seqno))
+   status('recorded frame %d' % cb.seqno)
+   cb.seqno += 1
+   usertext(cb.key)
+
+def stop(cb):
+   if framecb.seqno==0:
+      finis()
+   status('composing movie %s from %d frames' % (file, framecb.seqno-1))
+   p = open('mpeg.par', 'w')
+   p.write("PATTERN IBBB\n")
+   p.write("OUTPUT %s\n" % file)
+   p.write("INPUT_DIR .\n")
+   p.write("INPUT\n")
+   p.write("frame*.ppm [0000-%04d]\n" % (framecb.seqno-1))
+   p.write("END_INPUT\n")
+   p.write("BASE_FILE_FORMAT PPM\n")
+   p.write("INPUT_CONVERT *\n")
+   p.write("GOP_SIZE 4\n")
+   p.write("SLICES_PER_FRAME 1\n")
+   p.write("PIXEL HALF\n")
+   p.write("RANGE 4 \n")
+   p.write("PSEARCH_ALG EXHAUSTIVE\n")
+   p.write("BSEARCH_ALG SIMPLE\n")
+   p.write("IQSCALE 1\n")
+   p.write("PQSCALE 1\n")
+   p.write("BQSCALE 1\n")
+   p.write("REFERENCE_FRAME ORIGINAL\n")
+   p.write("FORCE_ENCODE_LAST_FRAME\n")
+   p.close()
+   os.system('ppmtompeg -realquiet mpeg.par')
+   finis()
+
+init()
+
+window = usertext('WINDOW=')
+file   = usertext('FILE=', default=2, defval='gipsy.mpg')
+gui    = userlog('GUI=', default=2, defval=True)
+
+if gui:
+   base   = GgiBase()
+   title  = base.Label('MPEG movie recorder')
+   button = base.Button('STOP=', 'Stop recording')
+   title.setPosition(0, None, 0, None)
+   button.setPosition(0, None, 0, title)
+
+framecb = KeyCallback(next, 'NEXT=', seqno=0)
+KeyCallback(stop, 'STOP=')
+status('ready to record frames')
+mainloop()
+#<

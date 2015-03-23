@@ -1,0 +1,502 @@
+E     PROGRAM COPY (copyright notice)
+C copy.shl
+C                           COPYRIGHT (c) 1990
+C         Kapteyn Astronomical Institute - University of Groningen
+C            P.O. box 800,  9700 AV Groningen, The Netherlands
+C
+C         Contains two applications, copy and diminish
+C
+C#>            copy.syn
+Cdiminish
+C#<
+E     PROGRAM COPY (copy.dc1)
+C#>            copy.dc1
+C
+CProgram:      COPY
+C
+CPurpose:      Program to copy set and subsets. It can also increase or
+C              decrease the frame size of the subsets. BLANKs will be
+C              written in the output set outside the original subset frame.
+C
+CCategory:     TRANSFER, MANIPULATION
+C
+CFile:         copy.shl
+C
+CAuthor:       K.G. Begeman
+C
+CKeywords:
+C
+C   INSET=     Set (and subset(s)) where to copy data from. Maximum
+C              number of input and output subsets is 2048.
+C
+C   BOX=       Frame of output subsets [frame of input subsets].
+C
+C   OUTSET=    Set and subset(s) where to copy to.
+C
+C **MAKEBLANK= Fill output set only with blanks:     Y/[N]
+C
+CExample:      COPY  Version 1.0  Jan 29, 1990
+C              <USER> COPY INSET=NGC4214 dec 0
+C              Set NGC4214 has 3 axes
+C              RA-NCP             from  -127 to   128
+C              DEC-NCP            from  -127 to   128    
+C              FREQ-OHEL          from     1 to    63
+C              <USER> COPY BOX=
+C              BOX range for set NGC4214 :
+C              RA-NCP             from  -127 to   128
+C              FREQ-OHEL          from     1 to    63
+C              <USER> COPY OUTSET=LV
+C              Set LV has 3 axes
+C              RA-NCP             from  -127 to   128
+C              FREQ-OHEL          from     1 to    63
+C              DEC-NCP            from     0 to     0
+C
+C              <STATUS>  COPY   +++ FINISHED +++
+C
+CUpdates:      Jan 29, 1990: KGB, Document created.
+C              Dec 20, 1991: KGB, Alignment bug repaired.
+C
+C#<
+C
+C#>            diminish.dc1
+C
+CProgram:      DIMINISH
+C
+CPurpose:      Program to copy set and subset. It will only copy the subset
+C              axes to the output set, so you can diminish the dimensionality
+C              of a set.
+C
+CCategory:     TRANSFER, MANIPULATION
+C
+CFile:         copy.shl
+C
+CAuthor:       K.G. Begeman
+C
+CKeywords:
+C
+C   INSET=     Set and subset where to copy data from.
+C
+C   BOX=       Frame of output subset [frame of input subset].
+C
+C   OUTSET=    Set (and subset) where to copy to.
+C
+C **MAKEBLANK= Fill OUTSET= with blanks only:      Y/[N]
+C              Do not copy the input data, but fill output
+C              set with blanks.
+C
+CExample:      DIMINISH  Version 1.0  Sep 18, 1995
+C              <USER> DIMINISH INSET=NGC4214 DEC 0
+C              Set NGC4214 has 3 axes
+C              RA-NCP             from  -127 to   128
+C              DEC-NCP            from  -127 to   128
+C              FREQ-OHEL          from     1 to    63
+C              <USER> DIMINISH BOX=
+C              BOX range for set NGC4214 :
+C              RA-NCP             from  -127 to   128
+C              FREQ-OHEL          from     1 to    63
+C              <USER> DIMINISH OUTSET=LV
+C              Set LV has 2 axes
+C              RA-NCP             from  -127 to   128
+C              FREQ-OHEL          from     1 to    63
+C
+C              <STATUS>  DIMINISH   +++ FINISHED +++
+C
+CUpdates:      Sep 18, 1995: KGB, Document created.
+C              Nov 13, 1999: VOG, MAKEBLANK= keyword added
+C
+C#<
+E     PROGRAM COPY (code)
+      program copy
+C
+C     Declaration of parameters:
+C
+      character*(*) ident1, ident2
+N     Change version number on this line
+      parameter (ident1 = 'COPY  Version 1.0  Jan 29, 1990 ')
+      parameter (ident2 = 'DIMINISH  Version 1.0  Sep 18, 1995 ')
+      integer maxaxes
+N     Maximum number of axes in a set
+      parameter (maxaxes = 10)
+      integer maxsubs
+N     Maximum number of subsets
+      parameter (maxsubs = 2048)
+      integer maxbuf1
+N     Size of input data array
+      parameter (maxbuf1 = 4096)
+      integer maxbuf2
+N     Size of output data array
+      parameter (maxbuf2 = 4096)
+C
+C     Declarations for input set
+C
+N     Name of input set
+      character*80 set1
+N     Permutation of axes for input set
+      integer      axperm1(maxaxes)
+N     Ax size array
+      integer      axsize1(maxaxes)
+N     Coordinate words for gdsi_read
+      integer      cwlo1, cwhi1
+N     Frame of input subsets
+      integer      flo1(maxaxes), fhi1(maxaxes)
+N     Coordinate words of input subsets
+      integer      subset1(maxsubs)
+N     Transfer id input set
+      integer      tid1
+N     Arrays for input data
+      real         data1(maxbuf1)
+C
+C     Declarations for output set
+C
+N     Name of output set
+      character*80 set2
+N     Permutation of axes for output set
+      integer      axperm2(maxaxes)
+N     Ax size array
+      integer      axsize2(maxaxes)
+N     Coordinate words for gdsi_write
+      integer      cwlo2, cwhi2
+N     Frame of output subsets
+      integer      flo2(maxaxes), fhi2(maxaxes)
+N     Coordinate words of output subsets
+      integer      subset2(maxsubs)
+N     Transfer id output set
+      integer      tid2
+N     Arrays for output data
+      real         data2(maxbuf2)
+C
+C     Declaration of local variables:
+C
+N     Class of program
+      integer      class
+N     Coordinate words hold range of set
+      integer      cwlo, cwhi
+N     Error return from various GDS routines
+      integer      gerror
+N     Counter for initptr
+      integer      icount
+N     Buffer pointer
+      integer      ip
+N     Read pointer
+      integer      ir
+N     Counter for minmax3
+      integer      mcount
+N     Maximum number of subsets
+      integer      msubs
+N     Counter
+      integer      n
+N     Number of pixels copied in loop
+      integer      nact
+N     Number of blanks in output subset
+      integer      nblanks(maxsubs)
+N     Number of pixels copied
+      integer      ndone
+N     Number of uncopied pixels in read buffer
+      integer      nleft
+N     Pixels in buffer
+      integer      np
+N     Number of pixels to read
+      integer      nr
+N     Subset counter
+      integer      ns
+N     Number of subsets to copy
+      integer      nsubs
+N     Number of pixels to write
+      integer      nw
+N     Total number of points in output subset
+      integer      ntotal
+N     Dimension of subsets
+      integer      subdim
+N     Update min and max?
+      logical      change
+N     Minimum and maximum in output subset
+      real         datamin(maxsubs), datamax(maxsubs)
+C
+C     Declaration of functions:
+C
+N     Returns name of task
+      character*9  myname
+N     Returns coordinate word
+      integer      gdsc_fill
+N     Extracts grid coordinate from coordinate word
+      integer      gdsc_grid
+N     Returns number of input subsets
+      integer      gdsinp
+N     Returns number of output subsets
+      integer      gdsout
+N     Returns true if inside defined frame
+      logical      insideptr
+N     Returns true if outside defined frame
+      logical      outsideptr
+N     Does user want blanks in the output?
+      logical      mkblank
+C
+C     Data statements:
+C
+N     Update minimum and maximum
+      data change / .false. /
+N     Error return from gds routines
+      data gerror / 0 /
+N     Number of pixels in subset
+      data ntotal / 1 /
+N     Subset dimension
+      data subdim / 0 /
+C
+C     Executable code:
+C
+N     Get in touch with HERMES
+      call init
+N     Get out name.
+      
+C     ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+C     Here we show the non-experienced user the version number and date
+C     of this program. Version 1.0 means that it has been migrated to
+C     portable GIPSY.
+C     ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+N     What do we do
+      if ( MYNAME() .eq. 'DIMINISH' )
+      then
+N        Tell user who we are
+         call anyout( 8, ident2 )
+         class = 2
+         msubs = 1
+      else
+N        Tell user who we are
+         call anyout( 8, ident1 )
+         class = 1
+         msubs = maxsubs
+      cif
+C     ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+C     Here we prompt the user for the name of the set (and subsets).
+C     The default message is used. COPY is a class 1 application so it
+C     will return the dimensions of the subset.
+C     GDSINP will store the coordinate system of the chosen input set
+C     internally, so that GDSOUT can use it to create the output set.
+C     ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+N     Get number of input subsets
+      nsubs = gdsinp( set1,
+     #                subset1,
+     #                msubs,
+     #                0,
+     #                'INSET=',
+     #                ' ',
+     #                11,
+     #                axperm1,
+     #                axsize1,
+     #                maxaxes,
+     #                1,
+     #                subdim )
+N     Get edges of set
+      call gdsc_range( set1, 0, cwlo, cwhi, gerror )      
+N     Get grids of subset frame
+      for n = 1, subdim
+N        lower grid
+         flo1(n) = gdsc_grid( set1, axperm1(n), cwlo, gerror )
+N        upper grid
+         fhi1(n) = gdsc_grid( set1, axperm1(n), cwhi, gerror )
+      cfor
+C     ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+C     Get here the frame of the new subsets. Note that the size of
+C     the output subsets may be different.
+C     ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+N     Get new subset size from user
+      call gdsbox( flo2,
+     #             fhi2,
+     #             set1,
+     #             subset1,
+     #             1,
+     #             'BOX=',
+     #             ' ',
+     #             11, 
+     #             1 )
+N     Find number of points in output subset
+      for n = 1, subdim
+         ntotal = ntotal * ( fhi2(n) - flo2(n) + 1 )
+      cfor
+N     Does size of output subset change?
+      for n = 1, subdim
+N        Different sizes ?
+         change = (change.or.flo1(n).ne.flo2(n).or.fhi1(n).ne.fhi2(n))
+      cfor
+C     ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+C     Here the internal buffer created by GDSINP is copied to a buffer
+C     which will be used by GDSOUT to create the output set (with
+C     exactly the same coordinate system as the input set, if the user
+C     wants to).
+C     ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+N     Assign GDSINP buffer to GDSOUT
+      call gdsasn( 'INSET=', 'OUTSET=', class )
+C     ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+C     Now the subset size of the internal buffer for GDSOUT is changed
+C     according to what the user entered at the GDSBOX prompt. Note that
+C     only NAXIS% and CRPIX% need to be changed. The coordinate system
+C     is left completely unchanged.
+C     ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+N     Define size of output subsets
+      call gdscss( 'OUTSET=', flo2, fhi2 )
+C     ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+C     GDSOUT will create the output set if it does not exist, else it
+C     will only check if the subset size is exactly equal to the size
+C     specified with GDSCSS. In principal the user only has to give a
+C     set name, the rest is taken from the contents in the internal
+C     buffer of GDSOUT. If the user specifies also the subsets, GDSOUT
+C     will check whether they are present in the existing set or in the
+C     internal buffer if the subset does not exist.
+C     GDSOUT also copies the 'relevant' header information from the
+C     input set to the output set.
+C     ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+N     get output set
+      nsubs = gdsout( set2,
+     #                subset2,
+     #                nsubs,
+     #                4,
+     #                'OUTSET=',
+     #                ' ',
+     #                11,
+     #                axperm2,
+     #                axsize2,
+     #                maxaxes )
+C     ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+C     Here we define which part of the input subset should be
+C     copied to the output set.
+C     ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+N     Get frame inside input subset
+      for n = 1, subdim
+N        start reading data at this grid
+         flo1(n) = max( flo1(n), flo2(n) )
+N        stop reading data at this grid
+         fhi1(n) = min( fhi1(n), fhi2(n) )
+      cfor
+C
+N     Does user wants only blanks in the copy?
+      mkblank = .false.
+      call userlog( mkblank, 1, 2, 'MAKEBLANK=', ' ')
+C     ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+C     Here we repeat the operation for each subset
+C     ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+N     Loop through the subsets
+      ir = 0
+      for ns = 1, nsubs
+N        Show user what we are working on
+         call showsub2( set1,
+     #                  subset1(ns),
+     #                  axperm1,
+     #                  set2,
+     #                  subset2(ns),
+     #                  axperm2 )
+N        Get lower coordinate word of input frame
+         cwlo1 = gdsc_fill( set1, subset1(ns), flo1 )
+N        Get upper coordinate word of input frame
+         cwhi1 = gdsc_fill( set1, subset1(ns), fhi1 )
+N        Get lower coordinate word of output frame
+         cwlo2 = gdsc_fill( set2, subset2(ns), flo2 )
+N        Get upper coordinate word of output frame
+         cwhi2 = gdsc_fill( set2, subset2(ns), fhi2 )
+N        Reset transfer id for input data
+         tid1 = 0
+N        Reset transfer id for output data
+         tid2 = 0
+N        Reset counter for minmax3
+         mcount = 0
+N        Reset counter for initptr
+         icount = 0
+N        Reset number of pixels to write
+         nw = ntotal
+N        Reset number of points in readin buffer
+         nleft = 0
+N        Loop through output subset
+         repeat
+N           Number of points done per iteration
+            nr = min( maxbuf2, nw )
+N           Initialize pointers
+            call initptr( flo2,
+     #                    fhi2,
+     #                    flo1,
+     #                    fhi1,
+     #                    subdim,
+     #                    nr,
+     #                    icount )
+N           Outside input subset
+            while (outsideptr( ip, np ))
+N              Fill with blanks
+               call setnfblank( data2(ip+1), np )
+            cwhile
+N           Inside input subset
+            while (insideptr( ip, np ))
+N              Reset number of pixels copied
+               ndone = 0
+N              Copy loop
+               while (ndone .lt. np)
+N                 need new data ?
+                  if (nleft .eq. 0)
+                  then
+N                    Read data from input subset
+                     call gdsi_read( set1,
+     #                               cwlo1,
+     #                               cwhi1,
+     #                               data1,
+     #                               maxbuf1,
+     #                               nleft,
+     #                               tid1 )
+N                    Reset read pointer
+                     ir = 0
+                  cif
+N                 Number of pixels to copy now
+                  nact = min( nleft, np - ndone)
+                  if (mkblank)
+                  then
+                     call setnfblank( data2(ip+1), nact ) 
+                  else
+N                    Copy data
+                     call mover( data1(ir+1),
+     #                           data2(ip+1),
+     #                           nact )
+                  cif
+N                 Uncopied data in read buffer
+                  nleft = nleft - nact
+N                 Pointer to first uncopied pixel
+                  ir = ir + nact
+N                 Number of pixels copied
+                  ndone = ndone + nact
+N                 Pointer where to copy the next pixel to
+                  ip = ip + nact
+               cwhile
+            cwhile
+N           Write data to output subset
+            call gdsi_write( set2,
+     #                       cwlo2,
+     #                       cwhi2,
+     #                       data2,
+     #                       nr,
+     #                       nr,
+     #                       tid2 )
+N           Find running minimum and maximum
+            call minmax3( data2,
+     #                    nr,
+     #                    datamin(ns),
+     #                    datamax(ns),
+     #                    nblanks(ns),
+     #                    mcount )
+N           Number of pixels still to write
+            nw = nw - nr
+         until (nw .eq. 0)
+      cfor
+N     Update of minimum and maximum needed?
+      if (change)
+      then
+N        Update minimum, maximum and number of blanks
+         call wminmax( set2,
+     #                 subset2,
+     #                 datamin,
+     #                 datamax,
+     #                 nblanks,
+     #                 nsubs,
+     #                 1 )
+         cif
+N     Tell HERMES we're done
+      call finis
+C
+C     End of program
+C
+      stop
+      end

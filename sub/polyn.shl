@@ -1,0 +1,134 @@
+C#> polyn.dc2
+C
+CName:       POLYN
+C
+C
+CPurpose:    POLYN  computes the value of an N-component polynomial
+C            DPOLYN computes the partial derivatives of that polynomial
+C
+CFiles:      polyn.dc2,polyn.shl
+C
+CAuthor:     Peter Roelfsema
+C
+C
+CCall:
+C
+C    PX=POLYN(X,PAR,NPAR)
+C
+C	   Input parameters:
+C          X     -R   -running coordinate.
+C          PAR   -R   -array defined as follows: PAR(0:NPAR) that
+C			  contains the parameters for the polynomial:
+C	                  PAR(n)-polynomial coefficient for X**n.
+C          NPAR  -I   -degree of the polynomial.
+C
+CUse:
+C            POLYN gives the value of a multi-component polynomial.
+C            Note that the polynomial is defined as the following
+C            summation:
+C
+C                 PX = 0  FOR N=0 TO NPAR ( PX = PX + PAR(N) * X**N )
+C
+C            POLYN does not check for floating overflows in X**N, you
+C            will have to worry about that yourself.
+C
+C
+CUpdate History:
+C   8- 7-85-PRR.-original document
+C  16- 6-86-PRR.-converted for VAX8600.
+C  10- 9-92-PRR.-converted to new GIPSY
+C#<
+C
+C@ real function polyn( real , real , integer )
+C@ subroutine dpolyn( real , real , real , integer )
+C               
+      REAL FUNCTION POLYN(X,PAR,NPAR)
+
+
+N.X-coordinate for which the polynomial is to be calculated
+      REAL      X
+N.parameters of the polynomial
+      REAL      PAR(*)
+N.partial derivatives
+      REAL      DERIV(*)
+N.buffer variables
+      REAL      POLY,XI
+
+N.number of parameters
+      INTEGER   NPAR
+N.loop counter
+      INTEGER   I
+
+
+N.zero level
+      POLY=PAR(1)
+N.initialise for loop
+      XI=1.0
+N.loop on parameters
+      FOR I=2,NPAR
+N.next power of X
+      XI=XI*X
+N.add to POLY
+      POLY=POLY+PAR(I)*XI
+      CFOR
+N.transfer to function
+      POLYN=POLY
+      RETURN
+
+C
+C#> dpolyn.dc2
+C
+CName:       DPOLYN
+C
+C
+CPurpose:    DPOLYN computes the partial derivatives of that polynomial
+C
+CFiles:      dpolyn.dc2,polyn.shl
+C
+CAuthor:     Peter Roelfsema
+C
+CCall:
+C
+C    CALL DPOLYN(X,PAR,DERIV,NPAR)          ( entry point in POLYN )
+C
+C        Input parameters:
+C             X     -R   -running coordinate.
+C             PAR   -R   -array  defined  as follows: PAR(0:NPAR) that
+C                         contains the parameters for the polynomial:
+C                         PAR(n)-polynomial coefficient for X**n.
+C             NPAR  -I   -degree of the polynomial.
+C        Output parameters:
+C             DERIV -R   -array defined as follows: DERIV(0:NPAR) that
+C                         contains the partial derivatives of the
+C                         polynomial with respect to the parameters:
+C                         DERIV(n)-partial derivative of coefficient for
+C                         X**n ( i.e. X**n ).
+C
+C
+CUse:
+C               DPOLYN gives the partial derivatives for the gaussian.
+C               Note that the polynomial is defined as the following
+C               summation:
+C
+C                 PX = 0  FOR N=0 TO NPAR ( PX = PX + PAR(N) * X**N )
+C
+C               DPOLYN does not check for floating overflows in X**N, you
+C               will have to worry about that yourself.
+C#<
+C
+      ENTRY DPOLYN(X,PAR,DERIV,NPAR)
+
+N.zero level-derivative
+      DERIV(1)=1.0
+N.initialise for loop
+      XI=1.0
+N.loop on all parameters
+      FOR I=2,NPAR
+N.next power of X
+      XI=XI*X
+N.set part. derivative
+      DERIV(I)=XI
+      CFOR
+      RETURN
+      END
+

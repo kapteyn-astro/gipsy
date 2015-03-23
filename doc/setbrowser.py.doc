@@ -1,0 +1,13 @@
+Document:     setbrowser.py
+
+Purpose:      Python module for composing data input including FITS files
+
+Category:     USER IO
+
+File:         setbrowser.py.src
+
+Author:       M.G.R. Vogelaar
+
+Description:  Refer to document QDataBrowser.dc2
+
+Updates:      Feb 21, 2012: VOG, Document created.

@@ -1,0 +1,2642 @@
+ioutils.py.src
+
+        Copyright (c) Kapteyn Astronomical Institute, Groningen 2013
+        All Rights Reserved.
+
+Name:         ioutils.py.src
+Creator:      vogelaar
+Host:         albirumi
+Date:         Aug 22, 2013
+Contents:     ioutils.py.make ioutils.py.doc wcsinp.dc2 wcsbox.dc2 wcspos.dc2
+              setwcsbox.dc2 ioutils.py
+
+#>            ioutils.py.make
+#----------------------------------------------------------------------
+# Makefile for IOUTILS (ioutils.py.make)
+#
+# Pack sources into ioutils.py.src with: > make -f ioutils.py.make pack
+# Unpack source files with:              > $gip_exe/xfile ioutils.py.src
+# Install source file with:              > p -reserve ioutils.py.src
+#                                        > p -install ioutils.py.src
+#
+# IOUTILS is a module and it is installed as ioutils.py
+# A Python module for GIPSY is installed as a task.
+#----------------------------------------------------------------------
+
+
+SHELL   = /bin/sh
+
+DOCUMENTS = ioutils.py.doc wcsinp.dc2  wcsbox.dc2  wcspos.dc2 setwcsbox.dc2
+
+SOURCES   = ioutils.py
+
+default::
+	chmod +x ioutils.py
+
+pack::
+	$$gip_sys/pack.csh ioutils.py.src ioutils.py.make \
+        $(DOCUMENTS) $(SOURCES)
+
+#<
+
+#>            ioutils.py.doc
+Document:     ioutils.py
+
+Purpose:      Python module providing functions for user I/O.
+
+Category:     USER IO, PHYSICAL COORDINATES
+
+File:         ioutils.py.src
+
+Author:       M.G.R. Vogelaar
+
+Description:  Refer to documents wcsinp.dc2,  wcsbox.dc2 and wcspos.dc2.
+
+Updates:      Apr 23, 2009: JPT, Document created.
+              Jul 06, 2010: VOG, Changed name from setinp to wcsinp
+              Nov 11, 2010: VOG, Bugs removed, more documentation
+              Feb 03, 2011: VOG, Documentation updated for new 
+                                 positions module in Kapteyn Package.
+              Sep 28, 2012, VOG, New major version. Many bugs removed
+#<
+
+#>            wcsinp.dc2
+Function:     WCSINP
+
+Purpose:      WCSINP prompts the user to enter the name of a
+              GIPSY set or FITS file together with a specification
+              of the subsets. Returned is a WCSset object with
+              useful attributes.
+
+Category:     USER IO
+
+Files:        ioutils.py
+
+Author:       M.G.R. Vogelaar
+
+Use:          setobject = wcsinp(key,         # Character string
+                                 mes,         # Character string
+                                 create,      # Boolean
+                                 write,       # Boolean
+                                 hdukey,      # Character string
+                                 hdumes,      # Character string
+                                 altkey,      # Character
+                                 altmes,      # Character string
+                                 axkey,       # Character string
+                                 axmes,       # Character string
+                                 axsuffix,    # Character string
+                                 swapkey,     # Character string
+                                 swapmes,     # Character string
+                                 requireddim, # Integer
+                                 listopt)     # Boolean
+
+             
+              Python call with defaults for keyword parameters:
+
+              setobject = wcsinp(key="INSET=",
+                                 mes="Enter data file: ",
+                                 create=False,
+                                 write=False,
+                                 hdukey="HDU=",
+                                 hdumes="Enter number of Header Data Unit:        [0]",
+                                 altkey="ALTHEAD=",
+                                 altmes=None,
+                                 axkey="AXNAMES=",
+                                 axmes=None,
+                                 axsuffix=None,
+                                 swapkey="AXSWAP=",
+                                 swapmes=None,
+                                 requireddim=None,
+                                 listopt=True)
+              
+
+              wcsinp   Returns an object from class WCSset (inherits from class Set)
+                       or None in case of unrecoverable errors or when nothing was
+                       entered.
+                       See: http://www.astro.rug.nl/~gipsy/pguide/pygipsy.html
+                       to find the methods and attributes of objects of this
+                       class.
+              key      Keyword prompt, default is "INSET="
+              mes      Message for the prompt. Default is "Enter data file: "
+              create   If True than a set is created. Default is False
+              write    Set to True if it is required to modify the set on disk.
+                       Default is False.
+              hdukey   Keyword for a prompt when the data is a FITS file and 
+                       there are multiple data header units. The default is
+                       "HDU="
+              hdumes   Message for the 'hdukey' prompt. There is a default
+                       message. The default is HDU=0.
+              altkey   Keyword for a prompt for an alternate header. An alternate header
+                       is an alternative description of a world coordinate system.
+                       The corresponding keywords are appended with a character a..z.
+                       This character is the input that is expected at this prompt.
+              altmes   A message for the prompt for 'altkey'. The message is
+                       only composed if there are alternate headers available.
+              axkey    If the input of a data structure has more dimensions than
+                       the number in parameter 'requireddim' then a user
+                       will be prompted to enter the names of the axes in the
+                       data structure that has the dimension 'requireddim'.
+                       The axes names are case insensitive and minimal matched
+                       against the list of available axes names.
+                       Also the positions of the slice(s) are prompted. These
+                       keywords are derived from the names of the 'repeat' axes.
+                       These are the axes outside the entered data slice/subset.
+              axmes    A message for the 'axkey' prompt. A default message contains
+                       'requireddim' axes names in order of the names in the header of
+                       the data set.
+              axsuffix Distinguish axes names in the prompt for 'repeat' axes.
+              swapkey  Axis swapping is only possible for two dimensional sets.
+                       Usually one wants to swap axes for plotting purposes.
+                       If subset axes are selected from a list and the subset is two
+                       dimensional, then the order is important.
+                       If a set with subset specification is entered, then the order
+                       is fixed by GIPSY. For two dimensional structures, the user
+                       gets an option to swap the axes.            
+              swapmes  A message for the 'swapkey' prompt. If omitted, a default
+                       message is constructed using the axis names in the selected
+                       two dimensional subset.
+              requireddim
+                       The required minimal dimension of the subsets.
+                       If set, there is a check whether the dimension
+                       of the subsets is equal to this 'requireddim' or
+                       equal to the dimension of the set.
+              listopt  Extend the prompt in 'mes' with a default option
+                       '[list files]', which lists all GIPSY sets and FITS files
+                       in the current working directory.
+
+Returns:      A 'WCSset' object. 
+              Its attributes are described in the document:
+              http://www.intra.astro.rug.nl/~gipsy/pguide/pygipsy.html
+              Assume we call this object 's', then below we summarize these
+              attributes:
+                          
+               s.image
+                  the set's image as a NumPy array.
+               s.header
+                  a SetHeader object which interfaces to the set's header.
+                  On write, a copy of the element is created. On read,
+                  the value of the copy is returned if it exists,
+                  or otherwise the set's header element itself. See below.
+               s.naxis
+                  the set's dimensionality.
+               s.ncoords
+                  the set's number of axes, including 'hidden axes'.
+               s.axnames
+                  the set's list of axis names.
+               s.slo, s.shi
+                  lists with the set's lower and upper grid limits.
+               s.blo, s.bhi
+                  if a box has been specified, lists with the box's limits,
+                  otherwise identical to s.slo, s.shi.
+               s.spec
+                  the set's specification string as given when the object was created.
+               s.open
+                  True when set is open.
+               s.wmode
+                  True when set is writable.
+               s.boxspec
+                  the set's box specification string as given to the method 'setbox()'.
+               s.subsets
+                  set's list of subset coordinate words.
+               s.blank
+                  Value of the undefined pixel.
+               s.fits
+                  True when set is a FITS 'pseudo set'.
+               s.fitsname
+                  For FITS pseudo sets: the name of the FITS file.
+               s.hdunum
+                  For FITS pseudo sets: the number of the HDU. Zero-relative.
+               s.altwcs
+                  For FITS pseudo sets: alternative WCS version code used for
+                  creating the set. Default: blank.
+
+              But the WCSset class adds attributes for coordinate systems:
+                     
+               s.dataname
+                  Name of source (GDS- or FITS file)
+               s.axperm_in
+                  Axis permutation array for axes inside subset
+               s.axperm_out
+                  Axis permutation array for axes outside subset
+               s.wcsinfo
+                  String with information about the coordinate system
+               s.transax
+                  Axis number (starting with 1) of the spectral axis (if any
+                  is available otherwise its value is None).
+               s.projection
+                  The 'Projection' object
+               s.mixax
+                  Axis number of a missing spatial axis. E.g. in XV maps we
+                  need the missing spatial axis for X to be able to do coordinate
+                  transformations.
+               s.subproj
+                  The Projection object that corresponds to a subset
+               s.projaxnum
+                  The axis number array for the subset axes.
+               s.spatialmap
+                  Boolean. Is True if both subset axes are spatial.
+               s.slicepositions
+                  Pixel coordinates at which a slice/subset is taken.
+                  E.g. in a RA-DEC-FREQ-STOKES data structure we need a pixel
+                  position in FREQ and STOKES to define one two-dim subset.
+
+              The attributes for the projection objects ('projection' and 'subproj'),
+              also have attributes. They are described in the documentation of
+              module 'wcs' in the Kapteyn Package, see:
+              http://www.astro.rug.nl/software/kapteyn/wcs.html#class-projection
+
+              An important attribute is 'gridmode'. In the GIPSY environment
+              this attribute is set to True. The input coordinates are
+              regarded as grid coordinates. If one wants to work in (FITS) pixel
+              coordinates only, then set:
+
+              s.subproj.gridmode = False
+              s.projection.gridmode = False
+              
+
+              The Set object has a number of methods. These methods are described
+              in the document:
+              http://www.intra.astro.rug.nl/~gipsy/pguide/pygipsy.html
+              at section 3.1, the Set class.
+
+
+              Methods:
+
+              Besides all methods of the Set class, we added some new methods:
+
+              s.swapaxes():
+                  Method to change the axes permutation array for two
+                  dimensional subsets only.
+
+              spec = s.set_spectraltranslation(key=None, mes=None, default=1, inside=True)
+                  Set a spectral translation. Either for an position-velocity
+                  diagram or for a repeat axis with type 'spectral' (inside=False).
+                  The default is always set to the current system.
+
+              skyout = s.set_skyout(key=None, mes=None, default=1)
+                  Set and return an output sky definition
+                  The default is always set to the current system.
+
+              s.printinfo()
+                  Print an informative message about the set in Hermes.
+
+
+Description:  WCS is a function which prompts the user to enter the name
+              of a set and (optionally) subset(s) and returns an object from 
+              class 'Set'.
+              This routine checks whether subsets are entered with the
+              dimensionality given in parameter 'requireddim'.
+              If not present, it will inform
+              the user and prompts again for subsets using axes names found in
+              the header of the input data.
+              It accepts also a FITS file. The parsing of a FITS file involves
+              module PyFITS. This module enables us to enter FITS data using
+              a location on the web (url) and/or read data from a compressed
+              file (.gz).
+              If a FITS file is entered and the FITS file has multiple
+              header Data Units (hdu's) then the user is prompted to
+              give the number of the hdu that contains the wanted data.
+              If it has alternate headers (header with an alternative description
+              of the world coordinate system), then it will prompt for
+              a character corresponding to the alternate header.
+
+
+Examples:     Below a real (but useless) GIPSY task. It prompts for a GIPSY
+              set or FITS file.
+
+              #!/usr/bin/env python
+              import gipsy
+              import ioutils
+               
+              gipsy.init()
+              gipsyset = ioutils.wcsinp()
+              gipsy.finis()
+
+              Parameter 'requireddim' is important. This parameter sets the
+              dimension of the subsets (an attribute of the object returned by
+              'wcsinp()'). If one enters only the name of the data and the dimension
+              of that data structure is not equal to the required dimension, then
+              a user will be prompted to enter the names of the axes in a subset.
+              Examples:
+              
+              gipsyset = ioutils.wcsinp(requireddim=4)  # Subsets must be 4-dim.!
+
+              Any data entered here with a dimension less than 4 will be
+              rejected.
+
+
+              Assume we have a 4 dimensional data structure called '4dimtest'
+              described by:
+
+              Set 4dimtest.fits has 4 axes:
+              FREQ                 from     -4 to      5
+              DEC--NCP             from     -4 to      5
+              STOKES               from     -1 to      2
+              RA---NCP             from     -4 to      5
+
+              Set the required subset dimension to 2:
+              
+              gipsyset = ioutils.wcsinp(requireddim=2)
+
+              If you enter only the name (and not any subset specification) on
+              the INSET= prompt, then you will get a AXNAMES= prompt
+              to enter the 2 (requireddim=2) names of the subset axes.
+              
+              AXNAMES=
+              Enter 2 names of FREQ,DEC,STOKES,RA    [FREQ,DEC]
+
+              Then you will get a prompt to enter grid coordinates on the
+              so called repeat axes (axes outside the subset).
+              STOKES=
+              Enter grid position(s) on STOKES ..... [-1:2]
+              RA=
+              Enter grid position(s) on RA ..... [-4:5] 
+
+              Note that this is all equivalent to:
+              
+              INSET=4dimtest.fits STOKES -1:2 RA -4:5
+
+              Which is the same as:
+              
+              INSET=4dimtest.fits STOKES RA
+
+              
+              Other examples
+              --------------
+              At the prompt one can enter GIPSY sets, and FITS files using the
+              same syntax for extracting subsets. FITS files can also be retrieved
+              from the web using its URL. Also gzipped FITS files can be read.
+              
+              INSET=aurora freq 1:10
+              INSET=http://www.atnf.csiro.au/people/mcalabre/data/WCS/1904-66_ZPN.fits.gz
+              INSET=ngcxxx.fits.gz velo 50
+
+
+              A complete GIPSY task
+              ----------------------
+
+              As an example of using methods 'wcsinp()' and 'wcspos()' in a GIPSY task
+              we wrote a small application which converts between grids and
+              world coordinates. It prompts a user for a data structure
+              (GIPSY set or FITS file), a spectral translation (if useful) and
+              an output sky system. These will change the output of the
+              calculated world coordinates into the new spectral system and/or
+              sky system.
+
+               #------- Start --------
+               !/usr/bin/env python
+
+               import gipsy
+               from kapteyn import ioutils
+
+               gipsy.init()
+               gipsyset = ioutils.wcsinp()
+               gipsyset.printinfo()
+               gipsyset.set_spectraltranslation("SPECTRANS=", mes=None, inside=True)
+               gipsyset.set_skyout("SKYOUT=")
+
+               # Using a prompt to enter positions for the same GIPSY set:
+               # Abort the loop if only enter is pressed.
+               key = "POS="
+               while 1:
+                  grids, world, pix, units, errmes = gipsyset.wcspos(0, key, "")
+                  gipsy.cancel(key)
+                  if not len(grids):
+                     if errmes:
+                        gipsy.reject(key, errmes)
+                     else:
+                        break
+                  else:
+                     for g,w in zip(grids, world):
+                        s = str(g) + "=" + str(w) + ' ' + str(units)
+                        gipsy.anyout(s)
+
+               gipsy.finis()
+               #------- End -------
+
+Updates:      Apr 23, 2009: VOG, Document created.
+              Jul 15, 2010: VOG, New version compatible with
+                                 Kapteyn version v2.0
+              Feb 03, 2011: VOG, Example of small task added.
+#<
+
+#>            wcsbox.dc2
+Function:     WCSBOX
+
+Purpose:      WCSBOX prompts the user to define a box inside/around a
+              subset. 
+
+Category:     USER IO, PHYSICAL COORDINATES
+
+File:         ioutils.py
+
+Author:       M.G.R. Vogelaar
+
+Use:          blo, bhi = gset.wcsbox(key="BOX=",   # Character string
+                                     mes="",       # Character string
+                                     default=1,    # Integer
+                                     showdev=0,    # Integer
+                                     option=0)     # Integer
+
+
+
+              gset    Object of class Set for which a box should be defined.
+              key     Keyword for prompt.
+              mes     Message for prompt
+              default Default code as in USERxxx.
+              showdev Device (as in ANYOUT) to which some info
+                      about the chosen box is displayed.
+              option  0: Check on upper limits for blo and bhi using
+                      attributes of 'gset' 
+
+              blo
+              bhi     Two lists with coordinates which set the axes limits of
+                      the input subset.
+                      The coordinates are sorted so that 'blo' represents the
+                      lower limits and 'bhi' the upper limits.
+                      Note that also the Set object (gset) is updated. 
+                      Therefore you can retrieve the limits also by accessing
+                      attributes gset.blo, gset.bhi
+
+Description:  WCSBOX is a function to set the grid limits of the axes in a subset.
+              it usually is called after the input of the data file
+              (GIPSY set or FITS file).
+              This function is similar to GIPSY's gdsbox() but it is
+              based on WCSLIB and supports more projection- and sky systems.
+              It needs the coordinate word of a subset to determine
+              for which axes limits are needed.
+              For these axes it creates a default prompt which can be
+              overruled with keyword parameter 'mes'. A box is defined
+              with two positions. The first position sets the lower limits
+              of the axes and the second sets the upper limits. One position
+              consists of n coordinates where n is equal to the dimensionality
+              of the subset.
+
+Notes:        In most situations the conversion between grids and world
+              coordinates is independent of the subset. E.g. in a sequence
+              of channel maps, each RA,Dec image represents the same
+              coordinate system.
+              However, when we create subsets with only one spatial axis,
+              then the matching spatial coordinate depends on the selected
+              subset (e.g. with XV maps). Here we follow the implementation
+              in gdsbox.c. That is, only the first subset is used for
+              coordinate transformations.
+
+Examples:     BOX=-10 -10 20 30
+              BOX= 0 0 D 30 50
+              BOX= 2h10m30s 60d32m2.7s D 10 10
+              BOX= 2h10m30s 60d32m2.7s D 2 arcmin 3 arcmin
+
+              Example of a small task that asks a user to enter a box:
+
+               #!/usr/bin/env python
+
+               import gipsy
+               from kapteyn import ioutils
+
+               gipsy.init()
+               gipsyset = ioutils.wcsinp()
+               gipsyset.printinfo()
+               blo, bhi = gipsyset.wcsbox()
+               gipsy.anyout("Box from %s to %s"%(str(blo), str(bhi)))
+               gipsy.finis()
+
+
+Updates:      Apr 23, 2009: VOG, Document created.
+
+#<
+
+#>            wcspos.dc2
+Function:     WCSPOS
+
+Purpose:      WCSPOS prompts the user to define a position in a subset.
+
+Category:     USER IO, PHYSICAL COORDINATES
+
+File:         ioutils.py
+
+Author:       M.G.R. Vogelaar
+
+Use:          grids, world, pixels, subsetunits, errmes =
+                        WCSset.wcspos(subnum,        # Integer
+                                      key="POS=",    # Character string
+                                      mes="",        # Character string
+                                      userpos='')    # String
+
+
+              wcspos    A method of class WCSset.
+              subnum    Index of current subset in subset arrray.
+                        Note that this is an index not a subset coordinate word.
+              key       Keyword for prompt. If you do not specify this parameter
+                        then by default it is "POS="
+              mes       Message for prompt. If you do not specify this message,
+                        then an appropriate message will be created. 
+              userpos   A string to replace the manual input. No prompt will appear.
+                        WCSPOS therefore is also suitable to use in a non
+                        interactive environment. If you want a prompt then this
+                        parameter should be omitted (or it must be an empty string).
+
+
+              It returns:
+              
+              grids     A 2 dimensional NumPy array with grids values for
+                        the entered position(s). Each row represents a position.
+                        Each element in a row is a coordinate.
+              world     A 2 dimensional NumPy array with world coordinates for
+                        the entered  position(s)
+              pixels    A 2 dimensional NumPy array with pixel coordinates.
+                        Pixel coordinates following the FITS standard,
+                        e.g. they start at 1. These coordinates can be used
+                        as an interface to the Kapteyn Package. This is
+                        a Python based toolkit for plotting and conversion
+                        of world coordinates.
+              subsetunits
+                        Units corresponding to axes in the current subset.
+                        The units of the first world coordinate in a position
+                        has the units of the first element in this list etc.
+              errmes    An error message if something was wrong.
+                        One should check this return value to decide whether
+                        the input was valid or not.
+
+
+Description:  WCSPOS is a method that returns a user given position 
+              in grid-, world- and pixel coordinates. This can be a
+              single position or a sequence of positions. The syntax of
+              a position is described in the 'Syntax' section.
+
+              WCSPOS can only be used in GIPSY tasks written in Python.
+              That is because it uses a system of world coordinates
+              based on the library WCSLIB for which we made a so called
+              'Python binding'. If one writes an application in Python
+              than one should use the more versatile routines 'wcsinp',
+              'wcspos' and 'wcsbox' for the input of GIPSY sets (or FITS files),
+              positions and axis limits.
+              WCSPOS replaces the function GDSPOS. The input of sky systems
+              is the main difference between these two routines.
+              It has a more options to specify sky systems.
+              It supports ICRS, elliptic terms of
+              abberation for transformations to or from FK4, a rich set of
+              projection systems etc.
+              WCSPOS and GDSPOS support a compatible set of units, but
+              WCSPOS can also deal with inverse units like 1/m.
+
+
+
+Notes:        In GIPSY tasks we often use WCSPOS in combination with
+              WCSINP and WCSBOX.
+
+              In most situations the conversion between grids and world
+              coordinates is independent of the subset. E.g. in a sequence
+              of channel maps, each RA,Dec image represents the same
+              coordinate system.
+              However, when we create subsets with only one spatial axis,
+              then the matching spatial coordinate depends on the selected
+              subset (e.g. with XV maps). Therefore we need to enter
+              the index of the subset we want to use.
+
+
+Example of a small GIPSY test task
+++++++++++++++++++++++++++++++++++
+
+Next example can be copied (cut & paste) to a file on disk.
+Give it the name 'postest' and make it executable with:
+> chmod u+x postest
+Then start GIPSY with:
+> gipsy
+and enter the name of your test application (postest).
+
+
+#!/usr/bin/env python
+
+import gipsy
+import ioutils
+
+gipsy.init()
+
+# A GIPSY set is created first.
+# Then a list with positions is processed as a closure test and as a test
+# for error messages. Finally, you are prompted in a loop (aborted by an
+# empty input i.e. 'enter' only) to enter your own test positions.
+# If you want to use your own GIPSY sets or FITS files, then
+# use method 'wcsinp()' instead of constructor 'WCSset()'
+
+setname = "wcspos_testset"
+command =  "CREATE BUNIT= \
+   CDELT1= -1.200000000000E-03 CDELT2= 1.497160000000E-03 CDELT3= -7.812500000000E+04 \
+   CROTA2= \
+   CRPIX1= 5 CRPIX2= 5 CRPIX3= 5 \
+   CRVAL1= 1.787792000000E+02 CRVAL2= 5.365500000000E+01 CRVAL3= 1.415418199417E+09 \
+   CTYPE1= RA---TAN CTYPE2= DEC--TAN CTYPE3= FREQ-OHEL CTYPE4= \
+   CUNIT1= CUNIT2= CUNIT3= HZ \
+   DELETE= y \
+   DRVAL3= 1.050000000000E+03 DUNIT3= KM/S FREQ0= 1415418199.417 \
+   FUNCTION= rang(0.0,3.0) \
+   INSTRUME= WSRT \
+   NAXIS1= 10 NAXIS2= 10 NAXIS3= 10 \
+   OUTSET= %s"%(setname)
+
+gipsy.xeq(command)
+gipsyset = ioutils.WCSset(setname + " freq 0")
+gipsyset.printinfo()
+userpos = ["0 0", "eq 178.7792  eq 53.655",
+           '{} header("crval1"), {} header("crval2")', "eq 178 ga 22"]
+for upos in userpos:
+   print gipsyset.wcspos(0, userpos=upos)
+   gr, wor, pix, units, errm = gipsyset.wcspos(0, userpos=upos)
+   if errm == '':
+      gipsy.anyout("%s -> grids: %f %f -> world: %f %f (%s %s)" %
+                   (upos, gr[0][0], gr[0][1],
+                    wor[0][0], wor[0][1],
+                    units[0], units[1]))
+   else:
+      gipsy.anyout("Error message test: %s --> %s" % (upos, errm))
+
+# Using a prompt to enter positions for the same GIPSY set:
+# Abort the loop if only enter is pressed.
+key = "POS="
+while 1:
+   grids, world, pix, units, errmes = gipsyset.wcspos(0, key, "")
+   gipsy.cancel(key)
+   if not len(grids):
+      if errmes:
+         gipsy.reject(key, errmes)
+      else:
+         break
+   else:
+      for g,w in zip(grids, world):
+         s = str(g) + "=" + str(w) + ' ' + str(units)
+         gipsy.anyout(s)
+
+gipsy.finis()
+
+
+# Run the module ioutils.py as a GIPSY task in test mode to see
+# the output of many input examples.
+
+
+Syntax
+++++++
+
+The syntax is described in the documentation of the 'positions' module in
+the Kapteyn Package.
+The web link is:
+http://www.astro.rug.nl/software/kapteyn/positions.html#position-syntax
+
+
+
+Real input examples for sky definitions
+.......................................
+
+POS={eq} 178.7792  {} 53.655                      # As a sky definition between curly brackets
+POS={} 178.7792 {} 53.655                         # A world coordinate in the native sky system
+POS={eq,B1950,fk4} 178.12830409  {} 53.93322241   # With sky system, reference system and equinox
+POS={fk4} 178.12830409  {} 53.93322241            # With reference system only.
+POS={eq, B1950,fk4, J1983.5} 178.1283  {} 53.933  # With epoch of observation (FK4 only)
+POS={eq B1950 fk4 J1983.5} 178.1283  {} 53.933    # With space as separator
+POS=ga 140.52382927 ga 61.50745891                # Galactic coordinates
+POS=ga 140.52382927 {} 61.50745891                # Second definition copies from first
+POS=su 61.4767412, su 4.0520188                   # Supergalactic
+POS=ec 150.73844942 ec 47.22071243                # Ecliptic
+POS={} 178.7792 6.0                               # Mix world- and pixel coordinate
+POS=5.0, {} 53.655                                # Mix with world coordinate in native system
+
+Notes:
+
+   * Mixing sky definitions for one position is not allowed i.e. one cannot
+     enter POS=ga 140.52382927 eq 53.655
+   * If you mix a pixel- and a world coordinate in a spatial system
+     then this world coordinate must be defined in the native system, i.e. {}
+
+
+We can also specify positions in data structures with only one spatial axis
+and a non-spatial axis (e.g. position velocity diagrams).
+The grid coordinate of the missing spatial axis is derived from the subset
+(entered as an index with parameter 'subnum').
+If one of the axes is a spectral axis, then one can enter world coordinates
+in a compatible spectral system:
+
+POS={} 53.655 1.415418199417E+09 hz    # Spatial and spectral world coordinate
+POS={} 53.655 1.415418199417E+03 Mhz   # Change Hz to MHz
+POS=53.655 deg 1.415418199417 Ghz      # to GHz
+POS={} 53.655 vopt 1.05000000e+06      # Use spectral translation to enter optical velocity
+POS={} 53.655 , vopt 1050 km/s         # Change units
+POS=10.0 , vopt 1050000 m/s            # Combine with a pixel position
+POS={} 53.655 vrad 1.05000000e+06      # Radio velocity
+POS={} 53.655 vrad 1.05000000e+03 km/s # Radio velocity with different unit
+POS={} 53.655 FREQ 1.41541820e+09      # A Frequency
+POS={} 53.655 wave 21.2 cm             # A wave length with alternative unit
+POS={} 53.655 vopt c_/285.51662        # Use speed of light constant to get number in m/s
+
+
+Note:
+
+   For positions in a data structure with one spatial axis, the other
+   (missing) spatial axis is identified by a grid coordinate derived from
+   the current subset.
+   This restricts the spatial world coordinates to their native WCS.
+   We define a world coordinate in its native sky system
+   with {} 
+
+Notes:
+
+   A sky definition needs not to be repeated for other coordinates than the first.
+   The second definition therefore can be empty as in {} as in:
+   POS={eq} 178.7792  {} 53.655
+
+   Only one definition is allowed in a position. If you mix definitions as in:
+   POS={eq, B1950} 178.7792 ga 22.01234
+   
+
+Note:
+
+   World coordinates followed by a unit, are supposed to be compatible
+   with the Projection object (attribute of an object from class WCSset).
+   So if you have a header with spectral type FREQ but
+   with a spectral translation set to VOPT, then
+   POS={} 53.655 1.415418199417E+09 hz
+   is invalid, but
+   POS=10.0 , vopt 1050000 m/s
+   is ok and also
+   POS={} 53.655 FREQ 1.415418199417e+09
+   is correct.
+
+   
+Sexagesimal notation
+.....................
+
+Read the documentation at function 'parsehmsdms()' in the positions
+module of the Kapteyn Package for the details.
+Here are some examples:
+
+POS=11h55m07.008s 53d39m18.0s
+POS={B1983.5} 11h55m07.008s {} -53d39m18.0s
+POS= -33d 0d
+
+
+Reading from file with function 'READCOL()'
+.............................................
+
+We introduced a command 'readcol' to read a column from a file on disk.
+Function readcol() requires the filename enclosed by double quotes.
+At the GIPSY command line (Hermes) you need to use back-quotes
+to escape these double quotes. Here is an example:
+
+POS=`readcol("test123positions.txt", col=0)
+                               readcol("test123positions.txt", col=2)`
+
+!! Note the back quotes to prevent an unwanted interpretation
+of the input by the GIPSY user interface Hermes.
+
+
+Structure of output
+....................
+
+In the first example of this document we presented a small program
+that uses method 'wcspos()' for processing positions.
+If we focus on the anyout statement that prints the result in the
+GIPSY log file then we that it is called in a loop (two strings that represent
+a position in the list 'userpos'). For each position 'wcspos()'
+returns a tuple with the following elements:
+
+    gr:    The entered position in grids.
+           Returned is a two dimensional array. Each row represents
+           a position. Each element in a row is one of the coordinates.
+           The order of the coordinates is the same as the order
+           of the axes in your data structure.
+    wor:   The entered position in world coordinates. See also remarks about grids.
+    pix:   The entered position in (FITS) pixels. See also remarks about grids.
+    units: Tuple with units. One for each coordinate.
+    errm:  If empty then no error condition exists, else, an error occurred
+           and one should take care of this. 
+
+userpos = ["0 0", "eq 178.7792  eq 53.655"]
+for upos in userpos:
+   gr, wor, pix, units, errm = gipsyset.wcspos(0, userpos=upos)
+   if errm == '':
+     gipsy.anyout("%s -> grids: %f %f -> world: %f %f (%s %s)" %
+         (upos, gr[0][0], gr[0][1], wor[0][0], wor[0][1], units[0], units[1]))
+
+The code of GIPSY's ioutils.py in $gip_tsk shows many examples.
+Task mapmaker.py shows how 'wcspos()' can be used in an interactive environment.
+
+Errors:
+........
+
+The position parser is flexible but there are some rules. If the input
+cannot be transformed into coordinates then an appropriate message will be
+returned. In some cases the error message seems not related to the problem
+but that seems inherent to parsers. If a number is wrong, the parser tries
+to parse it as a sky system or a unit. If it fails, it will complain about
+the sky system or the unit and not about the number.
+
+
+Updates:      Apr 23, 2009: VOG, Document created.
+              Jul 15, 2010: VOG, Made compatible with Kapteyn Package 2.0
+                                 (module positions.py).
+                                 Extended the documentation.
+              Feb 03, 2011: VOG  Removed documentation that can be found
+                                 in positions module of K.P.
+                                 Improved example.
+#<
+
+#>            setwcsbox.dc2
+Function:     SETWCSBOX
+
+Purpose:      SETWCSBOX define a box inside/around a subset (No user
+              interaction)
+
+Category:     USER IO, PHYSICAL COORDINATES
+
+File:         ioutils.py
+
+Author:       M.G.R. Vogelaar
+
+Use:          boxtxt = "2h10m30s 60d32m2.7s D 2 arcmin 3 arcmin"
+              blo, bhi = gset.setwcsbox(boxtxt, checklimits=True)
+
+              gset          Object of class Set for which a box should be defined.
+              boxtxt        Box specification as a string
+              checklimits   Boolean. If True, 'boxtxt' is not allowed to specify
+                            regions beyond the data regions.
+
+              blo
+              bhi     Two lists with coordinates which set the axes limits of
+                      the input subset.
+                      The coordinates are sorted so that 'blo' represents the
+                      lower limits and 'bhi' the upper limits.
+                      Note that also the Set object (gset) is updated. 
+                      Therefore you can retrieve the limits also by accessing
+                      attributes gset.blo, gset.bhi
+
+Description:  Read also the description for the interactive routine WCSBOX
+
+Notes:        In most situations the conversion between grids and world
+              coordinates is independent of the subset. E.g. in a sequence
+              of channel maps, each RA,Dec image represents the same
+              coordinate system.
+              However, when we create subsets with only one spatial axis,
+              then the matching spatial coordinate depends on the selected
+              subset (e.g. with XV maps). Here we follow the implementation
+              in gdsbox.c. That is, only the first subset is used for
+              coordinate transformations.
+
+Examples:     boxtxt = "-10 -10 20 30"
+              boxtxt = "0 0 D 30 50"
+              boxtxt = "2h10m30s 60d32m2.7s D 10 10"
+              boxtxt = "2h10m30s 60d32m2.7s D 2 arcmin 3 arcmin"
+               
+              blo, bhi = gset.setwcsbox(boxtxt)
+              
+
+Updates:      Sep 28, 2012: VOG, Document created.
+
+
+#<
+
+#>            ioutils.py
+#!/usr/bin/env python
+#----------------------------------------------------------------------
+# FILE:    ioutils.py
+# PURPOSE: Provides three functions for user I/O
+#          1) wcsinp() for the input of GIPSY sets or FITS files
+#          2) wcsbox() for the input of axis limits in a selected data slice
+#          3) wcspos() for the input of positions in grids or world coordinates
+# AUTHOR:  M.G.R. Vogelaar, University of Groningen, The Netherlands
+# DATE:    April 20, 2009
+# UPDATE:  Jun 05, 2010
+#          Jan 13, 2011
+# VERSION: 0.8
+#
+# (C) University of Groningen
+# Kapteyn Astronomical Institute
+# Groningen, The Netherlands
+# E: gipsy@astro.rug.nl
+#----------------------------------------------------------------------
+
+# Imports
+from math import *                               # For Pythons 'eval()' function
+from re import split as re_split
+from string import upper as string_upper
+from sys import stdout                           # For flushing a buffer
+from numpy import nan as unknown                 # new name for a NaN
+from numpy import asarray, zeros, floor
+from numpy import array2string                   # Used to format output
+import gipsy                                     # Provides classes and bindings to GIPSY routines
+from kapteyn import wcs                          # The WCSLIB binding
+from kapteyn import positions                    # The coordinate parser (expressions, units)
+from os import listdir, stat, path               # Used to get names of files on disk
+from fnmatch import fnmatch                      # Match file name against pattern
+import warnings
+
+def nint(x):
+   """--------------------------------------------------------------
+   Purpose:    Calculate a nearest integer compatible with then
+               definition used in GIPSY's coordinate routines.
+
+   Inputs:
+         x-    A floating point number to be rounded to the nearest
+               integer
+
+   Returns:    The nearest integer for 'x'.
+
+   Notes:      This definition adds a rule for half-integers. This
+               rule is implemented with function floor() which implies
+               that the left side of a pixel, in a sequence of
+               horizontal pixels, belongs to the pixel while the
+               right side belongs to the next pixel. This definition 
+               of a nearest integer differs from the Fortran
+               definition used in pre-April 2009 versions of GIPSY. 
+
+   -----------------------------------------------------------------"""
+   return floor(x+0.5)
+
+
+def prompthdu(key, mes):
+   def askhdu(hdulist):
+      """-------------------------------------------------------------------------------
+      Helper function for Set class. The function prompts for a header data unit
+      only if the file in the constructor was a FITS file.
+      -------------------------------------------------------------------------------"""
+      print hdulist.info()                       # Make sure the message is in the log file before the next keyword prompt
+      stdout.flush()
+      n = len(hdulist)
+      if n > 1:
+         while True:
+            hnr = gipsy.userint(key, mes, default=1, defval=0)
+            if hnr < n:
+               break
+            else:
+               gipsy.reject(key, "Hdu number must be %d <= n < %d" %(0, n))
+      else:
+         hnr = 0
+      return hnr
+   return askhdu
+
+
+def promptalt(key, mes):
+   def askalt(alts, header):
+      """-------------------------------------------------------------------------------
+      Helper function for Set class. The function prompts for a alternative header.
+      A primary header is selected if a space is returned (' ').
+      -------------------------------------------------------------------------------"""
+      mes = "Select header ... "             # Build a default message
+      for c in alts:
+         mes += "%s/"%c
+      mes += "[Primary header]:"
+      alth = ''
+      while True:
+         # Return only one uppercase character or ' '
+         alth = gipsy.usercharu(keyword=key, 
+                                message=mes, 
+                                default=1, 
+                                defval=alth, 
+                                width=1,
+                                nmax=1)
+         # Is this selection allowed?
+         if alth == '' or alth in alts:
+            break
+         else:
+            gipsy.reject(key, "This header is not in the list!")
+      return alth
+   return askalt
+
+
+
+def MinimalHeader(header):
+   """-------------------------------------------------------------------------------
+   Helper function for WCSet class. If somehow an application fails to read the
+   FITS header, we offer the option to create a minimal header with only the
+   axes lengths and CRPIX values. Then at least one can display the data.
+   -------------------------------------------------------------------------------"""
+   result = {}
+   naxis = header['NAXIS']
+   result['NAXIS'] = naxis
+   for i in range(1,naxis+1):
+      keyword = 'NAXIS%d' % i
+      result[keyword] = header[keyword]
+      keyword = 'CRPIX%d' % i
+      try:
+         result[keyword] = header[keyword]
+      except:
+         pass      
+   return result
+
+   
+
+class WCSset(gipsy.Set):
+   def __init__(self, setspec, create=False, write=False, gethdu=None, getalt=None,
+                minimal=False):
+      """---------------------------------------------------------------------------
+      Attributes:
+         axperm_in:    Axis permutation array for subset (FITS definition)
+         axperm_out:   Axis per. array for axes outside subset.
+         wcsinfo:      String with WCS information about subset axes
+         transax_in:   FITS axis number that corresponds to spectral axis
+                       in a subset or None
+         transax_out:  FITS axis number that corresponds to spectral axis
+                       outside a subset or None
+         translations: List with allowed spectral translations for spectral axis
+                       in subset. Could be empty for incorrect FITS headers (e.g.
+                       missing rest frequency)
+         projection:   An object of class Projection from module wcs. Serves as
+                       a base object.
+         subproj:      A projection object that represents the entered subset.
+         mixax:        The axes number of the missing speatial axes or None.
+                       The application will be aborted if it cannot find a matching
+                       axis.
+         projaxnum:    The axes permutation array for the projection object associated
+                       with the subset. It can have more elements than the dimension
+                       of the subset when it contains the axis number of the missing
+                       spatial axis (e.g. in a XV map). Also, at least for two
+                       dimensional subsets the order need not to be the same as the
+                       order in GDS (i.e. fixed order of as found in header of set).
+         spatialmap:   If True, the subset is two dimensional and has two spatial axes
+         slicepositions:
+                       Pixel positions on repeat axes to identify a slice.
+                       The positions are in order of the order of the repeat
+                       axes in the header.
+         sliceaxnums:  Axis numbers of the repeat axes. The numbers are 1 based
+                       and are ordered as the the order of the repeat
+                       axes in the header.
+       
+      Notes:           The Set class defines an array with axis numbers in the given
+                       subset. Assume a (Ra, Dec, Freq) set and one defines
+                       a subset (Dec, Freq). The the (FITS) axis numbers for the
+                       entire set (i.e. 'setlevel') is (1,2,3). The axis permutation
+                       array for the subset is (2,3).
+                       The projection object associated with this Set defines
+                       the axis numbers (FITS numbering) of the longitude, latitude
+                       and spectral axis. So:
+                       Set.Projection.lonaxnum = 1
+                       Set.Projection.lataxnum = 2
+                       Set.Projection.specaxnum = 3
+                       To test whether an axis is available in a subset one needs
+                       only to check if the required axis number is element of
+                       attribute axperm_in.
+                       On the other hand, this class creates a derived projection
+                       object that represents the subset as specified by a user.
+                       Then the axis numbers are redefined:
+                       Set.SubProjection.lonaxnum = None
+                       Set.SubProjection.lataxnum = 1
+                       Set.SubProjection.specaxnum = 2
+                       These numbers cannot be compared with the contents of axperm_in
+      ------------------------------------------------------------------------------"""      
+      # Create a Set object using its init method
+      warnings.resetwarnings()
+      warnings.filterwarnings('ignore', category=DeprecationWarning, append=True)
+      gipsy.Set.__init__(self, setspec, create, write, gethdu, getalt)
+      warnings.resetwarnings()
+      warnings.filterwarnings('always', category=DeprecationWarning, append=True)
+      # We need one name for the entered data whether it is gds or a FITS file
+      if self.fits:
+         self.dataname = self.fitsname
+      else:
+         self.dataname = self.name
+
+      # In the Kapteyn Package we have functionality which has the focus
+      # on two dimensional images (maps). In GIPSY we allow for any dimension.
+      # So we build our own projection object for the set input.
+
+      try:
+         if minimal:         
+            proj = wcs.Projection(MinimalHeader(self))
+         else:
+            proj = wcs.Projection(self, alter=self.altwcs)
+      except Exception, message:
+         raise Exception, message
+         
+      # Next we do some analysis about the axes in this data set.
+      # Do we have a missing spatial axis or are spectral translations possible?
+      # First we convert the axis permutation array to the FITS standard (i.e. start with 1)
+      self.axperm_in = [i + 1 for i in self.axperm('inside')]
+      self.wcsinfo = []
+      transax_in = None                   # The axis number of the spectral axis in a subset
+      for ax in self.axperm_in:
+         i = ax - 1                       # Axis numbers start with 1.
+         if proj.types[i] == None:        # Could be unknown type, or '-' at the wrong place
+            # Then warn the user that he/she could get unexpected results
+            info = "WCS Subset axis %s of unknown wcs type (units: %s). Axis is assumed linear!"%(proj.ctype[i], proj.units[i])
+         else:
+            info = "WCS Subset axis %s of type '%s' (units: %s)"%(proj.ctype[i], proj.types[i], proj.units[i])
+         self.wcsinfo.append(info)
+         if proj.types[i] == 'spectral':
+            transax_in = i + 1
+      self.transax_in = transax_in
+
+      self.axperm_out = [i + 1 for i in self.axperm('outside')]
+      transax_out = None                  # The number of the spectral axis as repeat axis
+      for ax in self.axperm_out:
+         i = ax - 1
+         if proj.types[i] == 'spectral':
+            transax_out = i + 1
+      self.transax_out = transax_out
+
+      # Make Projection object an attribute
+      self.projection = proj
+
+      # It is possible that a user wants to inspect a data structure
+      # with one spatial axis. For coordinate transformations we need
+      # a matching spatial axis. Before we create a Projection object for
+      # the subsets, we need to find a complete set of axis numbers.
+      # Note that we don't change the dimensionality of the GDS structure.
+      # The projection is only used for coordinate transformations.
+      # If a missing spatial axis is found, the system can transform
+      # between world coordinates and grids using the so called mixed
+      # coordinate system from WCSLIB.
+   
+      newaxperm, mixax = self.findmatchingaxis()
+      self.mixax = mixax                            # Store the missing axis number
+      # In GIPSY's Python binding the axis numbers start at 0.
+      # In WCSLIB the axis numbers start at 1. Then modify 
+      # 'newaxperm' for compatibility with WCSlib
+      axnum = [i+1 for i in newaxperm]
+      if len(axnum) == 0:
+         # We have a problem here. The user probably specified a pixel (0 dimensional subset)
+         self.subproj = None
+         self.projaxnum = None
+      else:
+         self.subproj = self.projection.sub(axnum)  # Modify the projection to support new axis number list
+         self.subproj.allow_invalid = True          # Do not raise exceptions after conversion problems
+         self.projaxnum = axnum
+      self.spatialmap =  'longitude' in self.subproj.types and 'latitude' in self.subproj.types
+
+      # For a smooth integration with the maputils module from the Kapteyn
+      # Package, we store the grids on the repeat axes for the slices as tuples.
+      # Method grid() decodes a GDS coordinate word into a grid. In GIPSY
+      # the grids are relative to the header value of CRPIX so in a
+      # FITS environment one should take notice whether returned coordinates
+      # are based on the grid- or the pixelsystem.
+      slicepositions = []
+      sliceaxnums = []
+      setdim = self.naxis       # self.ncoords includes hidden axes, which we don't want here
+      subdim = self.ndims(subset=True)
+      repeatdim = setdim - subdim
+
+      if repeatdim > 0:
+         for ax in self.axes(True, 'outside'):
+             sliceaxnums.append(ax.axnum+1)  # In gipsy module axnum is zero based
+         for cword in self.subsets:
+            spos = []
+            for ax in self.axes(True, 'outside'):
+               grid = self.grid(ax.axnum, cword)
+               pix  = grid + int(nint(self.projection.crpix[ax.axnum]))
+               spos.append(pix)
+
+            # Here we have the following problem: The repeat axes are given by the grid() method
+            # in order of the (user) input. For interaction with the maputils objects we
+            # need slicepositions to be given in order of the axes in the header, so we need
+            # to sort the slicepositions list.
+            if repeatdim > 1:  # For sorting
+               tmp = zip(sliceaxnums, spos)
+               tmp.sort()
+               sortedaxnums, spos = zip(*tmp)
+            slicepositions.append(spos)
+      self.slicepositions = slicepositions
+      self.sliceaxnums = sorted(sliceaxnums)
+
+
+   def findmatchingaxis(self):
+      """--------------------------------------------------------------------
+      Purpose: If the data, defined by the axes in 'axperm', has only one
+               spatial axis, then coordinate transformations are impossible
+               because a matching spatial axis is required. This routine
+               checks whether a spatial axis is missing and returns the
+               relevant information.
+
+      Returns:
+         ap-  The original axis permutation array and if necessary
+               extended with the axis number (0-based) of the missing
+               spatial axis.
+      mixax-  The axis number of the missing spatial axis or None.
+      -----------------------------------------------------------------------"""
+      mixax = None
+      setdim = self.naxis
+      subdim = self.ndims(subset=True)
+      axperm = self.axperm()
+      settypes = self.projection.types  # This is a list with axis types
+                                        # ('longitude', 'latitude', 'spectral' etc.)
+      ap = axperm[:subdim]
+      # If a set has 2 or less axes, then there is no need to look for
+      # a matching spatial axis because these are all the axes there are in a set.
+      if setdim <= 2:
+         return ap, mixax
+   
+      # Is a spatial axis missing in the sequence of subset axes
+      subtypes = []
+      for i in axperm[:subdim]:                     # We need only the subset axis types
+         subtypes.append(settypes[i])
+   
+      lat = 'latitude' in subtypes
+      lon = 'longitude' in subtypes
+      if (lat and not lon) or (lon and not lat):
+         # Then we need to find the missing axis
+         if lat:
+            missingaxis = 'longitude'
+         else:
+            missingaxis = 'latitude'
+         try:
+            # Have a look in the remaining types
+            mixax = list(settypes).index(missingaxis)
+         except ValueError:
+            gipsy.error(4, "Cannot find a matching axis for the spatial axis!")
+      else:
+         # No need to find a missing spatial axis because this
+         # data does not contain a spatial axis
+         return ap, mixax
+   
+      # We are left with the last option i.e. we found a matching
+      # spatial axis. We need to extend the axis permutation array
+      ap.append(mixax)   # Note that mixax numbering is 0 based. Not FITS! 
+      return ap, mixax
+
+
+   def changeproj(self, skyout=None, spectra=None):
+   #---------------------------------------------------------------------
+      """
+   Adjust sky system and/or spectral translation
+      """
+   #---------------------------------------------------------------------
+      if spectra != None:
+         self.subproj = self.projection.sub(self.projaxnum).spectra(spectra)
+      if skyout != None:
+         self.subproj.skyout = skyout
+         
+
+   def swapaxes(self):
+      """--------------------------------------------------------------------
+      Purpose:    Method to change the axes permutation array for two
+                  dimensional subsets only.
+
+      Notes:      Attribute projaxnum is a list with axis numbers in
+                  arbitrary order, which sets the projection object
+                  for the current subsets. Usually the order is the same
+                  as the order from the header of GDS set or FITS file,
+                  only for two dimensional subsets it makes sense to
+                  be able to swap axes. Note that this list can have more
+                  elements than the dimension of a subset because it
+                  can contain the number of the missing spatial axis.
+      --------------------------------------------------------------------"""
+      subdim = self.ndims(subset=True)
+      if subdim != 2:
+         raise Exception, "Cannot swap axes if subset dimension != 2"
+      a = self.projaxnum[1]
+      self.projaxnum[1] = self.projaxnum[0]
+      self.projaxnum[0] = a
+      # Recreate the projection object associated with the subset(s)
+      self.subproj = self.projection.sub(self.projaxnum)
+      # TODO add spectral translation and skyout. But, if this method is called
+      # before any change of spectral translation or alternative sky definition
+      # then there is no problem.
+
+
+   def set_spectraltranslation(self, key=None, mes=None, default=1, inside=True):
+      #---------------------------------------------------------------------
+      """
+      Set a spectral translation. Either for an position-velocity diagram
+      or for a repeat axis with type 'spectral'.
+
+      Method   set_spectraltranslation
+
+      Use:     t,u = setobject.set_spectraltranslation(
+                                 key,         # Character string
+                                 mes,         # Character string
+                                 default,     # Integer
+                                 inside,      # Boolean)
+
+               set_spectraltranslation
+                        Returns None, None if there is no possibility to return a
+                        spectral translation. Else, the spectral translation t
+                        as a string and also the unints are returned as a string.
+                        The output is minimal matched against
+                        the input (case insensitive).
+               key      Keyword. If nothing is entered then the default
+                        (SPECTRANS=) is used.
+               mes      Message for prompt
+               default  As in other input routines
+               inside   Boolean. If True then a translation is requested
+                        for one of the map axes and the projection object
+                        associated with the subset(s) is changed.
+                        Else a translation is requested for one of the repeat
+                        axes.
+
+      Example:
+         translation = gipsyset.set_spectraltranslation(key, mes, inside=True)
+      """
+      #---------------------------------------------------------------------
+      # Conditions to ask a spectral translation:
+      if inside:
+         ok = not (self.transax_in is None) and len(self.subproj.altspec) > 0
+         if ok:
+            altspecs = self.subproj.altspec
+            transax = self.transax_in
+         else:
+            return None, None
+      else:
+         ok = not (self.transax_out is None) and len(self.projection.altspec) > 0
+         if ok:
+            altspecs = self.projection.altspec
+            transax = self.transax_out
+         else:
+            return None, None
+            
+      spectrans = None
+      specunits = None
+      translations, units = zip(*altspecs)  # UNzip
+      specaxname = self.projection.ctype[transax-1]
+      ok = False
+      if key == None:
+        key = "SPECTRANS="
+      if mes == None:
+         mes = "Spectral translation for axis %s or ? for help ... [native]:" % specaxname
+      while not ok:
+         st = gipsy.userchar(key, mes, defval="", default=default)
+         if st == '?':
+            if len(translations):
+               gipsy.anyout("=========== Available spectral translations ===========", dev=1)
+               n = 0
+               maxcol = 6
+               while n < len(translations):
+                  col = 0
+                  trstr = ""
+                  while col < maxcol:
+                     if n < len(translations):
+                        if col > 0:
+                           trstr += ", " + translations[n]
+                           if units[n] != '':
+                              trstr += ' ('+units[n]+')'
+                        else:
+                           trstr += translations[n]
+                           if units[n] != '':
+                              trstr += ' ('+units[n]+')'
+                        n += 1
+                     col += 1
+                  gipsy.anyout(trstr, dev=1)
+               gipsy.anyout("\n", dev=1)
+            else:
+               gipsy.anyout("No spectral translations found!", dev=1)
+            ok = False
+            gipsy.wkey(key)         # First make empty
+            gipsy.cancel(key)       # Then cancel
+         elif st != "":
+            indx = positions.minmatch(st, translations)
+            if indx == None:
+               gipsy.reject(key, "Could not find a matching translation!" )
+               ok = False
+            elif indx == -1:
+               gipsy.reject(key, "Ambiguous input!")
+               ok = False
+            else:
+               spectrans = translations[indx]
+               specunits = units[indx]
+               ok = True
+               # Change projection object only if spectral axis is on of the subset axes.
+               if inside:
+                  self.changeproj(spectra=spectrans)
+         else:
+            ok = True
+         if ok:
+            gipsy.wkey(key+st)   # This prevents a semicolon in the keyword if first ? was used.
+         else:
+            default = 1          # You must be prompted
+      return spectrans, specunits
+         
+
+   def set_skyout(self, key=None, mes=None, default=1):
+      #---------------------------------------------------------------------
+      """
+      Set and return a sky definition for the axis labeling in spatial map.
+      """
+      #---------------------------------------------------------------------
+      spatial = self.projection.lonaxnum in self.axperm_in or self.projection.lataxnum in self.axperm_in
+      if not spatial:
+         return None
+   
+      if key == None:
+         key = "SKYOUT="
+      if mes == None:
+         mes = "Enter sky definition (type ? for examples) ... [native]:"
+      
+      ok = False
+      while not ok:
+         skyout = gipsy.usertext(keyword=key, message=mes, defval=None, default=default)
+         if skyout != None:
+            if string_upper(skyout) == '?':
+               gipsy.anyout("Sky systems: EQ=equatorial, EC=Ecliptic, GA=Galactic (II), SU=Supergalactic", dev=3)
+               gipsy.anyout("Ref. systems: fk4 fk4_no_e,fk5, icrs", dev=3)
+               gipsy.anyout("  FK4        mean place, old (Bessel-Newcomb) system", dev=3)
+               gipsy.anyout("  FK4-NO-E   mean place, old system but without e-terms", dev=3)
+               gipsy.anyout("  FK5        mean place, new (IAU 1984) system", dev=3)
+               gipsy.anyout("  ICRS       International Celestial Reference System", dev=3)
+               gipsy.anyout("Equinox, Epoch:", dev=3)
+               s = """
+               B      Besselian epoch. Example B 1950, b1950, B1983.5,
+                      -B1100
+               J      Julian epoch. Example: j2000.7, J 2000, -j100.0
+               JD     Julian date. This number of days (with decimals)
+                      that have elapsed since the initial epoch defined
+                      as noon Universal Time (UT) Monday, January 1, 4713 BC
+                      in the proleptic Julian calendar
+                      Example: JD2450123.7
+               MJD    The Modified Julian Day (MJD) is the number of days
+                      that have elapsed since midnight at the beginning of
+                      Wednesday November 17, 1858. In terms of the Julian day:
+                      MJD = JD - 2400000.5
+                      Example: mJD 24034, MJD50123.2
+               RJD    The Reduced Julian Day (RJD): Julian date counted from
+                      nearly the same day as the MJD,
+                      but lacks the additional offset of 12 hours that
+                      MJD has.
+                      It therefore starts from the previous noon UT or TT,
+                      on Tuesday November 16, 1858. It is defined as:
+                      RJD = JD - 2400000
+                      Example:  rJD50123., Rjd 23433
+               F      1) DD/MM/YY             Old FITS format
+                                              Example: F29/11/57
+                      2) YYYY-MM-DD           FITS format
+                                              Example: F2000-01-01
+                      3) YYYY-MM-DDTHH:MM:SS  FITS format with date and time.
+                                              Example: F2002-04-04T09:42:42.1
+               """
+               gipsy.anyout(s, dev=3)
+               gipsy.anyout("Example: SKYOUT=EQ FK4 J2000 B1950", dev=3)
+               ok = False
+               gipsy.wkey(key)
+               gipsy.cancel(key)
+            else:
+               try:
+                  self.changeproj(skyout=skyout)
+                  ok = True
+               except Exception, message:
+                  ok = False
+                  gipsy.reject(key, message)
+         else:
+            ok = True
+         if ok:
+            if skyout is None:
+               gipsy.wkey(key)
+            else:
+               gipsy.wkey(key+skyout)
+         else:
+            default = 1
+      return skyout
+
+
+   def printinfo(self):
+      """--------------------------------------------------------------------
+      Purpose:    Print a message in Hermes' log file
+                  The message contains information of the world coordinate
+                  system for all subset axes. For example:
+
+                  WCS Subset axis DEC--SIN of type 'latitude' (units: deg)
+                  WCS Subset axis FREQ of type 'spectral' (units: Hz)
+      --------------------------------------------------------------------"""
+      gipsy.anyout("\nWorld coordinate system for selected subset:")
+      for axinfo in self.wcsinfo:              # Print the WCS related axis information
+         gipsy.anyout(axinfo)
+      gipsy.anyout("\n")
+
+
+   def wcspos(self, subnum, key="POS=", mes="", userpos=''):
+      """--------------------------------------------------------------------
+      Purpose:   Method for input of positions.
+
+      Inputs:
+       subnum-   Index of current subset in subset arrray
+          key-   Keyword for prompt. If empty then the keyword becomes POS=
+          mes-   Message for prompt. If empty a default message is created.
+      userpos-   A string to replace the manual input. If not empty,
+                 then then no prompt will appear.
+
+      Returns:
+         grids-  A NumPy array with grids
+         world-  A NumPy array with world coordinates in the system that
+                 is defined by the Projection object. This object can be modified
+                 by changing attribute *skyout* to set an alternative sky
+                 definition (sky system, reference system, equinox, epoch),
+                 or by setting a spectral translation with method *spectra()*,
+                 or by changing attribute *usedate* from False to True.
+                 Read more about *usedate* in the notes.
+        pixels-  A NumPy array with pixels. Pixels are FITS positions
+                 i.e. start with 1. They are needed if the result of the
+                 input needs to be converted to world coordinates with method
+                 toworld().
+   subsetunits-  A list with units corresponding to the axes in the current
+                 subset.
+        errmes-  An error message if the input could not be processed into
+                 one or more positions. One should check the error message first
+                 before printing the output.
+      
+      Examples:
+               
+      Notes:     In most situations the conversion between grids and world
+                 coordinates is independent of the subset. E.g. in a sequence
+                 of channel maps, each RA,Dec image represents the same
+                 coordinate system.
+                 However, when we create subsets with only one spatial axis,
+                 then the matching spatial coordinate depends on the selected
+                 subset (e.g. with XV maps). Therefore we need to enter
+                 the index of the subset we want to use ('subnum').
+
+                 If an error is made in a position then this routine will
+                 return with empty lists and a no empty error message.
+
+                 An object from class 'WCSset' inherits from class 'Set'.
+                 The most important difference is the addition of a Projection
+                 object from module 'wcs' of the Kapteyn Package.
+                 If your input has a sky reference system FK4 AND you transform
+                 to a non FK4 reference system (or to another sky system),
+                 then the date of observation could play a role in the transformation
+                 between grid/pixel- and world coordinates. The data of observation
+                 is taken into account if attribute 'usedate' of the Projection
+                 object is set to True (the default is False).
+
+                 If you transform from a non FK4 system to FK4, then the date of
+                 observation is included in the input of positions as in 
+                 "{eq, B1950,fk4, J1983.5} 178.12830409  {} 53.93322241"
+                 independent of the value of attribute 'usedate'.
+
+      -----------------------------------------------------------------------"""
+      if self.subproj == None:                      # No subset available (i.e. a grid)
+         return [], [], [], [],'', "No projection object available for this subset"
+
+      # Create a default prompt if no string for 'mes' was given
+      subdim = self.ndims(subset=True)              # The subset dimension
+      # The projection object associated with the subset contains the axes names in the right order.
+      if mes == "":
+         mes = "Enter position(s) in "
+         for i in range(subdim):
+            mes += self.subproj.ctype[i].split('-')[0] + ','
+         mes = mes.rstrip(' ,')
+         mes += ' ... [Quit]:'
+
+      subset = self.subsets[subnum]
+      # Try to find the (FITS) pixel that corresponds
+      # to the grid on the missing spatial axis, set by the CURRENT SUBSET.
+      # Note that this pixel changes if the subset changes.
+      # Example. If a data set has axes RA, DEC, FREQ and one entered
+      # setname RA 0 1 2, then the subset is a DEC, FREQ plane.
+      # The grids() method returns a list: grids =  [0, None, None]
+      # for the first subset, [1, None, None] for the second etc.
+      # The number of elements is equal to the dimension of the data set.
+      # The axes of the subset are set to None. The other axes are so
+      # called 'repeat' axes the position of the subset corresponds to a grid
+      # on these repeat axes.
+      # The value of 'mixax' is always a number of an axis outside the subset.
+      # and therefore one of the numbers from the list not equal to None.
+      mixax = self.mixax
+      crpix_mixax = None
+      if mixax != None:                             # There is a missing spatial axis, number follows FITS definition
+         ssgrids = self.grids(subset)               # Find grids on axes outside subset
+         mixgrid = ssgrids[mixax]                   # The grid on the missing spatial axis
+         crpix_mixax = self.projection.crpix[self.mixax]
+         mixpix =  mixgrid
+         mixpix += nint(crpix_mixax)                # To get a pixel 
+      else:
+         mixpix = None
+
+      # Start to parse the input
+      valid = False
+      while not valid:
+         errmess = ''
+         if userpos != '':
+            postxt = userpos
+         else:
+            postxt = gipsy.usertext(keyword=key, message=mes, defval="", default=1)
+         if postxt == "":                           # Empty input --> return to calling environment
+            return [], [], [], [], ''
+
+         # Coordparser is a class that instantiates an object which either contains
+         # one or more positions or an error message. It parses text representing a number
+         # of coordinates. 'subdim' coordinates define 1 position. The text is parsed
+         # according to the parser rules listed earlier. Each position is a list with
+         # 'subdim' coordinates. A coordinate is a tuple consisting of a number,
+         # a mode ('g' or 'w': grid or world coordinate), a sky system and a
+         # spectral translation. The sky system and spectral translation modify the
+         # projection object so that the transformations from pixels to world coordinates
+         # v.v. take place in the modified system. The number could also be a
+         # NumPy array with numbers read from a file.
+
+         parsedpositions = positions.Coordparser(postxt,    # Text containing positions as entered by user
+                                       subdim,              # The number of coordinates in 1 position
+                                       self.subproj.units,  # Units (for conversions) in order of subset axes
+                                       self.subproj.types,  # Axis types to distinguish spatial and spectral coords.
+                                       self.subproj.crpix,  # Crpix values for 'PC' (projection center)
+                                       self.subproj.naxis,  # Axis lengths for center 'AC'
+                                       self.subproj.altspec,# List with allowed spectral translations
+                                       self.subproj.source, # Header which was used to create object
+                                       gipsygrids=True)     # Used for internal conversion grids to pixels
+         if len(parsedpositions.errmes) != 0:
+            valid = False
+            if userpos != '':
+               return [], [], [], [], parsedpositions.errmes
+         else:
+            wor, pix, subsetunits, errmes = positions.dotrans(parsedpositions.positions,
+                                                              self.subproj,
+                                                              subdim,
+                                                              mixpix)
+            if errmes != '':
+               return [], [], [], [], errmes
+
+            # Result is always pixels and we want an extra variable with grids
+            grids = self.subproj.pixel2grid(pix)
+            valid = True
+         if not valid:
+            gipsy.reject(key, parsedpositions.errmes)
+
+      # Return the results as NumPy arrays because then in the calling environment
+      # a user can easily extract one column.
+      return grids, wor, pix, subsetunits, ''
+
+
+
+   def setwcsbox(self, boxtxt, checklimits=True):
+      """-----------------------------------------------------------------------
+      Purpose:    Set box in parameter boxtxt. If this fails, raise exception.
+
+      Inputs:
+       boxtxt-   Box specification as a string
+  checklimits-   Boolean. If True, 'boxtxt' is not allowed to specify
+                 regions beyond the data regions.
+
+      Returns:
+     blo, bhi-   Tuple with two lists. The first is the position of the lower
+                 boundary of the region. The second is the upper position
+                 of the region. For a two dimensional region one can interpret
+                 this as blo=(xlo,ylo) and bhi=(xhi,yhi)
+                 
+
+      Examples:  boxtxt = "-10 -10 20 30"
+                 boxtxt = "0 0 D 30 50"
+                 boxtxt = "2h10m30s 60d32m2.7s D 10 10"
+                 boxtxt = "2h10m30s 60d32m2.7s D 2 arcmin 3 arcmin"
+
+      Notes:     This routine is similar to 'wcsbox()', but then
+                 without the interaction with a user. So the parameter
+                 'boxtxt' can be from an external source. If the parameter
+                 contains an invalid specification, there is no retry
+                 with a prompt for a new specification. Only an exception
+                 will be raised.      
+      -----------------------------------------------------------------------"""
+      if self.subproj == None:                      # No subset available (i.e. a pixel)
+         raise Exception, "No projection available"
+      else:
+         subproj = self.subproj
+      subdim = self.ndims(subset=True)
+      # Set default values for the limits
+      defblo = [0.0]*subdim
+      defbhi = [0.0]*subdim
+      valid = False
+      errmes = '?'
+
+      # Get offsets to convert between (GIPSY) grids and (FITS) pixels
+      offset = [0.0]*subdim
+      for i in range(subdim):
+         offset[i] = nint(self.subproj.crpix[i])
+
+      for i in range(subdim):
+         d = nint(subproj.crpix[i])
+         defblo[i] = 1 - d
+         defbhi[i] = subproj.naxis[i] - d
+
+      if boxtxt == "":       # Empty input --> return to calling environment
+         # Parameter 'boxtxt' is empty. set the box to it limits.
+         blo = defblo
+         bhi = defbhi
+         valid = True
+      else:
+         # Parameter 'boxtxt' is not empty? Then process it here.
+         subset = self.subsets[0]
+         blo = [0.0]*subdim
+         bhi = [0.0]*subdim
+         tokens = re_split('\s[dD]\s', boxtxt) # Split strings id 'D' is separator
+         valid = True
+         # At least the first one has to be a position
+         # For a series of subsets, select the first subset for calculating positions.
+         grids, world, pixels, units, errmes = self.wcspos(0, userpos=tokens[0])
+         valid = len(grids) == 2 and len(tokens) == 1
+         if valid:
+            # Two positions. Sort and store the coordinates
+            for i in range(subdim):
+               blo[i] = min(grids[0][i], grids[1][i])
+               bhi[i] = max(grids[0][i], grids[1][i])
+         elif len(grids) == 0:
+            valid = False
+            errmes = "No positions found in: %s (%s)"%(tokens[0],errmes)
+         elif len(grids) == 1 and len(tokens) == 1:
+            valid = False
+            errmes = "Only one position found"
+         elif len(grids) > 2: # Always an lower and upper position of dimension 'subdim'
+            valid = False
+            errmes = "Too many positions for a box"
+         elif len(grids) == 1 and len(tokens) == 2:
+            # One position is found and the second token represents a size
+            parsedpositions = positions.Coordparser(tokens[1],     # Text containing positions as entered by user
+                                    subdim,              # The number of coordinates in 1 position
+                                    self.subproj.units,  # Units (for conversions) in order of subset axes
+                                    self.subproj.types,  # Axis types to distinguish spatial and spectral coords.
+                                    self.subproj.crpix,  # Crpix values for 'PC' (projection center)
+                                    self.subproj.naxis,  # Axis lengths for center 'AC'
+                                    self.subproj.altspec,# List with allowed spectral translations
+                                    self.subproj.source, # Header which was used to create object
+                                    gipsygrids=False)    # Sizes are always pixels
+            if parsedpositions.errmes:
+               valid = False
+               errmes = parsedpositions.errmes
+            else:
+               valid = True
+               p = parsedpositions.positions[0]
+               for i in range(subdim):
+                  if p[i][1] == 'w':
+                     delta = subproj.cdelt[i]
+                     if delta != 0.0:
+                        size = abs(p[i][0][0] / delta)        # Remember that p[i][0] is always a list
+                     else:
+                        valid = False
+                        errmes = "Cannot convert to grids because CDELT is 0"
+                  else:
+                     size = abs(p[i][0][0])
+                  if valid:
+                     # Comparable to code in gdsbox()
+                     ci = nint(grids[0][i])
+                     si = nint(size)
+                     halfsi = int(si)/2
+                     hi = ci + halfsi
+                     lo = hi + 1 - si
+                     blo[i] = lo
+                     bhi[i] = hi
+         if not valid:
+            raise Exception, errmes
+                  
+      if checklimits:
+         # The caller required to check the limits.
+         valid = True
+         for i in range(subdim):
+            valid = valid and blo[i] >= defblo[i]
+            valid = valid and bhi[i] <= defbhi[i]
+         if not valid:
+            errmes = "Box outside limits of set"
+            raise Exception, errmes
+
+      # Update the box attributes for the Set object, then automatically the attributes
+      # for the axes objects are correct because these are derived from these lists.
+      self.axlimits = [[0.0, 0.0]]*subdim
+      for i in range(subdim):
+         self.axlimits[i] = [blo[i]+offset[i], bhi[i]+offset[i]]
+      if subdim == 2 and self.projaxnum[0] > self.projaxnum[1]:
+         # The axes are swapped, swap x and y of axes limits
+         self.blo = [blo[1], blo[0]]
+         self.bhi = [bhi[1], bhi[0]]
+      else:
+         self.blo = blo
+         self.bhi = bhi
+      return blo, bhi
+
+
+
+   def wcsbox(self, key="BOX=", mes="", default=1, showdev=0, option=1, gui=False):
+      """--------------------------------------------------------------------
+      Purpose:    Function to set the grid limits of the axes in a subset.
+                  This function is similar to GIPSY's gdsbox() but it is
+                  based on WCSLIB and supports more projection- and sky systems.
+                  It needs the coordinate word of a subset to determine
+                  for which axes limits are needed.
+                  For these axes it creates a default prompt which can be
+                  overruled with keyword parameter 'mes'. A box is defined
+                  with two positions. The first position sets the lower limits
+                  of the axes and the second sets the upper limits. One position
+                  consists of n coordinates where n is equal to the dimensionality
+                  of the subset.
+
+      Inputs:
+          key-    Keyword for prompt
+          mes-    Message for prompt. If empy then a default messafge is created.
+      default-    Set's the behaviour for defaults (as in the userxxxx routines).
+      showdev-    The destination of the informative messages.
+      option-     0: No check on result
+                  1: Check on upper limits for blo and bhi
+
+      Returns:
+         blo-
+         bhi-     Two lists with coordinates which set the axes limits of
+                  the input subset.
+                  The coordinates are sorted so that 'blo' represents the
+                  lower limits and 'bhi' the upper limits.
+                  Note that also the Set object (gset) is updated. Therefore
+                  you can retrieve the limits also by accessing attributes
+                  gset.blo, gset.bhi
+
+      Attributes:
+      blo, bhi-   See above
+      axlimits-   Convenience attribute. It is a FITS representation
+                  of the box (i.e. not grids but pixels and first pixel
+                  is 1). Note that for 2-dim structures, the axes order
+                  could have been changed. This attributes follow the
+                  order as entered in the input, while attributes
+                  blo and bhi follow the GIPSY standard, i.e. the order
+                  is the same as the axes in the original data.
+
+      Notes:      In most situations the conversion between grids and world
+                  coordinates is independent of the subset. E.g. in a sequence
+                  of channel maps, each RA,Dec image represents the same
+                  coordinate system.
+                  However, when we create subsets with only one spatial axis,
+                  then the matching spatial coordinate depends on the selected
+                  subset (e.g. with XV maps). Here we follow the implementation
+                  in gdsbox. That is, that only the first subset is used for
+                  coordinate transformations.
+
+      Examples:   BOX=-10 -10 20 30
+                  BOX= 0 0 D 30 50
+                  BOX= 2h10m30s 60d32m2.7s D 10 10
+                  BOX= 2h10m30s 60d32m2.7s D 2 arcmin 3 arcmin
+      -----------------------------------------------------------------------"""
+
+      if self.subproj == None:                      # No subset available (i.e. a pixel)
+         return [], [], "No projection object available for this subset"
+      else:
+         subproj = self.subproj
+
+      subdim = self.ndims(subset=True)
+      # Set default values for the limits
+      defblo = [0.0]*subdim
+      defbhi = [0.0]*subdim
+      # Create a default prompt if no string for 'mes' was given 
+      if mes == "":
+         mes = "Enter BOX in "
+         for i in range(subdim):
+            mes += subproj.ctype[i].split('-')[0] + ','
+         mes = mes.rstrip(' ,')                     # The last comma is one to many
+         blomes = ''
+         bhimes = ''
+         for i in range(subdim):
+            d = nint(subproj.crpix[i])
+            defblo[i] = 1 - d
+            blomes += "%d "%defblo[i]
+            defbhi[i] = subproj.naxis[i] - d
+            bhimes += "%d "%defbhi[i]
+         blomes = blomes.rstrip()
+         bhimes = bhimes.rstrip()
+         mes += ' ... [%s, %s]:'% (blomes, bhimes)
+
+      offset = [0.0]*subdim
+      for i in range(subdim):
+          offset[i] = nint(self.subproj.crpix[i])
+      # Prepare axis limits (box)
+      subset = self.subsets[0]
+      valid = False
+      while not valid:
+         errmess = ''
+         boxtxt = gipsy.usertext(keyword=key, message=mes, defval="", default=default)
+         if boxtxt == "":       # Empty input --> return to calling environment
+            blo = defblo
+            bhi = defbhi
+            valid = True
+         else:
+            blo = [0.0]*subdim
+            bhi = [0.0]*subdim
+            tokens = re_split('\s[dD]\s', boxtxt)
+            valid = True
+            # At least the first one has to be a position
+            # For a series of subsets, select the first subset for calculating positions.
+            grids, world, pixels, units, errmes = self.wcspos(0, userpos=tokens[0])
+            valid = len(grids) == 2 and len(tokens) == 1
+            if valid:
+               # Two positions. Sort and store the coordinates
+               for i in range(subdim):
+                  blo[i] = min(grids[0][i], grids[1][i])
+                  bhi[i] = max(grids[0][i], grids[1][i])
+            elif len(grids) == 0:
+               valid = False
+               errmes = "No positions found"
+            elif len(grids) == 1 and len(tokens) == 1:
+               valid = False
+               errmes = "Only one position found"
+            elif len(grids) > 2:
+               valid = False
+               errmes = "Too many positions for a box"
+            elif len(grids) == 1 and len(tokens) == 2:
+               # One position is found and the second token represents a size
+               # The trick is to calculate the second token as a position
+               # wrt. (grid 0,0). Then, if necessary, divide by the
+               # pixel size in CDELT to get the lengths in pixels wrt. (0,0)
+               parsedpositions = positions.Coordparser(tokens[1],     # Text containing positions as entered by user
+                                       subdim,              # The number of coordinates in 1 position
+                                       self.subproj.units,  # Units (for conversions) in order of subset axes
+                                       self.subproj.types,  # Axis types to distinguish spatial and spectral coords.
+                                       self.subproj.crpix,  # Crpix values for 'PC' (projection center)
+                                       self.subproj.naxis,  # Axis lengths for center 'AC'
+                                       self.subproj.altspec,# List with allowed spectral translations
+                                       self.subproj.source, # Header which was used to create object
+                                       gipsygrids=False)    # Size is same for GIPSY and FITS
+               if parsedpositions.errmes:
+                  valid = False
+                  errmes = parsedpositions.errmes
+               else:
+                  valid = True
+                  p = parsedpositions.positions[0]
+                  for i in range(subdim):
+                     if p[i][1] == 'w':
+                        delta = subproj.cdelt[i]
+                        if delta != 0.0:
+                           size = abs(p[i][0][0] / delta)        # Remember that p[i][0] is always a list
+                        else:
+                           valid = False
+                           errmes = "Cannot convert to grids because cdelt is 0"
+                     else:
+                        size = abs(p[i][0][0])
+                     if valid:
+                        # Comparable to code in gdsbox()
+                        ci = nint(grids[0][i])
+                        si = nint(size)
+                        halfsi = int(si)/2
+                        hi = ci + halfsi
+                        lo = hi + 1 - si
+                        blo[i] = lo
+                        bhi[i] = hi
+         if option:
+            # The caller required to check the limits.
+            valid = True
+            for i in range(subdim):
+               valid = valid and blo[i] >= defblo[i]
+               valid = valid and bhi[i] <= defbhi[i]
+            if not valid:
+               errmes = "Box outside limits of set"
+         if not valid:
+            gipsy.reject(key, errmes)
+            if gui:
+               return None, None
+
+      # Write an informative message in the log/screen file (depends on 'showdev')
+      header = "\nGrid range(s) for set %s :" % self.dataname
+      gipsy.anyout(header, dev=showdev)
+      for i in range(subdim):
+         axname = subproj.ctype[i]                     # Long name from (alternative) header
+         boxinfo = "%-18s from %6d to %6d" % (axname, blo[i], bhi[i])
+         gipsy.anyout(boxinfo, dev=showdev)
+      gipsy.anyout(" ", dev=showdev)
+      # Update the box attributes for the Set object, then automatically the attributes
+      # for the axes objects are correct because these are derived from these lists.
+      self.axlimits = [[0.0, 0.0]]*subdim
+      #self.wcsblo = blo[:]
+      #self.wcsbhi = bhi[:]
+      for i in range(subdim):
+         self.axlimits[i] = [blo[i]+offset[i], bhi[i]+offset[i]]
+      if subdim == 2 and self.projaxnum[0] > self.projaxnum[1]:
+         # The axes are swapped
+         self.blo = [blo[1], blo[0]]
+         self.bhi = [bhi[1], bhi[0]]
+      else:
+         self.blo = blo
+         self.bhi = bhi
+      return blo, bhi
+
+
+def listfiles():
+   #-----------------------------------------------------------------------
+   """
+   List files related to GDS, FITS or zipped FITS in current directory
+   """
+   #-----------------------------------------------------------------------
+   li = []
+   filenames = listdir(".")
+   for fname in filenames:
+      if  fnmatch(fname, '*.descr') or\
+          fnmatch(fname, '*.FITS')  or\
+          fnmatch(fname, '*.fits')  or\
+          fnmatch(fname, '*.fits.gz'):
+         li.append(fname)
+
+   li.sort()
+   for fname in li:
+       if fnmatch(fname, '*.descr'):
+          try:
+             basename, extension = path.splitext(fname)
+             fname = basename + '.image'
+             size = stat(fname)[6] / 1024.0 / 1024.0
+             sname = basename
+          except:
+             sname = ''
+       else:
+          sname = fname
+       if sname:
+          size = stat(fname)[6] / 1024.0 / 1024.0
+          gipsy.anyout("%-30s %6.2f Mb" % (sname, size), dev=3)
+
+
+
+
+def wcsinp(key="INSET=",
+           mes="Enter data file:",
+           create=False,
+           write=False,
+           hdukey="HDU=",
+           hdumes="Enter number of Header Data Unit ... [0]:",
+           altkey="ALTHEAD=",
+           altmes=None,
+           axkey="AXNAMES=",
+           axmes=None,
+           axsuffix=None,
+           swapkey="AXSWAP=",
+           swapmes=None,
+           requireddim=0,
+           listopt=True):
+   """--------------------------------------------------------------------
+   Purpose:   Routine for input of set/subsets, either from a GIPSY
+              set or a FITS file. The parsing of a FITS file involves
+              module PyFITS. Therefore we can also enter FITS data using
+              a location on the web (url) or read data from a compressed
+              file (.gz).
+              If a FITS file is entered and the FITS file has multiple
+              header Data Units (hdu's) then the user is prompted to
+              give the number of the hdu that contains the wanted data.
+
+   Inputs:
+       key-   Keyword for prompt
+       mes-   Message for prompt.
+              This routine appends the string   '[list files]'
+              as the default action. When a user presses 'Enter' then a list
+              with filenames is displayed. Keyword key appears again but
+              now the default has been changed to abort the loop of asking
+              a valid file to open and the string '[abort]' is appended.
+              This last prompt appears until a valid name is entered or
+              if you use the default (which aborts the loop).
+    hdukey-   Keyword for prompt of Header data unit
+    hdumes-   Message for prompt of Header data unit
+    altkey-   Keyword for prompt for a selection between alternate headers
+    altmes-   Message for 'altkey' prompt.
+  axsuffix-   A string to append to the axis names if a user needs to
+              specify slices. For example if a 4-dim set is entered while a
+              2-dim subset is required, then you will be prompted
+              to enter repeat axes and grids on the repeat axes
+              (these are axes that do not belong to the subset).
+ requireddim- Required (minimum) dimension of the specified subsets.
+              If the dimension of the structure entered at the prompt
+              is greater than the required dimension, then one should
+              specify grids on the repeat axes. This function
+              creates a prompt for each repeat axis. The default keyword
+              can be appended by a user given suffix.
+
+   Returns:   An object of class WCSSet which inherits from Set.
+              So it has all attributes from a object from class Set
+              and some additional attributes related to WCS.
+
+   Notes:     If the constructor of the Set objects encounters multiple 
+              header data units, then a callback is triggered. The callback
+              function deals with the user interaction. It returns a integer
+              number. The same construction applies if an alternative header
+              is encountered, Then a callback function returns a character
+              for the alternative header or ' ' if the primary header must be
+              selected.
+
+
+
+   Examples:  INSET=aurora freq 1:10
+              INSET=ngc1234 stokes 1 freq 
+              INSET=http://www.atnf.csiro.au/people/mcalabre/data/WCS/1904-66_ZPN.fits.gz
+              INSET=ngcxxx.fits.gz velo 50
+   -----------------------------------------------------------------------"""
+   validset = False
+   swapaxes = False
+   listed = False
+   if listopt:
+      mes2 = mes + "    [list files]"
+   else:
+      mes2 = mes
+   while not validset:
+      datafile = gipsy.usertext(keyword=key, message=mes2, default=1, defval=None)
+      if datafile == None:
+         # Two options: Either the user wants a list (listopt = True)
+         # or user wants nothing returned
+         if listopt and not listed:
+            listfiles()                             # User wants list with files
+            listed = True
+            gipsy.cancel(key)
+            mes2 = mes + "    [abort]"              # Change default to abort input loop
+         else:
+            return None
+      else:
+         # If a user enters more than 1 string than this extra string
+         # is part of a subset specification. We will use this property later.
+         prespecified = len(datafile.split()) > 1
+         # Both a GDS set or a FITS file can be opened. A FITS file is
+         # converted to a GDS set.
+         try:
+            # The prompthdu function is only active when a FITS file is detected
+            # and  the file has more than 1 header data unit (hdu)
+            # The hdu number is stored in attribute 'hdunum'
+            # The alternative header is stored in attribute 'altwcs'
+            gipsyset = gipsy.Set(datafile, create=create, write=write, gethdu=prompthdu(hdukey, hdumes),
+                                 getalt=promptalt(altkey, altmes))
+            validset = True
+         except gipsy.GipsyError, message:
+            validset = False
+            errmes = str(message)              #"Cannot open or process this set!"
+         if validset:
+            setdim = gipsyset.ndims(0)
+            subdim = gipsyset.ndims(subset=True)
+            if requireddim != 0:  # Only if 0 the user is free to select
+               validset = True
+               if subdim == requireddim or subdim == setdim:
+                  validset = True
+               else:
+                  validset = False
+                  errmes = "Wrong dimensionality"
+               if requireddim > setdim:
+                  validset = False
+                  errmes = "Required dim. > dim. of set"
+         if not validset:
+            gipsy.reject(key, errmes)
+         else:
+            subsetspec = datafile
+
+   # We always end up with a primary header because a selected alternative header
+   # is migrated to a primary header
+   if gipsyset.fits:
+      name = gipsyset.fitsname
+   else:
+      name = gipsyset.name
+   mes = "Set %s has %d axes:" % (name, setdim)
+   gipsy.anyout(mes)
+   for i in range(setdim):                       # Print some information about the axes
+      crpix  = gipsyset['CRPIX%d'%(i+1)]
+      axlen  = gipsyset['NAXIS%d'%(i+1)]
+      axname = gipsyset['CTYPE%d'%(i+1)]
+      # Follow the documented definition of the lower and upper axis limit:
+      gipsy.anyout("%-20s from %6d to %6d"%(axname, 1-nint(crpix), axlen-nint(crpix)))
+
+   # For users that work with a set with unknown axis names it is possible to
+   # enter a set name only. Then prompt user to enter the axes of
+   # the wanted data structure (subset). The keywords are the names of the
+   # repeat axes (with a suffix, if given).
+   if not prespecified:      # User entered a name only
+      if subdim > requireddim:                   # But we need to specify the subset axes
+         # Prompt user to enter 'requireddim' names from 'setdim' axes
+         if requireddim > 0:
+            mes = "Enter %d names of " % requireddim
+         else:
+            mes = "Enter axes from "
+         ax = gipsyset.axes(False)               # Set method to get information about all axes
+         for i in range(setdim):
+            mes += ax[i].name
+            if i < setdim - 1:
+               mes += ','
+         # Build a default list with axis names and a message for the prompt
+         deflist = "    ["
+         defval = []
+         if requireddim == 0:
+            maxaxes = setdim
+         else:
+            maxaxes = requireddim
+         for i in range(maxaxes):
+            deflist += ax[i].name
+            defval.append(ax[i].name)
+            if i < maxaxes - 1:
+               deflist += ','
+         deflist += ']:'
+         mes += deflist
+         # Ask user the name of the subset axes until a correct answer is entered
+         valid = False
+         nvalids = 0
+         validaxnums = []
+         while not valid:
+            if requireddim == 0:
+               default = 1
+            else:
+               default = 4+1
+            axes = gipsy.userchar(axkey, mes, default=default, defval=defval, nmax=maxaxes) # 1=default, 4=exact
+            for axselection in axes:
+               for i in range(setdim):
+                  axnr = i + 1
+                  axname = ax[i].name
+                  if axname.find(string_upper(axselection), 0, len(axselection)) > -1:
+                      # A valid axis name. Store the corresponding number
+                      nvalids += 1
+                      validaxnums.append(axnr)
+            
+            # Make a sorted list with unique elements only. Then check if there are enough axes.
+            sortedaxnums = validaxnums[:]
+            uset = {}
+            map(uset.__setitem__, validaxnums, [])
+            newlist = uset.keys()      # Is a copy, so validaxnums is unchanged!
+            
+            if requireddim in [0,2] and len(newlist) == 2:
+               # In this situation (user specifies the axes of the subset),
+               # one could have swapped the axes (Which the Set class does not
+               # support). Then swap axes later.
+               if validaxnums[0] > validaxnums[1]:
+                  swapaxes = True
+
+            if requireddim > 0:
+               valid = len(newlist) == requireddim
+            else:
+               valid = True
+            if not valid:
+               # No exceptions because we are in a loop
+               gipsy.reject(axkey, "Incorrect input of image axes!")
+
+         # At this point we have a set name, a list with axes, a hdu and an alt. header
+         # so that we can make a reconstruction of the input in terms of the Set object
+         # First retrieve grids on axes outside the subset if there are more
+         # axes than the 'requireddim' axes.
+         # For the keywords we use the axis names. Note that also for alternative headers
+         # the axis names in the axes() method are correct because they were ectracted
+         # from the selected header.
+         if len(newlist) < setdim:
+            grids = []
+            if gipsyset.fits:
+               # One cannot use attribute gipsyset.name because for FITS files the url is stripped
+               subsetspec = gipsyset.fitsname + " "
+            else:
+               subsetspec = gipsyset.name + " "
+            axo = gipsyset.axes(False)
+            for ax in axo:
+               if ax.axnum+1 not in validaxnums:
+                  key = "%s" % ax.name
+                  if axsuffix != None:
+                     key += axsuffix             # Add a user supplied suffix to distinguish from existing keywords
+
+                  # gipsy.anyout("name lo, hi, crpix %s %d %d %d"%(ax.name,ax.slo, ax.shi, ax.crpix)) 
+                  unvalid = True
+                  while unvalid: 
+                     defval = 0
+                     if not (ax.slo <= defval <= ax.shi):
+                        defval = int((ax.shi+ax.slo)/2)
+                     prompt = "Enter grid position(s) on %s ... [%d:%d]:" % (ax.name, ax.slo, ax.shi)
+                     nmax = ax.shi - ax.slo + 1
+                     # 'nmax' could be 1. Then a scalar is returned not a list.
+                     # With the next construction we force returning a list in
+                     # all situations. Also it allows a user to read the same subset
+                     # more than once.
+                     gr = gipsy.userint(key, prompt, defval=None, default=1, nmax=max(128,nmax))
+                     outside = False
+                     # If numbers are entered then check them all
+                     if (gr != None):
+                        for g in gr:
+                           outside = not (g >= ax.slo and g <= ax.shi)
+                           if outside:
+                              break
+                     unvalid = outside
+                     if unvalid:
+                        gipsy.reject(key, "Grid not in range %d to %d! Try again." % (ax.slo, ax.shi))
+                     else:
+                        # Copy the keyword contents to a string using the previous input
+                        gr = gipsy.usertext(key, "", defval="", default=1)
+                  subsetspec += ax.name + " " + gr + " "   # Build the subset specification string.
+                  grids.append(gr)
+
+   altwcs = gipsyset.altwcs                # Store attributes before deletion
+   hdunum = gipsyset.hdunum
+   gipsyset.close()                        # Close set before deletion
+   del gipsyset                            # Remove old one from memory first
+   
+
+   # Recreate the Set object but now as an object from class WCSset which inherits
+   # from the Set class. Then it get specific attributes related to the world
+   # coordinate system.
+   
+   stdout.flush()
+   gipsyset = WCSset(subsetspec,
+                     create=create,
+                     write=write,
+                     gethdu=lambda x: hdunum,
+                     getalt=lambda x,y: altwcs)
+   
+   # There are more input options for which one possibly wants to be able
+   # to swap axes.
+   # 1) There was a pre-specification of the data set and the resulting
+   # subset dimension is two.
+   # 2) There was no pre specification and the set dimension of the
+   # data set was 2 while the required dimension was also 2
+   if (prespecified and subdim == 2) or (not prespecified and requireddim == 2 and setdim == 2):
+      if swapmes is None:
+         ax = gipsyset.axes(level=gipsyset.subsets[0]) #, mode='inside')
+         swapmes = "Do you want to swap %s and %s? ... Y/[N]"%(ax[0].name, ax[1].name)
+      swapaxes = gipsy.userlog(swapkey, swapmes, defval=False, default=1)
+   if swapaxes:           # Could also have been set before (look for swapaxes)
+      gipsyset.swapaxes()         
+      
+   return gipsyset
+
+
+def dotest():
+   """--------------------------------------------------------------------
+   Purpose:    Test routine for the parser in this module. It works only
+               for 2 dim subsets.
+
+   Input:      Object from class WCSset
+   -----------------------------------------------------------------------"""
+
+   # First test WCSset. Create a minimal FITS file and test what we can do with it.
+
+   command =  "CREATE BUNIT= \
+                      CDELT1= -1.200000000000E-03 CDELT2= 1.497160000000E-03 CDELT3= -7.812500000000E+04 \
+                      CROTA2= \
+                      CRPIX1= 5 CRPIX2= 5 CRPIX3= 5 \
+                      CRVAL1= 1.787792000000E+02 CRVAL2= 5.365500000000E+01 CRVAL3= 1.415418199417E+09 \
+                      CTYPE1= RA---TAN CTYPE2= DEC--TAN CTYPE3= FREQ-OHEL CTYPE4= \
+                      CUNIT1= CUNIT2= CUNIT3= HZ \
+                      DELETE= y \
+                      DRVAL3= 1.050000000000E+03 DUNIT3= KM/S FREQ0= 1415418199.417 \
+                      FUNCTION= rang(0.0,3.0) \
+                      INSTRUME= WSRT \
+                      NAXIS1= 10 NAXIS2= 10 NAXIS3= 10 \
+                      OUTSET= test123wcsRADECFREQ"
+   gipsy.xeq(command)
+   gipsyset = WCSset("test123wcsRADECFREQ freq 0")
+   gipsyset.printinfo()
+
+   # Create an Ascii file with dummy data for testing FILE command
+   # The data in the Ascii file is composed of a fixed sequence of grids
+   # that are transformed to their corresponding galactic coordinates. 
+   asciifile = "test123wcsRADECFREQ.txt"
+   f = open(asciifile, 'w')
+   gipsy.anyout("Content test file on disk: %s" % asciifile)
+   s = "! Test file for Ascii data and the FILE command\n"
+   f.write(s)
+   gipsy.anyout(s)
+   upos = "[0:9] [0:27:3]"
+   oldsky = gipsyset.subproj.skyout
+   gipsyset.subproj.skyout = "gal"
+   gr, wor, pix, units, errm = gipsyset.wcspos(0, userpos=upos)
+   for i in range(10):
+      s = "%f %.12f %f %.12f\n" % (gr[i][0], wor[i][0], gr[i][1], wor[i][1] )
+      f.write(s)
+      gipsy.anyout(s)
+   f.close()
+   gipsyset.subproj.skyout = oldsky
+
+   gipsy.anyout("\n\n=========== Testing numbers ==========")
+   gr, wor, pix, units, errm= gipsyset.wcspos(0, userpos="3/4 3**2")
+   gipsy.anyout("3/4=%f 3**2=%f" % (gr[0][0], gr[0][1]))
+   gr, wor, pix, units, errm= gipsyset.wcspos(0, userpos="2.1234e+2 2.1234E-2")
+   gipsy.anyout("2.1234e+2=%f 2.1234E-2=%f" % (gr[0][0], gr[0][1]))
+   gr, wor, pix, units, errm= gipsyset.wcspos(0, userpos="(3*4)-5 1/5*(7-2)")
+   gipsy.anyout("(3*4)-5=%f 1/5*(7-2)=%f" % (gr[0][0], gr[0][1]))
+
+   # Numbers as described in http://www.astro.rug.nl/~gipsy/hermes/numbers.html#functions
+   gipsy.anyout("\n")
+   gipsy.anyout("=========== Testing constants ==========")
+   gr, wor, pix, units, errm= gipsyset.wcspos(0, userpos="pi c_")
+   gipsy.anyout("pi=%f c_=%f" % (gr[0][0], gr[0][1]))
+   gr, wor, pix, units, errm= gipsyset.wcspos(0, userpos="h_ k_")
+   gipsy.anyout("Too small for coordinate parsing: Planck h_=%.2g Boltzmann k_=%.2g" % (gr[0][0], gr[0][1]))
+   gipsy.anyout("because crpix is added and crpix >> h_ or k_")
+   gr, wor, pix, units, errm= gipsyset.wcspos(0, userpos="G_ s_")
+   gipsy.anyout("Gravitation G_=%g Stefan-Boltzman s=%g" % (gr[0][0], gr[0][1]))
+   gr, wor, pix, units, errm= gipsyset.wcspos(0, userpos="M_ P_")
+   gipsy.anyout("Solar mass M_=%f 1 parsec, P_=%f" % (gr[0][0], gr[0][1]))
+
+
+   gipsy.anyout("\n")
+   gipsy.anyout("=========== Testing special symbols and lists ==========")
+   userpos = ["[log(10)]*4, [exp(2)]*4",
+              "[log(10):log(100):2/4],  10**[0, 1, 2]",  # yields  1.0 1.5 2.0 and 1 10 100
+              "[1:3]+100, range(3)",  # yields  101 102 103 and 0 1 2
+              "sin([0, pi, pi/2]) [0, 1, 2]"
+             ]
+   for upos in userpos:
+      gr, wor, pix, units, errm= gipsyset.wcspos(0, userpos=upos)
+      if errm:
+         gipsy.anyout(errmes)
+      else:
+         gipsy.anyout("%s =\n %s" % (upos, array2string(gr, precision=1)))
+
+   gipsy.anyout("\n")
+   gipsy.anyout("=========== Testing grouping with quotes ==========")
+   userpos = ["0 1 2 3 10 11 12 13",
+              "'0, 1, 2, 3' '10, 11, 12, 13'",
+              "'G_, 1, 2, 3' '10, 11, 12, 13'",
+              "[G_*300000000, 1, 2, 3] [10, 11, 12, 13]",
+              "{eq} '178.779200, 178.778200, 178.777200' {} '53.655000, 53.656000, 53.657000'",
+              "{eq} [178.779200, 178.778200, 178.777200] {} [53.655000, 53.656000, 53.657000]",
+              "'178.779200, 178.778200, 178.777200' deg '53.655000, 53.656000, 53.657000' deg",
+              #'"178.779200 178.778200 178.777200" deg "53.655000 53.656000 53.657000" deg',
+             ]
+   for upos in userpos:
+      gr, wor, pix, units, errm= gipsyset.wcspos(0, userpos=upos)
+      gipsy.anyout("%s =\n %s" % (upos, array2string(gr, precision=5)))
+
+
+   gipsy.anyout("\n")
+   gipsy.anyout("=========== Testing expressions ==========")
+   userpos = ["abs(-10), sqrt(3)",
+              "sin(radians(30)), degrees(asin(0.5))",
+              "cos(radians(60)), degrees(acos(0.5))",
+              "tan(radians(45)), degrees(atan(1.0))",
+              "tanh(1.0), atan2(3, 4)",          # Extra space in atan2, two arguments for function
+              #"erf(0.1), erfc(0.1)",            # Is a scipy.special function. Not available here
+              "max([2,3])  min([4,10.3])",       # no comma between coordinates. Note [] is required
+              "sinc(0.0) sign(-4.4)",
+              "randn(2), ranf(2)"
+             ]
+   for upos in userpos:
+      gr, wor, pix, units, errm= gipsyset.wcspos(0, userpos=upos)
+      gipsy.anyout("%s = %f %f" % (upos, gr[0][0], gr[0][1]))
+
+   gipsy.anyout("\n")
+
+   
+   gipsy.anyout("\n=========== Testing the native function readcol() for reading files ==========")
+   gipsy.anyout("Read columns from an Ascii file on disk with the native readcol()")
+   gipsy.anyout("function. Note the difference with GIPSY's file() function")
+   userpos = ['readcol("test123wcsRADECFREQ.txt", 1) readcol("test123wcsRADECFREQ.txt", 3)',
+              'readcol("test123wcsRADECFREQ.txt", 1) readcol("test123wcsRADECFREQ.txt", 3)',
+              'readcol("test123wcsRADECFREQ.txt", col=1, rows=range(1,4)) [3:5]',
+              'readcol("test123wcsRADECFREQ.txt", 1, rows=range(4)) readcol("test123wcsRADECFREQ.txt", 3, rows=[0,1,2,3])',
+              'readcol("test123wcsRADECFREQ.txt", col=1, fromline=3, toline=5) readcol("test123wcsRADECFREQ.txt", col=3, fromline=3, toline=5)',
+              'readcol("test123wcsRADECFREQ.txt", 1, fromrow=3) readcol("test123wcsRADECFREQ.txt", 3, fromrow=3)',
+              '{ga} readcol("test123wcsRADECFREQ.txt", 1) {} readcol("test123wcsRADECFREQ.txt", 3)'
+             ]
+   for upos in userpos:
+      gr, wor, pix, units, errm= gipsyset.wcspos(0, userpos=upos)
+      if errm:
+         gipsy.anyout("Error: %s"%errm)
+      else:
+         gipsy.anyout("%s = %s" % (upos, array2string(gr)))
+
+   gipsy.anyout("\n")
+   gipsy.anyout("=========== Testing sky systems for set: %s Output in native world coordinates ==========" % gipsyset.name)
+   userpos = ["0 0",
+              "eq 178.7792  eq 53.655",          # e 10 will not work because e is not a symbol and an ambiguous sky system`
+              "{eq} 178.7792  {} 53.655",
+              "178.7792 deg  53.655 deg",
+              "11h55m07.008s 53d39m18.0s",
+              "11h55m07.008 53d39m18.0s",
+              "178.779200d0m 53d39m18.0s",
+              "{eq, B1950,fk4} 178.7792  {} 53.655",
+              "{eq, B1950,fk4} 178.12830409  {} 53.93322241",
+              "{eq, B1950,fk4, J1983.5} 178.12830409  {} 53.93322241",
+              "ga 140.52382927 ga  61.50745891",
+              "su 61.4767412, su 4.0520188",
+              "su 61.4767412, {} 4.0520188",
+              "ec 150.73844942 ec 47.22071243",
+              "{} 178.7792 0.0",
+              "0.0, {} 53.655",
+              # "0.0 ga 61.50745891", are mixed and not native -> invalid input
+              'header("crpix1"), header("crpix2")',
+              "ac",
+              "pc"
+             ]
+   for upos in userpos:
+      gr, wor, pix, units, errm = gipsyset.wcspos(0, userpos=upos)
+      #gipsy.anyout("errmes=%s"%errm)
+      gipsy.anyout("%s -> grids: %f %f -> world: %f %f (%s %s)" %
+       (upos, gr[0][0], gr[0][1], wor[0][0], wor[0][1], units[0], units[1]))
+
+   
+   gipsy.anyout("\n")
+   gipsy.anyout("=========== Testing sky systems for set: %s Output in {eq, B1950,fk4, J1983.5} coords.==========" % gipsyset.name)
+   userpos = ["0 0",
+              "eq 178.7792  eq 53.655",          # e 10 will not work because e is not a symbol and an ambiguous sky system`
+              "{eq} 178.7792  {} 53.655",
+              "178.7792 deg  53.655 deg",
+              "11h55m07.008s 53d39m18.0s",
+              "{eq, B1950,fk4} 178.7792  {} 53.655",
+              "{eq, B1950,fk4} 178.12830409  {} 53.93322241",
+              "{eq, B1950,fk4, J1983.5} 178.12830409  {} 53.93322241",
+              "ga 140.52382927 ga  61.50745891",
+              "su 61.4767412, su 4.0520188",
+              "ec 150.73844942 ec 47.22071243",
+              "{} 178.7792 0.0",
+              "0.0, {} 53.655",
+              'header("crpix1"), header("crpix2")'
+              # "0.0 ga 61.50745891", are mixed and not native -> invalid input
+             ]
+   oldsky = gipsyset.subproj.skyout
+   gipsyset.subproj.skyout = "{eq, B1950,fk4, J1983.5}"
+   for upos in userpos:
+      gr, wor, pix, units, errm = gipsyset.wcspos(0, userpos=upos)
+      gipsy.anyout("%s -> grids: %f %f -> world: %f %f (%s %s)" %
+       (upos, gr[0][0], gr[0][1], wor[0][0], wor[0][1], units[0], units[1]))
+   gipsyset.subproj.skyout = oldsky       # Restore
+
+   
+   # We re-open a set but now it wil be a XV map (DEC,FREQ)
+   del gipsyset
+   gipsyset = WCSset("test123wcsRADECFREQ RA 0")
+   gipsyset.printinfo()
+   gipsy.anyout("\n")
+   gipsy.anyout("=========== Testing mixed systems for set: %s ==========" % gipsyset.name)
+   gipsy.anyout("Notes: The header is a legacy header spectral type FREQ-OHEL")
+   gipsy.anyout("This implies that the supplied velocity in the header (DRVAL3 or VELR) is an")
+   gipsy.anyout("optical velocity (1.05000000e+06 m/s)")
+   userpos = ["0 0",
+              "{} 53.655 1.415418199417E+09 hz",
+              "{} 53.655 1.415418199417E+03 Mhz",
+              "{} 53.655 1.415418199417 Ghz",
+              "{} 53.655 vopt 1.05000000e+06",
+              "{} 53.655 , vopt 1050000 m/s",
+              "0.0 , vopt 1050000 m/s",
+              "10.0 , vopt 1050000 m/s",
+              "{} 53.655 vrad 1.05000000e+06",
+              "{} 53.655 FREQ 1.41541820e+09",
+             ]
+   for upos in userpos:
+      gr, wor, pix, units, errm = gipsyset.wcspos(0, userpos=upos)
+      gipsy.anyout("%s -> grids: %f %f -> world: %f %f (%s %s)" %
+       (upos, gr[0][0], gr[0][1], wor[0][0], wor[0][1], units[0], units[1]))
+
+
+   gipsy.anyout("\n")
+   gipsy.anyout("=========== Testing mixed systems for set: %s  [Output in VOPT-F2W] ==========" % gipsyset.name)
+   gipsy.anyout("Notes: The header is a legacy header spectral type FREQ-OHEL")
+   gipsy.anyout("This implies that the supplied velocity in the header (DRVAL3 or VELR) is an")
+   gipsy.anyout("optical velocity (1050 km/s). Note that the spectral translation 'FREQ' is not")
+   gipsy.anyout("equal to the native system (FREQ-OHEL) because FREQ means the barycentric frequency")
+   gipsy.anyout("converted from the topocentric frequency.")
+   
+   userpos = ["0 0",
+              "{} 53.655 freq 1.415418199417E+09 hz",
+              "{} 53.655 fr 1.415418199417E+03 Mhz",
+              "{} 53.655 fr 1.415418199417 Ghz",
+              "{} 53.655 vopt 1.05000000e+06",
+              "{} 53.655 , vopt 1050000 m/s",
+              "0.0 , vopt 1050000 m/s",
+              "10.0 , vopt 1050000 m/s",
+              "{} 53.655 vrad 1.05000000e+06",
+              "{} 53.655 FREQ 1.415418199417e+09",
+             ]
+   oldsubproj = gipsyset.subproj
+   gipsyset.subproj = oldsubproj.spectra('VOPT-???')
+   for upos in userpos:
+      gr, wor, pix, units, errm = gipsyset.wcspos(0, userpos=upos)
+      if errm != '':
+         gipsy.anyout(errm)
+      gipsy.anyout("%s -> grids: %f %f -> world: %f %f (%s %s)" %
+       (upos, gr[0][0], gr[0][1], wor[0][0], wor[0][1], units[0], units[1]))
+   gipsyset.subproj = oldsubproj     # Restore
+
+   gipsy.anyout("\n=========== Testing errors and error messages ==========")
+   gipsy.anyout("These are expressions with various errors")
+   userpos = ['readcol("test123wcsRADECFREQ.txt, 0) readcol("test123wcsRADECFREQ.txt", 2)',
+              'readcol("test123wcsRADECFREQ.txt", 0, range(1:4)) 3:5',
+              'readcol("test123wcsRADECFREQ.txt", col=0, rows=range(3)) 3::5',
+              'readcol("test123wcsRADECFREQ.txt", 2, rows=[0,1,2,3])',
+              'readcol("test123wcsRADECFREQ.txt", 0, rows=range(1,5)) 3:5',
+              'readcol("testwcsRADECFREQ.txt", 0, rows=range(6)) readcol("test123wcsRADECFREQ.txt", 2, rows=[0,1,2,3,4,5])',
+              'readcol("test123wcsRADECFREQ.txt", 0, rowsslice(5,None)) readcol("test123wcsRADECFREQ.txt", 2, rowslice=(5,None))',
+              'readcol("test123wcsRADECFREQ.txt", 0, row=2) readcol("test123wcsRADECFREQ.txt", 2, row=2)',
+              '{ga} readcol("test123wcsRADECFREQ.txt", 1) {} readcol("test123wcsRADECFREQ".txt, 3)'
+             ]
+   for upos in userpos:
+      gr, wor, pix, units, errm= gipsyset.wcspos(0, userpos=upos)
+      if errm:
+         gipsy.anyout("%s"%errm)
+      else:
+         gipsy.anyout("%s = %s" % (upos, array2string(gr)))
+
+# Test the three main routines (start as application with ioutils.py)
+# These functions are: wcsinp, wcsbox and wcspos
+if __name__ == "__main__":
+   gipsy.init()
+   testing = gipsy.userlog("RUNTEST=", "Run test ... Y/[N]:", defval=False, default=1)
+   if testing:
+      dotest()
+      gipsy.finis()
+      
+   dim = 2
+   dim = gipsy.userint("DIM=", "Required subset dimension ... [%d]:"%dim, defval=dim, default=1)
+   gipsyset = wcsinp(requireddim=dim)
+   if gipsyset == None:
+      gipsy.finis()
+   gipsyset.printinfo()
+
+   key = "BOX="
+   blo, bhi = gipsyset.wcsbox(key, "", option=1)
+
+   # Default output world coordinates in wcspos are in the native system
+   # unless user specifies otherwise.
+   key = "SKYOUT="
+   mes = None
+   gipsyset.set_skyout(key, mes)
+
+   # Same for the spectral coordinate
+   key = "SPECTRANS="
+   mes = None
+   gipsyset.set_spectraltranslation(key, mes, inside=True)
+
+   # Loop for positions. Press enter to abort
+   numsubsets = len(gipsyset.subsets)
+   if numsubsets > 1:
+      s = "I have %d subsets, but will display the results only for subset number 0!"%numsubsets
+      gipsy.anyout(s)
+   key = "POS="
+   while 1:
+      grids, world, pix, units, errmes = gipsyset.wcspos(0, key, "")
+      gipsy.cancel(key)
+      if not len(grids) or errmes:
+         if errmes:
+            gipsy.reject(key, errmes)
+         else:
+            break
+      else:
+         gipsy.anyout("Grid coordinates: ")
+         for g in grids:
+            gipsy.anyout(str(g))
+         gipsy.anyout("World coordinates:")
+         for i, w in enumerate(world):
+            s = str(w) + ' ' + str(units)
+            gipsy.anyout(s)
+   gipsy.finis()
+
+#<

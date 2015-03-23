@@ -1,0 +1,78 @@
+
+c@ character function IRCO_PRNAME ( integer )
+c
+c#>	irco_prname.dc2
+c Subroutine:	IRCO_PRNAME.
+c
+c Purpose: 	Give full name to plate projection system number.
+c
+c File: 	irco_project.shl.
+c
+c Author:	85 Jun 24 Albrecht de Jonge.
+c
+c Use:	<array> = IRCO_PRNAME (
+c		PRID 	I	integer.
+c		)
+c       <array>	(function result) a character string giving a
+c		proper description of the projection system.
+c		Function returns a blank if (PRID < 1) or
+c		(PRID > mxprid).
+c	PRID	a projection system number.
+c Description:
+c	Projection methods for the celestial sphere, used in subroutines
+c	IRCO_PROJECT, are numbered as follows:
+c	
+c	    1  'STEREO Stereographic'             conformal azimuthal
+c	    2  'GNOMON Gnomonic/Tangent plane'
+c	    3  'AZEQD  Azimuthal equidistant'
+c	    4  'AZEQA  Azimuthal equal area'
+c	    5  'ORTHO  Orthographic'             sphere seen from infinity
+c	    6  'CYLIND Cylindrical eq.area'
+c	    7  'MERCAT Mercator'                  cylindrical conformal
+c	    8  'SINUS  Sinusoidal eq.area'
+c	    9  'AITOFF Hammer-Aitoff eq.area'
+c	   10  'CYLEQD cylindrical equidistant'
+c	
+c	This function IRCO_PRNAME gives both a character form suitable for
+c	keywords ( return value (1:6)),
+c	and one for documentation of printouts etc (return value (8:)).
+c	
+c	At most 30 characters in total will be returned to you.
+c References:
+c	 IRCO_PROJECT.
+c Updates:
+c	90 Apr 25 Sjag Steensma; documentation changed,
+c	88 Jan 13 Peter Arendz; standarized,
+c	87 May 18 Albrecht de Jonge; renamed,
+c	87 Jan 21 Do Kester; added another projection.
+c#<
+
+        CHARACTER * (*) FUNCTION IRCO_PRNAME ( PRID )
+
+        INTEGER	  	PRID
+        integer	  	MXPRID
+        parameter 	( MXPRID = 10 )
+        character*30 	nmlist(MXPRID)
+
+        data nmlist (  1 ) /  'STEREO Stereographic'            /
+        data nmlist (  2 ) /  'GNOMON Gnomonic/Tangent plane'   /
+        data nmlist (  3 ) /  'AZEQD  Azimuthal equidistant'    /
+        data nmlist (  4 ) /  'AZEQA  Azimuthal equal area'     /
+        data nmlist (  5 ) /  'ORTHO  Orthographic'             /
+        data nmlist (  6 ) /  'CYLIND Cylindrical eq.area'      /
+        data nmlist (  7 ) /  'MERCAT Mercator'                 /
+        data nmlist (  8 ) /  'SINUS  Sinusoidal eq.area'       /
+        data nmlist (  9 ) /  'AITOFF Hammer-Aitoff eq.area'    /
+        data nmlist ( 10 ) /  'CYLEQD Cylindrical equidistant'  /
+c	data nmlist (  x ) /  '123456-23456789012345678901234'  /
+
+        if prid .gt. MXPRID .or. prid .lt. 1
+        then
+         IRCO_PRNAME = ' '
+        else
+         IRCO_PRNAME = nmlist ( prid )
+        cif
+
+        return
+        end
+

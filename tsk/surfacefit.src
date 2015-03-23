@@ -1,0 +1,661 @@
+surfacefit.src
+
+        Copyright (c) Kapteyn Astronomical Institute, Groningen 2011
+        All Rights Reserved.
+
+Name:         surfacefit.src
+Creator:      vogelaar
+Host:         Zeearend
+Date:         Nov 26, 2011
+Contents:     surfacefit.make surfacefit.py surfacefit.dc1
+
+#>            surfacefit.make
+#----------------------------------------------------------------------
+# Makefile for SURFACEFIT
+# 
+# Pack sources into surfacefit.src with:   > make -f surfacefit.make pack
+# Unpack source files with:                > $gip_exe/xfile surfacefit.src
+# Install source file with:                > p -reserve surfacefit.src
+#                                          > p -install surfacefit.src
+#
+#----------------------------------------------------------------------
+   
+SHELL   = /bin/sh
+   
+default:: surfacefit
+   
+surfacefit : surfacefit.py
+	cp surfacefit.py surfacefit
+	chmod +x surfacefit
+   
+pack::
+	$$gip_sys/pack.csh surfacefit.src surfacefit.make surfacefit.py \
+	surfacefit.dc1
+
+
+#<
+
+#>            surfacefit.py
+#!/usr/bin/env python
+#------------------------------------------------------------
+# Purpose: Fit parameters for plane in Z = A + B*X + C*Y
+# 
+# Vog, 17 Nov 2011
+#------------------------------------------------------------
+try:
+   import numpy
+   from numpy import *   
+except:
+   raise Exception, "Cannot import module numpy"
+try:
+   from matplotlib.pyplot import figure, show, cm, rc
+   from matplotlib.mlab import griddata
+except:
+   raise Exception, "Cannot import module matplotlib"
+try:
+   from kapteyn import tabarray
+except:
+   raise Exception, "Cannot import module kapteyn"
+try:
+   from kapteyn import kmpfit
+except:
+   raise Exception, "Cannot import module kmpfit (upgrade the Kapteyn Package)"
+try:
+   from mpl_toolkits.mplot3d import axes3d
+   canplot = True
+except:
+   print "Cannot import module mpl_toolkits.mplot3d: will skip 3D plot"
+   canplot = False
+try:
+   from scipy.special import erf, chdtrc, gammainc
+   use_scipy = True
+except:
+   use_scipy = False
+
+import gipsy
+import warnings
+
+
+# We define a0 .. a9 as allowed fit parameters
+allowed_vars = ['a'+str(i) for i in range(10)]
+
+#--------------------------------------------------------------------------
+# For future use we prepared a safe version of the eval function e.g. for
+# a web application. This version allows only a set of numpy functions,
+# the allowed fit parameters and the arrays x and y. It can only set the
+# allowed parameters after they are known to the model function, i.e.
+# after 'exec(tuplestr+'=p'). The tuplestr argument stores the names of
+# the used parameters (extracted from the user given function). The
+# argument 'p' has the values of the parameters in the order of the
+# index of the fit parameter (a0 before a1 etc.).
+#--------------------------------------------------------------------------
+"""
+safe_list = ['abs', 'arccos', 'arcsin', 'arctan', 'arctan2', 'ceil', 'cos',
+'cosh', 'deg2rad', 'degrees', 'e', 'exp', 'exp2', 'fabs', 'fix', 'floor',
+'fmod', 'frexp', 'hypot', 'ldexp', 'log', 'log2', 'log10',
+'modf', 'pi', 'power', 'radians', 'sin', 'sinc', 'sinh', 'sqrt', 'tan', 'tanh'] 
+#use the list to filter the local namespace 
+safe_dict = dict( [(k, locals().get(k, None)) for k in safe_list] )
+
+def safemodel(p, x, y, fie, tuplestr):
+   exec(tuplestr+'=p')
+   pardict = dict( [(k, locals().get(k, None)) for k in allowed_vars] )
+   safe_dict.update(pardict)
+   safe_dict.update({'x':x, 'y':y})
+   print  safe_dict
+   return eval(fie, {"__builtins__":None}, safe_dict)
+"""
+
+def model(p, x, y, fie, tuplestr, userfun):
+   if userfun:
+      exec(tuplestr+'=p')
+      return eval(fie)
+   else:
+      a0, a1, a2 = p
+      return a0 + a1*x + a2*y      
+
+
+def residuals(p, data):
+   xx, yy, Z, err,fie, tuplestr, userfun = data
+   return (Z - model(p, xx, yy, fie, tuplestr, userfun))/err
+
+
+def prob(nsigma):
+   # Probability to find a value between mean-nsigma and mean+nsigma 
+   return erf(nsigma/numpy.sqrt(2.0))
+
+
+def chauvenet(x, y, z, r, zmodel):
+   # Filter possible outliers based on Chauvenet's criterion
+   # Calculate mean and standard deviation of the residuals.
+   # Express residual-mean in standard deviations of the
+   # sample: d = |res_i-mean|/std
+   # The probability to find this value in a range
+   # mean-d*sigma and mean+d*sigma is P = erf(d/sqrt(2))
+   # The probabilty to find a residual outside this
+   # interval is Q=1-P
+   # According to Chauvenet we can discard data points where
+   # Q < N/2
+   x3 = []; y3 = []; z3 = []; r3 = []
+   N = len(z)
+   mean = zres.mean(); gipsy.anyout("sum zres=%g"%(zres.sum()))
+   stdv = zres.std()
+   s = "\nPossible outliers based on Chauvenet's criterion"
+   gipsy.anyout(s)
+   gipsy.anyout('='*len(s))
+   numoutliers = 0
+   for xd, yd, zd, rd, zr in zip(x, y, z, r, zres):
+      delta = abs(zr-mean)/stdv
+      Np = 1.0-prob(delta)
+      criterion = N*Np
+      if criterion < 0.5:
+         s = "(%g,%g,%g) has distance %f sigma to mean %f, PxN=%f" %(xd,yd,zd, delta, mean, Np)
+         gipsy.anyout(s)
+         numoutliers += 1
+      else:
+         x3.append(xd)
+         y3.append(yd)
+         z3.append(zd)
+         r3.append(rd)
+   if numoutliers == 0:
+      gipsy.anyout("No outliers detected")
+      
+   return numpy.array(x3), numpy.array(y3), numpy.array(z3), numpy.array(r3)
+
+
+gipsy.init()                                     # Contact Hermes
+
+# Ask for the file with the data
+key = "FILENAME="
+mes = "Enter name of file: "
+ask = True
+while ask:
+   try:
+      filename = gipsy.usertext(key, mes, default=0)
+      fp = open(filename, "r")
+      fp.close()
+      ask = False        # File is ok
+   except IOError, (code, errmes):
+      gipsy.reject(key, errmes)
+      ask = True
+   except:
+      errmes = "Cannot open this file, don't know why!"
+      gipsy.reject(key, errmes)
+      ask = True
+
+# Which columns do we want to read?
+key = "COLS="
+mes = "Enter columns for X, Y, Z, sigmaZ ... [1,2,3,4]:"
+ask = True
+equalweights = True
+while ask:
+   cols = gipsy.userint(key, mes, default=1, defval=[1,2,3,4], nmax=4)
+   if len(cols) < 3:
+      gipsy.reject(key, "I need at least three columns for X,Y,Z)!")
+   else:
+      cols = [c-1 for c in cols]
+      try:
+         if len(cols) == 3:
+            x2, y2, z2 = tabarray.readColumns(filename, cols=cols)
+            r2 = numpy.ones(len(z2))
+            equalweights = True
+         else:
+            x2, y2, z2, r2 = tabarray.readColumns(filename, cols=cols)
+            equalweights = False
+         ask = False
+      except:
+         gipsy.reject(key, "Cannot read these columns!")
+
+key = "SCALE="
+mes = "Multiply Z and sigmaZ with factor .... [1.0]:"
+scale = gipsy.userreal(key, mes, default=1, defval=1.0, nmax=1)
+if scale != 1.0:
+   gipsy.anyout("Program scaled data as Z = Z*%g"%scale)
+   z2 *= scale
+   if not equalweights:
+      r2 *= scale
+   
+N = len(z2)
+nx = ny = 100                     # Number of points in X & Y in meshgrid
+xmin = x2.min(); xmax = x2.max()
+ymin = y2.min(); ymax = y2.max()
+dx = abs(xmax-xmin)/10            # Add some extra space for plot
+dy = abs(ymax-ymin)/10
+X = numpy.linspace(xmin-dx,xmax+dx,nx)
+Y = numpy.linspace(ymin-dy,ymax+dy,ny)
+xx, yy = numpy.meshgrid(X,Y)
+Z = griddata(x2, y2, z2, xx, yy)  # Interpolate between ungridded data
+
+# Ask to enter a model function F(x,y)
+ask = True
+defval = 'a0+a1*x+a2*y'
+key = "FXY="
+mes = "Enter F(x,y) with parameters a0,..,a9    [a0+a1*x+a2*y]: "
+while ask:
+   fie = gipsy.usertext(key, mes, default=1, defval=defval)
+   userfun = (fie != defval)
+   used_vars = []
+   for v in allowed_vars:
+      if v in fie:
+         used_vars.append(v)
+   numpars = len(used_vars)
+   if numpars == 0:
+      ask = True
+      gipsy.reject(key, "This function has no parameters to fit!")
+   else:
+      ask = False
+
+# Prepare initial values
+parnames = ','.join(used_vars)
+tuplestr = parnames
+initvals = [0]*numpars
+initpars = str(initvals)
+mes = "Init. values for "+ parnames + ' ... ['+initpars+']:'
+key = "INITVALS="
+p0 = gipsy.userreal(key, mes, default=1+4, defval=initvals, nmax=numpars)
+
+key = "RESTABLE="
+mes = "Plot a table with the residuals ... [Y]/N:"
+restable = gipsy.userlog(key, mes, default=1, defval=True, nmax=1)
+
+trials = 0   # Default is No bootstrapping
+key = "TRIALS="
+mes = "Number of trials for bootstrap ... [%g]:"%trials
+trials = gipsy.userint(key, mes, default=1, defval=trials, nmax=1)
+
+if canplot:
+   key = "PLOT="
+   mes = "Do you want a 3d plot ... [Y]/N:"
+   plot = gipsy.userlog(key, mes, default=1, defval=True, nmax=1)
+else:
+   plot = False
+
+
+cont = True
+runs = 0
+while cont:
+   # Prepare a 'Fitter' object'
+   fitobj = kmpfit.Fitter(residuals=residuals,
+                        data=(x2,y2,z2,r2,fie,tuplestr,userfun))
+
+   try:
+      fitobj.fit(params0=p0)
+   except Exception, mes:
+      s = "Something wrong with fit: %s"%mes
+      gipsy.error(4, s)    # Fatal error, abort task
+
+   header = "Results for F(x,y)=%s"%fie
+   if runs == 1:
+      header += " (Outliers removed)"
+   gipsy.anyout("\n\n"+header)
+   gipsy.anyout("="*len(header))
+   gipsy.anyout("%5s %15s %15s %15s"%("par", "value", "cov.error", "std error"))
+   for i in range(numpars):
+      s = "%5s %15g %15g %15g"%(used_vars[i], fitobj.params[i], fitobj.xerror[i], fitobj.stderr[i])
+      gipsy.anyout(s)
+   gipsy.anyout(" ")
+   #gipsy.anyout("Parameters:    "+parnames)
+   #gipsy.anyout("Param. values: "+ str(fitobj.params))
+   #gipsy.anyout("Errors from covariance matrix: " + str(fitobj.xerror))
+   #gipsy.anyout("Uncertainties assuming reduced Chi^2=1: " + str(fitobj.stderr))
+   gipsy.anyout("Chi^2 min:             %g"% fitobj.chi2_min)
+   s =          "Reduced Chi^2:         %g"%(fitobj.rchi2_min)
+   if equalweights:
+      s += "  (Could be meaningless because fit was unweighted)"
+   gipsy.anyout(s)
+   gipsy.anyout("Number of data points: %g"% N)
+   gipsy.anyout("Degrees of freedom:    %g"% fitobj.dof)
+   gipsy.anyout("Iterations:            %g"% fitobj.niter)
+   gipsy.anyout("Function ev:           %d"% fitobj.nfev)
+   gipsy.anyout("Status:                %d"% fitobj.status)
+   gipsy.anyout("Status Message:        %s"% fitobj.message)
+
+   fittedparams = fitobj.params     # Store for later use
+   standarderrors = fitobj.stderr   # Store for later use
+
+   Dz = abs(model(fittedparams, x2, y2, fie, tuplestr, userfun) - z2)
+   gipsy.anyout("\nResiduals from Z - Zmodel:")
+   gipsy.anyout("Residuals max:                 %g"% Dz.max())
+   gipsy.anyout("Residuals min:                 %g"% Dz.min())
+   gipsy.anyout("Residuals mean:                %g"% Dz.mean())
+   gipsy.anyout("Residuals standard deviation:  %g"% Dz.std())
+
+
+   zmodel = model(fittedparams, x2, y2, fie, tuplestr, userfun)
+   zres = z2 - zmodel
+   if runs == 0 and use_scipy:
+      key = "CHAUVENET="
+      mes = "Remove Outliers with Chauvenet ... [Y]/N:"
+      remove_out = gipsy.userlog(key, mes, default=1, defval=True, nmax=1)
+      if remove_out:
+         x2, y2, z2, r2 = chauvenet(x2, y2, z2, r2, zres)
+         N = len(z2)
+   runs += 1
+   cont = (runs == 1 and remove_out)
+
+if restable:
+   # The original data is x2,y2,z2
+   arrays = zip(x2,y2,z2,zmodel,zres)
+   s = "\n%10s %10s %10s %10s %14s"%('X','Y','Z','Zmodel','Zresidual')
+   gipsy.anyout(s)
+   gipsy.anyout('='*len(s))
+   for xa,ya,za,zm,zr in arrays:
+      s = "%10g %10g %10g %10g %14g"%(xa,ya,za,zm,zr)
+      gipsy.anyout(s)
+
+if use_scipy and not equalweights:
+   # P = chdtrc(v,x) returns the area under the right hand tail
+   # (from x to infinity) of the Chi square probability density function
+   # with v degrees of freedom:
+   # 1/(2**(v/2) * gamma(v/2)) * integral(t**(v/2-1) * exp(-t/2), t=x..inf)
+   P = chdtrc(fitobj.dof, fitobj.chi2_min) # Integral from 0 to chi^2
+   # Note that this is P in the Chi^2 tables of Bevington and Q in Numerical
+   # Recipes, Press et al. It the probability of exceeding Chi^2.
+   # Note that the same answer can be found if you use SciPy's
+   # incomplete gamma function:
+   # gammainc(v,x)
+
+   s = """\nIf the model function is a good approximation to the parent
+function, the reduced chi^2 should be near 1.0 and the probability to
+find the measured reduced chi^2 (=%g) should be approximately 0.5.
+For larger values of chi^2, the probability of obtaining such a large value of
+chi^2 from the correct model function is smaller, which probably implies that
+the model function is not appropriate. The probability that we find a measured
+value of chi^2 of %g from the selected model function
+F(x,y)=%s is %g.
+Small values may indicate that
+1) The model is not appropriate (Truly wrong models have Q < 1e-18)
+2) The errors on the data points are too small
+3) The measurement errors may not normally distributed
+"""%(fitobj.rchi2_min, fitobj.chi2_min, fie, P)
+   gipsy.anyout(s)
+
+  
+# Do the bootstrapping if requested
+if trials > 0:
+   bootparams = []
+   x3 = x2.copy()
+   y3 = y2.copy()
+   z3 = z2.copy()
+   r3 = r2.copy()
+   fitobj = kmpfit.Fitter(residuals=residuals,
+                          data=(x3,y3,z3,r3,fie,tuplestr,userfun))
+
+   for i in range(trials):       # Start loop over pseudo sample
+      indx = numpy.random.randint(0, N, N)    # Do the resampling using an RNG
+      # indx is an array of random indices. Use this array to create a new one.
+      x3[:] = x2[indx]
+      y3[:] = y2[indx]
+      z3[:] = z2[indx]
+      r3[:] = r2[indx]
+
+      # Only do a regression if there are at least two different
+      # data points in the pseudo sample
+      ok = (x3 != x3[0]).any()
+
+      if (not ok):
+         gipsy.anyout("Skipping this sample: All elements are the same!")
+      else:
+         fitobj.fit(params0=p0)
+         bootparams.append(fitobj.params)
+
+   gipsy.anyout("\nStandard errors with bootstrap:")
+   bootparams = numpy.array(bootparams)
+   for i in range(numpars):
+      sigma = bootparams[:,i] - fittedparams[i]
+      gipsy.anyout("sigma "+used_vars[i]+": %g"%sigma.std())
+   
+
+# Plot data and fit in (interactive) 3D plot
+if plot:
+   # Suppress user warnings for PyFITS actions
+   warnings.resetwarnings()
+   warnings.filterwarnings('ignore', category=UserWarning, append=True)   
+   # Plotting
+   rc('xtick', labelsize=8)
+   rc('ytick', labelsize=8)
+   #rc('ztick', labelsize=8)
+   fig1 = figure(1)
+   frame = fig1.add_subplot(1,1,1, projection='3d', azim=-41, elev=21)
+   # For Matplotlib >- 1.01 one can use:
+   #frame.plot_surface(xx, yy, Z, rstride=1, cstride=1, cmap=cm.jet,
+   #        linewidth=0, antialiased=False, alpha=0.6)
+   #frame.plot_surface(xx,yy,Z)
+   frame.scatter(x2, y2, z2, c='r')
+   for x3,y3,z3,zm in zip(x2,y2,z2,zmodel):
+      frame.plot((x3,x3),(y3,y3),(z3,zm), 'b')
+   zz = model(fittedparams, xx, yy, fie, tuplestr, userfun)
+   frame.plot_surface(xx, yy, zz, color='y', alpha=0.4)
+   frame.set_xlabel('X')
+   frame.set_ylabel('Y')
+   frame.set_zlabel('Z')
+   # Turn warnings on  
+   warnings.resetwarnings()
+   warnings.filterwarnings('always', category=UserWarning, append=True)
+   show()
+
+gipsy.finis()          # Disconnect Hermes as soon user stopped interactive plot
+
+
+
+#<
+
+#>            surfacefit.dc1
+Program:      SURFACEFIT
+
+Purpose:      Given values Z at positions (X,Y) and optional standard errors for Z
+              from a text file with data in columns, find best fit parameters for 
+              a user given model function F(X,Y)
+              
+Category:     ANALYSIS, FITTING
+
+File:         surfacefit.src
+
+Author:       M.G.R. Vogelaar
+
+
+Keywords:
+
+ FILENAME=    Enter name of file: 
+
+              Name of text file with columns which represent values
+              Z at positions X, Y. A fourth column optionally represents
+              1 sigma errors of Z. These values are used as weights in the fit.
+
+
+ COLS=        Enter columns for X, Y, Z, sigmaZ ... [1,2,3,4]:
+
+              First column should be X. Second is Y and the third is Z.
+              If a fourth column is omitted then all the weights are set
+              to 1 in the fit. Else, weights are calculated as 
+              w_i = 1/(sigmaZ_i^2)
+
+
+ SCALE=       Multiply Z and sigmaZ with factor .... [1.0]:
+
+              If your Z values are very big or very small, it is often 
+              wise to scale your data to smaller values because it is
+              numerically more stable and less dependent on good initial
+              estimates (see INITVALS=).
+              The default is 1.0 which implies that the data is not scaled
+              at all.
+
+
+ FXY=         Enter F(x,y) with parameters a0,..,a9    [a0+a1*x+a2*y]:
+
+              Specify the model with parameters a0, a1 etc. for which we
+              want a 'best fit'. The data is stored in x and y.
+              If the default is used, then the program uses an optimized
+              version of the function evaluations needed for the fit.
+              A more generic surface is:
+              FXY=a0+a1*x+a2*y+a3*x*y+a4*x*x+a5*y*y
+              
+
+ INITVALS=    Init. values for a0, a1,.. [0,0,...]:
+      
+              Initial estimates of the parameters for which you want to 
+              find a 'best' value. If the values of Z are near 1.0 then
+              the default values (all zero) often suffice.
+              Note that you need to enter exactly n values where n is the
+              number of best-fit parameters.
+
+
+ RESTABLE=    Plot a table with the residuals ... [Y]/N:
+
+              For each position in the data, print the
+              position, the Z value, the Z value of the model
+              with the 'best fit' parateters and the difference
+              between these two Z values (the residual)
+
+
+ CHAUVENET=   Remove Outliers with Chauvenet ... [Y]/N:
+
+              After fitting the model parameters, we have an
+              impression of what outliers are.
+              Filter possible outliers based on Chauvenet's criterion
+              Calculate mean and standard deviation of the residuals.
+              Express residual-mean in standard deviations of the
+              sample: d = |res_i-mean|/std
+              The probability to find this value in a range
+              mean-d*sigma and mean+d*sigma is P = erf(d/sqrt(2))
+              The probabilty to find a residual outside this
+              interval is Q=1-P
+              According to Chauvenet we can discard data points where
+              Q < N/2
+              The fit will be repeated with the outliers removed.
+              Note that Chauvenet can be applied only one.
+
+
+ TRIALS=      Number of trials for bootstrap ... [0]:
+
+              If you need a realistic error on your fitted parameters
+              then apply a bootstrap method. The number of random 
+              samples is given in this keyword. For each sub sample 
+              a fit is made and the error is given by
+              the standard deviation of (an_boot - an_first)
+              where an_boot is parameter n for all the bootstrap
+              samples and an_first is parameter n for the first fit.
+
+              The default is TRIALS=0 which implies no bootstrapping.
+              Note that if the least squares fitting of your model
+              is sensitive to its initial estimates, these bootstrapping
+              errors can be unreasonable big. Usually this is a hint
+              to scale the data.
+
+              Note: For functions that are supplied by a user, the 
+              function evaluation is done by Python's eval() function.
+              This implies that this evaluation is not optimal.
+              So if you want a reliable bootstrap error estimation
+              (e.g.: TRIALS=5000) then the procedure can take a while.
+
+
+ PLOT=        Do you want a 3d plot ... [Y]:
+
+              Display a gridded (i.e. interpolated) version of your
+              data and the fitted curve. The plot is interactive, i.e.
+              one can rotate, pan and zoom the plot.
+
+
+Description:  Fit parameters of any model given by a user, given data from a 
+              text file on disk. The parameters in the function that describes
+              the model are a0, a1, .. a9. If your data file has a column
+              with a standard error for each datapoint and you selected
+              that column (as the fourth column), then you get a meaningful
+              value for Chi square and the reduced Chi square and the
+              estimated errors. We list both the errors derived from the
+              covariance matrix (made by the fit routine) and the scaled errors,
+              which are derived from the covariance errors while assuming
+              a reduced Chi square equal to 1.0.
+              It seems that bootstrapping (TRIALS=) indicate that these scaled
+              errors are more realistic.
+
+Example:      
+              FILENAME= testplane.txt
+              COLS= 1 2 3
+              SCALE= 1e-13
+              FXY= a0+a1*x+a2*y+a3*x*x+a4*y*y+a5*x*y
+              INITVALS= 0::6
+              TRIALS= 200      
+              PLOT=
+
+              Test Data:
+
+!       X                         Y                        Z
+        5.0                     3996.0                  -1.485E+17
+        397.0                   3736.0                  -1.328E+17
+        1995.0                  3994.0                  -2.147E+17
+        1994.0                  7.0                     -6.402E+16
+        10.0                    59.0                    -3.415E+13
+        1177.0                  16.0                    -2.231E+16
+        600.0                   1610.0                  -3.017E+16
+        1420.0                  2070.0                  -7.314E+16
+        1141.0                  1160.0                  -3.385E+16
+        990.0                   3085.0                  -1.052E+17
+        574.0                   2389.0                  -5.877E+16
+        1740.0                  1586.0                  -7.291E+16
+        1456.0                  3278.0                  -1.354E+17
+        864.0                   3846.0                  -1.505E+17
+        1604.0                  3030.0                  -1.282E+17
+        1332.0                  3658.0                  -1.544E+17
+        554.0                   3198.0                  -1.006E+17
+        1643.0                  900.0                   -5.141E+16
+        442.0                   1937.0                  -3.828E+16
+        1266.0                  1661.0                  -5.205E+16
+
+
+              Results:
+
+Program scaled data as Z = Z*1e-13
+Results for F(x,y)=a0+a1*x+a2*y+a3*x*x+a4*y*y+a5*x*y
+====================================================
+  par           value       cov.error       std error
+   a0        0.278127        0.944506         1.93969
+   a1    -0.000673375      0.00167908      0.00344825
+   a2    -0.000103869     0.000800445      0.00164384
+   a3     -0.00160955     7.79177e-07     1.60017e-06
+   a4    -0.000930062     1.74786e-07     3.58951e-07
+   a5    -2.83247e-05      2.3408e-07     4.80722e-07
+
+Chi^2 min:      59.0453
+Reduced Chi^2:  4.21752
+Iterations:     12
+Function ev:    95
+Status:         2
+
+Residuals from Z - Zmodel:
+Residuals max:                 3.65061
+Residuals min:                 0.0327222
+Residuals standard deviation:  1.175
+
+Standard errors with bootstrap:
+sigma a0: 5.52513
+sigma a1: 0.00792682
+sigma a2: 0.00247251
+sigma a3: 3.08476e-06
+sigma a4: 4.59987e-07
+sigma a5: 1.10049e-06
+
+              The value Chi^2 min is a measure of goodness of fit.
+              Note that it scales both with the values of Z (high values
+              of Z result in high values of the residuals) and with
+              the weights.
+              The reduced Chi-square gives a relation between the covariance
+              errors and the standard deviation of the mother sample.
+              If this value is ~1 then the errors from the covariance 
+              matrix can be used. If not, or when you have equal weights,
+              then you should use the standard errors derived from the
+              assumption that the reduced Chi-square is 1.
+              
+              If the weights are not under- or over estimated, then the
+              bootstrap errors will look like the standard errors.
+             
+Notes:        This is a GIPSY task written in Python. It uses kmpfit,
+              the least squares routine in the Kapteyn Package.
+              Python enables us to evaluate model expressions given 
+              by a user. The fit routine does not need expressions for
+              the parameter derivatives, so we end up with a flexible 
+              program that enables a user to explore different models.
+
+
+Updates:      Nov 20,  2011: VOG, Document created.
+#<

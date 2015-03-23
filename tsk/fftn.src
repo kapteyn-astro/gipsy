@@ -1,0 +1,356 @@
+fftn.src
+
+        Copyright (c) Kapteyn Astronomical Institute, Groningen 2014
+        All Rights Reserved.
+
+Name:         fftn.src
+Creator:      vogelaar
+Host:         albirumi
+Date:         Aug 12, 2014
+Contents:     fftn.make fftn.py fftn.dc1
+
+#>            fftn.make
+#----------------------------------------------------------------------
+# Makefile for FFTN
+# 
+# Pack sources into fftn.src with:   > make -f fftn.make pack
+# Unpack source files with:                > $gip_exe/xfile fftn.src
+# Install source file with:                > p -reserve fftn.src
+#                                          > p -install fftn.src
+#
+#----------------------------------------------------------------------
+   
+SHELL   = /bin/sh
+   
+default:: fftn
+   
+fftn : fftn.py
+	cp fftn.py fftn
+	chmod +x fftn
+   
+pack::
+	$$gip_sys/pack.csh fftn.src fftn.make fftn.py \
+	fftn.dc1
+
+#<
+
+#>            fftn.py
+#!/usr/bin/env python
+from gipsy import *
+import numpy as np
+
+init()
+mes = "Set mode to Inverse FFT: ... Y/[N]"
+inverse = userlog(keyword="INVERSE=", message=mes, default=1, defval=False, nmax=1)
+
+mes = "Input data in amplitude and phase? ... Y/[N]"
+ampphaseI = userlog(keyword="PHASEIN=", message=mes, default=1, defval=False, nmax=1)
+
+cont = True
+key = "RINSET="
+mes = "Set, subset real part of input:"
+while cont:
+   s = usertext(key, mes, default=1, defval="")
+   if s:
+      try:
+         setin = Set(s)
+         cont = False
+      except:
+         reject(key, "Incorrect input or set does not exist!")
+         cancel(key)
+         cont = True
+   else:
+      cont = False
+      setin = None
+set_real = setin
+
+cont = True
+key = "IINSET="
+mes = "Set, subset imaginary part of input:"
+while cont:
+   s = usertext(key, mes, default=1, defval="")
+   if s:
+      try:
+         setin = Set(s)
+         cont = False
+      except:
+         reject(key, "Incorrect input or set does not exist!")
+         cancel(key)
+         cont = True
+   else:
+      cont = False
+      setin = None
+set_imag = setin
+
+if not set_real and not set_imag:
+   error(4, "No set entered. Aborting task...")
+
+# Prepare to enter a box
+if set_real:
+   setin = set_real
+else:
+   setin = set_imag
+boxmes = 'Enter box in '
+for k in setin.axperm('inside'):
+    boxmes += str(setin.axname(k).split('-')[0]) + ' '
+boxmes += '   [entire subset]'
+b = usertext("BOX=", boxmes, defval='', default=1)
+
+if set_real:
+   set_real.setbox(b)
+   anyout( "BOX real input: blo=%s bhi=%s" % (set_real.blo,set_real.bhi) )
+if set_imag:
+   set_imag.setbox(b)
+   anyout( "BOX imaginary input: blo=%s bhi=%s" % (set_imag.blo,set_imag.bhi) )
+
+mes = "Output data in amplitude and phase? ... Y/[N]"
+ampphaseO = userlog(keyword="PHASEOUT=", message=mes, default=1, defval=False, nmax=1)
+
+if ampphaseO:
+   ext1 = "_amp"
+   ext2 = "_phase"
+else:
+   ext1 = "_real"   # Assume phase in radians
+   ext2 = "_imag"
+
+if not inverse:
+   mes = "Set first element in sample to the center of the input data? ... Y/[N]"
+   shift_in = userlog(keyword="SHIFTIN=", message=mes, default=1, defval=False, nmax=1)
+   mes = "Shift the zero-freq. component of OUTPUT to the center of the spectrum? ... Y/[N]"
+   shift_out = userlog(keyword="SHIFTOUT=", message=mes, default=1, defval=False, nmax=1)
+else:
+   mes = "Shift the zero-freq. component of INPUT to the left of the spectrum? ... Y/[N]"   
+   shift_in = userlog(keyword="SHIFTIN=", message=mes, default=1, defval=False, nmax=1)
+   mes = "Set first element of transform to be the center of the output data? ... Y/[N]"
+   shift_out = userlog(keyword="SHIFTOUT=", message=mes, default=1, defval=False, nmax=1)
+
+outname = usertext("OUTSET=", "Name of output set: ")
+
+# Describe mission
+anyout("\nMission")
+anyout("---------")
+if inverse:
+   anyout("You started the inverse Fourier transform")
+   if shift_in:
+      anyout("Your input will be inverse frequency shifted")
+   else:
+      anyout("Your input data will not be shifted")
+   if shift_out:
+      anyout("First element of output data will be shifted to center")
+   else:
+      anyout("Your output will not be shifted")
+else:
+   anyout("You started the Fourier transform")
+   if shift_in:
+      anyout("Center element of your input data will be shifted to first element")
+   else:
+      anyout("Your input data will not be shifted")
+   if shift_out:
+      anyout("The zero-freq. component of OUTPUT will be shifted to the center of the spectrum?")
+   else:
+      anyout("The zero-freq. component of OUTPUT will not be shifted")
+if ampphaseI:
+   anyout("The input is in amplitude/phase mode")
+else:
+   anyout("The input is in real/imaginary mode")
+if ampphaseO:
+   anyout("The output is in amplitude/phase mode")
+else:
+   anyout("The output is in real/imaginary mode")
+anyout(" ")
+
+
+# Prepare the output sets (2)
+setoutR=setin.copy( outname+ext1 )
+setoutI=setin.copy( outname+ext2 )
+
+
+for s in range(len(setin.subsets)):
+   if set_real:
+      MinReal = set_real.subimage(set_real.subsets[s])
+   else:
+      MinReal = 0.0
+   if set_imag:
+      MinImag = set_imag.subimage(set_imag.subsets[s])
+   else:
+      MinImag = 0.0
+
+   if ampphaseI:
+      imR = MinReal * np.cos(MinImag)
+      imI = MinReal * np.sin(MinImag)
+      Min = imR + 1j*imI
+   else:
+      Min = MinReal + 1j*MinImag
+
+   anyout("Shape input data subset %d: %s"%(s,str(Min.shape)))
+
+   MoutR = setoutR.subimage(setoutR.subsets[s])
+   MoutI = setoutI.subimage(setoutI.subsets[s])
+
+   if inverse:
+      if shift_in:
+         Min = np.fft.ifftshift(Min)
+      C = np.fft.ifftn(Min)
+      if shift_out:
+         C = np.fft.fftshift(C)  
+   else:
+      if shift_in:
+         Min = np.fft.ifftshift(Min)
+      C = np.fft.fftn(Min)
+      if shift_out:
+         C = np.fft.fftshift(C)
+
+   if ampphaseO:
+      MoutR[:] = np.abs(C)
+      MoutI[:] = np.angle(C)
+   else:
+      MoutR[:] = C.real
+      MoutI[:] = C.imag
+
+   setoutR.wminmax(setoutR.subsets[s]) # Update header items DATAMIN,DATAMAX,NBLANK
+   setoutI.wminmax(setoutI.subsets[s]) # Update header items DATAMIN,DATAMAX,NBLANK
+
+setoutR.whistory()                    # Save history to header
+setoutI.whistory()                    # Save history to header
+
+del setin
+del setoutI
+del setoutR
+
+finis()
+#<
+
+#>            fftn.dc1
+Program:      FFTN
+
+Purpose:      Apply fast Fourier transform in N dimensions, i.e. for a profile (N=1),
+              a map or a series of maps (N=2) or a data cube (N=3).
+
+Category:     MANIPULATION
+
+File:         fftn.src
+
+Author:       M.G.R. Vogelaar
+
+
+Keywords:
+
+   INVERSE=   FFT or Inverse FFT: ... [F]/I
+
+              Set modus of operation: FFT or the inverse transformation.
+
+
+   PHASEIN=   Input data in amplitude and phase? ... Y/[N]
+
+              If True, then the phases must be entered in radians.
+
+
+   RINSET=    Set, subset(s) real part of input:
+
+              Note that if your input is not contiguous (e.g.:
+              Aurora FREQ 10 14:16 20) then the output will be from
+              FREQ 10 to 20 and the subsets that are not included in the input
+              are set to blank in the output. The transform is only applied to
+              the given subsets.
+              
+
+   IINSET=    Set, subset imaginary part of input:
+
+
+   BOX=       Enter box in ....
+
+
+   PHASEOUT=  Output data in amplitude and phase? ... Y/[N]
+
+              The output phases are in radians.
+              The set names get the extension _amp and _phase
+              Else they get extensions _real and _imag
+
+
+              If INVERSE=n
+
+   SHIFTIN=   Set first element in sample to the center of the input data? ... Y/[N]
+
+   SHIFTOUT=  Shift the zero-freq. component of OUTPUT to the center of the spectrum? ... Y/[N]
+
+
+              If INVERSE=y
+              
+   SHIFTIN=   Shift the zero-freq. component of INPUT to the left of the spectrum? ... Y/[N]
+
+   SHIFTOUT=  Set first element of transform to be the center of the output data? ... Y/[N]"
+
+
+   OUTSET=    Name of output set:
+
+
+Description:
+              The program calculates an N dimensional Fourier transform of the
+              input data.
+              The number of axes in the selected subset(s) sets the value of N.
+              With this program it is possible to do a 3-dimensional FFT on a
+              data cube or one or more 1-dimensional FFT's in an image or
+              2-dimensional FFT's on channel maps in a data cube etc.
+
+
+              Gaussians
+              ---------
+              As a testcase, one often uses a Gaussian function as a real input.
+              The FFT of this symmetrical real function should be also gaussian
+              and the imaginary part is zero. An inverse FFT should return the
+              original image.
+
+              With numpy's fft() function (and therefore in this task), we need
+              to do something extra to achieve the same result.
+              First of all, the values in the result of an FFT follow so-called
+              standard order: If A = fft(a, n),
+              then A[0] contains the zero-frequency term (the mean of the signal),
+              which is always purely real for real inputs. Then A[1:n/2] contains
+              the positive-frequency terms, and A[n/2+1:] contains the negative-
+              frequency terms, in order of decreasingly negative frequency.
+              The routine fftshift(A) shifts transforms and their
+              frequencies to put the zero-frequency components in the middle.
+              This action is set with keyword SHIFTOUT=Y
+
+              But if your input is a Gaussian with the peak in the center, your
+              output wil not be Gaussian and the imaginary part is non-zero.
+              The reason is that the input is not a real-valued, symmetrical time
+              series because the peak is not at t=0.
+              We have to shift the peak of the Gaussian to time = 0 and wrap
+              around the shifted data for t < 0. The function that does this is
+              called ifftshift(A) and is executed if we set SHIFTIN=Y
+
+              From Gaussian with the peak in the center to Gaussian with the
+              peak in the center, use:
+
+              BOX=
+              IINSET=
+              INVERSE= n
+              OUTSET= gaussout
+              PHASEIN=
+              PHASEOUT=
+              RINSET= gaussin
+              SHIFTIN= y
+              SHIFTOUT= y
+
+              To get the original Gaussian back:
+
+              BOX=
+              IINSET= gaussout_imag
+              INVERSE= y
+              OUTSET= igauss
+              PHASEIN=
+              PHASEOUT=
+              RINSET= gaussout_real
+              SHIFTIN= y
+              SHIFTOUT= y
+
+             
+Notes:        If you shifted a transform and want to apply the inverse transform,
+              you should also set SHIFTIN=Y because the input is not the FFT but
+              the shifted FFT.
+                          
+
+Updates:      Jul 30, 2014: VOG, Document created.
+              
+#<

@@ -1,0 +1,43 @@
+
+Document:     tvdevices
+
+Purpose:      The file tvdevices, which resides in the gip_loc directory,
+              describes  the available tvdevices which can be used for
+              image display.
+
+Category:     SYSTEM SETUP
+
+Files:        tvdevices.doc
+
+Author:       K.G. Begeman
+
+Description:  The tv devices description consists of several fields,
+              separated by colons (:). The fields contain the
+              following information:
+              field          information
+                1            Name X display server. Usually the contents
+                             of the environment variable DISPLAY. Note
+                             that colons in the name have to be escaped
+                             by preceding it with a backslash.
+                2            Remote login (0 = No, 1 = Yes). 0 for
+                             X-terminals and workstations which do not
+                             run GIPSY, 1 for workstations which do run
+                             GIPSY. If 1 is chosen, the user must be able
+                             to do a remote login on the workstation, and
+                             GIPSY environment must be enables via the
+                             .cshrc.
+                3            Display server task (if any).
+                4            Display memory (kbytes).
+
+Example:      # Workstation copernicus (16MB memory)
+              copernicus\:0.0:1:$gip_exe/gids:8448
+              copernicus.astro.rug.nl\:0.0:1:$gip_exe/gids:8448
+              129.125.6.133\:0.0:1:$gip_exe/gids:8448
+              # X terminal pauwelkwak (3MB graphics memory)
+              pauwelkwak\:0.0:0:$gip_exe/gids:2048
+              pauwelkwak.astro.rug.nl\:0.0:0:$gip_exe/gids:2048
+              129.125.6.139\:0.0:0:$gip_exe/gids:2048
+
+Updates:      Aug 16, 1990: KGB, document created.
+              Jan 21, 1993: KGB, added some examples.
+

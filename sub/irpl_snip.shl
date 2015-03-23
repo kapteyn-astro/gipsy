@@ -1,0 +1,129 @@
+c@ subroutine IRPL_SNIP( character, double precision, integer, 
+c@			 integer, integer )
+c#>             irpl_snip.dc2
+c		
+c Subroutine:   IRPL_SNIP
+c 
+c Purpose:      snip a customplate out of plate system tapes
+c 
+c File:         irpl_snip.shl
+c 
+c Author:       Do Kester
+c 
+c Person resp.: Do Kester
+c 
+c Address:      guspace!do or rugfx4!do         (uucp)
+c 
+c Use: subroutine irpl_snip(
+c 	irds,		I	character*(*)
+c	size		I	doubleprecision(2)
+c	coor,		I	integer
+c	platenrs,	I	integer(nplates)
+c	nplates	)	I	integer 
+c
+c 	irds		the data structure containing the custom plate
+c	size		of the irds to build
+c 	coor		coordinate system  of the plate
+c 	platenrs	platenumbers overlapping the customplate
+c 	nplates		number of overlapping plates
+c 
+c Description:  
+c 
+c 
+c 
+c 
+c 
+c 
+c 
+c 
+c 
+c Externals:    
+c 
+c Updates:      900918	DK code
+
+	subroutine IRPL_SNIP( irds, size, coor, platenrs, nplates )
+
+	character*(*)	irds
+	integer		coor, nplates, platenrs(nplates)
+	doubleprecision	size(2)
+	character*40	instrument, object, coname, tapename, device
+	character*40	observer, irdsx, dummy
+	doubleprecision	center(2), oldsize(2)
+	integer		naxis, axes(4), firstf, lastf, skipf, files
+	real		epoch
+	integer		i, ierr, NELC, plate, nitem, USERCHAR
+	integer		mtid, MTOPEN, MTFSF, MTCLOSE, USERCHARU
+	logical		GDS_EXIST
+
+	data 	device	/ 'magtape' /
+
+	call IRDS_ENQUIRE( irds, object, instrument, naxis, axes,
+     #			center, oldsize, coname, epoch, ierr )
+
+c make scratch IRDS name and determine maximum length for this IRDS
+	irdsx = irds(:NELC( irds )) // 'SCR'
+	axes(2) = 16 * ( nint( sqrt( size(1)**2 + size(2)**2 ) ) + 2 )
+
+c loop over all plates
+	for i = 1, nplates
+	  plate = platenrs(i)
+
+c obtain a tape name instrument and plate
+c	  tapename = IRT_PL2TAPE( instrument, plate, 
+c     #			firstf, lastf, ierr )
+	  write( tapename, '(a,i3.3)' ) 'RIP', plate
+	  firstf = 1
+	  lastf = 999999
+
+c have the tape mounted
+	  call ANYOUT( 1, 'Please mount tape: ' // tapename )
+	  nitem = USERCHARU( dummy, 1, 1, 'MOUNTED=',
+     #		'D=dir/device; S=skip; Q=quit; Y=yes ' //
+     #		'when tape is ready [YES]' )
+	  call CANCEL( 'MOUNTED=' )
+	  if dummy(1:1) .eq. 'Q'
+	  then
+	    xfor
+	  else if dummy(1:1) .eq. 'D'
+	  then
+	    nitem = userchar( device, 1, 1, 'TAPE=', 
+     #		'Give magnetic tape device or directory [' //
+     #		device(:NELC( device ) ) // ']' )
+	  cif
+
+	  if dummy(1:1) .ne. 'S'
+	  then
+c open the tape unit with the plate tape mounted 
+	    mtid = MTOPEN( device )
+	    skipf = firstf - 1
+	    if MTFSF( mtid, skipf ) .ne. skipf
+	    then
+	      call ERROR( 3, 'Cannot skip' )
+	    cif
+
+c create a scratch IRDS; delete it first, just in case
+	    if GDS_EXIST( irdsx, ierr )
+	    then
+	      call IRDS_DELETE( irdsx, ierr )
+	    cif
+	    call IRDS_CREATE( irdsx, instrument, axes, center, size,
+     #			coname, epoch, object, observer, ierr )
+
+c snip the plate into a scratch IRDS
+	    files = lastf - skipf
+	    call IRPL_SNIPLATE( irdsx, instrument, mtid, files, plate,
+     #			coor, size, ierr )
+c merge the two IRDS's 
+	    call IRDS_MERGE( irdsx, irds, ierr )
+
+c close the tapeunit
+	    ierr = MTCLOSE( mtid )
+
+c delete the scratch IRDS
+	    call IRDS_DELETE( irdsx, ierr )
+	  cif
+
+	cfor
+
+	return
+	end

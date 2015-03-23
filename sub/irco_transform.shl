@@ -1,0 +1,838 @@
+c
+c	Copyright (c) Kapteyn Laboratorium Groningen 1991
+c	All Rights Reserved.
+c
+c@ subroutine irco_transform( double precision, integer, 
+c@                            double precision, integer, integer )
+c@ subroutine irco_connect( integer, integer )
+c@ subroutine irco_precess( integer, real, integer )
+c@ subroutine irco_newcoor( integer, double precision, double precision,
+c@                          double precision, character, integer )
+c@ subroutine irco_namepoch( integer, character, real )
+c@ subroutine irco_sunref( double precision )
+c@ subroutine irco_plate( integer, double precision, character, integer )
+
+        subroutine irco_transform( xyz1, coor1, xyz2, coor2, n )
+
+c       variables used in irco_transform
+        integer    	coor1, coor2, n
+	doubleprecision xyz1(3,n), xyz2(3,n)
+
+c	variables in irco_precess, irco_newcoor
+	integer		refcoor, newcoor
+	real		year, ct, et, ut
+	doubleprecision new_asc_node, pole_angle, ref_asc_node
+	character*(*)	newname
+	doubleprecision theta, zold, znew
+
+c       variables used in irco_coname
+        character*(*) 	word
+	real		epoch
+
+c       variables used in irco_sunref
+        doubleprecision PI, TWOPI, D2R, HALFPI, long, sunlong
+	parameter	( PI = 3.141592653589793238462643 )
+        parameter 	( TWOPI = 2 * PI, D2R = PI / 180 )
+	parameter	( HALFPI = PI * 0.5 )
+
+c       variables used in irco_plate
+        doubleprecision center(2)
+
+c  general declarations
+        integer 	i, j, k, izzz01, izzz02, izzz03, izzz04
+	integer		SERIOUS, MINOR
+	parameter	( SERIOUS = 3, MINOR = 2 )
+c  coordinate system numbers
+        integer 	kk, kk1, kk2, kf1, kf2, ksel, lastko
+c  matrix numbers
+        integer 	kmat, kmat1, kmat2, kfmat, newmat, lastmat
+c preset coordinate and matrix numbers 
+        integer 	KBAD, KEQU, KECL, KGAL, KSUP, KSUN, MEC2SR
+        parameter 	( KBAD = 0, KEQU = 1, KGAL = 2, KECL = 3,
+     &              	  KSUP = 4, KSUN = 5, MEC2SR = 6 )
+c number of coordinate systems and matrices
+        integer 	KONUM, MATNUM, FREENUM, NRMATS, NRKOS, NAMLEN
+        parameter  	( KONUM = 10, MATNUM = 20, NRMATS = 6 )
+        parameter  	( NRKOS = 5, FREENUM = (MATNUM - NRMATS)*9 )
+	parameter	( NAMLEN = 15 )
+c to be passed from one entry point to another
+        character*(NAMLEN)  	names(0:KONUM)
+        doubleprecision mats(3,3,0:MATNUM)
+        integer		connect(KONUM,KONUM)
+	real		epochs(0:KONUM)
+        save            names, epochs, mats, connect
+
+c  entry point context
+        integer 	MDTRAN, MDWORD, MDNEWC, MDPLAT, MDSUNR, MDPREC
+        parameter 	( MDTRAN = 1, MDWORD = 4 , MDPLAT = 6, 
+     #			  MDSUNR = 5, MDPREC = 2 , MDNEWC = 3 )
+	integer		modul
+
+	data epochs / 0.0, 2000.0, 0.0, 2000.0, 7 * 0.0 /
+        data names  / ' ', 
+     #       'EQUATORIAL     ', 
+     #       'GALACTIC       ', 
+     #       'ECLIPTIC       ',
+     #	     'SUPER GALACTIC ', 
+     #       'SUN REFERENCED ', 
+     #   5 * '               ' /
+
+c     Suppose a transformation from k1 to k2 is requested.
+c     The matrix CONNECT returns the index KMAT of the 
+c     transformation matrix at position connect(k1,k2). 
+c     The transformation matrix mats(1,1,abs( kmat )) describes the 
+c     conversion k1 -> k2, if kmat > 0
+c     otherwise it describes the conversion k2 -> k1. The transpose
+c     of mats(1,1,abs( kmat )) gives the inverse.
+c     upon initialisation, only 6 matrices are present; all others
+c     point to the identity matrix mats(1,1,0)
+
+        data 	connect / 0,  1,  2,  3,  4, 5 * 0,
+     #			 -1,  0,  0,  5,  0, 5 * 0,
+     #			 -2,  0,  0,  0,  6, 5 * 0,
+     #			 -3, -5,  0,  0,  0, 5 * 0,
+     #			 -4,  0, -6,  0,  0, 5 * 0,
+     #			 50 * 0 /
+c define the last implemented matrix and coordinate number
+	data	lastmat, lastko / NRMATS, NRKOS /
+
+c - identity
+        data (( mats (i,j, 0), i = 1, 3 ), j = 1, 3 ) /
+     &  1.0, 0.0, 0.0,
+     &  0.0, 1.0, 0.0,
+     &  0.0, 0.0, 1.0 /
+
+c - EQUatorial -> GALactic
+c the GAL system is defined w.r.t. EQU(1950) by 
+c poledist = 62.6; ref_asc_node = 282.25; new_asc_node = 33.0
+c (Allen, Astroph. Quantities 3rd Ed. 1973)
+c It is precessed to EQU(2000).
+        data (( mats (i,j, 1), i = 1, 3 ), j = 1, 3 ) /
+     #  -0.054877869280081, -0.873436953314947, -0.483835000849650,
+     #   0.494108219350561, -0.444830930981444,  0.746982269141912,
+     #  -0.867666691208955, -0.198074055408790,  0.455983751399564 /
+
+c - EQUatorial -> ECLiptic  ( e = 23d26m21s448, Lieske et al. 1977 )
+        data (( mats (i,j, 2), i = 1, 3 ), j = 1, 3 ) /
+     &  +1.0,          0.0,                0.0,
+     &  +0.0,         +0.917482063337445, +0.397777153006636,
+     &  +0.0,         -0.397777153006636, +0.917482063337445 /
+
+c - EQUatorial -> SUPergalactic
+c formed by (EQU->GAL) * (GAL->SUP)
+	data (( mats (i,j, 3), i = 1, 3 ), j = 1, 3 ) /
+     #   0.375016364111487,  0.341357962894957,  0.861880193424124,
+     #  -0.898320726319255, -0.095724730349861,  0.428785084470872,
+     #   0.228872452064130, -0.935046264720442,  0.270750592831302 /
+
+c - EQUatorial -> SUNreferenced (default sun at 0.0 long)
+c formed by (EQU->ECL) * (ECL->SUN)
+        data (( mats (i,j, 4), i = 1, 3 ), j = 1, 3 ) /
+     &  +0.0,         -0.397777153006636, +0.917482063337445,
+     &  +0.0,         -0.917482063337445, -0.397777153006636,
+     &  +1.0,          0.0,                0.0               /
+
+c - GALactic -> ECLiptic  (not filled in)
+
+c - GALactic -> SUPergalactic
+c the SUP system is defined w.r.t. GAL by 
+c poledist = 83.68; ref_asc_node = 137.37; new_asc_node = 0.0
+c (de Vaucouleurs, 2nd Ref. Cat. of Galaxies)
+        data (( mats (i,j, 5), i = 1, 3 ), j = 1, 3 ) /
+     #  -0.735742562226028,  0.677261310078377,  0.000000000000000,
+     #  -0.074553787485069, -0.080991478195575,  0.993922589154370,
+     #   0.673145314847182,  0.731271152398764,  0.110081273469528 /
+
+c - GALactic -> SUNreferenced  (not filled in)
+
+c - ECLiptic -> SUPergalactic  (not filled in)
+
+c - ECLiptic -> SUNreferenced  (pole at the sun; origin at pole)
+        data (( mats (i,j, 6), i = 1, 3 ), j = 1, 3 ) /
+     &  0.0,  0.0, 1.0,
+     &  0.0, -1.0, 0.0,
+     &  1.0,  0.0, 0.0 /
+
+c - SUPergalactic -> SUNreferenced  (not filled in)
+
+c - FREE
+        data ((( mats (i,j,k), i = 1, 3 ), j = 1, 3 ),
+     #           k = NRMATS+1, MATNUM ) / FREENUM * 0.0 /
+
+
+c**********************************************************
+c#>             irco_transform.dc2
+c Subroutine:   IRCO_TRANSFORM
+c 
+c Purpose:      Transform between coordinate systems
+c 
+c Category	WORLD COORDINATES, IRAS
+c
+c File:         irco.shl
+c 
+c Author:       Do Kester
+c 
+c Person resp.: Do Kester
+c 
+c Address:      guspace!do or rugfx4!do         (uucp)
+c 
+c Use: call irco_transform(
+c	xyz1,		I	double precision array(3,n)
+c 	coor1,		I	integer
+c 	xyz2,		O	double precision array(3,n)
+c 	coor2,		I	integer
+c 	n )		I	integer
+c 		
+c       xyz1     vectors to be transformed                    
+c       coor1    coordinate system in which XYZ1 are given    
+c       coor2    desired coordinate system                    
+c       n        number of vectors to be transformed          
+c       xyz2     vectors in system coor2
+c 		
+c Description:  
+c 	The vectors in XYZ1 and XYZ2 are three-dimensional unit vectors.
+c 	The vectors XYZ1 which are in coordinate system COOR1 are
+c 	transformed into vectors XYZ2 in coordinate system COOR2 by
+c 	multiplication with a transformation matrix. The matrix is
+c 	either given in advance (COORn <= 5), or it has to be (re)defined
+c 	using the routines IRCO_NEWCOOR, IRCO_PRECESS or IRCO_PLATE.
+c 
+c 	It is allowed that XYZ1 and XYZ2 are the same array.
+c 	It is not essential that XYZ1 are unit vectors; they will 
+c	retain their length upon transformation.
+c Externals:    
+c 
+c Updates:      850624 Albrecht de Jonge, original code
+c		900424 DK, documentation and rewrite
+c#<
+
+c start of subroutine IRCO_TRANSFORM( xyz1, coor1, xyz2, coor2, n )
+
+        modul = MDTRAN
+c check validity of coordinate numbers
+        kk = coor1
+        perform KO_CHECK
+        kk1 = kk
+        kk = coor2
+        perform KO_CHECK
+        kk2 = kk
+
+n select conversion matrix
+        perform MATRIX_SELECT
+        call MATVEC_PRODUCT( mats(1,1,kmat), xyz1, xyz2, n )
+
+c	print '(3(a,i4))', 'matrixnr', kmat, ' van', kk1, ' naar', kf2
+c	print '(3f10.4)', (( mats(i,k,kmat), i=1,3 ), k=1,3 )
+
+        return
+
+c***********************************************************
+c#>             irco_connect.dc2
+c Subroutine:   IRCO_CONNECT
+c 
+c Purpose:      connect two coordinate systems
+c 
+c Category	WORLD COORDINATES, IRAS
+c
+c File:         irco.shl
+c 
+c Author:       Do Kester
+c 
+c Person resp.: Do Kester
+c 
+c Address:      guspace!do or rugfx4!do         (uucp)
+c 
+c Use: call irco_connect(
+c 	coor1  	I  	integer 
+c 	coor2  	I 	integer )
+c 
+c 	coor1, coor2	two coordinate system to be connected
+c Description:  
+c 	A connection is made between the coordinate systems COOR1 and 
+c 	COOR2 if an intermediate system (e.g. K) is present.
+c	  (COOR1->COOR2) = (COOR1->K) * (K->COOR2)
+c	
+c Updates:      19 june 1990 DK
+c#<
+
+	entry irco_connect( coor1, coor2 )
+
+c check validity of coordinate numbers
+        kk = coor1
+        perform KO_CHECK
+        kk1 = kk
+        kk = coor2
+        perform KO_CHECK
+        kk2 = kk
+
+c select conversion matrix
+        perform MATRIX_SELECT
+
+	return
+	
+c***********************************************************
+c#>             irco_precess.dc2
+c Subroutine:   IRCO_PRECESS
+c 
+c Purpose:      precess a coordinate system
+c 
+c Category	WORLD COORDINATES, IRAS
+c
+c File:         irco.shl
+c 
+c Author:       Do Kester
+c 
+c Person resp.: Do Kester
+c 
+c Address:      guspace!do or rugfx4!do         (uucp)
+c 
+c Use: call irco_precess(
+c 	refcoor  	I  	integer 
+c 	year		I  	real
+c 	newcoor  	I/O 	integer )
+c 
+c 	refcoor	reference coordinate system
+c 	year	year to precess to
+c 	newcoor input: 0 => output: free coordinate number
+c		otherwise   output = input
+c Description:  
+c 	Precession can be applied to the coordinate systems Equatorial
+c 	and Ecliptic (numbers 1 and 3). YEAR is the year to precess
+c	to e.g. 1950.0
+c	The name of the system will be adjusted to the new epoch.
+c
+c 	If NEWCOOR equals REFCOOR all transformation matrices
+c 	that referred to REFCOOR will be precessed. If NEWCOOR
+c	is 0 upon entry, a free coordinate number will be returned,
+c	or 0 if none is available any more.
+c 	Upon output NEWCOOR contains the number of the precessed system. 
+c
+c	Note that if NEWCOOR equals REFCOOR subsequent precessions
+c	will be with respect to the last result and more importantly
+c	errors will accumulate in the process.
+c
+c	The connection to coordinate system nr 1 is always made, so that
+c	all connections with other systems will be present in one or
+c	two steps.
+c
+c Reference: Lieske etal. Astron & Astrophys. (1977) 58 p.1 - 16.
+c
+c Externals:    
+c 
+c Updates:      5 jan 1990 DK, documentation only
+c		17 DEC 1990 DK, make always connection with system nr 1
+c#<
+
+	entry IRCO_PRECESS( refcoor, year, newcoor )
+
+c ct 	is the difference in (tropical) centuries between present epoch and
+c 	the nul-epoch of the (numerical) system. (ct is 'T' in Lieske etal.)
+c ut 	is the difference in (tropical) centuries between the new system and
+c 	the present epoch. (ut is 't' in Lieske etal.)
+c theta is the angle between the poles of old and new system.
+c	( Lieske: theta for equatorial; pi for ecliptic )
+c zold  is zeta for equatorial and 90 - PI for ecliptic (Lieske).
+c       90 - zold is longitude of the ascending node in the old system 
+c znew  is z for equatorial and LAMBDA - 90 for ecliptic (Lieske).
+c       90 + znew is the longitude of the same node in the new system 
+c obliq is the obliquity of the ecliptic or the angle between the poles
+c 	( epsilon in Lieske )
+
+	if names(refcoor)(:3) .ne. 'EQU' .and. 
+     #     names(refcoor)(:3) .ne. 'ECL'
+	then
+	  call ERROR( 3, 'Cannot precess system called ' // 
+     #                   names(refcoor) )
+	  return
+	cif
+	  
+	et = epochs(refcoor)
+	ct = ( et - 2000 ) / 100
+	ut = ( year - et ) / 100
+	if names(refcoor)(:3) .eq. 'EQU'
+	then
+	  theta = D2R *
+     #    ut * ( 0.556753028 + ct * (-2.370278e-4 - ct * 6.0278e-8 ) +
+     #    ut * (-1.185139e-4 - ct * 6.0278e-8 ) - ut * 0.1162028e-4 )
+	  zold = D2R * ( 
+     #    ut * ( 0.640616139 + ct * ( 3.87933e-4 - ct * 3.861e-8 ) +
+     #    ut * ( 0.83856e-4 - ct * 9.583e-8 ) + ut * 4.9994e-6 ) )
+	  znew = D2R * ( 
+     #    ut * ( 0.640616139 + ct * ( 3.87933e-4 - ct * 3.861e-8 ) +
+     #    ut * ( 3.04078e-4 + ct * 1.833e-8 ) + ut * 5.05639e-6 ) )
+	cif
+
+	if names(refcoor)(:3) .eq. 'ECL'
+	then
+	  theta = D2R *
+     #    ut * ( 0.013056361 + ct * (-0.1834167e-4 + ct * 0.16611e-6 ) +
+     #	  ut * (-9.17222e-6 + ct * 0.16611e-6 + ut * 1.667e-8 ) )
+	  zold = D2R * ( 174.876383889 + 
+     #	  ct * ( 0.913744139 + ct * 1.68394e-4 ) +
+     #    ut * (-0.241613583 - ct * 1.40253e-4 + ut * 9.8222e-6 ) )
+	  znew = zold + D2R *
+     #	  ut * ( 1.396971278 + ct * ( 6.172944e-4 - ct * 1.1667e-8 ) +
+     #    ut * ( 3.086472e-4 - ct * 1.1667e-8 - ut * 0.1667e-8 ) )
+	  zold = HALFPI - zold
+	  znew = znew - HALFPI
+c	  obliq = d2r * ( 23.43929111 +
+c     #	  ct * (-0.013004167 + ct * (-0.16389e-6 + ct * 0.50361e-6 ) ) +
+c     #    ut * (-0.013004167 + ct * (-0.325e-6 + ct * 0.151083e-6 ) +
+c     #    ut * (-0.16389e-6 + ct * 0.151083e-6 ) + ut * 0.50361e-6 ) )
+	cif
+
+	perform NEWNUMBER
+	call IRCO_TRANSMAT( zold, theta, znew, mats(1,1,newmat) )
+
+	connect(refcoor,newcoor) = newmat
+	connect(newcoor,refcoor) =-newmat
+	epochs(newcoor) = year
+	names(newcoor) = names(refcoor)
+
+c fill in the connected matrices
+	kf1 = newcoor
+	kf2 = refcoor
+	perform MATRIX_FILL
+
+c make the connection with system nr 1
+	kk1 = kf1
+	kk2 = KEQU
+	perform MATRIX_SELECT
+
+	return
+
+c***********************************************************
+c#>             irco_newcoor.dc2
+c Subroutine:   IRCO_NEWCOOR
+c 
+c Purpose:      introduce a new coordinate system
+c 
+c Category	WORLD COORDINATES, IRAS
+c
+c File:         irco.shl
+c 
+c Author:       Do Kester
+c 
+c Person resp.: Do Kester
+c 
+c Address:      guspace!do or rugfx4!do         (uucp)
+c 
+c Use: call irco_newcoor(
+c 	refcoor  	I  	integer 
+c 	pole_angle	I  	doubleprecision
+c	ref_asc_node 	I  	doubleprecision
+c	new_asc_node 	I  	doubleprecision
+c	newname		I	character*(*)
+c 	newcoor  	I/O 	integer )
+c 
+c 	refcoor		reference coordinate system; see below.
+c 	pole_angle	angle between the poles of the systems
+c	ref_asc_node	longitude of asc.node in reference system
+c	new_asc_node	longitude of asc.node in new system
+c	newname		to be assigned to the new system
+c 	newcoor input: 0 => output: free coordinate number
+c		otherwise   output = input
+c Description:  
+c 	A new coordinate system will be created, defined with
+c 	respect to REFCOOR. Three angles are necessary to
+c 	define the new system: the distance between the north poles,
+c 	and the longitude of the ascending node in both the reference
+c	and the new system. The angles are given in radians.
+c	No epoch will be assigned to the new system which means
+c	that the system can not be precessed.
+c
+c 	If NEWCOOR equals REFCOOR or another existing coordinate number,
+c	all existing transformation matrices that referred to that 
+c	coordinate number will be overwritten. If NEWCOOR
+c	is 0 upon entry, a free coordinate number will be returned,
+c	or 0 if none is available any more.
+c 	Upon output NEWCOOR contains the number of the new system.
+c
+c	The connection to coordinate system nr 1 is always made, so that
+c	all connections with other systems will be present in one or
+c	two steps.
+c
+c Externals:    
+c 
+c Updates:      5 jan 1990 DK, documentation only
+c		17 DEC 1990 DK, make always connection with system nr 1
+c#<
+
+	entry IRCO_NEWCOOR( refcoor, pole_angle, ref_asc_node,
+     #		new_asc_node, newname, newcoor )
+
+c get a coordinate number and a matrix number
+	perform NEWNUMBER
+c make the transformation matrix
+	zold = HALFPI - ref_asc_node
+	znew = new_asc_node - HALFPI
+	theta = pole_angle
+	call IRCO_TRANSMAT( zold, theta, znew, mats(1,1,newmat) )
+
+	connect(refcoor,newcoor) = newmat
+	connect(newcoor,refcoor) = -newmat
+c assign the name and epoch
+	names(newcoor) = newname
+	epochs(newcoor) = 0.0
+
+c make the connection with system nr 1
+	kk1 = newcoor
+	kk2 = KEQU
+	perform MATRIX_SELECT
+
+	return
+
+
+c***********************************************************
+c#>             irco_namepoch.dc2
+c Subroutine:   IRCO_NAMEPOCH
+c 
+c Purpose:      returns name and epoch of a coordinate system
+c 
+c Category	WORLD COORDINATES, IRAS
+c
+c File:         irco.shl
+c 
+c Author:       Do Kester
+c 
+c Person resp.: Do Kester
+c 
+c Address:      guspace!do or rugfx4!do         (uucp)
+c 
+c Use: call irco_namepoch(
+c 	coor1  	I  	integer 
+c 	name    O       character*(*)
+c       epoch ) O       real
+c 
+c 	coor1	coordinate system
+c	name	the name of the system
+c	epoch	the epoch of the system ( zero if non-applicable )
+c
+c Description:  
+c 	For the system given with COOR1 the name and the epoch 
+c 	are returned
+c	The predefined systems are numbered as follows:
+c	  1	Equatorial	2000
+c	  2	Galactic
+c	  3	Ecliptic	2000
+c	  4	Supergalactic
+c	  5	Sunreferenced	sun at eclon = 0
+c	
+c Updates:      19 june 1990 DK
+c#<
+
+        entry IRCO_NAMEPOCH( coor1, word, epoch )
+
+        modul = MDWORD
+        kk = coor1
+        perform KO_CHECK
+        word = names(kk)
+	epoch = epochs(kk)
+
+        return
+
+c***********************************************************
+c#>             irco_sunref.dc2
+c Subroutine:   IRCO_SUNREF
+c 
+c Purpose:      construct a sunreferenced coordinate system
+c 
+c Category	WORLD COORDINATES, IRAS
+c
+c File:         irco.shl
+c 
+c Author:       Do Kester
+c 
+c Person resp.: Do Kester
+c 
+c Address:      guspace!do or rugfx4!do         (uucp)
+c 
+c Use: call irco_sunref(
+c 	sunlong )	I  	doubleprecision
+c 
+c 	sunlong	longitude of the sun
+c
+c Description:  
+c 	A sunreferenced coordinate system will be created with
+c 	respect to the present ecliptic coordinate system.
+c	SUNLONG is the angular distance of the sun to the 
+c	first-point-of-aries i.e. the ecliptic longitude of
+c	the sun.
+c 	All transformation matrices pertaining to the 
+c 	sunreferenced system will be overwritten with 
+c	matrices referring to this solar longitude.
+c	
+c Externals:    
+c 
+c Updates:      25 Apr 1990 DK, documentation only
+c		10 Oct 1990 DK, fill in connect with the proper systems
+c		26 Nov 1990 DK, sunlong is stored as epoch in radians
+c#<
+
+        entry IRCO_SUNREF( sunlong )
+
+        modul = MDSUNR
+        long = sunlong - int ( sunlong / TWOPI ) * TWOPI
+	epochs(KSUN) = long
+
+c oldlong = sunlong + 90; zold == 90 - oldlong ( see IRCO_TRANSMAT )
+c newlong = -90; znew == newlong - 90 ( see IRCO_TRANSMAT )
+	zold = - sunlong
+	theta = HALFPI
+	znew = -PI
+
+	newmat = MEC2SR
+	connect(KECL,KSUN) = newmat
+	connect(KSUN,KECL) =-newmat
+	call IRCO_TRANSMAT( zold, theta, znew, mats(1,1,newmat) )
+
+c  set remaining matrices
+        kf1 = KSUN
+        kf2 = KECL
+        perform MATRIX_FILL
+
+        return
+
+c*********************************************************
+c#>             irco_plate.dc2
+c Subroutine:   IRCO_PLATE
+c 
+c Purpose:      construct a plate coordinate system
+c 
+c Category	WORLD COORDINATES, IRAS
+c
+c File:         irco.shl
+c 
+c Author:       Do Kester
+c 
+c Person resp.: Do Kester
+c 
+c Address:      guspace!do or rugfx4!do         (uucp)
+c 
+c Use: call irco_plate(
+c 	refcoor  	I  	integer 
+c 	center		I  	doubleprecision array(2)
+c	name		I	character*(*)
+c 	newcoor  	I/O 	integer )
+c 
+c 	refcoor		reference coordinate system
+c 	center		longitude and latitude of the plate
+c	name		of the new system
+c 	newcoor input: 0 => output: free coordinate number
+c		otherwise   output = input
+c Description:  
+c 	A plate coordinate system will be created, defined with
+c 	respect to REFCOOR. Two angles are necessary to
+c 	define the new system: the longitude and the latitude
+c 	of the plate with respect to the reference system.
+c	The angles are given in radians. The plate system will
+c 	be aligned north-south along the meridian of the reference
+c	system running through the center of the plate.
+c	The central point of the plate has vector (1,0,0).
+c
+c 	It is not allowed for NEWCOOR to be the same as REFCOOR.
+c	If NEWCOOR is 0 upon entry, a free coordinate number will 
+c	be returned, or 0 if none is available any more.
+c 	Upon output NEWCOOR contains the number of the new system.
+c
+c	The connection to coordinate system nr 1 is always made, so that
+c	all connections with other systems will be present in one or
+c	two steps.
+c
+c Externals:    
+c 
+c Updates:      5 May 1990 DK, documentation only
+c		17 DEC 1990 DK, make always connection with system nr 1
+c#<
+
+        entry IRCO_PLATE( refcoor, center, newname, newcoor )
+
+        modul = MDPLAT
+	if newcoor .eq. refcoor
+	then
+	  call ERROR( SERIOUS, 'It is not allowed to overwrite the '//
+     #		'reference system with the plate system.' )
+	  return
+	cif
+        kk = refcoor
+        perform KO_CHECK
+
+	perform NEWNUMBER
+        names(newcoor) = newname
+	epochs(newcoor) = 0.0
+	connect(refcoor,newcoor) = newmat
+	connect(newcoor,refcoor) =-newmat
+
+c the the center of the new plate will be at lon=0 and lat=0, xyz=(1,0,0).
+c It is oriented with the longitudinal meridian in the y-direction
+c and with the latitudinal meridian in the z-direction
+c The old long is at center(1) - 90; zold == 90 - oldlong  ( see IRCO_TRANSMAT )
+c     => zold = 180 - center(1)
+c The new long is at -90; znew == newlong - 90 ( see IRCO_TRANSMAT )
+c     => znew = -180
+
+	theta = center(2)
+	zold = PI - center(1)
+	znew = -PI
+	call IRCO_TRANSMAT( zold, theta, znew, mats(1,1,newmat) )
+
+c  fill remaining matrices
+        kf1 = newcoor
+        kf2 = kk
+        perform MATRIX_FILL
+
+c make the connection with system nr 1
+	kk1 = kf1
+	kk2 = KEQU
+	perform MATRIX_SELECT
+
+        return
+
+c*******PROCEDURES*****************************************************
+
+	proc NEWNUMBER
+
+	  if newcoor .eq. refcoor
+	  then
+c temporary store in MATNUM ( see MATRIX_FILL )
+	    newmat = MATNUM
+	  else
+	    if newcoor .eq. 0
+	    then
+c select a new coordinate number
+	      lastko = lastko + 1
+	      if lastko .le. KONUM
+	      then
+	        newcoor = lastko
+	      else
+	        call ERROR( SERIOUS, 'Too many coordinate systems.'
+     #		// ' Ask expert help.' )
+	      cif
+	    cif
+	    newmat = abs( connect(refcoor,newcoor) )
+	    if newmat .eq. 0
+	    then
+c select a new matrix number
+	      lastmat = lastmat + 1
+	      if lastmat .lt. MATNUM
+	      then
+	        newmat = lastmat
+	      else
+	        call ERROR( SERIOUS, 'Too many coordinate '
+     #		// 'transformation matrices. Ask expert help.' )
+	      cif
+	    cif
+	  cif
+
+	cproc	  	  
+
+c****************************************************************
+
+        proc MATRIX_FILL
+
+c we want conversions for all systems connected with kf1 (=newcoor)
+
+	  kk1 = 0
+	  kk2 = kf2
+	  while kk1 .lt. lastko
+	    kk1 = kk1 + 1
+	    kfmat = abs( connect(kk1,kf1) )
+	    if kfmat .ne. 0 .and. kk1 .ne. kk2
+	    then
+c put them in the proper order
+	      call IRCO_TRANSPOSE( mats(1,1,kfmat), KONUM,
+     #                          connect, kk1, kf1 )
+	      perform MATRIX_SELECT
+
+c newmat is the matrix for kf2->kf1; kmat is for kk1->kf2
+c then mats(=,=,newmat) * mats(=,=,kmat) gives kk1->kf1,
+c which is stored in kfmat, the original connection between kf1 and kk1
+              call MATVEC_PRODUCT( mats(1,1,newmat),
+     &                mats(1,1,kmat), mats(1,1,kfmat), 3 )
+
+c	print '(3(a,i4))', 'matrixnr', newmat, ' van', kf2, ' naar', kf1
+c	print '(3f10.4)', (( mats(i,k,newmat), i=1,3 ), k=1,3 )
+c	print '(3(a,i4))', 'matrixnr', kmat, ' van', kk1, ' naar', kf2
+c	print '(3f10.4)', (( mats(i,k,kmat), i=1,3 ), k=1,3 )
+c	print '(3(a,i4))', 'matrixnr', kfmat, ' van', kk1, ' naar', kf1
+c	print '(3f10.4)', (( mats(i,k,kfmat), i=1,3 ), k=1,3 )
+
+	    cif
+          cwhile
+
+c	print '(10i4)', connect
+
+c restore identity if kf1 == kf2
+	  if kf1 .eq. kf2
+	  then
+	    connect(kf1,kf2) = 0
+	  cif
+        cproc
+
+c****************************************************************
+
+        proc MATRIX_SELECT
+
+c set mats(i,j,kmat) for conversion kk1->kk2
+          if kk1 .eq. kk2
+          then
+c identity 
+             kmat = 0
+          else
+             kmat = abs( connect(kk1,kk2) )
+	     if kmat .ne. 0
+	     then
+c there is a direct transformation: transpose if necessary
+	       call IRCO_TRANSPOSE( mats(1,1,kmat), KONUM, 
+     #                         connect, kk1, kk2 )
+	     else 
+c there is no direct transformation: search a two-step possibility
+	       for ksel = 1, KONUM
+	         kmat1 = abs( connect(kk1,ksel) )
+		 kmat2 = abs( connect(ksel,kk2) )
+		 if kmat1 .ne. 0 .and. kmat2 .ne. 0
+		 then
+c a two-step transformation via ksel is found: make it a direct one
+		   call IRCO_TRANSPOSE( mats(1,1,kmat1), KONUM, 
+     #				   connect, kk1, ksel )
+		   call IRCO_TRANSPOSE( mats(1,1,kmat2), KONUM, 
+     #				   connect, ksel, kk2 )
+		   lastmat = lastmat + 1
+		   kmat = lastmat
+		   connect(kk1,kk2) = kmat
+		   connect(kk2,kk1) = -kmat
+		   call MATVEC_PRODUCT( mats(1,1,kmat2),
+     #			mats(1,1,kmat1), mats(1,1,kmat), 3 )
+		   xfor
+		 cif
+	         if ksel .eq. KONUM
+		 then
+		   call ERROR( SERIOUS,
+     #               'connection between systems is not present' )
+		 cif
+	       cfor
+             cif
+          cif
+
+        cproc
+
+c****************************************************************
+
+        proc KO_CHECK
+          if kk .le. 0 .or. kk .gt. lastko
+          then
+            if modul .eq. MDWORD
+            then
+              kk = KBAD
+            else
+              kk = KEQU
+              call ERROR( MINOR, 
+     &          'Illegal coordinate system, system nr 1 assumed')
+            cif
+          cif
+        cproc
+
+        end
+
+c*******TRANSPOSE**********************************************
+

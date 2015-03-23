@@ -1,0 +1,56 @@
+
+Document:     lpdevices
+
+Purpose:      The file lpdevices, which resides in the gip_loc directory,
+              describes the available printers which can be used for
+              printing by GIPSY applications.
+
+Category:     SYSTEM SETUP
+
+Files:        lpdevices.doc
+
+Author:       K.G. Begeman
+
+Description:  The printer description consistsof several fields,
+              separated by colons (:). The fields contain the
+              following information:
+              field          information
+                1            Name of host or list of hosts (separated
+                             by comma's) or and asterix (*) if printer
+                             is for all possible hosts.
+                2            Name of print device. The first device
+                             available on the host will be the
+                             default printer.
+                3            Text string containing info about
+                             printer
+                4            C format string so as to form a legal
+                             command which will print the file (like
+                             lpr -Ptext %s). If the command starts with
+                             a dollar sign ($), the print command is
+                             executed by HERMES. Then the C format string
+                             should look like:
+                             $ @gip_exe:spooler "print %s" %d %s
+                             (see spooler.doc)
+                5            Number of columns on print device.
+                6            Number of rows on print device.
+
+Example:      # lineprinter
+              brahe,\
+              copernicus,\
+              galilei,\
+              kepler,\
+              rugfx4,\
+              ptolemeus:lineprinter:Printer in room ZG170:lpr -Pline %s:132:60
+              huygens,\
+              messier,\
+              shapley,\
+              zanstra:lineprinter:Printer in room ZG170:lp -s -dline %s:132:60
+              afrodite,\
+              gaia,\
+              guspace,\
+              hades,\
+              hermes:lineprinter:Printer in room ZG92A:lpr %s:158:60
+              spica:lineprinter:Printer in room ZG92A:lp -s %s:158:60
+
+Updates:      Aug 16, 1990: KGB, document created.
+              Jan 21, 1993: KGB, example added.

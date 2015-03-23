@@ -1,0 +1,55 @@
+
+c@ subroutine irco_torect( double precision, double precision, 
+c@			   double precision, integer )
+c
+c#>             irco_torect.dc2
+c Subroutine:	IRCO_TORECT.
+c
+c Purpose:	Transform from spherical to rectangular coordinates.
+c
+c Category	WORLD COORDINATES, IRAS
+c
+c File:		irco.shl
+c
+c Author:	85 Jul 17 Uwe Peppel.
+c
+c Use:
+c	call IRCO_TORECT (
+c		lon, lat  I	doubleprecision arrays (n),
+c		xyz	  O	doubleprecision array (3,n),
+c		n 	  I	integer.
+c		)
+c	lon, lat (in radian:) longitudes and latitudes,
+c	xyz	 rectangular coordinates,
+c	n	 number of coordinates to transform.
+c Description:
+c	Transformation according to:
+c		x = cos(lat) * cos(lon),
+c 		y = cos(lat) * sin(lon),
+c		z = sin(lat).
+c	In this module (psi, theta) is not applicable, use:
+c	call IRCO_TORECT ( psi, pi/2 - theta, xyz, n) !!
+c Updates:
+c	90 Apr 24 Sjag Steensma; documentation changed, n-coordinates,
+c	87 May 25 Timo Prusti; unification of versions,
+c	87 May 25 Romke Bontekoe; documentation changed.
+c#<
+
+	subroutine IRCO_TORECT ( lon, lat, xyz, n )
+
+	doubleprecision lon(n), lat(n), xyz(3,n)
+	integer		n
+	
+	doubleprecision coslat
+	integer		i
+	
+	for i = 1, n
+	  coslat = dcos( lat(i) )
+	  xyz(1,i) = coslat * dcos( lon(i) )
+	  xyz(2,i) = coslat * dsin( lon(i) )
+	  xyz(3,i) = dsin( lat(i) )
+	cfor
+	
+	return
+	end
+

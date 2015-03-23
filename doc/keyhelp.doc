@@ -1,0 +1,527 @@
+>UPDATESECTION
+
+Purpose:      File for Hermes prompt help
+              
+Files:        keyhelp.doc
+
+Author:       M. Vogelaar
+
+Updates:      Jun 10, 1993: VOG, Document created.
+              Sep 15, 1994: JPT, Reflect number input improvements.
+
+Description:
+
+# Format of the prompt help file:
+#
+# The section header consists of one or more lines in one of the following
+# formats:
+#                                examples
+#
+#   >keyword                     INSET=,  *SET= ("wildcarding")
+#   >taskname.keyword            FFT.RINSET= 
+#                                (wildcarding also allowed)
+#
+# The 'keyword' need not to end in an equals sign (=). A section without an 
+# equal sign can be useful as the text of a reference.
+#
+# References can occur anywhere in the text of the body. The format of a 
+# reference is as follows:
+#
+#   %%text%section name%
+#
+# The "text" part is copied to the window without any change. Hermes will append
+# it with the code to be typed to obtain the referenced text. The section name 
+# is not displayed.
+#
+#================================================================================
+
+
+>*BOX=
+       INPUT FOR BOX RELATED KEYWORDS
+       ==============================
+ BOX= <lower position> <upper position>
+                  or: 
+ BOX= [<centre position>] D <size>
+  
+ For a two dimensional RA-DEC plane:
+
+ BOX=-64 -64 63 63  Box between (RA,DEC)=(-64,-64) and (63,63)
+ BOX=0 0 D 7 6      Box between (-3,-2) and (RA,DEC)=(3,3), the 
+                    central position is (0,0), size is 7x6
+ BOX=D 7 6 CPOS=0 0 Same as above
+ BOX=PC D 4 4       Box with sizes 4x4 centered at the 
+                    Projection Centre
+
+ A 2-dim plane with axes in galactic coordinates:
+
+ BOX=G 56.7 G 9.89 D 12 ARCSEC 10 ARCSEC
+                    Box with size 12x10 seconds of arc centered
+                    at 56.7 galactic longitude and 9.89 
+                    latitude 
+
+ See also %%BOX SYNTAX%BOXSYNTAX% and %%POSITIONS INPUT%*POS=%
+#================================================================================
+
+>BOXSYNTAX
+       INPUT SYNTAX FOR BOX RELATED KEYWORDS
+       =====================================
+ BOX= <lower position> <upper position>
+                  or: 
+ BOX= [<centre position>] D <size>
+
+ The positions are n-dim vectors and n is the dimension of the specified subset.
+If only the size is given, you will be prompted with the CPOS= keyword.
+There are two symbols indicating a position: PC is the vector that represents
+the Projection Centre and AC is the vector that represents the Axis Centre.
+ For the input of (physical) positions see: %%POSITIONS %*POS=%
+#================================================================================
+
+>*POS=
+>POSITION=
+       INPUT FOR POSITION RELATED KEYWORDS (POS=,CPOS=,POSITION=)
+       ==========================================================
+ Examples:
+
+ A two dimensional subset with axes RA and DEC:
+ POS=10 5            Grid (RA,DEC)=(10,5)
+ POS=U 45.8 U 20.02  Phys. coord. at RA=45.8, DEC=20.02 in
+                     units of the RA, DEC axes.
+ POS=PC              RA, DEC of projection centre
+ POS=AC              RA, DEC of axis centre
+
+ Spatial coordinates:
+ POS=* 10 12 8 * -67 8 9.6 
+ (RA=10h12m8s, DEC=-67d8m9.6s in epoch of set)
+  
+ POS=*2000.0 10 12 8 *2000.0 -67 8 9.6
+ (RA=10h12m8s, DEC=-67d8m9.6s in epoch 2000.0)
+ 
+ POS=E 45.8 E 20.02  long, lat in degrees in ecliptical
+                     coordinates
+
+ A position on a frequency axis (with secondary axis units M/S):
+ POS=32              grid 32
+ POS=1418.6 MHZ      a frequency   see also: %%UNITS%UNITS%
+ POS=300000 M/S      a velocity
+ POS=U 300000        equivalent to 300000 M/S
+
+ See also: %%POSITION SYNTAX%POSITIONSYNTAX% and %%SPATIAL POSITIONS%SPATIALPOSITIONS%
+#================================================================================
+
+>*POSITIONSYNTAX
+        INPUT SYNTAX FOR POSITION RELATED KEYWORDS     
+        ==========================================
+ POS= <grid 1> .. < grid n>
+ POS= <value 1> <unit 1> .. <value n> <unit n>
+ POS= U <value 1> .. U <value n>
+ 
+ 'n' is the dimension of the selected subset.
+ 'unit' is a unit recognized by GIPSY (e.g. MHZ, KPC), see: %%UNITS%UNITS%
+ U <value> means that the value is in the (secondary axis) units of the 
+corresponding axis. The axis order can be obtained with program DISK. The options 
+can be mixed. For spatial coordinates, you can use the symbols *, E, G & S
+see: %%SPATIAL POSITIONS%SPATIALPOSITIONS%
+#================================================================================
+
+>SPATIALPOSITIONS
+        PREFIXES FOR INPUT OF SPATIAL POSITIONS
+        =======================================
+ *        for RA or DEC in resp. HMS and DMS in EPOCH of set
+ *1950    for RA or DEC in resp. HMS and DMS in EPOCH 1950.0
+ *xxxx.x  for RA or DEC in resp. HMS and DMS in EPOCH xxxx.x
+ G        Galactic longitude or latitude in degrees
+ E        Ecliptic longitude or latitude in degrees
+ S        Supergalactic longitude or latitude in degrees 
+ 
+#================================================================================
+
+ 
+>UNITS
+#List of units from file 'factor.c'
+         UNITS RECOGNIZED BY GIPSY
+         =========================
+ The following type of units are implemented:
+     DEGREE      ARCSEC      ARCMIN      RADIAN
+     CIRCLE      METER       ANGSTROM    MICRON
+     MM          CM          INCH        FOOT
+     YARD        M           KM          MILE
+     PC          KPC         MPC         TICK
+     SECOND      MINUTE      HOUR        DAY
+     YEAR        HZ          KHZ         MHZ
+     GHZ         M/S         MM/S        CM/S
+     KM/S        K           MK          JY
+     MJY         TAU
+#================================================================================
+
+>*SET=
+         INPUT OF SET (AND SUBSETS)
+         ==========================
+ Example: The structure AURORA is 3-d and has axes RA,DEC and FREQ with sizes:
+
+ RA            from   -63 to    64
+ DEC           from   -63 to    64 
+ FREQ          from     1 to    32
+
+ INSET=AURORA                or
+ INSET=/dj2/users/xxx/AURORA
+ gives cube  
+
+ INSET=AURORA FREQ 10:18 24  or
+ INSET=AURORA F 10:18 24     or
+ INSET=AURORA 10:18 24
+ gives planes (RA,DEC) for values of FREQ 10 to 18 and 24
+
+ INSET=AURORA F              or
+ INSET=AURORA 1:32
+ gives planes (RA,DEC) for values of FREQ 1 to 32
+
+ INSET=AURORA F 1::3
+ gives three planes (RA,DEC) for values of FREQ 1
+
+ INSET=AURORA F 1:10:2
+ gives planes (RA,DEC) for values of FREQ 1,3,5,7,9
+
+ INSET=AURORA DEC 5:10 FREQ 10 
+ gives lines (RA) for values of DEC 5 to 10 at FREQ 10
+
+ INSET=AURORA DEC 1           
+ gives plane (RA,FREQ) for a value of DEC 1
+
+ INSET=AURORA RA 0 DEC 0 FREQ 1
+ gives a pixel at (RA, DEC, FREQ) = (0, 0, 1)
+
+ See also: %%INPUT SYNTAX FOR SETS%INSETSYNTAX%
+#================================================================================
+
+>INSETSYNTAX
+          INPUT SYNTAX FOR SET RELATED KEYWORDS
+          =====================================
+
+  INSET=<[path]/setname> <non-subset axis 1> <lo 1>:<hi 1> ...
+                         <non-subset axis n> <lo n>:<hi n> 
+
+ (n == dimension of set - dimension of subset)
+ A set and subset are specified in one keyword. The set is a character string,
+that can include the path to your set on disk. The subset is defined by the 
+names of the axes that are not part of the subset. The name can be followed 
+by one or more numbers that correspond to grids on the specified axes. These
+numbers follow the syntax for input of integers (see: %%INPUT OF INTEGERS%USERINT%).
+             
+ The names of the axes in a set can be found with the program DISK. For more
+detailed information about the axes, you can use program HEADER with MODE=A or
+program FIXHED with ITEM=HEAD.
+Names can be abbreviated because there is a minimal match on the axis names. 
+ For axes used by GIPSY see %%AXES%AXES%.
+#================================================================================
+
+>DELETE.INSET=
+Only the names of the sets to be deleted are expected.  
+No further information can be given.
+#================================================================================
+
+>RENAME.INSET=
+Only the name of the set to be renamed is expected.
+No further information can be given.
+>RENAME.OUTSET=
+Only the new name of the set can be given.
+#==============================================================================$
+
+>DISK.INSET=
+Only the name of the sets to be displayed is expected.  
+No further information can be given.
+#================================================================================
+
+
+
+>AXES
+        AXIS NAMES RECOGNIZED BY GIPSY
+        ==============================
+
+        Name                  Meaning
+
+        RA           Equatorial, right ascension  
+        DEC          Equatorial, declination  
+        GLON         Galactic longitude  
+        GLAT         Galactic latitude  
+        ELON         Ecliptic longitude  
+        ELAT         Ecliptic latitude  
+        SLON         Supergalactic longitude  
+        SLAT         Supergalactic latitude  
+        FREQ         Frequency  
+        VELO         Velocity axis  
+        LAMBDA       Wavelength  
+        INVLAM       Inverse Wavelength  
+        LOGLAM       log(wavelength)  
+        TIME         Time  
+        POLN         polarisation  
+        PARAM        Parameter axis  
+        SAMPL        IRDS sample axis  
+        TICK         IRDS tick axis  
+        SDET         IRDS detector axis  
+        SNIP         IRDS snip axis  
+#================================================================================
+
+>OUTSET=
+        CREATE A NEW SET (OR OVERWRITE EXISTING SET)
+        ============================================
+ You can enter the name of a set and (optionally) subset(s). If a set is 
+not present on disk, it is created. The new set will have the same coordinate
+system as the input set. If an output set does exist it will check whether the
+input subset does exactly fit in the existing output set. The user is asked 
+permission to overwrite the old data.
+#================================================================================
+
+>CREATE.OUTSET=
+        A NEW SET MADE BY "CREATE"
+        ==========================
+ Only the name of a new set can be given.
+#================================================================================
+
+>USERINT
+        THE INPUT OF INTEGER NUMBERS
+        ============================
+ Integer numbers can be typed as numbers and/or expressions
+(see: %%OPERATORS%OPERATORS%, %%CONSTANTS%CONSTANTS%, %%FUNCTIONS%FUNCTIONS%,
+%%VARIABLES%VARIABLES%).
+
+ Examples:
+ 1 2 4:7             yields     1 2 4 5 6 7
+ 1::4                yields     1 1 1 1
+ [1:3]+[90:70:-10]   yields     91 82 73
+
+ The exact syntax is described in %%INPUT SYNTAX FOR NUMBERS%NUMBERINPUTSYNTAX%
+#================================================================================
+
+>USERREAL
+        THE INPUT OF REAL NUMBERS
+        =========================
+ Real numbers can be typed as numbers and/or expressions
+(see: %%OPERATORS%OPERATORS%, %%CONSTANTS%CONSTANTS%, 
+%%FUNCTIONS%FUNCTIONS%, %%VARIABLES%VARIABLES%).
+
+ Examples:
+ 1 2 3/3  sin(pi)      yields       1.0 2.0 1.0 0.0
+ log(10)::4            yields       1.0 1.0 1.0 1.0
+ log(10):log(100):2/4  yields       1.0 1.5 2.0
+ 10**(0 1 5)           yields       1 10 100000
+ 10**(0:3)             yields       1 10 100 1000
+ (1:3)+(90:70:-10)     yields       91 82 73
+ deg(acos(0.3 0.5))    yields       72.5424 60.0
+
+ The exact syntax is described in %%INPUT SYNTAX FOR NUMBERS%NUMBERINPUTSYNTAX%
+#================================================================================
+
+>USERDBLE
+        THE INPUT OF DOUBLE PRECISION NUMBERS
+        =====================================
+ Double precision numbers can be typed as numbers and/or expressions
+(see: %%OPERATORS%OPERATORS%, %%CONSTANTS%CONSTANTS%,
+%%FUNCTIONS%FUNCTIONS%, %%VARIABLES%VARIABLES%).
+
+ Examples:
+ 1 2 3/3  sin(pi)      yields       1.0 2.0 1.0 0.0
+ log(10)::4            yields       1.0 1.0 1.0 1.0
+ log(10):log(100):2/4  yields       1.0 1.5 2.0
+ 10**(0 1 5)           yields       1 10 100000
+ 10**(0:3)             yields       1 10 100 1000
+ (1:3)+(90:70:-10)     yields       91 82 73
+ deg(acos(0.3 0.5))    yields       72.5424 60.0
+
+ The exact syntax is described in %%INPUT SYNTAX FOR NUMBERS%NUMBERINPUTSYNTAX%
+#================================================================================
+
+>USERCHAR
+        THE INPUT OF STRINGS
+        ====================
+ One or more strings can be given. The strings are separated by blanks or comma's.
+If the input should contain special characters like (leading) blanks or equal
+signs, it can be quoted using back-quotes.
+
+ Example: LABELS=vel1 vel2 vel3
+          LABELS=`red=vel1 blue=vel2`
+#================================================================================
+
+>USERTEXT
+        THE INPUT OF TEXT
+        =================
+ Only one string is specified, but the string can include blanks and/or comma's.
+If the input should contain special characters like (leading) blanks or equal
+signs, it can be quoted using back-quotes.
+
+ Example: SUMMARY=`Something wrong with OUTSET= keyword`
+#================================================================================
+
+>USERLOG
+        THE INPUT OF LOGICALS
+        =====================
+ Logicals are decoded in the following way: YES, JA and TRUE result
+in a logical which is true, NO, NEE and FALSE give a logical which
+is false. It is sufficient to give the first letter of the possible
+affirmative and negative replies. Any other answer will result in
+a syntax error.
+
+ Example:  PLOTGRIDS=N
+           OK=YES
+#================================================================================
+
+>NUMBERINPUTSYNTAX
+        INPUT SYNTAX OF FLOATING POINT OR INTEGER NUMBERS
+        =================================================
+
+ Floating point or integer numbers can be typed as numbers and/or as
+expressions (see: %%OPERATORS%OPERATORS%, 
+%%CONSTANTS%CONSTANTS%, %%FUNCTIONS%FUNCTIONS%, %%VARIABLES%VARIABLES%).
+The numbers/expressions can be typed on one line, separated by
+blanks and/or a comma. 
+
+ A list of numbers can also be specified using the s:e or s:e:i notation,
+where s = start value, e = end value and i = increment value (default: 1).
+A list of n identical values v can be specified as v::n.
+ Lists can be used in expressions. They are then treated as a kind of array.
+The expression is evaluated for each list element (from left
+to right) separately. For more information about lists
+see %%reference%LISTS%.
+
+ Numbers can also be obtained using %%file functions%FILEFUNCTIONS%.
+#================================================================================
+
+>NUMBERINPUTEXAMPLES
+        EXAMPLES OF INPUT OF NUMBERS
+        ============================
+
+ 1 2 3/3  sin(pi)      yields       1.0 2.0 1.0 0.0
+ log(10)::4            yields       1.0 1.0 1.0 1.0
+ log(10):log(100):2/4  yields       1.0 1.5 2.0
+ 10**(0 1 5)           yields       1 10 100000
+ 10**(0:3)             yields       1 10 100 1000
+ (1:3)+(90:70:-10)     yields       91 82 73
+ deg(acos(0.3 0.5))    yields       72.5424 60.0
+
+ see also: %%OPERATORS%OPERATORS%, %%CONSTANTS%CONSTANTS%,
+%%FUNCTIONS%FUNCTIONS%, %%VARIABLES%VARIABLES%.
+#================================================================================
+
+>OPERATORS
+The following operators can be used in an expression:
+
+ +          addition               
+ -          subtraction
+ *          multiplication
+ /          division
+ **         exponentiation
+#================================================================================
+
+>CONSTANTS
+The following constants can be used in an expression:
+
+ pi         3.14159.... 
+ c          speed of light (SI)
+ h          Planck (SI)
+ k          Boltzmann (SI)
+ g          gravitation (SI)
+ s          Stefan-Boltzman (SI)
+ m          mass of sun (SI)
+ p          parsec (SI)
+ BLANK      Universal undefined value
+ 
+ Note: the Hubble constant is not included.
+#================================================================================
+
+>VARIABLES
+Variables can be defined by using the Hermes assignment statement:
+
+  variable= value
+
+ The value in this statement may be a number or a list. In the case of a list
+the number of items is limited to 10,000.
+
+ Variable names can be up to 20 characters long; they are not case-sensitive.
+The maximum number of variables is 40.
+#================================================================================
+
+>FUNCTIONS
+The following mathematical functions can be used in an expression:
+
+ abs(x)    absolute value of x   
+ sqrt(x)   square root of x
+ sin(x)    sine of x 
+ asin(x)   inverse sine of x
+ cos(x)    cosine of x 
+ acos(x)   inverse cosine of x
+ tan(x)    tangent of x 
+ atan(x)   inverse tan of x
+ exp(x)    exponential of x 
+ sinh(x)   hyperbolic sine of x
+ ln(x)     natural log of x
+ cosh(x)   hyperbolic cosine of x
+ log(x)    log (base 10) of x    
+ tanh(x)   hyperbolic tangent of x
+ rad(x)    convert x to radians  
+ deg(x)    convert x to degrees
+ erf(x)    error function of x  
+ erfc(x)   1-error function
+ max(x,y)  maximum of x and y 
+ min(x,y)  minimum of x and y
+ sinc(x)   sin(x)/x 
+ atan2(x,y) inverse tan (mod 2pi)
+            x = sin, y = cos
+ sign(x)   sign of x (-1,0,1)   
+ mod(x,y)  remainder of x/y
+ int(x)    truncates to integer  
+ nint(x)   nearest integer
+ ranu(x,y) generates uniform noise between x and y
+ rang(x,y) generates gaussian noise with mean x and dispersion y
+ ranp(x)   generates poisson noise with mean x
+ ifeq(x,y,a,b)  returns a if x equal y, else b
+ ifne(x,y,a,b)  returns a if x not equal y, else b
+ ifgt(x,y,a,b)  returns a if x greater y, else b
+ ifge(x,y,a,b)  returns a if x greater or equal y, else b
+ iflt(x,y,a,b)  returns a if x less y, else b
+ ifle(x,y,a,b)  returns a if x less or equal y, else b
+
+ There is also a number of functions that obtain data from a GDS data
+set or from a text file. See %%reference%FILEFUNCTIONS%.
+#================================================================================
+>LISTS
+        LISTS OF NUMBERS
+        ================
+
+A list of numbers can be specified in a number of ways:
+  - as a sequence of individual numbers, separated by blanks;
+  - using the 'start:end' or the 'start:end:increment'
+    notation;
+  - using the 'value::n' notation;
+  - using a function that delivers a list.
+
+
+        LIST FUNCTIONS
+
+ count(x)  the number of elements in x
+ sum(x)    the sum of the elements in x
+ mean(x)   the average of the elements in x
+ 
+
+        SELECTION OPERATOR
+
+ ?         selects elements of a list according to a
+           second list.
+
+ Example:  (20:30)?(3 4 5)  yields 22 23 24
+#================================================================================
+>FILEFUNCTIONS
+
+The following functions can be used to obtain data from GIPSY sets and text
+files. Depending on the arguments they return a number or a list.
+
+ descr(set, name)            descriptor item 'name' from 
+                             (sub)set 'set'
+ table(set, tab, col, row)   cell(s) from column 'col' of 
+                             table 'tab' in (sub)set 'set'
+ image(set, box)             pixel(s) from (sub)set 'set'
+ file(name, col, row)        number(s) from column in a 
+                             text file
+
+ The set- and box arguments have the syntax as described in
+%%reference%INSETSYNTAX% and %% %BOXSYNTAX%.
+#================================================================================
+

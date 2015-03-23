@@ -1,0 +1,13 @@
+Document:     res_viewer.py
+
+Purpose:      Python module providing resources for (a.o) visions
+
+Category:     DISPLAY, ANALYSIS
+
+File:         res_viewer.py.src
+
+Author:       M.G.R. Vogelaar
+
+Description:  Resource file for QT viewer
+
+Updates:      Nov 23, 2012: VOG, Document created.

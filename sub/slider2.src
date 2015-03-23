@@ -1,0 +1,2096 @@
+slider2.src
+
+        Copyright (c) Kapteyn Laboratorium Groningen 2001
+        All Rights Reserved.
+
+Name:         slider2.src
+Creator:      terlouw
+Host:         brahe
+Date:         May 16, 2001
+Contents:     Makefile.uti Slider2.c Slider2.h Slider2P.H slider2.dc3
+              xab.uue
+
+#>            Makefile.uti
+SHELL  = /bin/sh
+
+pack::
+	$$gip_sys/pack.csh slider2.src Makefile.uti \
+	Slider2.c Slider2.h Slider2P.H slider2.dc3 xab.uue
+#<
+
+#>            Slider2.c
+/* -XT */
+/*****************************************************************************
+ * Slider2.c: The slider widget with 2 indicators
+ *
+ * Widget:   Slider
+ *
+ * Author:   Aziz Boxwala
+ *           Department of Radiation Oncolgy
+ *           UNC-Chapel Hill
+ *
+ * Purpose:  
+ *
+ * Bugs   :  Value changed callback was not called for lock select interaction.
+ *            - Removed bug 11th Oct 1996 - Aziz Boxwala
+ *
+ * Date   :  27th May 1994
+ *
+ ***************************************************************************/
+
+#include "stdio.h"
+#include "math.h"
+#include <X11/cursorfont.h>
+#include <X11/IntrinsicP.h>
+#include <X11/Intrinsic.h>
+#include <X11/StringDefs.h>
+#include <X11/CoreP.h>
+#include "Slider2P.H"
+#include "Slider2.h"
+
+#define  MIN(a,b)    (((a) < (b)) ? (a) :  (b))
+#define  ABS(a)    ((a) < (0) ? (-(a)) : (a))
+
+/********    Static Function Declarations    ********/
+#ifdef _NO_PROTO
+
+static void    move_indicator ();
+static void    drag_indicator ();
+static void    increment_indicator ();
+static void    move_lock ();
+static void    drag_lock ();
+static void    release ();
+static void    increment_lock ();
+static void    Initialize();
+static void    Redisplay();
+static void    Resize();
+static void    Destroy();
+static void    Realize();
+static Boolean SetValues();
+static calculate_indicator_pos();
+static Dimension slider_thickness();
+static Dimension slider_length();
+static int round_to_incr();
+
+#else
+
+static void    move_indicator (
+			       Widget w,
+			       XEvent *event,
+			       char *args[],
+			       int n_args);
+static void    drag_indicator (
+			       Widget w,
+			       XEvent *event,
+			       char *args[],
+			       int n_args);
+static void    increment_indicator (
+				    Widget w,
+				    XEvent *event,
+				    char *args[],
+				    int n_args);
+static void    move_lock (
+			  Widget w,
+			  XEvent *event,
+			  char *args[],
+			  int n_args);
+static void    drag_lock (
+			  Widget w,
+			  XEvent *event,
+			  char *args[],
+			  int n_args);
+static void    release (
+			Widget w,
+			XEvent *event,
+			char *args[],
+			int n_args);
+static void    increment_lock (
+			       Widget w,
+			       XEvent *event,
+			       char *args[],
+			       int n_args);
+static void    Initialize(
+			  Widget rw,
+			  Widget nw,
+			  ArgList args,
+			  Cardinal *num_args);
+static void    Redisplay(
+			 Widget wid,
+			 XEvent *event,
+			 Region region);
+static void    Resize(
+		      Widget w);
+static void    Destroy(
+		       Widget w);
+static void    Realize(
+		       register Widget w,
+		       Mask *valueMask,
+		       XSetWindowAttributes *attributes);
+static Boolean SetValues(
+			 Widget cw,
+			 Widget rw,
+			 Widget nw,
+			 ArgList args,
+			 Cardinal *num_args);
+static calculate_indicator_pos(
+			       XabSlider2Widget w);
+static Dimension slider_thickness(
+				  XabSlider2Widget w);
+static Dimension slider_length(
+			       XabSlider2Widget w);
+static int round_to_incr(
+			 int pos,
+			 int min,
+			 int increment);
+
+#endif /* _NO_PROTO */
+/********    End Static Function Declarations    ********/
+
+
+/*
+ * Actions:
+ */
+static char defaultTranslations[] =  "Shift<Btn1Down>: Increment()\n\
+<Btn1Down>: Select()\n\
+<Btn1Up>: Release()\n\
+<Btn1Motion>: Drag()\n\
+Shift<Btn2Down>: LockIncrement()\n\
+<Btn2Down>: LockSelect()\n\
+<Btn2Up>: Release()\n\
+<Btn2Motion>: LockDrag()";
+
+
+
+static XtActionsRec actionsList[] = {
+  {"Select",   (XtActionProc) move_indicator},
+  {"Drag", (XtActionProc) drag_indicator},
+  {"Increment", (XtActionProc) increment_indicator},
+  {"LockSelect",   (XtActionProc) move_lock},
+  {"LockDrag", (XtActionProc) drag_lock},
+  {"Release", (XtActionProc) release},
+  {"LockIncrement", (XtActionProc) increment_lock}
+};
+
+static XtResource resources[] = {
+  {XtNindicatorColor, XtCColor, XtRPixel, sizeof (Pixel),
+     XtOffset(XabSlider2Widget, slider.indicator_color), 
+     XtRString, "Black"},
+
+  {XtNindicatorFillColor, XtCColor, XtRPixel, sizeof (Pixel),
+     XtOffset(XabSlider2Widget, slider.indicator_fill_color), 
+     XtRString, "White"},
+     
+  {XtNindicatorThickness, XtCThick, XtRInt, sizeof (int),
+     XtOffset(XabSlider2Widget, slider.thickness), XtRString, "3"},
+
+  {XtNminimum, XtCMin, XtRInt, sizeof (int),
+     XtOffset(XabSlider2Widget, slider.minimum), XtRString, "0"},
+
+  {XtNmaximum, XtCMax, XtRInt, sizeof (int),
+     XtOffset(XabSlider2Widget, slider.maximum), XtRString, "10"},
+
+  {XtNlowValue, XtCPosition, XtRInt, sizeof (int),
+    XtOffset(XabSlider2Widget, slider.lo_value), XtRString, "0"},
+
+  {XtNhighValue, XtCPosition, XtRInt, sizeof (int),
+     XtOffset(XabSlider2Widget, slider.hi_value), XtRString, "10" },
+  
+  {XtNincrement, XtCIncrement, XtRInt, sizeof(int),
+     XtOffset(XabSlider2Widget, slider.increment),
+     XtRString, "1"                                        },
+
+  {XtNorientation, XtCOrientation, XtRInt, sizeof (int),
+     XtOffset(XabSlider2Widget, slider.orientation),
+     XtRString, "0"                                        },
+
+  {XtNprocessingDirection, XtCDirection, XtRInt, sizeof (int),
+     XtOffset(XabSlider2Widget, slider.proc_dir),
+     XtRString, "0"                                        }, 
+
+  {XtNselectCallback,XtCCallback,XtRCallback,sizeof(XtPointer),
+     XtOffset (XabSlider2Widget, slider.select_cb), 
+     XtRCallback, NULL                                      },
+
+  {XtNdragCallback,XtCCallback,XtRCallback,sizeof(XtPointer),
+     XtOffset (XabSlider2Widget, slider.drag_cb), 
+     XtRCallback, NULL                                      },
+
+  {XtNincrementCallback,XtCCallback,XtRCallback,sizeof(XtPointer),
+     XtOffset (XabSlider2Widget, slider.increment_cb), 
+     XtRCallback, NULL                                      },
+
+  {XtNlockSelectCallback,XtCCallback,XtRCallback,sizeof(XtPointer),
+     XtOffset (XabSlider2Widget, slider.lock_select_cb), 
+     XtRCallback, NULL                                      },
+  
+  {XtNlockDragCallback,XtCCallback,XtRCallback,sizeof(XtPointer),
+     XtOffset (XabSlider2Widget, slider.lock_drag_cb), 
+     XtRCallback, NULL                                      },
+
+  {XtNlockIncrementCallback,XtCCallback,XtRCallback,sizeof(XtPointer),
+     XtOffset (XabSlider2Widget, slider.lock_increment_cb), 
+     XtRCallback, NULL                                      },
+
+  {XtNvalueChangedCallback,XtCCallback,XtRCallback,sizeof(XtPointer),
+     XtOffset (XabSlider2Widget, slider.value_changed_cb), 
+     XtRCallback, NULL                                      }
+
+ };
+
+XabSlider2ClassRec  Xabslider2ClassRec = {
+     /* CoreClassPart */
+  {
+   (WidgetClass) &widgetClassRec,  /* superclass            */
+   "Slider2",                      /* class_name            */
+   sizeof(XabSlider2Rec),           /* widget_size           */
+   NULL,                           /* class_initialize      */
+   NULL,                           /* class_part_initialize */
+   FALSE,                          /* class_inited          */
+   Initialize,                     /* initialize            */
+   NULL,                           /* initialize_hook       */
+   Realize,                        /* realize               */
+   actionsList,                    /* actions               */
+   XtNumber(actionsList),          /* num_actions           */
+   resources,                      /* resources             */
+   XtNumber(resources),            /* num_resources         */
+   NULLQUARK,                      /* xrm_class             */
+
+   TRUE,                           /* compress_motion       */
+   TRUE,                           /* compress_exposure     */
+   TRUE,                           /* compress_enterleave   */
+   TRUE,                           /* visible_interest      */
+   Destroy,                        /* destroy               */
+   Resize,                         /* resize                */
+   Redisplay,                      /* expose                */
+   SetValues,                      /* set_values            */
+   NULL,                           /* set_values_hook       */
+   XtInheritSetValuesAlmost,       /* set_values_almost     */
+   NULL,                           /* get_values_hook       */
+   NULL,                           /* accept_focus          */
+   XtVersion,                      /* version               */
+   NULL,                           /* callback private      */
+   defaultTranslations,            /* tm_table              */
+   NULL,                           /* query_geometry        */
+   NULL,                           /* display_accelerator   */
+   NULL,                           /* extension             */
+   },
+      /* Dial class fields */
+  {
+   0,                              /* ignore                */
+   }
+};
+
+WidgetClass xabSlider2WidgetClass = (WidgetClass) &Xabslider2ClassRec;
+      
+/************************************************************************
+ *
+ *  Initialize
+ *     The main widget instance initialization routine.
+ *
+ ************************************************************************/
+
+static void
+#ifdef _NO_PROTO
+Initialize(rw, nw)
+        Widget rw ;
+        Widget nw ;
+#else
+Initialize(
+        Widget rw,
+        Widget nw,
+        ArgList args,
+        Cardinal *num_args)
+#endif /* _NO_PROTO */
+{
+  XGCValues values;
+  XtGCMask  valueMask;
+  XabSlider2Widget request = (XabSlider2Widget) rw;
+  XabSlider2Widget new     = (XabSlider2Widget) nw;
+  /*
+   * Make sure the window size is not zero. The Core 
+   * Initialize() method doesn't do this.
+   */
+  if (request->core.width == 0){
+    switch(new->slider.orientation){
+    case XabHORIZONTAL:
+      new->core.width = 100;
+      break;
+    case XabVERTICAL:
+    default:
+      new->core.width = 10;
+    }
+  }
+  if (request->core.height == 0){
+    switch(new->slider.orientation){
+    case XabHORIZONTAL:
+      new->core.height = 10;
+      break;
+    case XabVERTICAL:
+    default:
+      new->core.height = 100;
+    }
+  }
+
+  /*
+   * Verify processing direction
+   */
+  switch (new->slider.orientation){
+  case XabVERTICAL:
+    if (new->slider.proc_dir == XabMAX_ON_LEFT){
+      XtWarning("Slider processing direction inappropriate");
+      new->slider.proc_dir = XabMAX_ON_TOP;
+    }
+    if (new->slider.proc_dir == XabMAX_ON_RIGHT){
+     XtWarning("Slider processing direction inappropriate");
+      new->slider.proc_dir = XabMAX_ON_BOTTOM;
+    }
+    new->slider.cursor =
+      XCreateFontCursor(XtDisplay(new),
+			XC_sb_left_arrow);
+    break;
+  case XabHORIZONTAL:
+    if (new->slider.proc_dir == XabMAX_ON_TOP){
+      XtWarning("Slider processing direction inappropriate");
+      new->slider.proc_dir = XabMAX_ON_LEFT;
+    }
+    if (new->slider.proc_dir == XabMAX_ON_BOTTOM){
+     XtWarning("Slider processing direction inappropriate");
+      new->slider.proc_dir = XabMAX_ON_RIGHT;
+    } 
+    new->slider.cursor =
+      XCreateFontCursor(XtDisplay(new),
+			XC_sb_up_arrow);
+    break;
+  }
+  /*
+   * Make sure the min and max settings are valid.
+   */
+  if (new->slider.maximum < new->slider.minimum){
+    XtWarning ("Slider maximum less than minimum");
+    new->slider.maximum = new->slider.minimum;
+  }
+  if (new->slider.lo_value < new->slider.minimum){
+    XtWarning ("Low value is less than the minimum");
+    new->slider.lo_value = new->slider.minimum;
+  }
+  if (new->slider.hi_value > new->slider.maximum){
+    XtWarning ("High value is greater than maximum");
+    new->slider.hi_value = new->slider.maximum;
+  }
+  new->slider.lo_value = round_to_incr(new->slider.lo_value,
+				       new->slider.minimum,
+				       new->slider.increment);
+  new->slider.hi_value = round_to_incr(new->slider.hi_value,
+				       new->slider.minimum,
+				       new->slider.increment);
+  if (new->slider.lo_value > new->slider.hi_value){
+    XtWarning ("Low value is greater than high value");
+    new->slider.lo_value = new->slider.hi_value;
+  }
+
+  if (new->slider.increment > (new->slider.hi_value-new->slider.lo_value)){
+    XtWarning ("Slider increments too high\n");
+    new->slider.increment = new->slider.hi_value-new->slider.lo_value;
+  }
+
+  valueMask = GCForeground | GCBackground | GCLineWidth;
+  values.background = new->core.background_pixel;
+  values.foreground = new->slider.indicator_color;
+  values.line_width = 0;
+  /*
+   *   Now caching again to allow non-default visuals
+   */
+   new->slider.indicator_GC = XtGetGC ((Widget)new, valueMask,&values);
+
+  values.background = new->core.background_pixel;
+  values.foreground = new->slider.indicator_fill_color;
+  new->slider.indicator_fill_GC = XtGetGC ((Widget)new, valueMask,&values);
+		
+  new->slider.dragged = FALSE;
+  Resize (nw);
+}
+
+static void
+#ifdef _NO_PROTO
+Realize(w, valueMask, attributes)
+     register Widget w;
+     Mask *valueMask;
+     XSetWindowAttributes *attributes;
+#else
+Realize(
+	register Widget w,
+	Mask *valueMask,
+	XSetWindowAttributes *attributes)
+#endif /* _NO_PROTO */
+     
+{
+
+  if ((attributes->cursor = ((XabSlider2Widget)w)->slider.cursor) != None)
+    *valueMask |= CWCursor;
+
+
+  XtCreateWindow( w, (unsigned int)InputOutput, (Visual *)CopyFromParent,
+		 *valueMask, attributes );
+
+}
+
+static void
+#ifdef _NO_PROTO
+Destroy( w )
+        Widget w;
+#else
+Destroy(
+        Widget w)
+#endif /* _NO_PROTO */
+{
+  XabSlider2Widget sw = ( XabSlider2Widget) w;
+  XtReleaseGC (w, sw->slider.indicator_GC);
+  XtReleaseGC (w, sw->slider.indicator_fill_GC);
+
+  XtRemoveAllCallbacks (w, XtNselectCallback);
+  XtRemoveAllCallbacks (w, XtNdragCallback);
+  XtRemoveAllCallbacks (w, XtNincrementCallback);
+  XtRemoveAllCallbacks (w, XtNlockSelectCallback);
+  XtRemoveAllCallbacks (w, XtNlockDragCallback);
+  XtRemoveAllCallbacks (w, XtNlockIncrementCallback);
+  XtRemoveAllCallbacks (w, XtNvalueChangedCallback);
+}
+
+static void
+#ifdef _NO_PROTO
+Resize (w)
+     Widget w;
+#else
+Resize (Widget w)
+#endif /* _NO_PROTO */
+{
+  calculate_indicator_pos((XabSlider2Widget)w);
+}
+
+
+static
+#ifdef _NO_PROTO
+calculate_indicator_pos(w)
+     XabSlider2Widget w;
+#else
+calculate_indicator_pos(
+			XabSlider2Widget w)
+#endif /* _NO_PROTO */
+{
+  
+  Dimension sld_len, sld_thk; /* Slider dimensions */
+  Position  sld_orig_x, sld_orig_y;
+  Position  lo_x, lo_y, hi_x, hi_y;
+
+  /*
+   * calculate the positions of the indicators
+   */
+  sld_len = slider_length(w);
+  sld_thk = slider_thickness(w);
+  sld_orig_x = 0;
+  sld_orig_y = 0;
+
+  /* 
+   * Calculate as for vertical slider with max on bottom
+   */
+  lo_x = sld_orig_x + 0;
+  hi_x = sld_orig_x + 0;
+  lo_y = sld_orig_y + (int)((float)sld_len*
+			    ((float)(w->slider.lo_value-w->slider.minimum)/
+			     (float)(w->slider.maximum-w->slider.minimum)));
+  hi_y = sld_orig_y + (int)((float)sld_len*
+			    ((float)(w->slider.hi_value-w->slider.minimum)/
+			     (float)(w->slider.maximum-w->slider.minimum)));
+
+  /*
+   * Modify values according to orientation and processing dir
+   */
+  switch(w->slider.orientation){
+  case XabHORIZONTAL:
+    switch(w->slider.proc_dir){
+    case XabMAX_ON_RIGHT:
+      w->slider.lo_x = lo_y;
+      w->slider.lo_y = lo_x;
+      w->slider.hi_x = hi_y;
+      w->slider.hi_y = hi_x;
+      break;
+    case XabMAX_ON_LEFT:
+      w->slider.lo_x = (sld_len-hi_y);
+      w->slider.lo_y = (hi_x);
+      w->slider.hi_x = (sld_len-lo_y);
+      w->slider.hi_y = (lo_x);
+    }
+  case XabVERTICAL:
+    switch(w->slider.proc_dir){
+    case XabMAX_ON_TOP:
+      w->slider.lo_x = (hi_x);
+      w->slider.lo_y = (sld_len-hi_y);
+      w->slider.hi_x = (lo_x);
+      w->slider.hi_y = (sld_len-lo_y);
+      break;
+    case XabMAX_ON_BOTTOM:
+      w->slider.lo_x = lo_x;
+      w->slider.lo_y = lo_y;
+      w->slider.hi_x = hi_x;
+      w->slider.hi_y = hi_y;
+      break;
+    }
+  }
+
+} 
+
+/*
+ * The dimension of the slider in the direction in which
+ * the indicators move.
+ */
+static Dimension
+#ifdef _NO_PROTO
+slider_length(w)
+     XabSlider2Widget w;
+#else
+slider_length(
+	      XabSlider2Widget w)
+#endif /* _NO_PROTO */
+{
+
+  Dimension len;
+
+  switch(w->slider.orientation){
+  case XabHORIZONTAL:
+    len = w->core.width;
+    break;
+  case XabVERTICAL:
+    len = w->core.height;
+  }
+  return len-w->slider.thickness;
+}
+
+/*
+ * The dimension of the slider perpendicular to the direction
+ * in which the indicators move.
+ */
+static Dimension
+#ifdef _NO_PROTO
+slider_thickness(w)
+     XabSlider2Widget w;
+#else
+slider_thickness(
+		 XabSlider2Widget w)
+#endif /* _NO_PROTO */
+{
+
+  Dimension thk;
+
+  switch(w->slider.orientation){
+  case XabHORIZONTAL:
+    thk = w->core.height;
+    break;
+  case XabVERTICAL:
+    thk = w->core.width;
+  }
+  return thk;
+}
+
+  
+/*
+ * Redraws the indicators
+ */
+static
+#ifdef _NO_PROTO
+DrawIndicators(w)
+     XabSlider2Widget  w;
+#else
+DrawIndicators(
+	       XabSlider2Widget  w)
+#endif /* _NO_PROTO */
+{
+  Widget wid = (Widget) w;
+  int sldthk = slider_thickness(w)-1;
+  int indthk = w->slider.thickness-1;
+
+  switch (w->slider.orientation){
+  case XabVERTICAL:
+    XFillRectangle(XtDisplay(wid), XtWindow(wid),
+		   w->slider.indicator_fill_GC,
+		   w->slider.lo_x, w->slider.lo_y,
+		   sldthk, indthk);
+
+    XFillRectangle(XtDisplay(wid), XtWindow(wid),
+		   w->slider.indicator_fill_GC,
+		   w->slider.hi_x, w->slider.hi_y,
+		   sldthk, indthk);
+
+    XDrawRectangle(XtDisplay(wid), XtWindow(wid),
+		   w->slider.indicator_GC,
+		   w->slider.lo_x, w->slider.lo_y,
+		   sldthk, indthk);
+    XDrawRectangle(XtDisplay(wid), XtWindow(wid),
+		   w->slider.indicator_GC,
+		   w->slider.hi_x, w->slider.hi_y,
+		   sldthk, indthk);
+    break;
+  case XabHORIZONTAL:
+    XFillRectangle(XtDisplay(wid), XtWindow(wid),
+		   w->slider.indicator_fill_GC,
+		   w->slider.lo_x, w->slider.lo_y,
+		   indthk, sldthk);
+    XFillRectangle(XtDisplay(wid), XtWindow(wid),
+		   w->slider.indicator_fill_GC,
+		   w->slider.hi_x, w->slider.hi_y,
+		   indthk, sldthk);
+
+    XDrawRectangle(XtDisplay(wid), XtWindow(wid),
+		   w->slider.indicator_GC,
+		   w->slider.lo_x, w->slider.lo_y,
+		   indthk, sldthk);
+    XDrawRectangle(XtDisplay(wid), XtWindow(wid),
+		   w->slider.indicator_GC,
+		   w->slider.hi_x, w->slider.hi_y,
+		   indthk, sldthk);
+  }
+}
+
+static
+#ifdef _NO_PROTO
+EraseIndicators(w)
+     XabSlider2Widget w;
+#else
+EraseIndicators(
+		XabSlider2Widget w)
+#endif /* _NO_PROTO */
+{
+
+  Widget wid = (Widget) w;
+  int sldthk = slider_thickness(w)+1;
+  int indthk = w->slider.thickness+1;
+
+  switch (w->slider.orientation){
+  case XabVERTICAL:
+    XClearArea(XtDisplay(wid), XtWindow(wid),
+	       w->slider.lo_x, w->slider.lo_y,
+	       sldthk, indthk,
+	       False);
+    XClearArea(XtDisplay(wid), XtWindow(wid),
+	       w->slider.hi_x, w->slider.hi_y,
+	       sldthk, indthk,
+	       False);
+    break;
+  case XabHORIZONTAL:
+    XClearArea(XtDisplay(wid), XtWindow(wid),
+	       w->slider.lo_x, w->slider.lo_y,
+	       indthk, sldthk,
+	       False);
+    XClearArea(XtDisplay(wid), XtWindow(wid),
+	       w->slider.hi_x, w->slider.hi_y,
+	       indthk, sldthk,
+	       False);
+  }
+}
+static void
+#ifdef _NO_PROTO
+Redisplay (w, event, region)
+     Widget  w;
+     XEvent       *event;
+     Region        region;
+#else
+Redisplay (
+	   Widget  w,
+	   XEvent *event,
+	   Region  region)
+#endif /* _NO_PROTO */
+{
+  XabSlider2Widget  sw = (XabSlider2Widget) w;
+  if(!(sw->core.visible)) return;
+
+  /*
+   * Draw the indicator lines
+   */
+  DrawIndicators(sw);
+  
+}
+
+static Boolean
+#ifdef _NO_PROTO
+SetValues (cw, rw, nw)
+     Widget cw, rw, nw;
+#else
+SetValues (
+	   Widget cw,
+	   Widget rw,
+	   Widget nw,
+	   ArgList args,
+	   Cardinal *num_args)
+#endif /* _NO_PROTO */
+{
+
+  XabSlider2Widget current = (XabSlider2Widget) cw;
+  XabSlider2Widget request = (XabSlider2Widget) rw;
+  XabSlider2Widget new     = (XabSlider2Widget) nw;
+  XGCValues  values;
+  XtGCMask   valueMask;
+  Boolean    redraw = FALSE;
+  Boolean    redraw_indicator = FALSE;
+  char       ind_pos[100];
+
+
+  /*
+   * Verify processing direction and change cursor
+   */
+  if (new->slider.orientation != current->slider.orientation){
+    XFreeCursor(XtDisplay(nw), current->slider.cursor);
+    switch (new->slider.orientation){
+    case XabVERTICAL:
+      new->slider.cursor = XCreateFontCursor(XtDisplay(nw),
+					     XC_sb_left_arrow);
+      break;
+    case XabHORIZONTAL:
+      new->slider.cursor = XCreateFontCursor(XtDisplay(nw),
+					     XC_sb_up_arrow);
+      break;
+    }
+    if (XtIsRealized(nw))
+      XDefineCursor(XtDisplay(nw), XtWindow(nw), new->slider.cursor);
+  }
+  /*
+   * Verify processing direction
+   */
+  if ((new->slider.orientation != current->slider.orientation)||
+      (new->slider.proc_dir != current->slider.proc_dir)){
+    switch (new->slider.orientation){
+    case XabVERTICAL:
+      if (new->slider.proc_dir == XabMAX_ON_LEFT){
+	XtWarning("Slider processing direction inappropriate");
+	new->slider.proc_dir = XabMAX_ON_TOP;
+      }
+      if (new->slider.proc_dir == XabMAX_ON_RIGHT){
+	XtWarning("Slider processing direction inappropriate");
+	new->slider.proc_dir = XabMAX_ON_BOTTOM;
+      } 
+      break;
+    case XabHORIZONTAL:
+      if (new->slider.proc_dir == XabMAX_ON_TOP){
+	XtWarning("Slider processing direction inappropriate");
+	new->slider.proc_dir = XabMAX_ON_LEFT;
+      }
+      if (new->slider.proc_dir == XabMAX_ON_BOTTOM){
+	XtWarning("Slider processing direction inappropriate");
+	new->slider.proc_dir = XabMAX_ON_RIGHT;
+      } 
+      break;
+    }
+    if (new->slider.orientation != current->slider.orientation){
+      new->core.height = current->core.width;
+      new->core.width  =  current->core.height;
+    }
+    redraw = TRUE;
+  }
+
+  /*
+   * Make sure the min and max settings are valid.
+   */
+  if ((new->slider.maximum != current->slider.maximum)||
+      (new->slider.minimum != current->slider.minimum)||
+      (new->slider.hi_value != current->slider.hi_value)||
+      (new->slider.lo_value != current->slider.lo_value)){
+
+    if (new->slider.maximum < new->slider.minimum){
+      XtWarning ("Slider maximum less than minimum");
+      new->slider.maximum = new->slider.minimum;
+    }
+    if (new->slider.lo_value < new->slider.minimum){
+      XtWarning ("Low value is less than the Minimum");
+      new->slider.lo_value = new->slider.minimum;
+    }
+    if (new->slider.hi_value > new->slider.maximum){
+      XtWarning ("High value is greater than Maximum");
+      new->slider.hi_value = new->slider.maximum;
+    }
+    if (new->slider.lo_value > new->slider.hi_value){
+      XtWarning ("Low value is greater than high value");
+      new->slider.lo_value = new->slider.hi_value;
+    }
+    new->slider.lo_value = round_to_incr(new->slider.lo_value,
+					 new->slider.minimum,
+					 new->slider.increment);
+    new->slider.hi_value = round_to_incr(new->slider.hi_value,
+					 new->slider.minimum,
+					 new->slider.increment);
+    calculate_indicator_pos(new);
+    redraw_indicator = TRUE;
+  }
+  
+  if (new->slider.increment != current->slider.increment){
+    if (new->slider.increment > (new->slider.hi_value-new->slider.lo_value)){
+      XtWarning ("Slider increments too high\n");
+      new->slider.increment = new->slider.hi_value-new->slider.lo_value;
+    }
+    new->slider.lo_value = round_to_incr(new->slider.lo_value,
+					 new->slider.minimum,
+					 new->slider.increment);
+    new->slider.hi_value = round_to_incr(new->slider.hi_value,
+					 new->slider.minimum,
+					 new->slider.increment);
+    redraw_indicator = TRUE;
+  }
+
+  /*
+   * If the indicator color or background color 
+   * has changed, generate the GC's.
+   */
+  if(new->slider.indicator_color!=current->slider.indicator_color){
+    valueMask = GCForeground | GCBackground | GCLineWidth;
+    values.foreground = new->slider.indicator_color;
+    values.background = new->core.background_pixel;
+    values.line_width = 0;
+
+#if 1
+    XtReleaseGC(nw, new->slider.indicator_GC);
+    new->slider.indicator_GC = XtGetGC(nw, valueMask,&values);
+#else
+    XChangeGC(XtDisplay(nw), new->slider.indicator_GC, valueMask,&values);
+#endif
+    redraw_indicator = TRUE;
+  }
+
+  if(new->slider.indicator_fill_color!=current->slider.indicator_fill_color){
+    valueMask = GCForeground | GCBackground;
+    values.foreground = new->slider.indicator_fill_color;
+    values.background = new->core.background_pixel;
+
+#if 1
+    XtReleaseGC((Widget)new, new->slider.indicator_fill_GC);
+    new->slider.indicator_fill_GC = XtGetGC((Widget)new, valueMask, &values);
+#else
+    XChangeGC(XtDisplay(nw), new->slider.indicator_fill_GC,
+	      valueMask,&values);
+#endif
+    redraw_indicator = TRUE;     
+  }
+  if (new->slider.thickness!=current->slider.thickness) {
+     Dimension len;
+
+     switch(new->slider.orientation){
+     case XabHORIZONTAL:
+       len = new->core.width;
+       break;
+     case XabVERTICAL:
+       len = new->core.height;
+     }
+    new->slider.thickness =
+       MIN(new->slider.thickness,len);
+       if (new->slider.thickness<1) new->slider.thickness = 1;
+    redraw_indicator = TRUE;
+  }
+
+  /*
+   * If only the indicator needs to be redrawn and
+   * the widget is realized, erase the current indicator
+   * and draw the new one.
+   */
+  if(redraw_indicator && ! redraw &&
+     XtIsRealized(nw) && new->core.visible){
+    EraseIndicators(current);
+    /* DrawIndicators(current, current->slider.inverse_GC); */
+    DrawIndicators(new);
+  }
+
+  if (redraw) calculate_indicator_pos(new);
+  return (redraw); 
+} 
+
+/*
+ * This ocde moves the min/max value to the closest value which is
+ * a multiple of slider.increment + minimum value
+ */
+static int
+#ifdef _NO_PROTO
+round_to_incr(pos, min, increment)
+     int pos;
+     int min;
+     int increment;
+#else
+round_to_incr(
+	      int pos,
+	      int min,
+	      int increment)
+#endif
+{
+
+  int remainder = (pos -min)%increment;
+  if (remainder <= increment/2)
+    pos -= remainder;
+  else
+    pos += (increment-remainder);
+
+  return pos;
+}
+
+/*
+ * Returns the position of the sprite in slider co-ordinates
+ */
+static int
+#ifdef _NO_PROTO
+pos_from_xy(w,x,y)
+     XabSlider2Widget  w;
+     Position         x, y;
+#else
+pos_from_xy(
+	    XabSlider2Widget  w,
+	    Position x,
+	    Position y)
+#endif /* _NO_PROTO */
+{
+
+  int sld_orig_x = 0;
+  int sld_orig_y = 0;
+  int sld_len = slider_length(w);
+  int sld_thk = slider_thickness(w);
+  int pos;
+  x -= sld_orig_x;
+  y -= sld_orig_y;
+
+  switch (w->slider.orientation){
+  case XabHORIZONTAL:
+    switch (w->slider.proc_dir){
+    case XabMAX_ON_RIGHT:
+      pos =  w->slider.minimum+
+	(int)((float)(x*(w->slider.maximum-w->slider.minimum))/
+		  (float)sld_len + 0.5);
+      break;
+    case XabMAX_ON_LEFT:
+      x = sld_len - x;
+      pos =  w->slider.minimum+
+	(int)((float)(x*(w->slider.maximum-w->slider.minimum))/
+		  (float)sld_len + 0.5);
+      break;
+    }
+  case XabVERTICAL:
+    switch (w->slider.proc_dir){
+    case XabMAX_ON_BOTTOM:
+      pos = w->slider.minimum+
+	(int)((float)(y*(w->slider.maximum-w->slider.minimum))/
+		  (float)sld_len + 0.5);
+      break;
+    case XabMAX_ON_TOP:
+      y =sld_len - y;
+      pos =  w->slider.minimum+
+	(int)((float)(y*(w->slider.maximum-w->slider.minimum))/
+		  (float)sld_len + 0.5);
+      break;
+    }
+  }
+
+  return round_to_incr(pos, w->slider.minimum, w->slider.increment);
+}
+
+/*
+ * The action routines
+ */
+static void
+#ifdef _NO_PROTO
+move_indicator(wid, event, args, n_args)
+     Widget   wid;
+     XEvent        *event;
+     char          *args[];
+     int            n_args;
+#else
+move_indicator(
+	       Widget wid,
+	       XEvent *event,
+	       char *args[],
+	       int  n_args)
+#endif /* _NO_PROTO */
+{
+
+  XabSlider2Widget w = (XabSlider2Widget) wid;
+  XabSlider2CallbackStruct cb;
+  int     lo_value, hi_value;
+  int     incr;
+  int     newpos;
+  Boolean value_changed = FALSE;
+
+  cb.reason = XabCR_SELECT;
+  cb.event  = event;
+
+  lo_value = w->slider.lo_value;
+  hi_value = w->slider.hi_value;
+  incr     = w->slider.increment;
+  
+  /*
+   * Get the position of the cursor
+   */
+  newpos = pos_from_xy(w,event->xbutton.x, event->xbutton.y);
+
+  if (newpos < w->slider.minimum) newpos = w->slider.minimum;
+  if (newpos > w->slider.maximum) newpos = w->slider.maximum;
+
+  /*
+   * Move the indicator that the cursor was closest to 
+   */
+  if ((ABS((newpos - lo_value))<ABS((newpos - hi_value))) ||
+      ((lo_value == hi_value) && (newpos < lo_value))){
+    w->slider.current_indicator = LO_INDICATOR;
+    cb.low_value  = newpos;
+    cb.high_value = hi_value;
+    if (newpos != lo_value) value_changed = TRUE;
+    XtVaSetValues((Widget)w,
+		  XtNlowValue, newpos,
+		  NULL);
+  }
+  else{
+    w->slider.current_indicator = HI_INDICATOR;
+    cb.high_value = newpos;
+    cb.low_value  = w->slider.lo_value;
+    if (newpos != hi_value) value_changed = TRUE;
+    XtVaSetValues((Widget)w,
+		  XtNhighValue, newpos,
+		  NULL);
+  }
+
+  if (w->slider.select_cb != NULL)
+      XtCallCallbacks ((Widget)w, XtNselectCallback, &cb);
+    else if (value_changed){
+      cb.reason = XabCR_VALUE_CHANGED;
+      XtCallCallbacks ((Widget)w, XtNvalueChangedCallback, &cb); 
+    }
+} 
+
+static void
+#ifdef _NO_PROTO
+drag_indicator(wid, event, args, n_args)
+     Widget   wid;
+     XEvent   *event;
+     char     *args[];
+     int      n_args;
+#else
+drag_indicator(
+	       Widget   wid,
+	       XEvent   *event,
+	       char     *args[],
+	       int      n_args)
+#endif /* _NO_PROTO */
+{
+
+  XabSlider2Widget w = (XabSlider2Widget) wid;
+  XabSlider2CallbackStruct cb;
+  Arg        wargs[1];
+  int     lo_value, hi_value;
+  int     incr;
+  int     newpos;
+  Boolean value_changed = FALSE;
+
+  lo_value = w->slider.lo_value;
+  hi_value = w->slider.hi_value;
+  incr     = w->slider.increment;
+  
+  newpos = pos_from_xy(w,event->xbutton.x, event->xbutton.y);
+  if (newpos < w->slider.minimum) newpos = w->slider.minimum;
+  if (newpos > w->slider.maximum) newpos = w->slider.maximum;
+
+  /* if (ABS((newpos - lo_value))<
+      ABS((newpos - hi_value))){ */
+
+  if (w->slider.current_indicator == LO_INDICATOR){
+    if (newpos > hi_value) newpos = hi_value;
+    cb.low_value  = newpos;
+    cb.high_value = hi_value;
+    if (cb.low_value != lo_value) value_changed = TRUE;
+    XtVaSetValues((Widget)w,
+		  XtNlowValue, newpos,
+		  NULL);
+  }
+  else if (w->slider.current_indicator == HI_INDICATOR) {
+    if (newpos < lo_value) newpos = lo_value;
+    cb.high_value = newpos;
+    cb.low_value  = lo_value;
+    if (cb.high_value != hi_value) value_changed = TRUE;
+    XtVaSetValues((Widget)w,
+		  XtNhighValue, newpos,
+		  NULL);
+  }
+  if (value_changed) w->slider.dragged = TRUE;
+  /*
+   * Invoke the callback, report the position in the call_data
+   * structure
+   */
+  cb.reason   = XabCR_DRAG;
+  cb.event    = event;
+  XtCallCallbacks ((Widget)w, XtNdragCallback, &cb);
+
+}
+
+
+static void
+#ifdef _NO_PROTO
+drag_lock(wid, event, args, n_args)
+     Widget   wid;
+     XEvent   *event;
+     char     *args[];
+     int      n_args;
+#else
+drag_lock(
+	  Widget   wid,
+	  XEvent   *event,
+	  char     *args[],
+	  int      n_args)
+#endif /* _NO_PROTO */
+{
+
+  XabSlider2Widget w = (XabSlider2Widget) wid;
+  int new_center;
+  int newmin, newmax;
+  int old_center;
+  XabSlider2CallbackStruct cb;
+
+  new_center = pos_from_xy(w,event->xbutton.x, event->xbutton.y);
+
+  old_center = w->slider.lo_value +(w->slider.hi_value-w->slider.lo_value)/2;
+  newmin = w->slider.lo_value+(new_center-old_center);
+  newmax = w->slider.hi_value+(new_center-old_center);
+
+  if (newmin <  w->slider.minimum){
+    newmax += (w->slider.minimum - newmin);
+    newmin = w->slider.minimum;
+  }
+  else if (newmax > w->slider.maximum){
+    newmin -= (newmax - w->slider.maximum);
+    newmax = w->slider.maximum;
+  }
+
+  if ((newmin != w->slider.lo_value) || (newmax != w->slider.hi_value))
+    w->slider.dragged = TRUE;
+
+  XtVaSetValues((Widget)w,
+		XtNlowValue, newmin,
+		XtNhighValue, newmax,
+		NULL);
+  
+  /*
+   * Invoke the callback, report the position in the call_data
+   * structure
+   */
+  cb.low_value  = newmin;
+  cb.high_value = newmax;
+  cb.reason   = XabCR_LOCK_DRAG;
+  cb.event    = event;
+  if (w->slider.lock_drag_cb != NULL)
+    XtCallCallbacks ((Widget)w, XtNlockDragCallback, &cb);
+
+}
+
+
+static void
+#ifdef _NO_PROTO
+move_lock(wid, event, args, n_args)
+     Widget   wid;
+     XEvent   *event;
+     char     *args[];
+     int      n_args;
+#else
+move_lock(
+	  Widget   wid,
+	  XEvent   *event,
+	  char     *args[],
+	  int      n_args)
+#endif /* _NO_PROTO */
+{
+
+  XabSlider2Widget w = (XabSlider2Widget) wid;
+  int new_center;
+  int newmin, newmax;
+  int old_center;
+  XabSlider2CallbackStruct cb;
+  Boolean value_changed = FALSE;
+
+  new_center = pos_from_xy(w,event->xbutton.x, event->xbutton.y);
+  
+  old_center = w->slider.lo_value +(w->slider.hi_value-w->slider.lo_value)/2;
+  newmin = w->slider.lo_value+(new_center-old_center);
+  newmax = w->slider.hi_value+(new_center-old_center);
+  if (newmin <  w->slider.minimum){
+    newmax += (w->slider.minimum - newmin);
+    newmin = w->slider.minimum;
+    value_changed = TRUE;
+  }
+  else if (newmax > w->slider.maximum){
+    newmin -= (newmax - w->slider.maximum);
+    newmax = w->slider.maximum;
+    value_changed = TRUE;
+  }
+  cb.low_value  = newmin;
+  cb.high_value = newmax;
+  /* If the value changes, callback must be made */
+  if ((newmin != w->slider.lo_value) || (newmax != w->slider.hi_value))
+    value_changed = TRUE;
+  XtVaSetValues((Widget)w,
+		XtNlowValue, newmin,
+		XtNhighValue, newmax,
+		NULL);
+  
+  /*
+   * Invoke the callback, report the position in the call_data
+   * structure
+   */
+  cb.reason   = XabCR_LOCK_SELECT;
+  cb.event    = event;
+  if (w->slider.lock_select_cb != NULL)
+    XtCallCallbacks ((Widget)w, XtNlockSelectCallback, &cb);
+  else if (value_changed){
+    cb.reason   = XabCR_VALUE_CHANGED;
+    XtCallCallbacks ((Widget)w, XtNvalueChangedCallback, &cb);
+  }
+}
+
+static void
+#ifdef _NO_PROTO
+increment_lock(wid, event, args, n_args)
+     Widget   wid;
+     XEvent   *event;
+     char     *args[];
+     int      n_args;
+#else
+increment_lock(
+	       Widget   wid,
+	       XEvent   *event,
+	       char     *args[],
+	       int      n_args)
+#endif /* _NO_PROTO */
+{
+
+  XabSlider2Widget w = (XabSlider2Widget) wid;
+  int new_center;
+  int newmin, newmax;
+  int old_center;
+  XabSlider2CallbackStruct cb;
+  int  incr    = w->slider.increment;
+  int lo_value = w->slider.lo_value;
+  int hi_value = w->slider.hi_value;
+  Boolean value_changed = FALSE;
+
+  new_center = pos_from_xy(w,event->xbutton.x, event->xbutton.y);
+  old_center = w->slider.lo_value +(w->slider.hi_value-w->slider.lo_value)/2;
+
+  if (old_center> new_center){
+    if ((lo_value - incr) >= w->slider.minimum){
+      lo_value -= incr;
+      hi_value -= incr;
+      value_changed = TRUE;
+    }
+  }
+  else if (old_center < new_center){
+   if ((hi_value + incr) <= w->slider.maximum){
+      lo_value += incr;
+      hi_value += incr;
+      value_changed = TRUE;
+    }
+  } 
+
+  cb.low_value  = lo_value;
+  cb.high_value = hi_value;
+  XtVaSetValues((Widget)w,
+		XtNlowValue, lo_value,
+		XtNhighValue, hi_value,
+		NULL);
+  
+  /*
+   * Invoke the callback, report the position in the call_data
+   * structure
+   */
+  cb.reason   = XabCR_LOCK_INCREMENT;
+  cb.event    = event;
+  if (w->slider.lock_increment_cb != NULL)
+    XtCallCallbacks ((Widget)w, XtNlockIncrementCallback, &cb);
+  else if (value_changed){
+    cb.reason   = XabCR_VALUE_CHANGED;
+    XtCallCallbacks ((Widget)w, XtNvalueChangedCallback, &cb);
+  }
+}
+
+
+static void
+#ifdef _NO_PROTO
+increment_indicator(wid, event, args, n_args)
+     Widget   wid;
+     XEvent   *event;
+     char     *args[];
+     int      n_args;
+#else
+increment_indicator(
+		    Widget   wid,
+		    XEvent   *event,
+		    char     *args[],
+		    int      n_args)
+#endif /* _NO_PROTO */
+{
+
+  XabSlider2Widget w = (XabSlider2Widget) wid;
+  XabSlider2CallbackStruct cb;
+  int     lo_value, hi_value;
+  int     incr;
+  int     newpos;
+  Boolean value_changed = FALSE;
+
+  lo_value = w->slider.lo_value;
+  hi_value = w->slider.hi_value;
+  incr     = w->slider.increment;
+  
+  newpos = pos_from_xy(w,event->xbutton.x, event->xbutton.y);
+  /*
+   * If slider was closer to the lo value indicator
+   */
+  if ((ABS((newpos - lo_value))<ABS((newpos - hi_value)))||
+      ((hi_value == lo_value) && (newpos < lo_value))){
+    /*
+     * If click was in pos < lo value
+     */
+    if ((newpos - w->slider.lo_value)<0){
+      if ((lo_value - incr) >= w->slider.minimum){
+	lo_value -= incr;
+	value_changed = TRUE;
+      }
+    }
+    else if ((newpos - w->slider.lo_value)>0){
+      if ((lo_value + incr) <= w->slider.maximum){
+	lo_value += incr;
+	value_changed = TRUE;
+      }
+    }
+    cb.low_value  = lo_value;
+    cb.high_value = w->slider.hi_value;
+    XtVaSetValues((Widget)w,
+		  XtNlowValue, lo_value,
+		  NULL);
+  }
+  /*
+   * If slider was closer to the hi value indicator
+   */ 
+  else{
+   /*
+     * If click was in pos > high value
+     */
+    if ((newpos - w->slider.hi_value) > 0){
+      if ((hi_value + incr) <= w->slider.maximum){
+	hi_value += incr;
+	value_changed = TRUE;
+      }
+    }
+    else if ((newpos - w->slider.hi_value) < 0){
+       if ((hi_value - incr) >=  w->slider.minimum){
+	 hi_value -= incr;
+	 value_changed = TRUE;
+       }
+     }
+    cb.high_value = hi_value;
+    cb.low_value  = w->slider.lo_value;
+    XtVaSetValues((Widget)w,
+		  XtNhighValue, hi_value,
+		  NULL);
+  }
+
+  /*
+   * Invoke the callback, report the position in the call_data
+   * structure
+   */
+  cb.reason   = XabCR_INCREMENT;
+  cb.event    = event;
+  if (w->slider.increment_cb != NULL)
+    XtCallCallbacks ((Widget)w, XtNincrementCallback, &cb);
+  else if (value_changed){
+    cb.reason   = XabCR_VALUE_CHANGED;
+    XtCallCallbacks ((Widget)w, XtNvalueChangedCallback, &cb);
+  }
+}
+
+
+static void
+#ifdef _NO_PROTO
+release(wid, event, args, n_args)
+     Widget   wid;
+     XEvent   *event;
+     char     *args[];
+     int      n_args;
+#else
+release(
+	Widget   wid,
+	XEvent   *event,
+	char     *args[],
+	int      n_args)
+#endif /* _NO_PROTO */
+{
+  XabSlider2Widget w = (XabSlider2Widget) wid;
+  XabSlider2CallbackStruct cb;
+
+  w->slider.current_indicator = NO_INDICATOR;
+  if (w->slider.dragged == FALSE) return;
+
+  cb.reason     =  XabCR_VALUE_CHANGED;
+  cb.event      = event;
+  cb.low_value  = w->slider.lo_value;
+  cb.high_value = w->slider.hi_value;
+  XtCallCallbacks ((Widget)w, XtNvalueChangedCallback, &cb);
+  w->slider.dragged = FALSE;
+}
+
+#<
+
+#>            Slider2.h
+/***************************************************************************
+ *
+ * Slider2.h: Public header file for slider with 2 indicators
+ *
+ * Author   : Aziz Boxwala
+ *            Dept of Radiation Oncology
+ *            UNC Chapel Hill
+ *
+ **************************************************************************/
+
+#ifndef  __SLIDER2_H__
+#define  __SLIDER2_H__
+
+/*
+ * Resource string names
+ */
+#define XtNvalueChangedCallback  "value_changedCallback"
+#define XtNdragCallback          "dragCallback"
+#define XtNincrementCallback     "incrementCallback"
+#define XtNdecrementCallback     "decrementCallback"
+#define XtNselectCallback        "selectCallback"
+#define XtNresetCallback         "resetCallback"
+#define XtNlockSelectCallback    "lock_selectCallback"
+#define XtNlockDragCallback      "lock_dragCallback"
+#define XtNlockIncrementCallback "lock_incrementCallback"
+
+#define XtNmarkers             "markers"
+#define XtNindicatorColor      "indicatorColor"
+#define XtNindicatorFillColor  "indicatorFillColor"
+#define XtNindicatorThickness  "indicatorThickness"
+#define XtNposition            "position"
+#define XtNincrement           "increment"
+#define XtNmarkerLength        "markerLength"
+#define XtNshowLabel           "show_label"
+#define XtNlabelColor          "label_color"
+#define XtNlabelAlignment      "label_align"
+#define XtNlabelPrecision      "label_precision"
+#define XtNminimum             "minimum"
+#define XtNmaximum             "maximum"
+#define XtNlowValue            "lo_value"
+#define XtNhighValue           "hi_value"
+#define XtNprocessingDirection "processingDir"
+
+#define XtCMarkers        "Markers"
+#define XtCMin            "Min"
+#define XtCMax            "Max"
+#define XtCThick          "Thick"
+#define XtCIncrement      "Increment"
+#define XtCAlignment      "Alignment"
+#define XtCPrecision      "Precision"
+#define XtCDirection      "Direction"
+
+enum {XabCR_VALUE_CHANGED, XabCR_DRAG, XabCR_INCREMENT,
+	XabCR_DECREMENT, XabCR_RESET, XabCR_SELECT,
+	XabCR_LOCK_SELECT, XabCR_LOCK_DRAG, XabCR_LOCK_INCREMENT};
+enum {XabALIGN_CENTER, XabALIGN_LEFT, XabALIGN_RIGHT};
+
+enum {XabVERTICAL, XabHORIZONTAL};
+enum {XabMAX_ON_TOP, XabMAX_ON_BOTTOM, XabMAX_ON_LEFT, XabMAX_ON_RIGHT};
+
+extern WidgetClass xabSlider2WidgetClass;
+typedef struct _XabSlider2ClassRec * XabSlider2WidgetClass;
+typedef struct _XabSlider2Rec      * XabSlider2Widget;
+
+typedef struct {
+  int     reason;     /* The reason why the callback was made            */
+  XEvent *event;      /* The event structure that triggered the callback */
+  int     low_value;  /* The new position of the low value indicator     */
+  int     high_value; /* The new position of the high value indicator    */
+}  XabSlider2CallbackStruct;
+
+#endif /* __SLIDER2_H__ */
+#<
+
+#>            Slider2P.H
+/**************************************************************************
+ *
+ * Slider2P.h : Private header file for slider widget with 2 indicators
+ *
+ * Author   : Aziz Boxwala
+ *            Dept of Radiation Oncology
+ *            UNC Chapel Hill
+ *
+ **************************************************************************/
+
+#ifndef __SLIDER2P_H__
+#define __SLIDER2P_H__
+
+#define INDICATOR_THICKNESS (3) /* Indicator line thickness */
+enum {NO_INDICATOR, LO_INDICATOR, HI_INDICATOR};
+
+typedef struct _XabSlider2ClassPart{
+       int ignore;
+} XabSlider2ClassPart;
+
+typedef struct _XabSlider2ClassRec{
+   CoreClassPart    core_class;
+   XabSlider2ClassPart  slider2_class;
+} XabSlider2ClassRec;
+
+extern XabSlider2ClassRec Xabslider2ClassRec;
+
+
+typedef struct _XabSlider2Part {
+   Pixel     indicator_color;  /* Color of indicators    */
+   Pixel     indicator_fill_color;
+   int       lo_value;         /* lo indicator position  */
+   int       hi_value;         /* hi indicator position  */
+   int       minimum;          /* Minimum value          */
+   int       maximum;          /* Max value              */
+   int       increment;        /* Minimum increment      */
+   int       thickness;        /* indicator thickness    */
+   Position  lo_x;             /* coordinates of the     */
+   Position  lo_y;             /* low value indicator    */
+   Position  hi_x;             /* coordinates of the     */
+   Position  hi_y;             /* high value indicator   */
+   int       orientation;      /* Slider horz or vert    */
+   int       proc_dir;         /* Processing direction   */
+   GC        indicator_GC;     /* assorted gc's          */
+   GC        indicator_fill_GC;
+   Cursor    cursor;           /* Cursor displayed in slider window */
+   Boolean   dragged;           /* Flag to indicate drag event*/
+   int       current_indicator; /* Indicator being dragged */
+   XtCallbackList select_cb;    /* callback list          */
+   XtCallbackList drag_cb;
+   XtCallbackList increment_cb;
+   XtCallbackList lock_select_cb;
+   XtCallbackList lock_drag_cb;
+   XtCallbackList lock_increment_cb;
+   XtCallbackList value_changed_cb;
+ } XabSlider2Part;
+
+typedef struct _XabSlider2Rec {
+   CorePart          core;
+   XabSlider2Part     slider;
+} XabSlider2Rec;
+
+#endif /* __SLIDER2P_H__ */
+
+#<
+
+#>            slider2.dc3
+Document:     slider2
+
+Purpose:      Slider2 widget
+
+Category:     USER-INTERFACE, SYSTEM
+
+File:         slider2.src
+
+Author:       J.P. Terlouw
+
+Description:  slider2.src contains Aziz Boxwala's Slider2 widget
+              for use in GIPSY. It is part of the Xab Widget Library of which
+              the original distribution source files
+              are included in tar'ed, gzip'ped, uuencode'd format.
+              The `packaging' of this widget has been slightly modified for
+              easier inclusion in giplib and a small bug in the
+              XtNlockIncrementCallback definition has been repaired.
+
+              Also a new resource "indicatorThickness" has been added.
+
+Copyright notice:  
+
+       Copyright (C) 1995 Aziz Boxwala, University of North Carolina
+       at Chapel Hill.  All Rights Reserved
+       
+       Permission to use, copy, modify, and distribute this software for any
+       purpose and without fee is hereby granted, provided that the above
+       copyright notice appear in all copies and that both the copyright notice
+       and this permission notice appear in supporting documentation. 
+       
+       The author and the institution disclaim all warranties with regard to
+       this software, including all implied warranties of merchantability and
+       fitness.  In no event shall the author be liable for any special,
+       indirect or cosequential damages or any damages whatsoever resulting
+       from loss of use, data or profits, whether in an action of contract,
+       negligence or other tortious action, arising out of or in connection
+       with the use or performance of this software.
+       
+Updates:      Apr  9, 1998: JPT, Document created.
+              Jun 30, 1999: JPT, indicatorThickness resource added.
+              Feb  7, 2000: JPT, modified to allow non-default visuals.
+#<
+
+#>            xab.uue
+begin 644 xab-v1.1.tar.gz
+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
+KNMRV+L=`[H1\*0,.2V<:*_\T?^;/_)D_\V?^S)_Y<X_/_P>,6IS<``@"`/;0
+`
+end
+#<

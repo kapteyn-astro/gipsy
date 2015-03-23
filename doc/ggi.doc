@@ -1,0 +1,223 @@
+Document:     ggi
+
+------------------------------------------------------------------------
+Ggi, GIPSY's graphical user interface, makes use of the X Toolkit. Most
+elements come from the Athena widget set. With a few exceptions, all
+elements are coupled to the Hermes keyword mechanism. This implies that
+all rules for user input also apply to input within Ggi.
+
+Below the interaction with the most important elements is explained.
+
+
+TEXT INPUT FIELDS
+=================
+In a text input field the user can type information. It has limited
+Emacs-like editing capabilities. The following mouse and keyboard
+interactions are defined:
+
+CTRL-B or Left Arrow  :  move one character left
+
+CTRL-F or Right Arrow :  move one character right
+
+CTRL-A                :  move to beginning of text
+
+CTRL-E                :  move to end of text
+
+CTRL-H, Backspace
+or Delete             :  delete previous character
+
+CTRL-D                :  delete next character
+
+CTRL-K                :  delete from cursor to end
+
+CTRL-U, Esc or      
+Right Button click    :  delete all
+
+Left Button drag      :  select text for "mouse buffer"
+
+Middle Button click   :  paste "mouse buffer" into input field
+
+Enter                 :  accept input (i.e. send it to the program)
+
+Left Button click     :  move to input field clicked in
+
+Tab or Down Arrow     :  move to next input field
+
+Up Arrow              :  move to previous input field
+
+
+ANALOG VALUATORS
+================
+There are two kinds of analog valuators: gauges and dials. A gauge is a
+horizontal rectangle containing a kind of handle which can be
+manipulated with the mouse. The position of the handle determines which
+value is sent to the program. A dial is a circle or circle sector
+containing an arrow which also can be manipulated with the mouse.
+In this case the rotation angle determines the value. 
+
+GAUGE interactions
+------------------
+Left Mouse Button     :  move handle to position of the mouse. Both clicking
+                         and dragging are possible
+
+Middle or Right click :  move handle a small amount towards mouse position
+
+DIAL interactions
+-----------------
+Left Mouse Button     :  move arrow to position of the mouse. Both clicking
+                         and dragging are possible
+
+Middle Button click   :  move arrow small amount clockwise
+
+Right  Button click   :  move arrow small amount anti-clockwise
+
+
+BUTTONS and MENUS
+=================
+These elements don't need much explanation. A button can be activated by
+clicking in it with the mouse. A menu requires a two-stage interaction.
+First press the left mouse button in the menu button and hold it down.
+Now the actual menu pops up. Then move the mouse pointer to the desired
+menu entry and release the mouse button.
+
+NOTE: on some systems menu entries cannot be selected when the Caps Lock
+      key is on.
+
+
+PLOT FIELDS
+===========
+Depending on the program, a plot field may be either output-only or
+cursor interaction may be possible. For output-only plot fields, the
+cursor has an arrow shape. When cursor interaction is possible, a
+crosshair cursor is used. The possible interactions are completely
+determined by the program.
+
+
+POP-UP WINDOWS
+==============
+Pop-up windows are windows, separate from the "main" window, which can
+be brought to the screen when they are needed. The way in which this is
+done, is determined by the program, but it is usually the result of a
+button-press or menu selection. Closing such a window is also under
+program control, usually as the result of pressing some kind of
+"close"-button.
+
+
+HELP WINDOWS
+============
+A help window is a pop-up window used to show a documentation file. If
+a document does not fit in the window, scrollbars are added which allow
+the user to scroll through the document. Interaction with help windows
+depends on which version of the Athena widget set is used. The
+following interactions may or may not work:
+
+CTRL-S                :  search forward (case sensitive)
+
+CTRL-R                :  search backwards (case sensitive)
+
+CTRL-V or Page Down   :  go to next page
+
+Page Up               :  go to previous page
+
+CTRL-Z or CTRL-N      :  scroll or move one line forward
+
+CTRL-P                :  move one line backwards
+
+
+WINDOW BACKGROUND
+=================
+Clicking in any window's background with the right mouse button
+activates a special pop-up window containing GUI elements common to
+every application.  Currently there are elements for recording events in
+a file (which can be played back by the task PLAYER), for starting
+PLAYER, and for logging events in the log file. Please note that PLAYER
+is an independent task, not a pop-up window of the originating task.
+It is started under the name of the originating task prefixed by "PLAY_".
+
+
+Keywords
+========
+
+GGIOPT=
+
+     When a Ggi application is started, the keyword GGIOPT= can be used to
+     influence its behaviour with respect to the colormap. Two values
+     are possible:
+     
+     OWNCOL causes the application to use its own colormap. This can be useful
+            for applications displaying images with a large number of colors.
+            The default behaviour is that Ggi will try to obtain the necessary
+            colors from the default colormap and if this is not possible, it
+            will switch to a newly created colormap. In the latter case
+            standard colors are often displayed incorrectly.
+     
+     NOFIXCOL do not use the default colormap but try to use PseudoColor or
+            DirectColor instead. This is only useful when the
+            the default colormap is fixed, i.e. of the TrueColor class.
+
+
+GGILOGFILE=
+
+     Name of file in which changes in keywords related to Ggi elements are
+     to be logged. This file can then later be used as input to the event
+     player program PLAYER. GGILOGFILE= can be changed at any time:
+     when the task is started, but also for a running task. Also accessible
+     via the window background pop-up. See above.
+
+
+GGILOG=
+
+     YES or NO. Switches logging on or off. Note that logging is implicitly
+     on whenever a log file is specified. Can be changed at any time.
+     Also accessible via the window background pop-up.
+
+
+GGILOGDELAY=
+
+     YES or NO. If YES, also the time intervals between events are logged.
+     Can be changed at any time. Also accessible via the window background
+     pop-up.
+
+
+Configuration file
+==================
+There is a limited possibility to configure Ggi. This is done using an
+application defaults file, which must have the name XGgi and reside in
+a directory pointed to by the environment variable XAPPLRESDIR.
+An indication of what can be configured can be found in Ggi's source
+code, $gip_sub/ggi.src. Search for "def_fallback".
+
+For instance if you prefer a white background color and a blue foreground,
+create a file XGgi with the following contents:
+
+   *Background: white
+   *Foreground: blue
+
+Then set the environment variable to the current directory:
+
+   setenv XAPPLRESDIR `pwd`
+
+Now you must start GIPSY again after which the new configuration will be
+used. Please note that Ggi does not always adapt to the chosen configuration.
+E.g. if you choose a different font size, the layout may not be optimal. 
+------------------------------------------------------------------------
+
+
+Purpose:      Describe GIPSY's Graphical User Interface
+
+Category:     USER-INTERFACE
+
+File:         ggi.src
+
+Author:       J.P. Terlouw
+
+Updates:      Nov 18, 1999: JPT, Document created.
+              Aug 30, 2000: JPT, Document text updated.
+              Feb  7, 2001: JPT, Explain GGIOPT= keyword
+              Apr 24, 2001: JPT, GILOGFILE=, GGILOG= and GGILOGDELAY= added.
+              May  9, 2001: JPT, Window background pop-up.
+              Jun 18, 2001: JPT, Added PLAYER to window background pop-up.
+              Apr 21, 2008: JPT, Reversed default colour behaviour for GGIOPT=.
+              Apr 23, 2008: JPT, Fixed help text background problem.
+              Jun  2, 2010: JPT, Avoid some X servers' XGetImage inefficiency.
+              Jun 28, 2010: JPT, Fixed problem with Mac OS in ggihelpmenu.c.

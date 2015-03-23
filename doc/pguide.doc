@@ -1,0 +1,16 @@
+
+Document:     pguide
+
+Purpose:      GIPSY Programmers Guide.
+
+Category:     DOCUMENTATION
+
+File:         pguide.tex
+
+Author:       K.G. Begeman
+
+Description:  pguide.tex is a GIPSY programmers guide in LaTeX format.
+              Run latex $gip_doc/pguide to get the dvi file.
+
+Updates:      Sep 18, 1991: KGB, document created.
+

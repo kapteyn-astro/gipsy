@@ -1,0 +1,277 @@
+E     PROGRAM INSERT (copyright notice)
+C insert.shl
+C                           COPYRIGHT (c) 1991, 1995
+C         Kapteyn Astronomical Institute - University of Groningen
+C            P.O. box 800,  9700 AV Groningen, The Netherlands
+C
+E     PROGRAM INSERT (insert.dc1)
+C#>            insert.dc1
+C
+CProgram:      INSERT
+C
+CPurpose:      Program to insert (multiple) (parts of) a set into another
+C              existing set.
+C
+CCategory:     TRANSFER, MANIPULATION
+C
+CFile:         insert.shl
+C
+CAuthor:       K.G. Begeman
+C
+CKeywords:
+C
+C   INSET=     Set (and subset(s)) where to copy data from. Maximum
+C              number of input and output subsets is 2048.
+C
+C   OUTSET=    Set and subset(s) where to insert the data. The set and
+C              subsets must exist.
+C
+C** REPEAT=    Repeat keywords INBOX= and OUTBOX= to insert multiple parts
+C              of input set into output set [N].
+C
+C   INBOX=     Part of subsets to be inserted [REPEAT=N,whole subset;
+C              REPEAT=Y,quit].
+C
+C   OUTBOX=    Part of subsets where to insert [REPEAT=N,no default;
+C              REPEAT=Y,INBOX]. The size of the OUTBOX must equal the
+C              size of INBOX.
+C
+CUpdates:      Sep 25, 1991: KGB, Document created.
+C              Sep  6, 1995: KGB, Keyword REPEAT= implemented.
+C
+C#<
+E     PROGRAM INSERT (code)
+      program insert
+C
+C     Declaration of parameters:
+C
+      character*(*) ident
+N     Change version number on this line
+      parameter (ident = ' INSERT  Version 1.1  Sep  , 1995 ')
+      integer maxaxes
+N     Maximum number of axes in a set
+      parameter (maxaxes = 10)
+      integer maxsubs
+N     Maximum number of subsets
+      parameter (maxsubs = 2048)
+      integer maxbuf
+N     Size of data array
+      parameter (maxbuf = 4096)
+C
+C     Declarations for input set
+C
+N     Name of input set
+      character*80 set1
+N     Permutation of axes for input set
+      integer      axperm1(maxaxes)
+N     Ax size array
+      integer      axsize1(maxaxes)
+N     Coordinate words for gdsi_read
+      integer      cwlo1, cwhi1
+N     Frame of input subsets
+      integer      blo1(maxaxes), bhi1(maxaxes)
+N     Coordinate words of input subsets
+      integer      subset1(maxsubs)
+N     Transfer id input set
+      integer      tid1
+C
+C     Declarations for output set
+C
+N     Name of output set
+      character*80 set2
+N     Permutation of axes for output set
+      integer      axperm2(maxaxes)
+N     Ax size array
+      integer      axsize2(maxaxes)
+N     Coordinate words for gdsi_write
+      integer      cwlo2, cwhi2
+N     Frame of output subsets
+      integer      blo2(maxaxes), bhi2(maxaxes)
+N     Coordinate words of output subsets
+      integer      subset2(maxsubs)
+N     Transfer id output set
+      integer      tid2
+C
+C     Declaration of local variables:
+C
+N     Dummy string
+      character    string*512
+N     Dummy integer
+      integer      dummy
+N     Mode for gdsbox
+      integer      mode
+N     Counter
+      integer      n
+N     Number of pixels to read
+      integer      nr
+N     Subset counter
+      integer      ns
+N     Number of subsets to copy
+      integer      nsubs
+N     Dimension of subsets
+      integer      subdim
+N     Logical
+      logical      loop
+N     Arrays for input data
+      real         data(maxbuf)
+C
+C     Declaration of functions:
+C
+N     Returns coordinate word
+      integer      gdsc_fill
+N     Returns number of input subsets
+      integer      gdsinp
+N     Gets booleans
+      integer      userlog
+N     Gets text
+      integer      usertext
+C
+C     Data statements:
+C
+N     Repeat mode
+      data loop / .false. /
+N     Subset dimension
+      data subdim / 0 /
+C
+C     Executable code:
+C
+N     Get in touch with HERMES
+      call init
+N     Tell user who we are
+      call anyout( 8, ident )
+N     Get number of input subsets
+      nsubs = gdsinp( set1,
+     #                subset1,
+     #                maxsubs,
+     #                0,
+     #                'INSET=',
+     #                ' ',
+     #                11,
+     #                axperm1,
+     #                axsize1,
+     #                maxaxes,
+     #                1,
+     #                subdim )
+N     get output set
+      nsubs = gdsinp( set2,
+     #                subset2,
+     #                nsubs,
+     #                4,
+     #                'OUTSET=',
+     #                ' ',
+     #                11,
+     #                axperm2,
+     #                axsize2,
+     #                maxaxes,
+     #                1,
+     #                subdim )
+      dummy = userlog( loop, 1, 2, 'REPEAT=',
+     #                 'Repeat operation [N]' )
+C     Start of loop
+      repeat
+         if ( loop )
+         then
+            if ( usertext( string, 1, 'INBOX=',
+     #                     'Enter box to insert from [quit]' )
+     #           .EQ. 0 )
+            then
+               xrepeat
+            cif
+         cif
+         perform doit
+      until ( .not. loop )
+      call status( 'Updating minimum and maximum' )
+      call uminmax( set2, subset2, nsubs, 1 )
+N     Tell HERMES we're done
+      call finis
+C
+C     End of program
+C
+      stop
+E     Procedure doit
+      proc doit
+ 
+      call gdsbox( blo1,
+     #             bhi1,
+     #             set1,
+     #             subset1,
+     #             1,
+     #             'INBOX=',
+     #             ' ',
+     #             11,
+     #             0 )
+      if ( loop )
+      then
+         call cancel( 'INBOX=' )
+         for n = 1, subdim
+            bhi2(n) = bhi1(n)
+            blo2(n) = blo1(n)
+         cfor
+         mode = 6
+      else
+         for n = 1, subdim
+            bhi2(n) = bhi1(n) - blo1(n) + 1
+         cfor
+         mode = 12
+      cif
+      call gdsbox( blo2,
+     #             bhi2,
+     #             set2,
+     #             subset2,
+     #             1,
+     #             'OUTBOX=',
+     #             ' ',
+     #             11,
+     #             mode )
+      if ( loop )
+      then
+         call cancel( 'OUTBOX=' )
+      cif
+      for n = 1, subdim
+         if ((bhi2(n) - blo2(n) + 1) .ne. (bhi1(n) - blo1(n) + 1))
+         then
+            call error( 4, 'Unequal box sizes' )
+         cif
+      cfor
+N     Loop through the subsets
+      for ns = 1, nsubs
+N        Show user what we are working on
+         call showsub2( set1,
+     #                  subset1(ns),
+     #                  axperm1,
+     #                  set2,
+     #                  subset2(ns),
+     #                  axperm2 )
+N        Get lower coordinate word of input frame
+         cwlo1 = gdsc_fill( set1, subset1(ns), blo1 )
+N        Get upper coordinate word of input frame
+         cwhi1 = gdsc_fill( set1, subset1(ns), bhi1 )
+N        Get lower coordinate word of output frame
+         cwlo2 = gdsc_fill( set2, subset2(ns), blo2 )
+N        Get upper coordinate word of output frame
+         cwhi2 = gdsc_fill( set2, subset2(ns), bhi2 )
+N        Reset transfer id for input data
+         tid1 = 0
+N        Reset transfer id for output data
+         tid2 = 0
+         repeat
+            call gdsi_read( set1,
+     #                      cwlo1,
+     #                      cwhi1,
+     #                      data,
+     #                      maxbuf,
+     #                      nr,
+     #                      tid1 )
+            call gdsi_write( set2,
+     #                       cwlo2,
+     #                       cwhi2,
+     #                       data ,
+     #                       nr,
+     #                       nr,
+     #                       tid2 )
+         until (tid1 .eq. 0 .and. tid2 .eq. 0)
+      cfor
+
+      cproc
+E     The End
+      end

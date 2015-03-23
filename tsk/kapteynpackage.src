@@ -1,0 +1,114 @@
+kapteynpackage.src
+
+        Copyright (c) Kapteyn Laboratorium Groningen 2011
+        All Rights Reserved.
+
+Name:         kapteynpackage.src
+Creator:      terlouw
+Host:         azarquiel
+Date:         Feb 24, 2011
+Contents:     kapteynpackage.doc kapteynpackage.make kapteynpackage.py
+
+#>            kapteynpackage.doc
+Program:     KAPTEYNPACKAGE
+
+Purpose:     Kapteyn Package checking program.
+
+Category:    SYSTEM
+
+File:        kapteynpackage.src
+
+Author:      J.P. Terlouw
+
+Description: Running this program displays a message about the current
+             version of the Kapteyn Package. The main purpose of installing
+             this program is to install the Kapteyn Package within GIPSY.
+             This is done as a side-effect of the installation.
+             The installation procedure first fetches the package's
+             distribution from the web using wget and then installs it
+             under $gip_exe using the package's normal install script setup.py.
+
+             If problems have ocurred with the package's installation, more
+             information can be found in GIPSY's update log file. If this is
+             not available, running the following command from the GIPSY
+             account will show this information again:
+
+                 p -rebuild kapteynpackage.src
+
+             The download program wget or one or more prerequisites may be
+             missing, such as Python, WCSLIB and NumPy. Of the latter,
+             also their header (.h, "include") files need to be present.
+             Those are usually provided by the respective development
+             packages of your system's distribution. After correcting the
+             problem, repeating the rebuild command will install the package.
+
+             If you need to use the Kapteyn Package outside GIPSY, and if
+             it is not installed in another way, you can point the environment
+             variable PYTHONPATH to $gip_exe:
+
+                 setenv PYTHONPATH $gip_exe
+
+             after which it can be used normally.
+
+             More information about the Kapteyn Package can be found on the
+             webpage http://www.astro.rug.nl/software/kapteyn/.
+
+Updates:     Jun 14, 2010: JPT, Document created.
+#<
+
+#>            kapteynpackage.make
+SHELL     = /bin/sh
+
+DIR       = kapteyn-beta
+
+DOCUMENTS = kapteynpackage.doc
+
+HELPERS   = kapteynpackage.make kapteynpackage.py
+
+default:: kapteynpackage
+
+pack::
+	$${gip_sys}/pack.csh kapteynpackage.src $(DOCUMENTS) $(HELPERS)
+
+kapteynpackage :
+	-@rm kapteyn.tar.gz 
+	-@rm -rf kapteyn-*
+	-@wget http://www.astro.rug.nl/software/${DIR}/kapteyn.tar.gz
+	-@tar xvfz kapteyn.tar.gz
+	-@cd kapteyn-*; python setup.py install --install-lib $${gip_exe}
+	-@rm kapteyn.tar.gz 
+	-@rm -rf kapteyn-*
+	cp kapteynpackage.py kapteynpackage
+	chmod +x kapteynpackage
+#<
+
+#>            kapteynpackage.py
+#!/usr/bin/env python
+
+from gipsy import *
+
+init()
+
+try:
+   import kapteyn
+   anyout('Kapteyn Package version %s' % kapteyn.__version__)
+except:
+   anyout('''Kapteyn Package is not properly installed!
+
+More information can be found in GIPSY's update log file.
+If this is not available, running the following command from
+the GIPSY account will show this information again:
+
+  p -rebuild kapteynpackage.src
+
+One or more requirements may not be met, such as Python,
+WCSLIB and NumPy. Also their header (.h, "include") files need
+to be present. Those are usually provided by the respective
+development packages of your system's distribution. After
+correction the problem, repeating the rebuild command will
+install the package. See also the document kapteynpackage.doc.
+
+''')
+
+finis()
+#<

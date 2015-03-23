@@ -1,0 +1,2395 @@
+wcsflux.src
+
+        Copyright (c) Kapteyn Astronomical Institute, Groningen 2013
+        All Rights Reserved.
+
+Name:         wcsflux.src
+Creator:      vogelaar
+Host:         albirumi
+Date:         Sep 8, 2013
+Contents:     wcsflux.make wcsflux.dc1 mapmaker.dc1 wcsflux.py wcsflux.syn
+
+#>            wcsflux.make
+#----------------------------------------------------------------------
+# Makefile for task WCSFLUX (wcsflux.make)
+#
+# Pack sources into wcsflux.src with:    > make -f wcsflux.make pack
+# Unpack source files with:              > $gip_exe/xfile wcsflux.src
+# Install source file with:              > p -reserve wcsflux.src
+#                                        > p -install wcsfluxsrc
+#
+# Note that the source file includes a so called synonym file.
+# It contains a second name for the executable.
+#----------------------------------------------------------------------
+
+SHELL   = /bin/sh
+
+DOCUMENTS = wcsflux.dc1  mapmaker.dc1
+
+SOURCES   = wcsflux.py wcsflux.syn
+
+default:: wcsflux
+
+wcsflux : wcsflux.py
+	cp wcsflux.py wcsflux
+	chmod +x wcsflux
+
+pack::
+	$$gip_sys/pack.csh wcsflux.src wcsflux.make \
+        $(DOCUMENTS) $(SOURCES)
+
+#<
+
+#>            wcsflux.dc1
+Program:       WCSFLUX
+
+Purpose:       Plot set/subsets from a GIPSY set or slices from a FITS file
+               and annotate those plots with world coordinate labels and or
+               a graticule. Then add shapes in one image. The shapes are copied
+               to other images using their world coordinates. Finally
+               calculate the flux in those shapes.
+
+Category:      COORDINATES, DISPLAY, PLOTTING, ANALYSIS
+
+File:          wcsflux.src
+
+Author:        M.G.R. Vogelaar
+
+Keywords:
+               WCSFLUX specific keywords:
+               ==========================
+
+
+   POLFROMFILE= Do you want to read polygon data from file? .... Y/[N]
+
+               Data used to construct a shape can be written to an Ascii file
+               on disk. If you want to read it back, specify the file name
+               with keyword POLYFILENAME=
+               Shape data is written by pressing key 'w'. A file with shape
+               data is written to disk with a file name that starts with 'shapes'.
+               It also contains a date/time stamp. This name cannot be changed
+               by a user.
+               
+               After reading a file with shape data, the plotting the data is
+               started after pressing key 'r'.
+
+
+   POLYFILENAME= Enter name of file with polygon data:
+
+               Name of file on disk with data that defines a shape.
+
+               Here is an example of a file with shape data.
+               The data corresponds to an image with a world coordinate system
+               and should be read back in a compatible system.
+               The third a fourth column set a pixel coordinate. These start with 1 (FITS).
+               Note that this is not the same as GIPSY grids (where grid 0 is
+               equal to CRPIX).
+               Column five and six are world coordinates given in the system of the image
+               from which they are written to file.
+
+               The first two columns are for internal administration. They indicate
+               the associated shape (one of polygon, ellipse, circle
+               rectangle or spline). The second number is the number of the object
+               in its shape category.
+
+               ! Saved at Sunday 28/11/2010 14:39:34
+               ! Data saved for image: ../Mapmaker/ngc6946.fits
+               ! Slice position(s): [51]
+               ! Format of this file:
+               ! Shape # - object# - x pixel - y pixel - x world - y world
+               ! ---------------------------------------------------------
+               0 0    84.867303    29.604512    40.707425    28.550258
+               0 0   138.401389    28.117454    40.687110    28.549761
+               0 0   138.401389    78.677425    40.687108    28.566615
+               0 0   138.401389   129.237395    40.687106    28.583468
+               0 0    80.406129   128.493866    40.709121    28.583221
+               0 0    84.123774    77.933896    40.707708    28.566367
+               0 0    84.123774    27.373925    40.707707    28.549514
+
+
+   PIXORWORLD=  Read Pixel- or World coords from shape file ... P/[W]:
+
+               Select for the file in POLYFILENAME= whether you want the positions
+               in pixel coordinates (P) or in world coordinates (W).
+               Note that pixel coordinates follow the FITS standard, i.e.
+               they start with 1. These are not the same as grid coordinates
+               in GIPSY because there we label the pixel that corresponds to the
+               projection center (CRPIX) as grid 0. The advantage is that
+               one can use the shape data files in both the GIPSY environment
+               and in applications that follow the FITS standard.
+
+
+   WCS=        Markers propagate in Pixel- or World coords ... P/[W]:
+
+               While plotting a marker at a position in the current image, the
+               program looks for other images and tries to plot a corresponding
+               position in those images. The correspondence can either be in pixel
+               coordinates or in world coordinates. The procedure also works for
+               maps with only one spatial axis (e.g. position-velocity diagrams).
+               
+
+               The graphical user interface (gui) shows a number of buttons. The text on
+               the buttons explain what they do.
+               At the bottom of the gui you will see a list with (keyboard) keys and
+               their associated action.
+
+
+               Keywords common in MAPMAKER and WCSFLUX
+               =======================================
+
+   DEVLEV=     Prompt all keywords (1) or only most important (2)? ... [2]:
+
+               Many keywords are to adjust plot parameters and it is not
+               useful to prompt all of them if you only want to have a
+               quick plot on the screen for inspection. If you need different
+               sky systems, spectral translations or an optimal result for
+               a hardcopy, then set DEFLEV=1.
+
+
+               Keywords in a loop:
+               -------------------
+               Keywords prompted in a loop have a name followed by a number
+               like KEYWORD1=, KEYWORD2= etc. The number corresponds to the
+               data set which is also entered in a loop.
+
+   DATASET1=   Enter name of FITS file or GIPSY set ... [list files]:
+
+               Specify the location of the data. This data can either be
+               a GIPSY set or a FITS file. You can give the name of the file, then
+               other keywords to specify axes will follow. Or your input
+               contains the description of the slices (subsets). This syntax is
+               the same for FITS files and GIPSY sets.
+               Examples:
+                  1) DATASET=AURORA
+                  2) DATASET=AURORA FREQ 10:20 30 40
+                  3) DATASET=m101.fits
+                  4) DATASET=http://people.sc.fsu.edu/~burkardt/data/fit/datacube.fit FELO 2
+                  5) DATASET=datacube.fit.gz FELO 0
+
+               ad 1) Just the name of the data. The program will prompt for additional
+                     information. Knowledge about the axes in the set is not necessary.
+               ad 2) Using knowledge of the axes in a set, specify location and
+                     subsets (data slices).
+               ad 3) Same as 1 but now for a FITS file
+               ad 4) FITS files can be retrieved from an Internet location with an URL
+                     In this example one slice is defined.
+               ad 5) FITS files can also be accessed in gzipped format.
+
+               Note that the pixels for FITS files are not 1-based as is standard in FITS,
+               but they follow GIPSY rules i.e. pixel 0 is found at the header value of
+               'crpix' of the corresponding axis.
+
+
+   HDU1=       Enter number of Header Data Unit ... [0]:
+
+               If a FITS file is selected and the file contains more than one Header
+               Data Units (hdu), the user is prompted to select the unit where the
+               image data is stored. A table with options is written to screen.
+               The input is a valid integer number. The default is 0.
+
+
+   AXNAMES1=   Enter two of RA,DEC,VELO ... [RA DEC]:
+
+               If you did not specify subsets and the dimension of your data is
+               greater than 2, you are prompted to enter two axis names that
+               are part of the image you want to plot. In the prompt all the axes
+               are included. The default are the first two axes in your set.
+               The input are two strings which are minimal matched.against the known
+               axes. Note that you can enter the axes in any order.
+
+               Examples for set AURORA with RA, DEC, FREQ axes.
+                  AXNAMES1=                     # default is RA,DEC
+                  AXNAMES1=RA FREQ              # XV map with FREQ along vertical axis
+                  AXNAMES1=FR R                 # XV map with FREQ along horizontal axis
+                  AXNAMES1=D R                  # Spatial DEC,RA map
+
+
+
+   XXXX1=      Enter pixel position(s) on XXXX ... [lo:hi]:
+
+               XXXX represents a variable set of keywords with the same name as the
+               repeat axes in a set. Repeat axes are all axes that are not part of the
+               specified data slice (AXNAMES1=). The default values are all pixels along
+               the axis resulting in all possible slices along the repeat axis.
+               The syntax follows the rules for GIPSY input of integers.
+
+               Example for set AURORA2 with:
+                  FREQ-OHEL            from     -4 to      5
+                  DEC--NCP             from    -29 to     20
+                  RA---NCP             from    -24 to     25
+                  POL                  from      0 to      3
+
+                  AXNAMES=DEC FR
+                  Enter grid position(s) on RA ..... [-24:25]
+                  RA=0
+                  Enter grid position(s) on POL ..... [0:3]
+                  POL=1
+
+                  This defines one slice with axes DEC and FREQ at RA=0 and POL=1
+                  or:
+                  RA=-2:2 10
+                  to get six slices at RA -2,-1,0,1,2 and 10
+
+               Note that these subset/slices could also be entered at the DATASET1=
+               prompt as follows:
+                  DATASET1=AURORA2 ra -2:2 10 pol 1
+
+
+   SWAPAXES1=  Do you want to swap axes RA and DEC? ... Y/[N]:
+
+               If your input defined 2D slices then you you are able to swap
+               the two axes in the subset. The GIPSY input syntax for set/subsets
+               does not provide syntax to get for swapped axes.
+
+
+   BOX1=       Enter limits of map xlo,ylo, xhi,yhi ... [xlo,ylo, xhi,yhi]:
+
+               Enter coordinates that extract an area smaller than or equal
+               (the default) to the slice area.
+               Pleas note:
+               1) that the syntax follows that of GIPSY and therefore the
+                  pixel positions are not 1-based as in FITS.
+                  The GIPSY syntax allows for a center coordinate and sizes.
+               2) that world coordinates are related to GIPSY's legacy coordinate
+                  system which will conflict with WCSlib. Therefore only grid coordinates
+                  and no world coordinates should be entered.
+               3) the order of the axes is always that of the axes in the data set.
+                  even if you forced swapping axes with AXNAMES= or SWAPAXES=
+
+               Examples:
+                  Limits RAlo,VELOlo, RAhi,VELOhi ... [-50,-50,49,49]:
+                  BOX=
+                  BOX=-9 -9 10 10
+                  BOX=0 0 D 20 20
+
+                  Note that the second and third example result in the same area.
+
+
+
+   SPECTRANS1= Spectral translation for axis xxx or ? for help ... [native]:
+
+               If one of the image axes is of spectral type, you are prompted
+               to enter a so called 'spectral translations' which sets a translation
+               from the native coordinate to another (e.q. frequency to velocity).
+
+               If you entered ? then you will see a list with
+               available spectral translation
+               All translations known by WCSlib are tested by the program
+               and only the valid ones are listed. One can enter part of the string that
+               represents the spectral translation.
+
+               Example:
+               SPECTRANS1=?
+               =========== Available spectral translations ===========
+               FREQ (Hz), ENER (J), WAVN (/m), VOPT-F2W (m/s), VRAD (m/s), VELO-F2V (m/s)
+               WAVE-F2W (m), ZOPT-F2W, AWAV-F2A (m), BETA-F2V
+
+               SPECTRANS1=b
+               This selects the spectral translation BETA-F2V which has no units.
+               Labeling and position information in the plot are from this moment on
+               related to this translation.
+
+
+   SUNITS1=    Units for spectral slice info ... [native]:
+
+               If more than one subset/slice is entered and one of the subset/slice
+               axes is spectral, then you are asked to give an (alternative)
+               unit for the numbers in the subset/slice info label.
+               If, for example, the native axis is frequency and you entered
+               SPECTRANS1=VOPT, then with SUNITS1=km/s you get the slice
+               information optical velocities in km/s.
+
+
+   COLORMAP1=  Enter name of color map or ? for list ... [jet]:
+
+               If you enter ? then a list with color maps is displayed in the Hermes'
+               log file.
+               Your selection is (part of) a string and is minimal matched with
+               the entries in the list. If it is not in the list it could be a color
+               map (lut) on disk. Color luts are created with key 'm' when an image
+               is displayed. This way, one can create custom color maps.
+               Note that the input is case sensitive.
+
+
+   COLORSCALE1= 1=linear  2=log  3=exp  4=sqrt  5=square ... [1]:
+
+               Set the color scaling to one of the list in the prompt.
+
+
+   CSLOPE1=    Slope image values vs colors ... [1.0]:
+
+               Together with COFFSET1=, one defines how the range of image
+               values correspond with a range of colors.
+               Usually the slope and offset
+
+
+   COFFSET1=   Offset image values vs colors ... [0.0]:
+
+               Together with CSLOPE1=, one defines how the range of image
+               values correspond with a range of colors.
+
+
+   VMINMAX1=   Scale colors between image values ... [datamin, datamax]:
+
+               Before the prompt, the minimum and maximum data values of you slices
+               (subsets) within the given axes limits (BOX=) are calculated.
+               These values are used as a default to distribute the colors of your
+               color map. Data outside this range is clipped.
+
+
+   WANTCONT1=  Add contours? ... Y/[N]:
+
+               To enhance the visibility of certain features in a map, one can add
+               contour lines. If you confirm wanting contours you will be prompted
+               for the wanted contour levels with CLEVELS=
+
+
+   CLEVELS1=   Enter contour levels between .. and .. ... [automatic]:
+
+               Enter one or more levels in units of you image data for which
+               contour lines will be plotted. The default forces the program
+               to calculate levels. Usually these are not the most suitable
+               levels because also noise is represented by one or more of these
+               levels. The contours are labeled.
+
+
+   CCOLORS1=   Enter one or more colors for contours ... [r]:
+
+               Distinguish contours by a color. The default is one color (red).
+               In the log file a list is presented with possible colors and their
+               abbreviation.
+
+
+   WANTCOLORBAR1= Add a colorbar? ... Y/[N]:
+
+               Create a bar with colors from the selected colormap and label
+               these colors with the corresponding data values in the units of
+               your data.
+
+
+   COLBARFRAME1= Enter x0,y0, width, height ... [calculated]:
+
+               If you want to specify a frame for a colorbar, then
+               enter a center and a width and height. The coordinates
+               in which this must be entered, depend on the value of
+               CBFRAMEMODE1=
+
+
+   CBFRAMEMODE1= Frame coords: F=Norm. in frame, D=Data coords ... [Norm. in figure]:
+
+               The coordinates entered in COLBARFRAME1= are in normalized
+               figure coordinates, i.e. the lower left coordinate of the
+               figure is (0,0) and the upper right coordinate of the figure
+               is (1,1). This is the default.
+
+               If CBFRAMEMODE1=F then the coordinates are normalized coordinates
+               but now with respect to the current subplot.
+               If CBFRAMEMODE1=D, the coordinates are pixel coordinates with
+               respect to the current subplot (Not yet tested and perhaps less useful).
+
+
+   CBORIENT1=  Horizontal color bar (H) or vertical (V)? ... H/[V]:"
+
+               Orientation of the colorbar.
+
+
+   CBLABEL1=   Label for color bar ... [BUNITS from header]:
+
+               To print a label near the colorbar with information about
+               the data units, one should enter a string here. The default
+               string is a unit as read from the header of Set or FITS file
+               (FITS keyword BUNIT)
+
+
+   SKYOUT1=    Sky system 0=eq, 1=ecl, 2=gal, 3=sup.gal ... [native]?
+
+               If both axes of your map are spatial axes (one longitude
+               and one latitude axis), then you are prompted to enter
+               a celestial system (sky system) for the coordinate transformations.
+               The default value is the system native to the data as defined
+               by the FITS or GIPSY header.
+               The systems are given by number:
+               0 = Equatorial
+               1 = Ecliptic
+               2 = Galactic (II)
+               3 = Supergalactic
+
+               Equatorial systems are further identified by an Equinox and
+               a reference system. Those can be entered with the keywords
+               EQUINOX= and REFSYS=
+
+               You can only change the output sky system for spatial axes
+               and not for maps with one spatial axis and one non spatial axis
+               (e.q. position-velocity maps).
+
+
+   RADESYS1=   Ref.sys 0=fk4, 1=fk4_no_e, 2=fk5, 3=icrs, 4=j2000 ... [native]:
+
+               Equatorial and ecliptic coordinates are relative to a
+               reference system. The system is selected with an integer
+               number. The fk4_no_e system is fk4 where the positions are
+               not corrected for the elliptic terms of aberration.
+               If nothing appropriate could be found in the header
+               a reference system is assumed according the FITS standard
+               rules.
+
+
+   EQUINOX1=   Enter equinox (eq. J2000, B1983.5) ... [native]:
+
+               Equatorial and ecliptic coordinates are relative to a
+               given equinox. The default value is the one found in the header.
+               If the value is not listed in the header of your data set,
+               an equinox is assumed according the FITS standard rules.
+
+               The input is an integer or floating point number prefixed by
+               one or more characters to set an epoch.
+
+               B      Besselian epoch. Example 'B 1950', 'b1950', 'B1983.5', '-B1100'
+               J      Julian epoch. Example: 'j2000.7', 'J 2000', '-j100.0'
+               JD     Julian date. This number of days (with decimals)
+                      that have elapsed since the initial epoch defined
+                      as noon Universal Time (UT) Monday, January 1, 4713 BC
+                      in the proleptic Julian calendar
+                      Example: 'JD2450123.7'
+               MJD    The Modified Julian Day (MJD) is the number of days
+                      that have elapsed since midnight at the beginning of
+                      Wednesday November 17, 1858. In terms of the Julian day:
+                      MJD = JD - 2400000.5
+                      Example: 'mJD 24034', 'MJD50123.2'
+               RJD    The Reduced Julian Day (RJD): Julian date counted from
+                      nearly the same day as the MJD,
+                      but lacks the additional offset of 12 hours that MJD has.
+                      It therefore starts from the previous noon UT or TT,
+                      on Tuesday November 16, 1858. It is defined as:
+                      RJD = JD - 2400000
+                      Example:  'rJD50123.2', 'Rjd 23433'
+               F      1) DD/MM/YY             Old FITS format
+                                              Example: 'F29/11/57'
+                      2) YYYY-MM-DD           FITS format
+                                              Example: 'F2000-01-01'
+                      3) YYYY-MM-DDTHH:MM:SS  FITS format with date and time.
+                                              Example: 'F2002-04-04T09:42:42.1'
+
+
+   GRATICULES1= Draw graticule lines and WCS labels? ... [Y]/N:
+
+               A world coordinate system with parallels and meridians
+               is plotted labeled with the corresponding constant
+               values. The system is plotted in the projection defined
+               in the header and in the celestial system defined
+               with previous keywords SKYOUT=, RADESYS= and EQUINOX=
+
+               If one wants to plot images without the graticule overlay,
+               then enter GRATICULES=N
+
+
+   GRIDLAB1=   Do you want to plot grid labels? ... Y/[N]:
+
+               Annotate the grids along the top and right plot axis.
+               Note that grid (0,0) corresponds to pixel
+               NINT(CRPIX_x), NINT(CRPIX_y). Function NINT() finds
+               the nearest integer. CRPIX is the reference pixel.
+
+
+   GRIDLABATT1= Plot attributes for plot object ... [color:g]:"
+
+               Plot attributes in format key:value
+               and value always without quotes.
+               E.g.: GRIDLABATT1=color:#aabb00 fontsize=4
+
+
+   BEAMPOS1=   Enter position of beam ... [no beam]:
+
+               If a position is entered, the program assumes you want
+               to plot a beam and it will ask for related parameters.
+               The position is a string that follows the syntax
+               for positions as described in wcspos.dc2
+               E.g. BEAM=23h10m30.2s -10d34m23s
+
+
+   FWHMUNITS1= Units of FWHM major&minor axes ... [arcmin]:
+
+               If a position is given in BEAMPOS=, one can enter the
+               units in which the Full Width at Half Maximum are entered.
+               The units must be compatible to degrees.
+
+   
+   BEAMPARS1=  Maj, min (units), pa (deg) ... [1, 1, 0]:
+
+               FWHM of major axis, minor axis and position angle of the
+               beam. The units of the major and minor axis are given in
+               keyword FWHMUNITS=. The angle is w.r.t. the North and
+               is given in degrees.
+
+
+   BEAMATT1=   Plot attributes for plot object ... [alpha:0.5]:
+
+               Plot attributes in format key:value
+               and value always without quotes.
+               e.g. BEAMKWARGS1= alpha:0.5 hatch:/ color:r
+
+
+   ROWSCOLS=   How many rows & columns for N images? ... [i,j]:
+
+               Set a layout for a mosaic of plots. In the prompt you will
+               see the total number of plots set by your DATASET= keywords
+               and a suggestion is made for the number of rows and columns.
+
+
+   SKIPLABELS= Skip WCS labels not part of left and bottom axes? ... Y/[N]:
+
+               For mosaics of plots the labels can get in the way. For a
+               better looking array of plots you can decide to
+               get rid of (most) abundant labeling with SKIPLABELS=Y
+
+
+   TYPECLI=    Do you want mouse positions on command line ... Y/[N]:
+
+               If set to Y, then clicking with the left mouse button in the
+               displayed image will write the mouse position in grids
+               on the Hermes command line.
+
+
+   ASPECTRATIO1= Enter pixel aspect ratio ... [derived from pixel size]:
+
+               This task tries to plot pixels in the correct size as
+               given in world coordinates in the header (these sizes
+               are given by FITS keywords CDELT). If one plots a map
+               with uncorrelated axes, then this aspect ratio is not
+               physical and a new, more realistic value is calculated.
+               Often one wants to change this value to make a plot
+               more or less square.
+
+
+   TITLE1_m=   Title for current plot ... [derived from file name]
+
+               For each plot a title can be plotted. For a series of
+               subsets the title for the first plot can be entered
+               at a prompt, the other subset plot titles are asked
+               with a hidden prompt. So if you want to change them
+               please enter a title on the command line, e.g.:
+               TITLE1_2=second subset
+               'm' is the plot number which starts with 1 for the
+               first subset.
+
+
+   TITLEATT1_m= Plot attributes for plot object ... []:
+
+               Plot attributes in format key:value
+               and value always without quotes.
+               Handy attributes for a title are
+               color, fontsize, y. The last one sets the position of
+               the title in the y direction in normalized device
+               coordinates, e.g. TITLEATT1_1=y:1.02
+
+
+   FIGSIZE=    Enter figure size (width,height) in cm ... [25.0,25.0]:
+
+               A figure size in centimeter.
+
+
+   CANVASCOL=  Enter color of figure canvas ... [#efefef]:
+
+               The background of the figure can be changes with this
+               keyword.
+
+
+   SUBPLOTPARS= Enter parameters for subplots in param:value format ... [defaults]:
+
+               The parameters are all in normalized figure coordinates:
+
+               left      Space in normalized coordinates to the left
+               bottom    Space in normalized coordinates to the bottom
+               right     Space in normalized coordinates to the right
+               top       Space in normalized coordinates to the top
+               wspace    The amount of width reserved for blank space between subplots
+               hspace    The amount of height reserved for white space between subplots
+
+               If you change any of these parameters with the subplot configuration
+               tool on the Matplotlib toolbar, then the new values are
+               written back into keyword SUBPLOTPARS=
+               This enables you to retrieve the same plot after using the
+               GIPSY macro mechanism.
+
+
+   SCRIPT=     Name of plot script ... [do not create script]:
+
+               If a name is entered, then a Python script with this name
+               will be written on disk in the current directory.
+               The file contains the commands to re-create the plot
+               outside the context of GIPSY. The script can be used as a
+               template. This template can be extended with features
+               from the Kapteyn Package that are not available in the GIPSY
+               context.
+
+
+   MARKER=     -
+
+               Enter 'taskname MARKER=' on the Hermes command line
+               and enter one or more positions. Markers follow the syntax
+               as described in GIPSY module IOUTILS.
+
+               Example:
+               mapmaker marker=10 7.2   5.0 13.8
+               mapmaker marker={} 20h36m34.71s {} 59d57m21.4s
+
+
+
+               Adjusted keywords for use in macro
+               ==================================
+
+               Some keyword values can be changed interactively while the plot
+               is displayed. When the task is closed correctly then the corresponding
+               keywords are updated too. Then you can retrieve the same plot with
+               GIPSY's macro mechanism (!taskname on Hermes command line).
+               The keywords are:
+               CSLOPE=         (after rescaling colors with mouse)
+               COFFSET=        (after rescaling colors with mouse)
+               COLORSCALE=     (after using a key to change the color scale)
+               COLORMAP=       (after page up/down for new colormap)
+               SUBPLOTPARS=    (after using subplot configuration tool)
+               FIGSIZE=        (after resizing the window)
+                
+
+
+Notes:         The images defined with the previous keywords are displayed
+               on a Matplotlib figure canvas which is part of a new window
+               showing a number of icons (for zooming, panning etc).
+               (current URL:
+               http://matplotlib.sourceforge.net/users/navigation_toolbar.html )
+
+               The aspect ratio of the image is taken so that the pixels are
+               displayed with the correct sizes in world coordinates (if possible).
+               If you resize the window, this aspect ratio remains constant.
+
+               One of the toolbar buttons pops up a window that allows for the
+               selection of the format of a hard copy.
+               The standard figure size allows for a (encapsulated) PostScript
+               output with everything within the bounding box. If one resizes
+               the windows you get PostScript output with plots with a cutoff.
+               PDF output scales correctly. So it is always possible to
+               get the layout that you want by resizing the window. Then
+               create a hardcopy in PDF and convert the PDF to PostScript
+               with a utility (e.q. pdf2ps)
+
+
+               Cursor:
+
+               The cursor in a frame (where a plot is visible) generates an
+               informative message in the toolbar of the figure canvas.
+               This message shows the current grid position
+               and (if possible) the corresponding world coordinate together
+               with the image value at that position.
+
+
+               Cursor + shift-left button:
+
+               Position information is send to the log file.
+
+
+               Cursor + right button:
+
+               Change color map.
+
+
+               Important:
+
+               The markers propagate in the world coordinate system.
+               Sometimes this gives unexpected results.
+               Imagine you display a mosaic of
+               position velocity diagrams extracted from a cube with
+               RA, DEC and a FREQ axis. If the RA/DEC data is rotated
+               (CROTA in the header is unequal to 0, e.g. 30 deg), then the
+               spatial axes labels (plotted along the axes)
+               are not at the same position in different slices.
+               Therefore each slice/subset shows the marker at a different
+               grid position because only the position in world coordinates
+               remains unaltered. For these maps (with one spatial axis)
+               one can mark features in an image using the right mouse button.
+               These markers are copied on the same pixel position in each
+               image that has the same projection system (otherwise we are
+               comparing positions that are not related).
+
+
+               Difference between pixel coordinates and grids:
+
+               FITS defines it coordinates as follows. The first pixel is
+               labeled 1. The last pixel is labeled NAXISn (where n is the
+               axis number).
+               The header includes for each axis a floating point position
+               CRPIXn which tells us where on the axis you can put the
+               label CRVALn, the world coordinate.
+
+               Historically GIPSY users are used to another system. In GIPSY
+               we define a coordinate system. Its origin (grid 0) is exactly
+               located on CRPIXn.
+               Therefore a box often contains negative numbers which is not
+               the case if you would enter limits in a pixel system.
+               Note that a grid system is not centered on a
+               pixel if the value of CRPIXn is not an integer value.
+
+
+               Different approach:
+
+               This application is a demonstration of how a GIPSY application
+               can be enhanced with standard libraries and Python modules
+               to fulfill modern requirements for reading FITS files, plotting
+               images and dealing with world coordinates.
+
+               1) It is a non gui (let's say classic GIPSY) application where keywords
+               are prompted in a sequence. We demonstrated that it is easier
+               for a user to enter the name of a data set first and then to
+               enter the axes names of the subset (which we also call a slice)
+               and to enter the grids on the repeat axes (axes that do not belong
+               to the subset).
+
+               2) FITS files are usable as data sets. They are mapped onto
+               a GIPSY set, transparent and invisible to the user. Also
+               supported are FITS files addressed with an URL and gzipped files.
+
+               3) The use of WCSlib allows users to get precise information
+               about positions in world coordinates in a map. There is support
+               for spectral translation (e.g. a frequency axis in your image
+               can be labeled in optical, radio or radial velocity etc.)
+               For FITS files with non FITS extensions like FREQ-OHEL etc.
+               the header is parsed to get a set of items that follow the
+               FITS standard.
+               There is also support for reference systems for equatorial and
+               ecliptic celestial systems. We wrote a Python module, called
+               celestial, which contains definitions and algorithms from the
+               Explanatory Supplement to the Astronomical Almanac.
+               Also the syntax for entering an epoch for the equinox is
+               enhanced.
+
+
+
+Updates:       Nov 27, 2010: VOG document created.
+               Nov 11, 2010: VOG update to latest Kapteyn Package support
+               Feb 20, 2011: VOG update documentation
+               Sep 07, 2013: VOG adapted for Matplotlib 1.3
+
+#<
+
+#>            mapmaker.dc1
+Program:       MAPMAKER
+
+Purpose:       Plot set/subsets from a GIPSY set or slices from a FITS file
+               and annotate those plots with world coordinate labels and or
+               a graticule.
+               The program has a hard copy facility. It is ideal for comparing
+               channels in a radio data cube or for comparing different sources
+               (e.g. mixing GIPSY sets and FITS files). Put markers with keyword
+               MARKER=  A marker will be plotted in all images, at least if its
+               position in world coordinates is part of the image.
+
+
+Category:      COORDINATES, DISPLAY, PLOTTING
+
+File:          wcsflux.src
+
+Author:        M.G.R. Vogelaar
+
+
+
+               Keywords common in MAPMAKER and WCSFLUX
+               =======================================
+
+   DEVLEV=     Prompt all keywords (1) or only most important (2)? ... [2]:
+
+               Many keywords are to adjust plot parameters and it is not
+               useful to prompt all of them if you only want to have a
+               quick plot on the screen for inspection. If you need different
+               sky systems, spectral translations or an optimal result for
+               a hardcopy, then set DEFLEV=1.
+
+
+               Keywords in a loop:
+               -------------------
+               Keywords prompted in a loop have a name followed by a number
+               like KEYWORD1=, KEYWORD2= etc. The number corresponds to the
+               data set which is also entered in a loop.
+
+   DATASET1=   Enter name of FITS file or GIPSY set ... [list files]:
+
+               Specify the location of the data. This data can either be
+               a GIPSY set or a FITS file. You can give the name of the file, then
+               other keywords to specify axes will follow. Or your input
+               contains the description of the slices (subsets). This syntax is
+               the same for FITS files and GIPSY sets.
+               Examples:
+                  1) DATASET=AURORA
+                  2) DATASET=AURORA FREQ 10:20 30 40
+                  3) DATASET=m101.fits
+                  4) DATASET=http://people.sc.fsu.edu/~burkardt/data/fit/datacube.fit FELO 2
+                  5) DATASET=datacube.fit.gz FELO 0
+
+               ad 1) Just the name of the data. The program will prompt for additional
+                     information. Knowledge about the axes in the set is not necessary.
+               ad 2) Using knowledge of the axes in a set, specify location and
+                     subsets (data slices).
+               ad 3) Same as 1 but now for a FITS file
+               ad 4) FITS files can be retrieved from an Internet location with an URL
+                     In this example one slice is defined.
+               ad 5) FITS files can also be accessed in gzipped format.
+
+               Note that the pixels for FITS files are not 1-based as is standard in FITS,
+               but they follow GIPSY rules i.e. pixel 0 is found at the header value of
+               'crpix' of the corresponding axis.
+
+
+   HDU1=       Enter number of Header Data Unit ... [0]:
+
+               If a FITS file is selected and the file contains more than one Header
+               Data Units (hdu), the user is prompted to select the unit where the
+               image data is stored. A table with options is written to screen.
+               The input is a valid integer number. The default is 0.
+
+
+   AXNAMES1=   Enter two of RA,DEC,VELO ... [RA DEC]:
+
+               If you did not specify subsets and the dimension of your data is
+               greater than 2, you are prompted to enter two axis names that
+               are part of the image you want to plot. In the prompt all the axes
+               are included. The default are the first two axes in your set.
+               The input are two strings which are minimal matched.against the known
+               axes. Note that you can enter the axes in any order.
+
+               Examples for set AURORA with RA, DEC, FREQ axes.
+                  AXNAMES1=                     # default is RA,DEC
+                  AXNAMES1=RA FREQ              # XV map with FREQ along vertical axis
+                  AXNAMES1=FR R                 # XV map with FREQ along horizontal axis
+                  AXNAMES1=D R                  # Spatial DEC,RA map
+
+
+
+   XXXX1=      Enter pixel position(s) on XXXX ... [lo:hi]:
+
+               XXXX represents a variable set of keywords with the same name as the
+               repeat axes in a set. Repeat axes are all axes that are not part of the
+               specified data slice (AXNAMES1=). The default values are all pixels along
+               the axis resulting in all possible slices along the repeat axis.
+               The syntax follows the rules for GIPSY input of integers.
+
+               Example for set AURORA2 with:
+                  FREQ-OHEL            from     -4 to      5
+                  DEC--NCP             from    -29 to     20
+                  RA---NCP             from    -24 to     25
+                  POL                  from      0 to      3
+
+                  AXNAMES=DEC FR
+                  Enter grid position(s) on RA ..... [-24:25]
+                  RA=0
+                  Enter grid position(s) on POL ..... [0:3]
+                  POL=1
+
+                  This defines one slice with axes DEC and FREQ at RA=0 and POL=1
+                  or:
+                  RA=-2:2 10
+                  to get six slices at RA -2,-1,0,1,2 and 10
+
+               Note that these subset/slices could also be entered at the DATASET1=
+               prompt as follows:
+                  DATASET1=AURORA2 ra -2:2 10 pol 1
+
+
+   SWAPAXES1=  Do you want to swap axes RA and DEC? ... Y/[N]:
+
+               If your input defined 2D slices then you you are able to swap
+               the two axes in the subset. The GIPSY input syntax for set/subsets
+               does not provide syntax to get for swapped axes.
+
+
+   BOX1=       Enter limits of map xlo,ylo, xhi,yhi ... [xlo,ylo, xhi,yhi]:
+
+               Enter coordinates that extract an area smaller than or equal
+               (the default) to the slice area.
+               Pleas note:
+               1) that the syntax follows that of GIPSY and therefore the
+                  pixel positions are not 1-based as in FITS.
+                  The GIPSY syntax allows for a center coordinate and sizes.
+               2) that world coordinates are related to GIPSY's legacy coordinate
+                  system which will conflict with WCSlib. Therefore only grid coordinates
+                  and no world coordinates should be entered.
+               3) the order of the axes is always that of the axes in the data set.
+                  even if you forced swapping axes with AXNAMES= or SWAPAXES=
+
+               Examples:
+                  Limits RAlo,VELOlo, RAhi,VELOhi ... [-50,-50,49,49]:
+                  BOX=
+                  BOX=-9 -9 10 10
+                  BOX=0 0 D 20 20
+
+                  Note that the second and third example result in the same area.
+
+
+
+   SPECTRANS1= Spectral translation for axis xxx or ? for help ... [native]:
+
+               If one of the image axes is of spectral type, you are prompted
+               to enter a so called 'spectral translations' which sets a translation
+               from the native coordinate to another (e.q. frequency to velocity).
+
+               If you entered ? then you will see a list with
+               available spectral translation
+               All translations known by WCSlib are tested by the program
+               and only the valid ones are listed. One can enter part of the string that
+               represents the spectral translation.
+
+               Example:
+               SPECTRANS1=?
+               =========== Available spectral translations ===========
+               FREQ (Hz), ENER (J), WAVN (/m), VOPT-F2W (m/s), VRAD (m/s), VELO-F2V (m/s)
+               WAVE-F2W (m), ZOPT-F2W, AWAV-F2A (m), BETA-F2V
+
+               SPECTRANS1=b
+               This selects the spectral translation BETA-F2V which has no units.
+               Labeling and position information in the plot are from this moment on
+               related to this translation.
+
+
+   SUNITS1=    Units for spectral slice info ... [native]:
+
+               If more than one subset/slice is entered and one of the subset/slice
+               axes is spectral, then you are asked to give an (alternative)
+               unit for the numbers in the subset/slice info label.
+               If, for example, the native axis is frequency and you entered
+               SPECTRANS1=VOPT, then with SUNITS1=km/s you get the slice
+               information optical velocities in km/s.
+
+
+   COLORMAP1=  Enter name of color map or ? for list ... [jet]:
+
+               If you enter ? then a list with color maps is displayed in the Hermes'
+               log file.
+               Your selection is (part of) a string and is minimal matched with
+               the entries in the list. If it is not in the list it could be a color
+               map (lut) on disk. Color luts are created with key 'm' when an image
+               is displayed. This way, one can create custom color maps.
+               Note that the input is case sensitive.
+
+
+   COLORSCALE1= 1=linear  2=log  3=exp  4=sqrt  5=square ... [1]:
+
+               Set the color scaling to one of the list in the prompt.
+
+
+   CSLOPE1=    Slope image values vs colors ... [1.0]:
+
+               Together with COFFSET1=, one defines how the range of image
+               values correspond with a range of colors.
+               Usually the slope and offset
+
+
+   COFFSET1=   Offset image values vs colors ... [0.0]:
+
+               Together with CSLOPE1=, one defines how the range of image
+               values correspond with a range of colors.
+
+
+   VMINMAX1=   Scale colors between image values ... [datamin, datamax]:
+
+               Before the prompt, the minimum and maximum data values of you slices
+               (subsets) within the given axes limits (BOX=) are calculated.
+               These values are used as a default to distribute the colors of your
+               color map. Data outside this range is clipped.
+
+
+   WANTCONT1=  Add contours? ... Y/[N]:
+
+               To enhance the visibility of certain features in a map, one can add
+               contour lines. If you confirm wanting contours you will be prompted
+               for the wanted contour levels with CLEVELS=
+
+
+   CLEVELS1=   Enter contour levels between .. and .. ... [automatic]:
+
+               Enter one or more levels in units of you image data for which
+               contour lines will be plotted. The default forces the program
+               to calculate levels. Usually these are not the most suitable
+               levels because also noise is represented by one or more of these
+               levels. The contours are labeled.
+
+
+   CCOLORS1=   Enter one or more colors for contours ... [r]:
+
+               Distinguish contours by a color. The default is one color (red).
+               In the log file a list is presented with possible colors and their
+               abbreviation.
+
+
+   WANTCOLORBAR1= Add a colorbar? ... Y/[N]:
+
+               Create a bar with colors from the selected colormap and label
+               these colors with the corresponding data values in the units of
+               your data.
+
+
+   COLBARFRAME1= Enter x0,y0, width, height ... [calculated]:
+
+               If you want to specify a frame for a colorbar, then
+               enter a center and a width and height. The coordinates
+               in which this must be entered, depend on the value of
+               CBFRAMEMODE1=
+
+
+   CBFRAMEMODE1= Frame coords: F=Norm. in frame, D=Data coords ... [Norm. in figure]:
+
+               The coordinates entered in COLBARFRAME1= are in normalized
+               figure coordinates, i.e. the lower left coordinate of the
+               figure is (0,0) and the upper right coordinate of the figure
+               is (1,1). This is the default.
+
+               If CBFRAMEMODE1=F then the coordinates are normalized coordinates
+               but now with respect to the current subplot.
+               If CBFRAMEMODE1=D, the coordinates are pixel coordinates with
+               respect to the current subplot (Not yet tested and perhaps less useful).
+
+
+   CBORIENT1=  Horizontal color bar (H) or vertical (V)? ... H/[V]:"
+
+               Orientation of the colorbar.
+
+
+   CBLABEL1=   Label for color bar ... [BUNITS from header]:
+
+               To print a label near the colorbar with information about
+               the data units, one should enter a string here. The default
+               string is a unit as read from the header of Set or FITS file
+               (FITS keyword BUNIT)
+
+
+   SKYOUT1=    Sky system 0=eq, 1=ecl, 2=gal, 3=sup.gal ... [native]?
+
+               If both axes of your map are spatial axes (one longitude
+               and one latitude axis), then you are prompted to enter
+               a celestial system (sky system) for the coordinate transformations.
+               The default value is the system native to the data as defined
+               by the FITS or GIPSY header.
+               The systems are given by number:
+               0 = Equatorial
+               1 = Ecliptic
+               2 = Galactic (II)
+               3 = Supergalactic
+
+               Equatorial systems are further identified by an Equinox and
+               a reference system. Those can be entered with the keywords
+               EQUINOX= and REFSYS=
+
+               You can only change the output sky system for spatial axes
+               and not for maps with one spatial axis and one non spatial axis
+               (e.q. position-velocity maps).
+
+
+   RADESYS1=   Ref.sys 0=fk4, 1=fk4_no_e, 2=fk5, 3=icrs, 4=j2000 ... [native]:
+
+               Equatorial and ecliptic coordinates are relative to a
+               reference system. The system is selected with an integer
+               number. The fk4_no_e system is fk4 where the positions are
+               not corrected for the elliptic terms of aberration.
+               If nothing appropriate could be found in the header
+               a reference system is assumed according the FITS standard
+               rules.
+
+
+   EQUINOX1=   Enter equinox (eq. J2000, B1983.5) ... [native]:
+
+               Equatorial and ecliptic coordinates are relative to a
+               given equinox. The default value is the one found in the header.
+               If the value is not listed in the header of your data set,
+               an equinox is assumed according the FITS standard rules.
+
+               The input is an integer or floating point number prefixed by
+               one or more characters to set an epoch.
+
+               B      Besselian epoch. Example 'B 1950', 'b1950', 'B1983.5', '-B1100'
+               J      Julian epoch. Example: 'j2000.7', 'J 2000', '-j100.0'
+               JD     Julian date. This number of days (with decimals)
+                      that have elapsed since the initial epoch defined
+                      as noon Universal Time (UT) Monday, January 1, 4713 BC
+                      in the proleptic Julian calendar
+                      Example: 'JD2450123.7'
+               MJD    The Modified Julian Day (MJD) is the number of days
+                      that have elapsed since midnight at the beginning of
+                      Wednesday November 17, 1858. In terms of the Julian day:
+                      MJD = JD - 2400000.5
+                      Example: 'mJD 24034', 'MJD50123.2'
+               RJD    The Reduced Julian Day (RJD): Julian date counted from
+                      nearly the same day as the MJD,
+                      but lacks the additional offset of 12 hours that MJD has.
+                      It therefore starts from the previous noon UT or TT,
+                      on Tuesday November 16, 1858. It is defined as:
+                      RJD = JD - 2400000
+                      Example:  'rJD50123.2', 'Rjd 23433'
+               F      1) DD/MM/YY             Old FITS format
+                                              Example: 'F29/11/57'
+                      2) YYYY-MM-DD           FITS format
+                                              Example: 'F2000-01-01'
+                      3) YYYY-MM-DDTHH:MM:SS  FITS format with date and time.
+                                              Example: 'F2002-04-04T09:42:42.1'
+
+
+   GRATICULES1= Draw graticule lines and WCS labels? ... [Y]/N:
+
+               A world coordinate system with parallels and meridians
+               is plotted labeled with the corresponding constant
+               values. The system is plotted in the projection defined
+               in the header and in the celestial system defined
+               with previous keywords SKYOUT=, RADESYS= and EQUINOX=
+
+               If one wants to plot images without the graticule overlay,
+               then enter GRATICULES=N
+
+
+   ROWSCOLS=   How many rows & columns for N images? ... [i,j]:
+
+               Set a layout for a mosaic of plots. In the prompt you will
+               see the total number of plots set by your DATASET= keywords
+               and a suggestion is made for the number of rows and columns.
+
+
+   SKIPLABELS= Skip WCS labels not part of left and bottom axes? ... Y/[N]:
+
+               For mosaics of plots the labels can get in the way. For a
+               better looking array of plots you can decide to
+               get rid of (most) abundant labeling with SKIPLABELS=Y
+
+
+   TYPECLI=    Do you want mouse positions on command line ... Y/[N]:
+
+               If set to Y, then clicking with the left mouse button in the
+               displayed image will write the mouse position in grids
+               on the Hermes command line.
+
+
+   ASPECTRATIO1= Enter pixel aspect ratio ... [derived from pixel size]:
+
+               This task tries to plot pixels in the correct size as
+               given in world coordinates in the header (these sizes
+               are given by FITS keywords CDELT). If one plots a map
+               with uncorrelated axes, then this aspect ratio is not
+               physical and a new, more realistic value is calculated.
+               Often one wants to change this value to make a plot
+               more or less square.
+
+
+   FIGSIZE=    Enter figure size (width,height) in cm ... [25.0,25.0]:
+
+               A figure size in centimeter.
+
+
+   CANVASCOL=  Enter color of figure canvas ... [#efefef]:
+
+               The background of the figure can be changes with this
+               keyword.
+
+
+   SUBPLOTPARS= Enter parameters for subplots in param:value format ... [defaults]:
+
+               The parameters are all in normalized figure coordinates:
+
+               left      Space in normalized coordinates to the left
+               bottom    Space in normalized coordinates to the bottom
+               right     Space in normalized coordinates to the right
+               top       Space in normalized coordinates to the top
+               wspace    The amount of width reserved for blank space between subplots
+               hspace    The amount of height reserved for white space between subplots
+
+               If you change any of these parameters with the subplot configuration
+               tool on the Matplotlib toolbar, then the new values are
+               written back into keyword SUBPLOTPARS=
+               This enables you to retrieve the same plot after using the
+               GIPSY macro mechanism.
+
+
+   SCRIPT=     Name of plot script ... [do not create script]:
+
+               If a name is entered, then a Python script with this name
+               will be written on disk in the current directory.
+               The file contains the commands to re-create the plot
+               outside the context of GIPSY. The script can be used as a
+               template. This template can be extended with features
+               from the Kapteyn Package that are not available in the GIPSY
+               context.
+
+
+   MARKER=     No prompt
+
+               Enter 'taskname MARKER=' on the Hermes command line
+               and enter one or more positions. Markers follow the syntax
+               as described in GIPSY module IOUTILS.
+
+               Example:
+               mapmaker marker=10 7.2   5.0 13.8
+               mapmaker marker={} 20h36m34.71s {} 59d57m21.4s
+
+
+
+               Adjusted keywords for use in macro
+               ==================================
+
+               Some keyword values can be changed interactively while the plot
+               is displayed. When the task is closed correctly then the corresponding
+               keywords are updated too. Then you can retrieve the same plot with
+               GIPSY's macro mechanism (!taskname on Hermes command line).
+               The keywords are:
+               CSLOPE=         (after rescaling colors with mouse)
+               COFFSET=        (after rescaling colors with mouse)
+               COLORSCALE=     (after using a key to change the color scale)
+               COLORMAP=       (after page up/down for new colormap)
+               SUBPLOTPARS=    (after using subplot configuration tool)
+               FIGSIZE=        (after resizing the window)
+
+
+
+Notes:         The images defined with the previous keywords are displayed
+               on a Matplotlib figure canvas which is part of a new window
+               showing a number of icons (for zooming, panning etc).
+               (current URL:
+               http://matplotlib.sourceforge.net/users/navigation_toolbar.html )
+
+               The aspect ratio of the image is taken so that the pixels are
+               displayed with the correct sizes in world coordinates (if possible).
+               If you resize the window, this aspect ratio remains constant.
+
+               One of the toolbar buttons pops up a window that allows for the
+               selection of the format of a hard copy.
+               The standard figure size allows for a (encapsulated) PostScript
+               output with everything within the bounding box. If one resizes
+               the windows you get PostScript output with plots with a cutoff.
+               PDF output scales correctly. So it is always possible to
+               get the layout that you want by resizing the window. Then
+               create a hardcopy in PDF and convert the PDF to PostScript
+               with a utility (e.q. pdf2ps)
+
+
+               Cursor:
+
+               The cursor in a frame (where a plot is visible) generates an
+               informative message in the toolbar of the figure canvas.
+               This message shows the current grid position
+               and (if possible) the corresponding world coordinate together
+               with the image value at that position.
+
+
+               Cursor + shift-left button:
+
+               Position information is send to the log file.
+
+
+               Cursor + right button:
+
+               Change color map.
+
+
+               Important:
+
+               The markers propagate in the world coordinate system.
+               Sometimes this gives unexpected results.
+               Imagine you display a mosaic of
+               position velocity diagrams extracted from a cube with
+               RA, DEC and a FREQ axis. If the RA/DEC data is rotated
+               (CROTA in the header is unequal to 0, e.g. 30 deg), then the
+               spatial axes labels (plotted along the axes)
+               are not at the same position in different slices.
+               Therefore each slice/subset shows the marker at a different
+               grid position because only the position in world coordinates
+               remains unaltered. For these maps (with one spatial axis)
+               one can mark features in an image using the right mouse button.
+               These markers are copied on the same pixel position in each
+               image that has the same projection system (otherwise we are
+               comparing positions that are not related).
+
+
+               Difference between pixel coordinates and grids:
+
+               FITS defines it coordinates as follows. The first pixel is
+               labeled 1. The last pixel is labeled NAXISn (where n is the
+               axis number).
+               The header includes for each axis a floating point position
+               CRPIXn which tells us where on the axis you can put the
+               label CRVALn, the world coordinate.
+
+               Historically GIPSY users are used to another system. In GIPSY
+               we define a coordinate system. Its origin (grid 0) is exactly
+               located on CRPIXn.
+               Therefore a box often contains negative numbers which is not
+               the case if you would enter limits in a pixel system.
+               Note that a grid system is not centered on a
+               pixel if the value of CRPIXn is not an integer value.
+
+
+               Different approach:
+
+               This application is a demonstration of how a GIPSY application
+               can be enhanced with standard libraries and Python modules
+               to fulfill modern requirements for reading FITS files, plotting
+               images and dealing with world coordinates.
+
+               1) It is a non gui (let's say classic GIPSY) application where keywords
+               are prompted in a sequence. We demonstrated that it is easier
+               for a user to enter the name of a data set first and then to
+               enter the axes names of the subset (which we also call a slice)
+               and to enter the grids on the repeat axes (axes that do not belong
+               to the subset).
+
+               2) FITS files are usable as data sets. They are mapped onto
+               a GIPSY set, transparent and invisible to the user. Also
+               supported are FITS files addressed with an URL and gzipped files.
+
+               3) The use of WCSlib allows users to get precise information
+               about positions in world coordinates in a map. There is support
+               for spectral translation (e.g. a frequency axis in your image
+               can be labeled in optical, radio or radial velocity etc.)
+               For FITS files with non FITS extensions like FREQ-OHEL etc.
+               the header is parsed to get a set of items that follow the
+               FITS standard.
+               There is also support for reference systems for equatorial and
+               ecliptic celestial systems. We wrote a Python module, called
+               celestial, which contains definitions and algorithms from the
+               Explanatory Supplement to the Astronomical Almanac.
+               Also the syntax for entering an epoch for the equinox is
+               enhanced.
+
+
+Updates:       Feb 26, 2009: VOG document created.
+               Nov 11, 2010: VOG update to latest Kapteyn Package support
+               Feb 20, 2011: VOG update documentation
+               
+#<
+
+#>            wcsflux.py
+#!/usr/bin/env python
+#----------------------------------------------------------------------
+# FILE:    wcsflux.py (GIPSY version)
+# PURPOSE: Calculate sum of image values and area defined by a polygon. 
+# AUTHOR:  M.G.R. Vogelaar, University of Groningen, The Netherlands
+# DATE:    November 26, 2009
+# UPDATE:  November 26, 2009
+#          September 07, 2013 (Adapted for Matplotlib 1.3)
+# VERSION: 1.0.1
+#
+# (C) University of Groningen
+# Kapteyn Astronomical Institute
+# Groningen, The Netherlands
+# E: gipsy@astro.rug.nl
+#----------------------------------------------------------------------
+import gipsy
+import os.path                  # to check existence of a file
+import ioutils
+import datetime
+from kapteyn.maputils import cmlist as CMlist
+from kapteyn.positions import minmatch, unitfactor
+from kapteyn.maputils import FITSimage
+from kapteyn.mplutil import gipsy_connect
+from kapteyn import shapes
+from matplotlib.pyplot import figure, show, draw
+from matplotlib.figure import SubplotParams
+from numpy.ma import masked_invalid
+from math import sqrt
+from types import StringType
+from re import split as re_split
+
+__version__ = '1.1'
+
+cmlist = CMlist.colormaps
+
+#TODO:
+#-gebruiker toestaan om frames met de hand op te geven.
+#-Super title
+
+def parstr2dict(s):
+   """
+   Convert string with parameters in key:value format to dictionary
+   """
+   kwargs = {}
+   if s != '':               # Result of usertext is a list
+      ss = re_split('[ ,\t]+', s)
+      for sss in ss:
+         if len(ss) > 0:
+            try:
+               k, v = sss.split(':')
+               try:
+                  kwargs[k] = float(v)
+               except:
+                  kwargs[k] = v
+            except: pass
+   return kwargs
+
+
+def plmarker(cb):
+   """
+   #---------------------------------------------------------------------
+   This function is called with a frequency set by a timer function. It
+   reads keyword MARKER= which must be specified while we are in
+   Matplotlib's main loop. Positions are converted to pixel coordinates
+   and these are plotted in all images on the canvas.
+   The sets are stored in the global list 'allsets'.
+   #---------------------------------------------------------------------
+   """
+   key = cb.key
+   pos = gipsy.usertext(key, "", defval=None, default=2)
+   if pos != None:
+      for gipsyset in cb.allsets:
+         grids, world, pix, units, errmes = gipsyset.wcspos(0, userpos=pos)
+         if not len(grids):
+            if errmes:
+               gipsy.anyout(errmes)
+               gipsy.cancel(key)
+               gipsy.cancel(key)
+               return
+         else:
+            for g,w in zip(grids, world):
+               s = str(g) + "=" + str(w) + ' ' + str(units)
+               gipsy.anyout(s)
+            xy = pix.T
+            x = xy[0]; y = xy[1]
+
+            # Plot in all subsets
+            for annim in gipsyset.allim:
+               annim.frame.plot(x, y, '+', markersize=10, markeredgewidth=2, color='y')
+               draw()
+   gipsy.cancel(key)
+   gipsy.cancel(key)  # Repeat to remove last one
+
+
+
+def get_graticuleproperties(gipsyset, inpnr=None, deflev=1):
+#----------------------------------------------------------------------
+   """
+   Deal with properties of axes and graticule lines.
+   """
+#----------------------------------------------------------------------
+   if inpnr == None:
+      pp = '='
+   else:
+      pp = "%d="%inpnr
+   spectral = longitude = latitude = False
+   gipsyset.gratstart = [None,None]
+   gipsyset.gratdelta = [None,None]
+   gipsyset.gratfmt   = [None,None]
+   gipsyset.gratfun   = [None,None]
+   gipsyset.gratunits = [None,None]
+
+   # Note for programmers: The 'gipsyset' object has a number
+   # of attributes that are added in several stages, For instance
+   # it has a projection object and from that object a sub-projection is derived.
+   # Both have the attributes of the Projection class but in the axes order
+   # as specified when you entered the image axes.
+   # One can prove this with command:
+   # print "Units", gipsyset.subproj.cunit, gipsyset.projection.cunit
+   opts = ['X', 'Y']
+   for ax in [0, 1]:
+      keystart = 'AXSTART' + opts[ax] + pp
+      #gipsy.anyout("Axis number: %d"%gipsyset.projaxnum[ax])
+      mes = "Enter value of start label(s) on %s axis ... [calculated]:"%(opts[ax])
+      gipsyset.gratstart[ax] = gipsy.usertext(keystart, mes, defval=None, default=deflev)
+      keydelta = 'AXDELTA' + opts[ax] + pp
+      mes = "Enter value of step on %s axis ... [calculated]:"%(opts[ax])
+      gipsyset.gratdelta[ax] = gipsy.usertext(keydelta, mes, defval=None, default=deflev)
+      # Ask for a spectral translation
+      origunit = gipsyset.subproj.cunit[ax]
+      axtype = gipsyset.subproj.ctype[ax].split('-')[0]
+      if origunit != '':       # Empty units (e.g. Stokes axis) cannot be converted.
+         key = "AXUNITS" + opts[ax] + pp
+         mes = "Enter units for %s (i.e. %s) axis ... [%s]:"%(opts[ax], axtype, origunit)
+         gipsyset.gratunits[ax] = gipsy.usertext(key, mes, defval=None, default=deflev)
+   return
+
+
+def imagespec(inpnr, taskname, deflev):
+   """-------------------------------------------------------------------------------
+   Purpose:    This function is written to gather all relevant user input for one
+               data set (either a FITS file or a GIPSY set).
+   Input:
+      inpnr-   The number of the current data set. This number is appended to all
+               relevant keywords. It should start with 1.
+   Returns:    A list with images (if more than one slice/subset was entered.
+   Notes:
+   Examples:
+   -------------------------------------------------------------------------------"""
+   pp = "%d="%inpnr         # Create the string that needs to be appended to all keywords
+   dim = 2                  # Allowed dimension for images is 2
+   key = "DATASET" + pp     # Append keyword with index number
+   mes = 'Enter name of FITS file or GIPSY set:'
+   hdukey = "HDUNUM" + pp
+   altkey = "ALTHEAD" + pp
+   axkey = "AXNAMES" + pp
+   swapkey = "SWAPAXES" + pp
+
+   if inpnr == 1:
+      listopt = True
+   else:
+      listopt = False
+   gipsyset = ioutils.wcsinp(key, mes, hdukey=hdukey, altkey=altkey, axkey=axkey,
+                             axsuffix=pp, swapkey=swapkey, requireddim=2, listopt=listopt)
+   # Note that gipsyset has two projection objects called 'projection' and 'subproj'
+   # Projection objects have an attribute 'gridmode' which is set to True by default
+   # in a call to wcsinp()
+   if gipsyset == None:                          # Nothing to do. Return 0 as the number of subsets
+      return None, 0
+
+   gipsyset.printinfo()
+   subdim = gipsyset.ndims(subset=True)
+
+   # Set limits to the axes
+   key = "BOX" + pp
+   ublo, ubhi = gipsyset.wcsbox(key=key, mes="", default=1, showdev=0, option=0)
+   # These are in order of (sub) projection object 'subproj'
+   gipsyset.pxlim = gipsyset.axlimits[0]
+   gipsyset.pylim = gipsyset.axlimits[1]
+
+   # Ask for a spectral translation
+   key = "SPECTRANS" + pp
+   gipsyset.subspectraltrans, un = gipsyset.set_spectraltranslation(key, mes=None, inside=True, default=deflev)
+   # At this stage we have either None or a spectral translation for one of the
+   # subset axes! If there is a spectral axis in the subset, then ask the
+   # units for this axis
+   gipsyset.repspectraltrans = None
+   gipsyset.repspectralunits = None
+   gipsyset.orispectralunits = None
+   if gipsyset.subspectraltrans is None:
+      # There is no subset axis that is spectral. Perhaps one of the repeat
+      # axes is spectral.
+      gipsyset.repspectraltrans = None
+      if len(gipsyset.subsets) > 1:
+         # Use the same SPECTRANS= keyword
+         mes = "Spectral translation for subset labeling (or ?) ... [native]:"
+         # Now check the repeat axes with inside=False
+         gipsyset.repspectraltrans, un = gipsyset.set_spectraltranslation(key, mes, inside=False, default=deflev)
+         if not gipsyset.repspectraltrans is None:
+            key = "SUNITS" + pp
+            mes = "Units for spectral slice info ... [%s]:"%un
+            gipsyset.repspectralunits = gipsy.userchar(key, mes, defval=None, default=deflev)
+
+
+   # For spatial maps (images with two spatial axes, one longitude
+   # and one latitude) one can change the celestial system for the graticules,
+   # the WCS labels and the cursor information.
+   gipsyset.u_skyout = None                      # Skyout set by user
+   if gipsyset.spatialmap:
+      key = "SKYOUT" + pp
+      gipsyset.u_skyout = gipsyset.set_skyout(key=key, default=deflev)
+
+   # Display a list with color map names and prompt the user
+   # to set a color map
+   #cmlist = cmapnames
+   #cmlist.sort()
+   key = "COLORMAP" + pp
+   ok = False
+   while not ok:
+      st = gipsy.userchar(key, 'Enter name of color map or ? for list: ... [jet]:', defval='jet', default=deflev)
+      if st == '?':
+         gipsy.anyout("=========== Available color maps ===========")
+         n = 0
+         maxcol = 6
+         while n < len(cmlist):
+            col = 0
+            cmstr = ""
+            while col < maxcol:
+               if n < len(cmlist):
+                  if col > 0:
+                     cmstr += ", " + cmlist[n]
+                  else:
+                     cmstr += cmlist[n]
+                  n += 1
+               col += 1
+            gipsy.anyout(cmstr)
+            ok = False
+         gipsy.wkey(key)         # First make empty
+         gipsy.cancel(key)       # Then cancel
+      else:
+         colormap = st
+         if st != "":
+            indx = minmatch(st, cmlist, case=1)
+            if indx == None:
+               if os.path.isfile(st):   # Perhaps it is a lut on disk
+                  ok = True
+               else:
+                  gipsy.reject(key, "Could not find a matching color map!" )
+                  ok = False
+            elif indx == -1:
+               gipsy.reject(key, "Ambiguous input!")
+               ok = False
+            else:
+               colormap = cmlist[indx]
+               ok = True
+               gipsy.wkey(key+colormap)
+         else:
+            gipsy.reject(key, "Nothing entered!")
+   gipsy.anyout(taskname + ": Selected colormap: %s"%colormap)
+   gipsyset.colormap = colormap
+
+   # Ask user a color scale
+   scales = {'1': 'linear', '2': 'log', '3': 'exp', '4': 'sqrt', '5': 'square'}
+   # User can select a color scale
+   key = "COLORSCALE" + pp
+   mes = "1=linear  2=log  3=exp  4=sqrt  5=square ... [1]:"
+   scale = gipsy.userint(key, mes, defval=1, default=deflev, nmax=1)
+   if scale < 1:
+      scale = 1
+   if scale > 5:
+      scale = 5
+   gipsyset.colorscale = scales[str(scale)]  # Must be one of the strings
+
+   key = "CSLOPE" + pp
+   mes = "Slope image values vs colours ... [1.0]:"
+   gipsyset.cslope = gipsy.userdble(key, mes, defval=1.0, default=deflev, nmax=1)
+
+   key = "COFFSET" + pp
+   mes = "Offset image values vs colours ... [0.0]:"
+   gipsyset.coffset = gipsy.userdble(key, mes, defval=0.0, default=deflev, nmax=1)
+
+   # For the current subsets, find the min and max to set a
+   # default for the color scaling. Use a masked array to avoid
+   # counting blanks (which are covered by numpy's 'isinf()' method)
+   mini = maxi = None
+   for cword in gipsyset.subsets:
+      z = gipsyset.subimage(cword)
+      subdata = masked_invalid(z)
+      dmin = subdata.min()
+      dmax = subdata.max()
+      if mini == None:
+         mini = dmin
+      else:
+         if dmin < mini:
+            mini = dmin
+      if maxi == None:
+         maxi = dmax
+      else:
+         if dmax > maxi:
+            maxi = dmax
+
+   # Get the min and max from the user, using default calculated previously
+   key = "VMINMAX" + pp
+   dmin = mini
+   dmax = maxi
+   mes = "Scale colors between image values ... [%.2g,%.2g]:"%(dmin, dmax)
+   vminmax = gipsy.userdble(key, mes, defval=(dmin,dmax), default=deflev, nmax=2)
+   if (len(vminmax) == 1):
+      vminmax.append(dmax)
+   gipsy.anyout(taskname+": Colors scale between %g and %g"%(vminmax[0], vminmax[1]))
+   gipsyset.vminmax = vminmax
+
+   # Process contours
+   key = "WANTCONT" + pp
+   mes = "Add contours? ... Y/[N]:"
+   wantcont = gipsy.userlog(key, mes, default=deflev, defval=False, nmax=1)
+   maxlevels = 100
+   levels = None
+   colors = None
+   if wantcont:
+      key = "CLEVELS" + pp
+      mes = "Enter contour levels between %g and %g ... [automatic]:"%(vminmax[0], vminmax[1])
+      levels = gipsy.userdble(key, mes, defval=None, default=deflev, nmax=maxlevels)
+      gipsyset.levels = levels
+      gipsy.anyout("b=blue, g=green, r=red, c=cyan, m=magenta, y=yellow, k=black, w=white")
+      key = "CCOLORS" + pp
+      mes = "Enter one or more colors for contours ... [r]:"
+      colors = gipsy.userchar(key, mes, defval='r', default=deflev, nmax=maxlevels)
+   gipsyset.colors = colors
+   gipsyset.wantcont = wantcont
+
+   key = "WANTCOLORBAR" + pp
+   mes = "Add a colorbar? ... Y/[N]:"
+   wantcolorbar = gipsy.userlog(key, mes, default=1, defval=False, nmax=1)
+   gipsyset.wantcolorbar = wantcolorbar
+
+   if wantcolorbar:
+      key = "COLBARFRAME" + pp
+      mes = "Enter x0,y0, width, height ... [calculated]:"
+      colbarframe = gipsy.userreal(key, mes, default=deflev+4, defval=None, nmax=4)
+      gipsyset.colbarframe = colbarframe
+      gipsyset.cbframemode = ''
+      if not colbarframe is None:
+         key = "CBFRAMEMODE" + pp
+         mes = "Frame coords: F=Norm. in frame, D=Data coords ... [Norm. in figure]: "
+         s = gipsy.userchar(key, mes, defval='', default=deflev)
+         gipsyset.cbframemode = s
+
+      gipsyset.cborientation = 'V'
+      key = "CBORIENT" + pp
+      mes = "Horizontal color bar (H) or vertical (V)? ... H/[V]:"
+      cborientation = gipsy.userchar(key, mes, default=deflev, defval='V', nmax=1)
+      cborientation = cborientation.upper()
+      if cborientation not in ['V', 'H']:
+         cborientation = 'V'
+      gipsyset.cborientation = cborientation
+      if gipsyset.cborientation == 'V':
+         gipsyset.cborientation = 'vertical'
+      else:
+         gipsyset.cborientation = 'horizontal'
+
+   # One can label the color bar with the units of the data
+   if wantcolorbar:
+      if gipsyset.header.has_key('BUNIT'):
+         cbunits = gipsyset.header['BUNIT']
+      else:
+         cbunits = ''
+      key = "CBLABEL" + pp
+      mes = "Label for color bar ... [%s]:"%cbunits
+      gipsyset.cbunits = gipsy.userchar(key, mes, default=deflev, defval=cbunits, nmax=1)
+
+   # Does user wants to draw graticules and wcs labels?
+   key = "GRATICULES" + pp
+   mes = "Draw graticule lines and WCS labels? ... [Y]/N:"
+   drawgraticules = gipsy.userlog(keyword=key, message=mes, defval=True, default=1)
+   gipsyset.drawgraticules = drawgraticules
+
+   if gipsyset.drawgraticules:
+      get_graticuleproperties(gipsyset, inpnr, deflev=deflev)
+
+   key = "GRIDLAB" + pp
+   mes = "Do you want to plot grid labels? ... Y/[N]:"
+   gridlabels = False
+   gipsyset.gridlabels = gipsy.userlog(key, mes, default=deflev, defval=gridlabels)
+   if gipsyset.gridlabels:
+      key = "GRIDLABATT" + pp
+      mes = "Plot attributes for plot object ... [color:g]:"
+      defval = "color:g"
+      s = gipsy.usertext(key, mes, default=1, defval=defval)
+      gipsyset.gridlabelkwargs = parstr2dict(s)
+
+   key = "BEAMPOS" + pp
+   mes = "Enter position of beam ... [no beam]:"
+   beampos = None
+   gipsyset.beampos = gipsy.usertext(key, mes, default=deflev, defval=beampos)
+   if not gipsyset.beampos is None:
+      key = "FWHMUNITS" + pp
+      mes = "Units of FWHM major&minor axes ... [arcmin]:"
+      gipsyset.fwhmunits = gipsy.userchar(key, mes, default=1, defval='arcmin')
+      key = "BEAMPARS" + pp
+      beampars = [1.0, 1.0, 0.0]
+      mes = "maj, min (%s), pa (deg) ... [1, 1, 0]:"%gipsyset.fwhmunits
+      bpars = gipsy.userdble(key, mes, default=1, defval=beampars, nmax=3)
+      for i, bp in enumerate(bpars):
+         beampars[i] = bp
+      gipsyset.beampars = beampars
+      key = "BEAMATT" + pp
+      mes = "Plot attributes for plot object ... [alpha:0.5]:"
+      defval = "alpha:0.5"
+      s = gipsy.usertext(key, mes, default=1, defval=defval)
+      gipsyset.beamkwargs = parstr2dict(s)
+   
+   
+   return gipsyset, len(gipsyset.subsets)
+
+
+def openscript(key, mes, taskname):
+   script = None
+   scriptname = gipsy.userchar(key, mes, defval=None, default=1)
+   if not scriptname is None:
+      script = []
+      commentline = "#"+'-'*70
+      FILE = open(scriptname, "w")
+      script.append("#!/usr/bin/env python\n\n")
+      from getpass import getuser
+      username = getuser()
+      from datetime import datetime
+      date = datetime.now().strftime("%d-%m-%Y at %H:%M:%S")
+      script.append(commentline+"\n")
+      s = "#  Script generated with GIPSY task %s by user: %s\n"%(taskname, username)
+      script.append(s)
+      s = "#  Date: %s\n" % (date)
+      script.append(s)
+      script.append(commentline+"\n\n")
+      script.append("from matplotlib import pyplot as plt\n")
+      script.append("from kapteyn.maputils import FITSimage\n\n")
+      script.append("taskname = '%s'\n" %taskname)
+   else:
+      FILE = None
+      script = None
+      scriptname = ''
+   return FILE, script, scriptname
+
+
+def closescript(FILE, script):
+   if FILE is None:
+      return
+   else:
+      script.append("\nplt.show()\n")
+      FILE.writelines(script)
+      FILE.close()
+   return
+
+
+def getfigure(xfig_cm=25, yfig_cm=25, canvascolor= '#efefef', script=None, deflev=1):
+   # Ask user to enter a size for the figure canvas.
+   # The default is the size of A4 is 210 x 297 (mm)
+   cm2inch = 0.393700787                            # 1cm is 0.393700787 inch
+   #xfig_cm = 21.0
+   #yfig_cm = 29.7
+   key = "FIGSIZE="
+   mes = "Enter figure size (width,height) in cm ... [%.1f,%.1f]:" %  (xfig_cm, yfig_cm)
+   defval = (xfig_cm, yfig_cm)
+   xycm = gipsy.userdble(keyword=key, message=mes, defval=defval, default=deflev, nmax=2)
+   if (len(xycm) == 1):
+      xycm.append(yfig_cm)
+   xfig_inch = xycm[0] * cm2inch; yfig_inch = xycm[1] * cm2inch;
+   # Create a figure
+   key = "CANVASCOL="
+   mes = "Enter color of figure canvas ... [%s]:"%canvascolor
+   canvascolor = gipsy.usertext(keyword=key, message=mes, defval=canvascolor, default=deflev)
+   fig = figure(figsize=(xfig_inch, yfig_inch), facecolor=canvascolor) # Set a figure for Matplotlib
+   if not script is None:
+      s = "fig = plt.figure(figsize=(%g, %g), facecolor='%s')\n"%(xfig_inch, yfig_inch, canvascolor)
+      script.append(s)
+
+   # Are there any subplot parameters?
+   key = "SUBPLOTPARS="
+   mes = "Enter parameters for subplots in param:value format ... [defaults]:"
+   s = gipsy.usertext(keyword=key, message=mes, defval='', default=deflev)
+   subplotpars = None
+   subplotparsstr = ''
+   if s != '':               # Result of usertext is a list
+      ss = re_split('[ ,\t]+', s)
+      kwargs = {}
+      for sss in ss:
+         if len(ss) > 0:
+            try:
+               k, v = sss.split(':')
+               kwargs[k] = float(v)
+               # Create string for script. Take care of comma's
+               if subplotparsstr == '':
+                  subplotparsstr += '%s=%s'%(k,v)
+               else:
+                  subplotparsstr += ', %s=%s'%(k,v)
+            except: pass
+      if len(kwargs) > 0:
+         fig.subplots_adjust(**kwargs)
+         if not script is None:
+            s = "fig.subplots_adjust(%s)\n"%subplotparsstr
+            script.append(s)
+   else:
+      fig.subplots_adjust(bottom=0.15)
+      if not script is None:
+         s = "fig.subplots_adjust(bottom=0.15)"
+         script.append(s)
+   return fig
+
+
+def plotimages(fig, allsets, n, taskname, filename=None, script=None, deflev=1):
+   # allsets is the list with images & subsets. n is the total number of imagespec
+   # which can be higher than the number of elements in the allsets list,
+   # because each subset is counted as an image.
+
+   writetoscript = not script is None
+   images = []               # A list with Annotatedimage objects
+   rows = int(round(sqrt(n)))
+   cols = n/rows
+   if n%rows:
+      cols +=1
+   key = "ROWSCOLS="
+   mes = "How many rows & columns for %d images? ... [%d,%d]:" % (n, rows,cols)
+   rowscols = gipsy.userint(key, mes, defval=(rows,cols), default=deflev+4, nmax=2)
+   ticks_fontsize = 11 - max(rowscols[0], rowscols[1])
+   if ticks_fontsize < 4:
+      ticks_fontsize = 4
+   lab_fontsize = max(4, ticks_fontsize)
+   if writetoscript:
+      script.append("ticks_fontsize = %g\n"%ticks_fontsize)
+      script.append("lab_fontsize = %g\n"%lab_fontsize)
+
+   key = "SKIPLABELS="
+   mes = "Skip WCS labels not part of left and bottom axes? ... Y/[N]:"
+   minlabs = gipsy.userlog(key, mes, defval=False, default=deflev)
+
+   key = "TYPECLI="
+   mes = "Do you want mouse positions on command line? ... Y/[N]:"
+   typecli = gipsy.userlog(key, mes, defval=False, default=deflev)
+   
+   nrows = rowscols[0]
+   ncols = rowscols[1]
+
+   # Does user wants some help text at bottom of figure?
+   key = "HELPTEXT"
+   mes = "Print help at bottom of figure ... Y/[N]:"
+   wanthelptext = gipsy.userlog(key, mes, default=deflev, defval=False, nmax=1)
+
+   r = c = 0
+   imnr = 1
+   framenr = 1
+   for gipsyset in allsets:
+      allim = []
+      f = FITSimage(externalheader=gipsyset.projection.source, externaldata=gipsyset.image,
+                    externalname=gipsyset.dataname)
+      if writetoscript:
+         # Here we assume the image data came from a FITS file.
+         # Currently there is no way to read directly from a GDS image
+         # in the Kapteyn Package environment
+         script.append("\nf = FITSimage('%s')\n"%f.filename)
+
+      # Set a dummy slice (if any) to get the pixel aspect ratio
+      if len(gipsyset.slicepositions):
+         sp =  gipsyset.slicepositions[0]
+      else:
+         sp = None
+      f.set_imageaxes(gipsyset.projaxnum[0], gipsyset.projaxnum[1], slicepos=sp)
+      gipsy.anyout(taskname + ": Pixel aspectratio %s: %f"%(gipsyset.dataname, f.get_pixelaspectratio()))
+
+      key = "ASPECTRATIO%d="%imnr
+      aspect = f.get_pixelaspectratio()
+      mes = 'Enter pixel aspect ratio ... [%g]: '%aspect
+      aspect = gipsy.userreal(key, mes, defval=aspect, default=deflev, nmax=1)
+      
+      cmap = gipsyset.colormap
+      if writetoscript:
+         script.append("cmap = '%s'\n" %gipsyset.colormap)
+
+      for i, subset in enumerate(gipsyset.subsets):
+         if writetoscript:
+            script.append("\nclipmin = %g\n"%gipsyset.vminmax[0])
+            script.append("clipmax = %g\n"%gipsyset.vminmax[1])
+            script.append("pxlim = %s\n"%gipsyset.pxlim)
+            script.append("pylim = %s\n"%gipsyset.pylim)
+         if c == ncols:
+            c = 0
+            r += 1
+
+         key = "TITLE%d_%d="%(imnr, i+1)
+         if i == 0:
+            deftitle = gipsyset.dataname.split('/')[-1]  # Remove path
+            mes = "Title for current plot ... [%s]:"%deftitle
+            default = deflev
+         else:
+            deftitle = ""
+            mes = ""
+            default = 2
+         title = gipsy.usertext(key, mes, default=default, defval=deftitle)
+         if title != '':
+            key = "TITLEATT%d_%d="%(imnr, i+1)
+            mes = "Plot attributes for plot object ... []:"
+            defval = ""
+            s = gipsy.usertext(key, mes, default=2, defval=defval)
+            titlekwargs = parstr2dict(s)
+
+      
+         frame = fig.add_subplot(rows, cols, framenr);
+         if len(gipsyset.slicepositions):
+            sp = gipsyset.slicepositions[i]
+         else:
+            sp = None 
+         f.set_imageaxes(gipsyset.projaxnum[0], gipsyset.projaxnum[1], slicepos=sp)
+         f.set_limits(pxlim=gipsyset.pxlim, pylim=gipsyset.pylim)
+         if writetoscript:
+            #script.append("axesrect = %s\n"%(str(axesrect)))
+            #script.append("frame = fig.add_axes(axesrect)\n")
+            script.append("frame = fig.add_subplot(%d, %d, %d)\n"%(rows, cols, framenr))
+            script.append("f.set_imageaxes(%d, %d , slicepos=%s)\n"%\
+                (gipsyset.projaxnum[0], gipsyset.projaxnum[1], gipsyset.slicepositions[i]))
+            script.append("f.set_limits(pxlim=pxlim, pylim=pylim)\n")
+
+         framenr += 1
+         if gipsyset.u_skyout != None:
+            f.set_skyout(gipsyset.u_skyout)
+            if writetoscript:
+               script.append("f.set_skyout('%s')\n"%gipsyset.u_skyout)
+         if gipsyset.subspectraltrans != None:
+            f.set_spectrans(gipsyset.subspectraltrans)
+            if writetoscript:
+               script.append("f.set_spectrans('%s')\n"%gipsyset.subspectraltrans)
+
+         annim = f.Annotatedimage(frame, clipmin=gipsyset.vminmax[0], clipmax=gipsyset.vminmax[1],
+                                  cmap=cmap, basename=taskname, gridmode=True)
+         annim.set_aspectratio(aspect)
+         annim.Image()
+         annim.cmap.set_scale(gipsyset.colorscale)
+         annim.cmap.modify(gipsyset.cslope, gipsyset.coffset)
+         # Done by constructor? annim.set_pixoffset(gipsyset.subproj.crpix[0], gipsyset.subproj.crpix[1])
+         if writetoscript:
+            script.append("annim = f.Annotatedimage(frame, clipmin=clipmin, clipmax=clipmax, cmap=cmap, basename=taskname, gridmode=True)\n")
+            script.append("annim.Image()\n")
+            script.append("annim.cmap.set_scale('%s')\n"%gipsyset.colorscale)
+            script.append("annim.cmap.modify(%g, %g)\n"%(gipsyset.cslope, gipsyset.coffset))
+
+         grat = None
+         if gipsyset.drawgraticules:
+            spectrans = gipsyset.subspectraltrans
+            startx = gipsyset.gratstart[0]
+            starty = gipsyset.gratstart[1]
+            deltax = gipsyset.gratdelta[0]
+            deltay = gipsyset.gratdelta[1]
+            unitsx = gipsyset.gratunits[0]
+            unitsy = gipsyset.gratunits[1]
+
+            grat = annim.Graticule(spectrans=spectrans, startx=startx, starty=starty,
+                                   deltax=deltax, deltay=deltay, unitsx=unitsx, unitsy=unitsy)
+
+            if writetoscript:
+               if spectrans is None:
+                  script.append("spectrans = None\n")
+               else:
+                  script.append("spectrans = '%s'\n"%spectrans)
+               if startx is None:
+                  script.append("startx = None\n")
+               else:
+                  # In this context startx is a string!
+                  script.append('startx = "%s"\n'%startx)
+                  # Note the quotes. If startx strings contain grouping it can contain
+                  # single quotes.
+               if starty is None:
+                  script.append("starty = None\n")
+               else:
+                  # In this context starty is a string!
+                  script.append('starty = "%s"\n'%starty)
+               if deltax is None:
+                  script.append("deltax = None\n")
+               else:
+                  script.append('deltax = "%s"\n'%deltax)
+               if deltay is None:
+                  script.append("deltay = None\n")
+               else:
+                  script.append('deltay = "%s"\n'%deltay)
+               if unitsx is None:
+                  script.append("unitsx = None\n")
+               else:
+                  script.append('unitsx = "%s"\n'%unitsx)
+               if unitsy is None:
+                  script.append("unitsy = None\n")
+               else:
+                  script.append('unitsy = "%s"\n'%unitsy)
+
+               script.append("grat = annim.Graticule(spectrans=spectrans,\n")
+               script.append("       startx=startx, starty=starty,\n")
+               script.append("       deltax=deltax, deltay=deltay,\n")
+               script.append("       unitsx=unitsx, unitsy=unitsy)\n")
+
+            if minlabs:
+               if c == 0:
+                  grat.set_tickmode(plotaxis=("left"), mode="Native")
+                  grat.setp_axislabel(plotaxis="left", fontsize=lab_fontsize)
+                  if writetoscript:
+                     script.append('grat.setp_axislabel(plotaxis="left", fontsize=lab_fontsize)\n')
+                     script.append('grat.setp_axislabel(plotaxis="left", fontsize=lab_fontsize)\n')
+               else:
+                  grat.setp_axislabel(plotaxis="left", visible=False)
+                  grat.set_tickmode(plotaxis=("left"), mode="NO")
+                  if writetoscript:
+                     script.append('grat.setp_axislabel(plotaxis="left", visible=False)\n')
+                     script.append('grat.set_tickmode(plotaxis=("left"), mode="NO")\n')
+               if r == nrows - 1:
+                  grat.set_tickmode(plotaxis=("bottom"), mode="Native")
+                  grat.setp_axislabel(plotaxis="bottom", fontsize=lab_fontsize)
+                  if writetoscript:
+                     script.append('grat.set_tickmode(plotaxis=("bottom"), mode="Native")\n')
+                     script.append('grat.setp_axislabel(plotaxis="bottom", fontsize=lab_fontsize)\n')
+               else:
+                  grat.setp_axislabel(plotaxis="bottom", visible=False)
+                  grat.set_tickmode(plotaxis=("bottom"), mode="NO")
+                  if writetoscript:
+                     script.append('grat.setp_axislabel(plotaxis="bottom", visible=False)\n')
+                     script.append('grat.set_tickmode(plotaxis=("bottom"), mode="NO")\n')
+            else:
+               grat.set_tickmode(plotaxis=("bottom", "left"), mode="Native")
+               grat.setp_axislabel(plotaxis=("bottom", "left"), fontsize=lab_fontsize)
+               if writetoscript:
+                     script.append('grat.set_tickmode(plotaxis=("bottom", "left"), mode="Native")\n')
+                     script.append('grat.setp_axislabel(plotaxis=("bottom", "left"), fontsize=lab_fontsize)\n')
+
+            grat.setp_ticklabel(plotaxis=("left","bottom"), color='b',
+                              fontsize=ticks_fontsize)
+            if writetoscript:
+               script.append('grat.setp_ticklabel(plotaxis=("left","bottom"), color="b", fontsize=ticks_fontsize)\n')
+
+         if gipsyset.wantcont:
+            annim.Contours(levels=gipsyset.levels, colors=gipsyset.colors)
+            if writetoscript:
+               script.append("levels = %s\n"%(str(gipsyset.levels)))
+               s = "colors = ("
+               for col in gipsyset.colors:
+                  s += '"'+col+'",';
+               script.append("%s)\n"%(s))
+               script.append("annim.Contours(levels=levels, colors=colors)\n\n")
+
+         if not gipsyset.beampos is None:
+            beam = annim.Beam(major=gipsyset.beampars[0],
+                              minor=gipsyset.beampars[1],
+                              pa = gipsyset.beampars[2],
+                              pos=gipsyset.beampos,
+                              units=gipsyset.fwhmunits,
+                              **gipsyset.beamkwargs)  # Fails on MPL systems v < 0.99.?
+            if writetoscript:
+                script.append('major = %g\n'%gipsyset.beampars[0])
+                script.append('minor = %g\n'%gipsyset.beampars[1])
+                script.append('beampa = %g\n'%gipsyset.beampars[2])
+                script.append('beampos = "%s"\n'%gipsyset.beampos)
+                script.append('fwhmunits = "%s"\n'%gipsyset.fwhmunits)
+                script.append('beamkwargs = %s\n'%str(gipsyset.beamkwargs))
+                script.append('beam = annim.Beam(major=major, minor=minor, pa=beampa, pos=beampos, units=fwhmunits, **beamkwargs)\n')
+
+         if gipsyset.gridlabels:
+            annim.Pixellabels(plotaxis=("top","right"), **gipsyset.gridlabelkwargs)
+            if writetoscript:
+               script.append('gridlabelkwargs = %s\n'%str(gipsyset.gridlabelkwargs))
+               script.append("annim.Pixellabels(plotaxis=('top','right'), **gridlabelkwargs)\n")
+
+         if gipsyset.wantcolorbar:
+            cb = None
+            if writetoscript:
+               script.append("cborientation = '%s'\n"%gipsyset.cborientation)
+            if gipsyset.colbarframe is None:
+               cb = annim.Colorbar(orientation=gipsyset.cborientation, fontsize=lab_fontsize-1)
+               if writetoscript:
+                  script.append("cb = annim.Colorbar(orientation=cborientation, fontsize=lab_fontsize-1)\n")
+            else:
+               # The colorbar frame is given as a center position (xc, yc)
+               # a width w and height h. The coordinates are normalized coordinates
+               # in the current frame. They are converted to normalized coordinates
+               # with respect to the figure, because this is needed to create
+               # a Matplotlib Axes object.
+               xc, yc, w, h = gipsyset.colbarframe
+               x0 = xc-w/2.0; y0 = yc-h/2.0; x1 = xc+w/2.0; y1 = yc+h/2.0
+               mode = gipsyset.cbframemode
+               single = False
+               if mode.upper().startswith('F'):
+                  X0,Y0 = frame.transAxes.transform((x0,y0))
+                  X1,Y1 = frame.transAxes.transform((x1,y1))
+                  x0,y0 = fig.transFigure.inverted().transform((X0,Y0))
+                  x1,y1 = fig.transFigure.inverted().transform((X1,Y1))
+               elif mode.upper().startswith('D'):
+                  X0,Y0 = frame.transData.transform((x0,y0))
+                  X1,Y1 = frame.transData.transform((x1,y1))
+                  x0,y0 = fig.transFigure.inverted().transform((X0,Y0))
+                  x1,y1 = fig.transFigure.inverted().transform((X1,Y1))
+               else:
+                  single = True
+
+               if not single or i == 0:
+                  f4 = (x0, y0, x1-x0, y1-y0)
+                  adjust = frame.get_adjustable()
+                  cfr = fig.add_axes(f4,
+                                     adjustable=adjust,
+                                     autoscale_on=False)
+                  cb = annim.Colorbar(orientation=gipsyset.cborientation,
+                                      fontsize=lab_fontsize-1, frame=cfr)
+                  if writetoscript:
+                     script.append("adjust = frame.get_adjustable()\n")
+                     script.append("cfr = fig.add_axes(%s, adjustable=adjust, autoscale_on=False)\n"%str(f4))
+                     script.append("cb = annim.Colorbar(orientation=cborientation, fontsize=lab_fontsize-1, frame=cfr)\n")
+                                     
+            if not cb is None and gipsyset.cbunits != '':
+               cb.set_label(gipsyset.cbunits, fontsize=lab_fontsize-1)
+               if writetoscript:
+                  script.append("cbunits = '%s'\n"%gipsyset.cbunits)
+                  script.append("cb.set_label(cbunits, fontsize=lab_fontsize-1)\n")
+         
+            if title != '':       # First plot of a subset sequence
+               # Titlekwargs belong to one subset. Therefore they are
+               # not an attribute of 'gipsyset'.
+               frame.set_title(title, **titlekwargs)
+               if writetoscript:
+                  script.append('title = "%s"\n'%title)
+                  script.append('titlekwargs = %s\n'%str(titlekwargs))
+                  script.append("frame.set_title(title, **titlekwargs)\n")
+
+            if writetoscript:
+               script.append("\n\n")   # Add space to distinguish plots
+               
+         annim.plot()
+         if writetoscript:
+            script.append("annim.plot()\n")
+         # If more than one subset was entered, then give world coordinates
+         # for the slices.
+         if len(gipsyset.subsets) > 1:   # and not (gipsyset.subspectra is None):
+            # If one of the axes outside the map is spectral, then ask
+            # user to enter a spectral translation.
+            vel, uni = f.slice2world(spectra=gipsyset.repspectraltrans,
+                                     userunits=gipsyset.repspectralunits)   # Skyout is also possible.
+            sliceinfo = ""
+            for v, u in zip(vel, uni):
+               sliceinfo += "%g (%s) " % (v,u)
+
+            if not grat is None:
+               fr = grat.frame   # This frame is only known after annim.plot() which sets frames
+            else:
+               fr = frame
+            fr.text(0.98, 0.98, sliceinfo,
+                    horizontalalignment='right',
+                    verticalalignment='top',
+                    transform = fr.transAxes,
+                    fontsize=ticks_fontsize-1, color='w',
+                    bbox=dict(facecolor='red', alpha=0.7))
+            if writetoscript:
+               if gipsyset.repspectraltrans is None:
+                  s = "repspectra = None\n"
+               else:
+                  s = "repspectra = '%s'\n"%gipsyset.repspectraltrans
+               script.append(s)
+               if gipsyset.repspectralunits is None:
+                  s = "userunits = None\n"
+               else:
+                  s = "userunits = '%s'\n"%gipsyset.repspectralunits
+               script.append(s)
+               script.append("vel, uni = f.slice2world(spectra=repspectra, userunits=userunits)\n")
+               script.append('sliceinfo = ""\n')
+               script.append('for v, u in zip(vel, uni):\n')
+               script.append('   sliceinfo += "%g (%s) " % (v,u)\n')
+               if not grat is None:
+                  script.append('fr = grat.frame\n')
+               else:
+                  script.append('fr = frame\n')
+               script.append("""fr.text(0.98, 0.98, sliceinfo,
+                    horizontalalignment='right',
+                    verticalalignment='top',
+                    transform = fr.transAxes,
+                    fontsize=ticks_fontsize-1, color='w',
+                    bbox=dict(facecolor='red', alpha=0.7))\n""")
+
+
+         annim.interact_toolbarinfo()
+         annim.interact_imagecolors()
+         annim.interact_writepos(gipsy=True, g_typecli=typecli)
+         if writetoscript:
+            script.append("annim.interact_toolbarinfo()\n")
+            script.append("annim.interact_imagecolors()\n")
+            # Script runs outside GIPSY. But it must use grid coodinates
+            # and not pixel coordinates. Therefore we set a pixel offset for
+            # mouse positions. We set the projection object in grid mode
+            # and tell the output of tagged positions to write to
+            # a terminal instead of the GIPSY log and screen.
+            script.append("annim.interact_writepos(gipsy=False, g_typecli=False)\n")
+         c += 1
+         allim.append(annim)    # All Annotatedimage objects per 'gipsyset' object
+         images.append(annim)   # List with all images of all 'gipsyset' objects
+         cmap = annim.cmap      # Use same colormap instance for all subsets
+         if writetoscript:
+            script.append("cmap = annim.cmap\n")
+
+      imnr += 1
+      gipsyset.allim = allim   # Later we need to be able to identify the subsets
+
+   if wanthelptext:
+      tdict = dict(color='g', fontsize=10, va='bottom', ha='left')
+      helptxt = allsets[0].allim[0].get_colornavigation_info()
+      fig.text(0.01, 0.01, helptxt, tdict)
+
+   return images   # Return list with all images of all 'gipsyset' objects
+
+
+
+
+
+
+
+#---------- Main program -----------------
+gipsy.init()
+taskname = gipsy.myname()
+# Start prompting user for data sets
+askmore = True
+inp = 0
+n = 0                                            # Counter for input of data sets.
+allsets = []
+key = "DEVLEV="
+mes = "Prompt all keywords (1) or only most important (2)? ... [2]:"
+deflev = gipsy.userint(key, mes, defval=2, default=1)
+if deflev != 2:
+   deflev = 1
+while askmore:
+   inp += 1
+   gipsyset, plotted = imagespec(inp, taskname, deflev)
+   askmore = plotted > 0
+   n += plotted
+   if askmore:
+      allsets.append(gipsyset)
+
+if n == 0:
+   # No images were specified
+   gipsy.finis()                                 # Leave Hermes
+
+
+# Ask user of a name for a Python script that does the actual plotting.
+key = "SCRIPT="
+mes = "Name of plot script ... [do not create script]:"
+fileobj, script, scriptname = openscript(key, mes, taskname)
+fig = getfigure(xfig_cm=40, script=script, deflev=deflev)
+images = plotimages(fig, allsets, n, taskname, script=script, deflev=deflev)
+closescript(fileobj, script)
+if not fileobj is None:
+   gipsy.anyout(taskname + ": Wrote Python script [%s] to file"%scriptname)
+
+
+# Ask some keywords only for WCSFLUX
+if taskname.upper() == 'WCSFLUX':
+   key = 'POLFROMFILE='
+   prompt = "Do you want to read polygon data from file? .... Y/[N] "
+   fromfile = gipsy.userlog(keyword=key, message=prompt, defval=False, default=1)
+
+   filename = None
+   world = False
+   if fromfile:
+      prompt = "Enter name of file with polygon data:"
+      key = "POLYFILENAME="
+      s = gipsy.usertext(keyword=key, message=prompt, defval='', default=1)
+      if s == '':
+         gipsy.anyout("No file name entered!")
+      else:
+         filename = s
+         prompt = "Read Pixel- or World coords from shape file ... P/[W]:"
+         key = "PIXORWORLD="
+         s = gipsy.usertext(keyword=key, message=prompt, defval='', default=1)
+         world = False
+         if s == '' or s in ['w', 'W']:
+            world = True
+
+   key = 'WCS='
+   prompt = "Markers propagate in Pixel- or World coordinates ... P/[W]:"
+   s = gipsy.userchar(keyword=key, message=prompt, defval='W', default=1)
+
+   if s.upper() == 'W':
+      wcs = True
+   else:
+      wcs = False
+   for ima in images:
+      ima.world = wcs
+
+   shapes = shapes.Shapecollection(images, fig,
+                                   wcs=wcs,
+                                   inputfilename=filename,
+                                   inputwcs=world,
+                                   gipsy=True)
+
+# Give user an option to set marker symbols at one or more positions
+gipsy_connect()
+gipsy.KeyCallback(plmarker, 'MARKER=', allsets=allsets)
+
+show()
+
+# At the end of the program, after closing the Matplotlib window,
+# we write the current settings of the image editor to the
+# corresponding keywords so that it will be possible to restore 
+# the last plot using the GIPSY macro mechanism.
+for i, gset in enumerate(allsets):
+   colormap0 = gset.allim[0].cmap
+   gipsy.anyout(taskname + ": CSLOPE%d= %g COFFSET%d= %g"%(i+1, colormap0.slope, i+1, colormap0.shift))
+   gipsy.wkey("CSLOPE%d= %g"%(i+1, colormap0.slope))
+   gipsy.wkey("COFFSET%d= %g"%(i+1, colormap0.shift))
+   scales = {'LINEAR' : '1', 'LOG' : '2', 'EXP' : '3', 'SQRT' : '4', 'SQUARE': '5'}
+   sc = colormap0.scale
+   sc = scales[sc]
+   gipsy.anyout(taskname + ": COLORSCALE%d= %s"%(i+1, sc))
+   gipsy.wkey("COLORSCALE%d= %s"%(i+1, sc))
+   # Module mplutil stores the source of the VariableColormap instance
+   # In the context of this task, the source is (or should be) a string. Note that
+   # for a series of subsets only the first stores the string, the others store
+   # a VariableColormap instance. To be sure, check always whether the source is a string.
+   cm = colormap0.source
+   if type(cm) == StringType:
+      gipsy.wkey("COLORMAP%d= %s"%(i+1, cm))
+
+# The parameters that adjust the subplots
+key = "SUBPLOTPARS="
+key += "left:%f right:%f top:%f bottom:%f hspace:%f wspace:%f"%(fig.subplotpars.left,
+       fig.subplotpars.right, fig.subplotpars.top, fig.subplotpars.bottom,
+       fig.subplotpars.wspace, fig.subplotpars.hspace) 
+gipsy.wkey(key)
+
+cm2inch = 0.393700787                            # 1cm is 0.393700787 inch
+xs, ys = fig.get_size_inches()
+gipsy.wkey("FIGSIZE=%f %f"%(xs/cm2inch, ys/cm2inch))
+
+# End GIPSY task
+gipsy.finis()
+#<
+
+#>            wcsflux.syn
+mapmaker
+#<

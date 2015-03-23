@@ -1,0 +1,2411 @@
+ipaccal.src
+
+        Copyright (c) Kapteyn Laboratorium Groningen 1994
+        All Rights Reserved.
+
+Name:         ipaccal.src
+Creator:      do
+Host:         vega
+Date:         Apr 20, 1994
+Contents:     ipaccal.dc1 cimain.f ciamps.f cicmgo.f cidn2v.f
+              cidt05.f cidt19.f cidt43.f ciical.f cioffs.f
+              ciprec.f ciprhf.f cirdsf.f cirdvt.f ciseqn.f
+              cisrec.f ciwpm2.f ccstim.f cigbbi.shl guutsc.f
+              ccesad.shl ccgxnc.shl ipaccal.make
+
+#>            ipaccal.dc1
+
+Program:        IPACCAL
+
+Purpose:        Program to calibrate IRAS data sets.
+
+Category:       IRAS
+
+File:           ipaccal.src
+
+Author:         D.R.Boxhoorn
+
+Keywords:
+
+   IRSETIN=     Give set to be calibrated.
+
+** CIPFIL=      Directory with PRHF values [standard]
+
+** CISFIL=      Directory with SRHF values [standard]
+
+** GAIN=        Gain setting [standard]
+                Choices are:  Standard, High, Low
+
+** VFET=        File with vfet constants for standard gain [standard]
+
+** LOVFET=      File with vfet constants for low gain [standard]
+
+** HIVFET=      File with vfet constants for high gain [standard]
+
+** TYPE2=       File with type2 constants [standard]
+
+** BBT=         File with bias boost times [standard]
+
+** UTCSFL=      File with UTCS references [standard]
+
+   UNITS=       The units of the output IRDS [MJy/sr]
+                Choices are: MJy/sr, W/m2, pW/m2
+
+   IRSETOUT=    Give output set [IRSETIN]
+
+
+Description:    The data from IRSETIN are calibrated with constants from
+                various files peculiar to this IPAC calibration.
+                Only raw data (with units DN-02) can be calibrated.
+                The hidden GAIN keyword is used in case an AO that has been
+                measured with a non-standard (e.g. low or high) gain has to
+                be calibrated. You should know yourself when this has to be
+                done. In that case the standard GAIN setting should give
+                ridiculously low or high fluxes.
+
+		The noise estimate from PLATE is converted to the units
+		requested; the value of one digitization step is also
+		converted and written to the irds under keyword DIGNOISE
+
+References:
+                Former routine name: cimain.
+
+
+Example:        1) Inset and Outset are one and the same Set:
+                   IRSETIN=peer
+                   IRSETOUT=<carriage return>
+                   UNITS=<carriage return>
+*******************************************************
+ The inputset  is peer
+ The outputset is peer
+                            .
+                            .
+                            .
+ The set will be calibrated in units of MJY/SR
+*******************************************************
+IPACCAL   +++ FINISHED +++
+
+
+                2) Inset and Outset are different and Units are W/m2
+                   IRSETIN=geishab4
+                   IRSETOUT=cal4geisha
+                   UNITS=W
+ COPY  Version 1.0  Jan 29, 1990
+Set geishab4 has 4 axes
+                            .
+                            .
+                            .
+*******************************************************
+ The inputset  is geishab4
+ The outputset is cal4geisha
+                            .
+                            .
+                            .
+ The set will be calibrated in units of W/M2
+*******************************************************
+IPACCAL   +++ FINISHED +++
+
+
+
+
+Updates:        Apr 13, 1992: DRB, Document created.
+		Oct 29, 1992: DK, conversion of noise nad digitization noise
+		Feb  8, 1994: DRB, "inverted scans" bug fixed
+		Apr 20, 1994: DK, inadvertent recursion in string operation
+				removed.
+#<
+
+#>            cimain.f
+c	 cimain.f
+c
+c           Copyright (c) 1991
+c  Laboratory for Space Research Groningen 
+c       Kapteyn Laboratory Groningen 
+c           All Rights Reserved.
+c
+c Function:     cimain
+c
+c Purpose:      For documentation see ipaccal.dc1
+c
+c Category:     IRAS, calibration program
+c
+c Author:       Danny Boxhoorn		danny@guspace.rug.nl
+c
+c Updates:      20 Jan 1992: DRB, Creation date
+c               11 Aug 1992: DRB, Units pW/m2 added.
+c		29 Oct 1992: DK, conversion of noise and 
+c				 addition of DIGITIZATION
+c 		06 Apr 1993: DK, add keyword CALIBSYS with value 'IPAC'
+c 
+	program ipaccal
+
+	implicit 	none
+
+	integer		NELC, USERCHAR, USERCHARU
+	integer		IRAS_ROOT, IRC_CHUNIT, IRDS_EXIST
+	integer		IRCC_BANDNR
+	integer		GDSC_WORD
+	real		CCESAD
+	double precision	GUSCUT
+	logical		DEAD, nosrhf
+	real		RBLANK, OVERF
+	parameter	( OVERF = 65534.9 )
+	integer		logfile, i, k, rl
+	character*80	root, bunit, scantype, units, initgn
+	real		scale, w2mjy(4)
+c beware of long pathnames in setnames and files ! --> character*256
+	character*256	irdsin, irdsout, cipfil, cisfil
+	character*256	vfetsg, vfetlg, vfethg
+	character*256	ctype2, bbfile, utcsfl
+	character*256	dummy
+
+	character*256	object, coor, instrument, scname
+	real		epoch
+	doubleprecision size(2), center(2)
+	integer		axes(4), naxis
+	integer		snips, ndets, length, rate
+	integer		ksnip, kdet
+	integer		level, dslevel, numsam, band
+	integer		sop, obs, att, satcal, scandur, snipcal, snipdur
+	integer		astart, asend, snipsc, sampdur
+	real		psi, psirat, theta
+	integer		NDATA
+	parameter	( NDATA = 48000 )
+	real		data(NDATA), amps(NDATA)
+	logical		isblnk(NDATA), okdata
+	integer		det
+	double precision	snutcs, snutc1, bbt, dtime
+	real		utcinc, utmbb
+	real		noise, conversion, bbd
+	integer		mdets
+	parameter	( mdets = 62 )
+	real		ap(mdets), bp(mdets), tp(mdets), abt(3)
+
+	integer		ierr, cont
+	integer		OK, FATAL
+	parameter 	( OK = 0, FATAL = 4 )
+	common		/dfault/ vfetsg, vfetlg, vfethg,
+     #				 cipfil, cisfil, initgn,
+     #				 ctype2, bbfile, utcsfl
+
+	data		logfile / 0 /
+	data		units	/ 'MJY/SR' /
+	data		bunit	/ ' ' /
+	data		w2mjy	/ 7.481e6, 19.38e6, 38.76e6, 100.0e6 /
+
+	data		vfetsg	/ 'IPAC/tables/vfetsg' /
+	data		vfetlg	/ 'IPAC/tables/vfetlg' /
+	data		vfethg	/ 'IPAC/tables/vfethg' /
+	data		cipfil	/ 'IPAC/P' /
+	data		cisfil	/ 'IPAC/S' /
+	data		initgn	/ 'STANDARD' /
+	data		bbfile	/ 'IPAC/tables/bbtimes' /
+	data		ctype2	/ 'IPAC/tables/ctype2' /
+	data		utcsfl	/ 'IPAC/tables/utcs_satc.refs' /
+
+c	integer 	unitl, uniti, unito, bun
+c	integer 	skip, step
+c	character	status*3, unkey*5, cu
+c	character*80	filin, filout, headi(72)
+c	integer		bufi(1560)
+c
+c	data	uniti, unito, unitl / 12, 14, 4 /
+c	data	skip, step, bun  / 0, 1, 1 /
+c	data	status, unkey, cu / 'new', ' pPwW', ' ' /
+
+	DEAD(det) = (det .eq. 17) .or. (det .eq. 20) .or. (det .eq. 36)
+
+c Get in touch with HERMES:
+	call INIT
+
+	call ANYOUT( logfile, ' IPACCAL Version 1.50  20 April 1994')
+
+	call SETFBLANK( RBLANK )
+	cont = fatal
+	do while ( cont .ne. ok )
+	  k = USERCHAR( irdsin, 1, 0, 'IRSETIN=',
+     #		'Give set to be calibrated' )
+	  cont = IRDS_EXIST( irdsin, ierr )
+	  if ( cont .ne. ok ) then
+	    call ANYOUT( 0, 'the irds does not exist' )
+	    call CANCEL( 'IRSETIN=' )
+	  end if
+	end do
+
+	irdsout = irdsin
+	k = USERCHAR( irdsout, 1, 1, 'IRSETOUT=',
+     #		'Give output set [' // irdsout(:NELC(irdsout)) // ']' )
+c Check if irdsin is uncalibrated:
+	ierr = 0
+	call GDSD_RCHAR( irdsin, 'BUNIT', 0, bunit, ierr )
+	if ( bunit(:NELC( bunit )) .ne. 'DN' ) goto 9999
+
+	rl = IRAS_ROOT( root )
+	dummy  = root(:rl) // vfetsg
+	vfetsg = dummy(:80)
+	dummy  = root(:rl) // vfetlg
+	vfetlg = dummy(:80)
+	dummy  = root(:rl) // vfethg
+	vfethg = dummy(:80)
+	dummy  = root(:rl) // cipfil
+	cipfil = dummy(:80)
+	dummy  = root(:rl) // cisfil
+	cisfil = dummy(:80)
+	dummy  = root(:rl) // ctype2
+	ctype2 = dummy(:80)
+	dummy  = root(:rl) // bbfile
+	bbfile = dummy(:80)
+	dummy  = root(:rl) // utcsfl
+	utcsfl = dummy(:80)
+
+	k = USERCHAR( cipfil, 1, 2, 'CIPFIL=', 
+     #		'Give directory with PRHF values [standard]' )
+	k = USERCHAR( cisfil, 1, 2, 'CISFIL=', 
+     #		'Give directory with SRHF values [standard]' )
+	k = USERCHARU( initgn, 1, 2, 'GAIN=', 
+     #		'Give gain setting [standard]' )
+	k = USERCHAR( vfetsg, 1, 2, 'VFET=', 
+     #		'Give file with standard gain vfet constants [standard]' )
+	k = USERCHAR( vfetlg, 1, 2, 'LOVFET=', 
+     #		'Give file with low gain vfet constants [standard]' )
+	k = USERCHAR( vfethg, 1, 2, 'HIVFET=', 
+     #		'Give file with high gain vfet constants [standard]' )
+	k = USERCHAR( ctype2, 1, 2, 'TYPE2=', 
+     #		'Give file with type2 constants [standard]' )
+	k = USERCHAR( bbfile, 1, 2, 'BBT=', 
+     #		'Give file with Bias Boost Times [standard]' )
+	k = USERCHAR( utcsfl, 1, 2, 'UTCSFL=', 
+     #		'Give file with UTCS references [standard]' )
+
+	k = USERCHARU( units, 1, 1, 'UNITS=', 
+     #		'Specify units of output irds [MJy/sr]' )
+		
+
+c check validity of units-request; use dummys for the first 3 variables
+	if ( IRC_CHUNIT( 0, 0.0, 0, units, units ) .lt. 0 ) then
+	  call ERROR( FATAL, 'Unknown unit specification: ' // 
+     #			units(:NELC( units )) )
+	end if
+
+c Copy irdsin to irdsout if ( irdsin .ne. irdsout ) (Yuck !)
+	if ( irdsin .ne. irdsout ) then
+	  ierr = 0
+	  call WKEY( 'INSET=' // irdsin )
+	  call WKEY( 'OUTSET=' // irdsout )
+	  call WKEY( 'BOX=' )
+	  call WKEY( 'OKAY=Y' )
+	  call DEPUTY( 'copy', ierr)
+	end if
+
+
+c write some messages to administration file
+        call ANYOUT( logfile,
+     #      '*******************************************************' )
+
+	call ANYOUT( logfile, ' The inputset  is '
+     #		// irdsin(:NELC( irdsin )) )
+	call ANYOUT( logfile, ' The outputset is '
+     #		// irdsout(:NELC( irdsout )) )
+	call ANYOUT( logfile, ' The PRHF values are taken from '
+     #          // cipfil(:NELC( cipfil )) )
+	call ANYOUT( logfile, ' The SRHF values are taken from '
+     #          // cisfil(:NELC( cisfil )) )
+	call ANYOUT( logfile, ' The GAIN is '
+     #          // initgn(:NELC( initgn )) )
+	call ANYOUT( logfile, ' The standard VFET constants are taken '
+     #          // 'from ' // vfetsg(:NELC( vfetsg )) )
+	call ANYOUT( logfile, ' The low gain VFET constants are taken '
+     #          // 'from ' // vfetlg(:NELC( vfetlg )) )
+	call ANYOUT( logfile, ' The high gain VFET constants are taken '
+     #          // 'from ' // vfethg(:NELC( vfethg )) )
+	call ANYOUT( logfile, ' The TYPE2 constants are taken from '
+     #          // ctype2(:NELC( ctype2 )) )
+	call ANYOUT( logfile, ' The bias boost times are taken from '
+     #          // bbfile(:NELC( bbfile )) )
+	call ANYOUT( logfile, ' The UTCS references are taken from '
+     #          // utcsfl(:NELC( utcsfl )) )
+	call ANYOUT( logfile,
+     #		' The set will be calibrated in units of '
+     #		// units(:NELC( units )) )
+
+        call ANYOUT( logfile,
+     #      '*******************************************************' )
+
+c calibrate the irds
+
+	call IRDS_ENQUIRE( irdsout, object, instrument, naxis, axes,
+     #			center, size, coor, epoch, ierr )
+	snips = axes(4)
+	ndets = axes(3)
+	length = axes(2)
+	rate = axes(1)
+	numsam = length * rate
+	
+	band = IRCC_BANDNR( instrument )
+
+	do ksnip = 1, snips
+	  ierr = 0
+	  level = GDSC_WORD( irdsout, 4, ksnip, 0, ierr )
+	  call IRDS_ENQUIRE_SNIP( irdsout, ksnip, sop, obs, att,
+     #		scantype, satcal, scandur, snipcal, snipdur, psi,
+     #		psirat, theta, ierr )
+	  sampdur = snipdur * rate
+	  dtime = satcal + snipcal
+	  snutcs = GUSCUT( dtime )
+	  utcinc = (GUSCUT( dtime + snipdur ) - snutcs) / sampdur
+	  astart = snutcs
+	  asend  = snutcs + sampdur
+	  if ( obs .eq. 0 ) then
+	    write ( scname, '(a,2i4)' ) 'Invalid item OBS: sop-obs ',
+     #		sop,obs
+	    call ANYOUT( logfile, scname(:NELC(scname)) )
+	  call ERROR( FATAL, 'Please rerun PLATE to create an IRDS that'
+     #		// ' contains an OBS unequal 0' )
+	  end if
+	  ierr = 0
+	  call cigbbi( snutcs, bbt, bbd, ierr )
+	  ierr = 0
+	  call cirdsf( sop, obs, ap, bp, tp, ierr )
+	  if ( ierr .ne. ok ) then
+	    write ( scname, '(2i4)' ) sop, obs
+	    call ERROR( ierr, 'Blanking sop-obs ' // 
+     #			scname(:NELC(scname)) // ': No SRHF data' )
+	    nosrhf = .true.
+	  else
+	    nosrhf = .false.
+	  end if
+cs DEBUG
+c	write( dummy, '(a,e20.12,a,e20.12,a)' ) '(snutcs, utcinc) = ',
+c     #		snutcs, ',', utcinc, ')'
+c	call ANYOUT( logfile, dummy )
+c	write( dummy, '(a,i4)' ) 'obs = ', obs
+c	call ANYOUT( logfile, dummy )
+c	write( dummy, '(a,i9,a,i9,a)' ) '(start, end) = ',astart,',',asend
+c     #  ,')'
+c	call ANYOUT( logfile, dummy )
+ce DEBUG
+	  do kdet = 1, ndets
+	    ierr = 0
+	    call GDSD_GRINT(  irdsout, 'DETNO', 3, kdet, 1, det, ierr )
+	    if (units .eq. 'MJY/SR') then
+	      if ( .not. DEAD(det) ) scale = w2mjy(band) / ccesad(det)
+	    else if (units .eq. 'W/M2') then
+	      scale = 1.0
+	    else if (units .eq. 'PW/M2') then
+              scale = 1.0e12
+	    else
+	      call ERROR( FATAL, 'Unknown unit specification: ' // 
+     #			units(:NELC( units )) )
+	    end if
+	    ierr = 0
+	    dslevel = GDSC_WORD( irdsout, 3, kdet, level, ierr )
+	    call GDSD_RREAL( irdsout, 'NOISE', dslevel, noise, ierr )
+	    call IRDS_RD_SAMPLES( irdsout, ksnip, kdet, 1, data,
+     #		numsam, ierr )
+cs DEBUG
+c	write( dummy, '(a,i6)' ) 'numsam = ', numsam
+c	call ANYOUT( logfile, dummy )
+ce DEBUG
+	    do i = 1, numsam
+	      if ( data(i) .ne. RBLANK ) then
+		isblnk(i) = data(i) .gt. OVERF
+	      else
+		isblnk(i) = .true.
+	      end if
+	    end do
+	    if ( DEAD(det) .or. nosrhf) then
+	      okdata = .false.
+	      do i = 1, numsam
+	        data(i) = RBLANK
+	      end do
+	    else
+	      okdata = .true.
+	      snutc1 = snutcs
+              snipsc = satcal + snipcal
+	      utmbb = snutc1 - bbt
+cs DEBUG
+c	write( dummy, '(a,e20.12)' ) 'utmbb = ', utmbb
+c	call ANYOUT( logfile, dummy )
+ce DEBUG
+	      call ciical( det, utmbb, bbd, snutc1, utcinc,
+     #			snipsc, sampdur, data, amps, conversion )
+	      abt(1) = ap(det)
+	      abt(2) = bp(det)
+	      abt(3) = tp(det)
+	      call ciwpm2( sop, obs, det, utmbb, utcinc,
+     #			abt, sampdur, amps, data, conversion )
+	      do i = 1, sampdur
+	        if ( data(i) .ne. RBLANK ) data(i) = scale * data(i)
+	      end do
+	    end if
+	    do i = 1, numsam
+	      if ( isblnk(i) ) data(i) = RBLANK
+	    end do
+
+	    if ( okdata ) then
+	      write( scname, '(a,i4,a,2i4,a,i3,a)' ) 'snip', ksnip,
+     #		' sop/att', sop, att, ' det', det,
+     #		' is calibrated and written'
+	    else
+	      write( scname, '(a,i4,a,2i4,a,i3,a)' ) 'snip', ksnip,
+     #		' sop/att', sop, att, ' det', det,
+     #		' is blanked and written'
+	    endif
+	    call STATUS( scname )
+	    
+	    ierr = 0
+	    call IRDS_WR_SAMPLES( irdsout, ksnip, kdet, 1, data,
+     #		numsam, ierr )
+
+c write scaled and converted noise and digitization noise to the irds
+	    noise = noise * scale * conversion
+	    call GDSD_WREAL( irdsout, 'NOISE', dslevel, noise, ierr )
+	    noise = scale * conversion
+	    call GDSD_WREAL( irdsout, 'DIGNOISE', dslevel, noise, ierr )
+	  end do
+	end do
+
+cs DEBUG
+c	write( dummy, '(a,a30)' ) 'irdsout = ', irdsout
+c	call ANYOUT( logfile, dummy )
+c	write( dummy, '(a,a30)' ) 'object = ', object
+c	call ANYOUT( logfile, dummy )
+c	write( dummy, '(a,a30)' ) 'instrument = ', instrument
+c	call ANYOUT( logfile, dummy )
+c	write( dummy, '(a,i4)' ) 'naxis = ', naxis
+c	call ANYOUT( logfile, dummy )
+c	write( dummy, '(a,2e15.8)' ) 'center = ', center(1), center(2)
+c	call ANYOUT( logfile, dummy )
+c	write( dummy, '(a,2e15.8)' ) 'size = ', size(1), size(2)
+c	call ANYOUT( logfile, dummy )
+c	write( dummy, '(a,a30)' ) 'coor = ', coor
+c	call ANYOUT( logfile, dummy )
+c	write( dummy, '(a,e15.8)' ) 'epoch = ', epoch
+c	call ANYOUT( logfile, dummy )
+ce DEBUG
+	
+
+c write proper units in irds
+	ierr = 0
+	call GDSD_WCHAR( irdsout, 'BUNIT', 0, units, ierr )
+	call GDSD_WCHAR( irdsout, 'CALIBSYS', 0, 'IPAC pass 2', ierr )
+
+c	Say goodbye to HERMES:
+9999	call FINIS
+	stop
+
+	end
+
+#<
+
+#>            ciamps.f
+cdNAME		CIAMPS
+cd
+cdDATE		891214 DK, clean up
+cd		890630 SWheelock
+cd
+cdPURPOSE convert volts to amps
+cd
+cdHEADER  subroutine ciamps( volts, nsample, amps, conv )
+cd	  integer 	nsample
+cd	  real 		volts(nsample), amps(nsample), conv
+cd
+cdPARAMETERS
+cd	input	volts - input buffer in volts
+cd		nsample number of samples
+cd      output  amps  - output buffer in amps
+cd	i/o	conv	conversion factor
+cd
+cdUSE   calculates load resistor given using the Pass3 IPAC load
+cd	resistor function that appears in the 
+cd	Explanatory Supplement IIC-11.
+cd
+cd	     V < 0.001 	log(R/R0) = 0.008
+cd   0.001 < V < 0.01   log(R/R0) = 0.008 - 0.008 log ( V / 0.001 )
+cd   0.01  < V < 0.14   log(R/R0) = -.0349 log ( V / 0.01 )
+cd   0.14  < V          log(R/R0) = -.04  - 0.1402 log ( V / 0.14 ) 
+cd	In these formulae R0 is 2.0e10 ohm
+cd
+cd      The calcluated load resistor is applied to the volts to get
+cd	  amps = volts / loadres
+cd
+cdEXTERNALS 
+cd
+cdREFERENCES
+cd
+cdDEPENDENCE 
+
+	subroutine ciamps( volts, nsample, amps, conv )
+
+	implicit 	none
+
+	integer 	nsample
+	real 		volts(nsample), amps(nsample), conv
+	integer		k
+	real		r0, rl1, rl2, rl3
+c rl1 = R0 * 10 ** 0.008; rl2 = R0; rl3 = R0 * 10 ** -0.04 
+	parameter	( r0 = 2.0e10 )
+	parameter 	( rl1 = r0 * 1.0186 )	! = 10 ** 0.008
+	parameter	( rl2 = r0 )
+	parameter	( rl3 = r0 * 0.9120 )   ! = 10 ** (-0.04)
+	real		vm1, vm2, vm3, pr1, pr2, pr3
+	parameter	( vm1 = 0.001, vm2 = 0.01, vm3 = 0.14 )
+	parameter	( pr1 = -0.008, pr2 = -0.0349, pr3 = -0.1402 )
+	real		v, loadres
+
+	do k = 1, nsample
+c calculate load resistor according to IRASES fig II-C.11
+	  v = volts(k)
+	  if ( v .lt. vm1 ) then
+	    loadres = rl1
+	  else if ( v .lt. vm2 ) then
+	    loadres = rl1 * ( v / vm1 ) ** pr1
+	  else if ( v .lt. vm3 ) then
+	    loadres = rl2 * ( v / vm2 ) ** pr2
+	  else 
+	    loadres = rl3 * ( v / vm3 ) ** pr3
+	  endif
+c apply load resistor values to data buffer of volts to obtain amps.
+	  amps(k) = v / loadres
+	enddo
+
+c apply the load resistor for the lowest voltage
+	conv = conv / rl1
+
+	return
+	end
+#<
+
+#>            cicmgo.f
+cdNAME		CICMGO
+cd
+cdDATE		910130 DRB add 'initgn' as a parameter in commonblock
+cd		901102 DK add (hidden) keyword for gain 
+cd		890702 SLWheelock
+cd
+cdPURPOSE  obtain the gain and offset commands 
+cd
+cdHEADER  subroutine cicmgo( satc1, length, detn, cgain, coff )
+cd	  integer	length, detn, cgain, coff
+cd	  real*8	satc1
+cdPARAMETERS
+cd      input  satc1   - start buffer time
+cd	       detn    - detector number
+cd	       length	 length of buffer in samples
+cd	output length    length for which the commands are valid
+cd      output cgain   - commandable gain
+cd	       coff    - commandable offset 
+cd
+cdUSE assign appropriate gain and offset command values for
+cd	detector. This routine can be replaced when exact
+cd	command values are known. It should change the length
+cd	of the snip if gain changed during snip.
+cd
+cdEXTERNALS
+cd
+cdREFERENCES
+cd
+cdDEPENDENCE
+
+	subroutine cicmgo( satc1, length, det, cgain, coff )
+
+	implicit	none
+
+	integer 	length, det, cgain, coff
+	
+	character*80	initgn
+        character*256   cipfil, cisfil
+        character*256   vfetsg, vfetlg, vfethg
+        character*256   ctype2, bbfile, utcsfl
+        common          /dfault/ vfetsg, vfetlg, vfethg,
+     #                           cipfil, cisfil, initgn,
+     #                           ctype2, bbfile, utcsfl
+
+	real*8  	satc1
+	integer		cgn, cof(62), i
+	logical		first
+	save		cgn, cof, first
+
+	data	first	/ .true. /
+c ***note***
+c all assumed values as in IRAS-ES p.II-12&13
+c **********
+	data cof/ 3, 3, 3, 4, 2, 4, 3,
+     #  	  3, 3, 4, 3, 3, 3, 3, 4,
+     #            4, 3, 4, 4, 4, 4, 4,
+     #            4, 4, 4, 3, 4, 3, 4, 4,
+     #            3, 3, 3, 3, 3, 3, 4, 3,
+     #            4, 4, 3, 4, 3, 4, 3, 3,
+     #            4, 3, 4, 2, 3, 3, 4, 4,
+     #            4, 4, 3, 4, 3, 3, 4, 4 /
+
+	if ( first ) then
+	  if ( initgn(1:1) .eq. 'L' ) then
+	    cgn = 1
+	  else if ( initgn(1:1) .eq. 'H' ) then
+	    cgn = 2
+	  else
+	    cgn = 3
+	  endif
+	  first = .false.
+	endif
+
+	cgain = cgn
+	coff = cof(det) + 1
+
+	return
+	end
+#<
+
+#>            cidn2v.f
+cdNAME		CIDN2V
+cd
+cdDATE		901107 Peter Arendz set default filename
+cd		890629 SWheelock
+cd
+cdPURPOSE convert raw data (dn's) into volts
+cd
+cdHEADER subroutine cidn2v( det, cgain, coff, length, raw, volts, conv )
+cd
+cd		integer 	det, length, cgain, coff
+cd		real 		raw(*), volts(*), conv
+cdPARAMETERS
+cd      input   det	detector number
+cd		gain  - gain command
+cd		off   - offset command
+cd		length- number of samples in raw buffer
+cd		raw -   input data buffer (dn's)
+cd      output  volts  - output buffer (volts)
+cd		conv	conversion factor
+cd
+cdUSE  In the first call the gains, offsets and analog-to-digital
+cd	conversion constant (a2dc) are read from the 'type2'-file.
+cd	By default this file is searched at 
+cd	  (guspace)/tables/IPAC/tables/ctype2
+cd	It can be overruled by commandline keyword 'type2'.
+cd	The constants are saved for later use
+cd
+cd      Each call converts the data numbers into volts by
+cd	  volts = a2dc * raw / gain - off
+cd
+cdEXTERNALS	ciseqn
+cd
+cdREFERENCES IRAS Explanatory Supplement VI-1Z
+cd
+cdDEPENDENCE
+
+	subroutine cidn2v( det, cgain, coff, length ,raw, volts, conv )
+
+	implicit	none
+
+	integer 	det, cgain, coff, length
+	real 		raw(*), volts(*), conv
+	
+	character*80	initgn, mess
+        character*256   cipfil, cisfil
+        character*256   vfetsg, vfetlg, vfethg
+        character*256   ctype2, bbfile, utcsfl
+        common          /dfault/ vfetsg, vfetlg, vfethg,
+     #                           cipfil, cisfil, initgn,
+     #                           ctype2, bbfile, utcsfl
+
+	integer		i, k, ierr, OK, FATAL, unit2, MG, MO, MD
+	parameter 	( OK = 0, FATAL = 4 )
+	parameter	( MG = 3, MO = 8, MD = 62 )
+	real		gains(MD,MG), offs(MD,MO)
+	real    	off, a2dc
+	integer		cseqn, ciseqn
+	logical		first
+	save		first, gains, offs, a2dc
+
+	data	first	/ .true. /
+
+	if ( first ) then
+c obtain a free unit number
+	  unit2 = 0
+	  call reqlun( unit2 )
+c open calibration 'type2' file. This file contains the values of
+c the gains and offsets per detector. It also has the analog to
+c digital conversion constant.
+	  ierr = ok
+	  open( unit2, file = ctype2, status='old', iostat = ierr )
+	
+	  if (ierr .ne. ok) then
+	    call ERROR( FATAL, 'cannot open TYPE2 file: ' // ctype2 )
+	  end if
+	  rewind( unit2 )
+c the fourth constant is a2dc
+	  read( unit2, '(45x,e15.7)' ) a2dc
+	  do i = 1, mg
+	    read( unit2, '(8e15.7)' ) ( gains(k,i), k = 1, md )
+	  end do
+	  do i = 1, mo
+	    read( unit2, '(8e15.7)' ) ( offs(k,i), k = 1, md )
+	  end do
+c release the unit number
+	  call rellun( unit2 )
+
+	  first = .false.
+	endif
+
+c for all samples (length) convert raw data numbers into volts
+
+	cseqn = ciseqn( det )
+	conv = a2dc / gains(cseqn,cgain)
+	off = offs(cseqn,coff)
+
+	do i = 1, length
+	   volts(i) = raw(i) * conv  - off
+	enddo
+
+	return
+	end
+#<
+
+#>            cidt05.f
+cdNAME		CIDT05
+cd
+cdDATE		900215 Peter Arendz improved typing
+cd		900129 Do Kester, synchronize on satcals
+cd		890703 SWheelock
+cd
+cdPURPOSE correct detector 5 for coherent noise
+cd
+cdHEADER  subroutine cidt05( length, satcal, volts )
+cd
+cdPARAMETERS
+cd	input	length  number of samples in input buffer
+cd		satcal  satcal of the first point of volts.
+cd		volts - input buffer in volts
+cd      output  volts - output buffer in volts after
+cd		        correction applied
+cd
+cdUSE 
+cd
+cdEXTERNALS
+cd
+cdREFERENCES
+cd
+cdDEPENDENCE
+
+	subroutine cidt05( length, satcal, volts )
+
+	integer 	length, satcal
+	real 		volts(length)
+	integer		i, k, RATE
+	parameter	( RATE = 4 )
+c correct each second data for detector 5 coherent noise
+	real 		d5cor(16)
+	character*80	mess
+	save		d5cor
+	data d5cor/ -0.235e-6, -8.53e-6,  -2.35e-6,  -9.72e-6,
+     #		   -16.93e-6, -16.94e-6, -16.64e-6, -17.23e-6,
+     #               2.76e-6,  19.80e-6,  26.20e-6,  28.60e-6,
+     #              24.80e-6,  -3.39e-6,  -0.70e-6,  -9.12e-6 /
+
+c the coherent noise is synchronized on satcal 
+c and every 4 satcal secs the same
+	k = mod( satcal, RATE ) * RATE
+
+	do i = 1, length
+	  k = k + 1
+	  if ( k .eq. 17 ) k = 1		! range 1 .. 16
+	  volts(i) = volts(i) - d5cor(k)
+	enddo
+
+	return
+	end
+
+#<
+
+#>            cidt19.f
+cdNAME		CIDT19
+cd
+cdDATE		890703 SWheelock
+cd
+cdPURPOSE to correct detector 19 for coherent noise
+cd
+cdHEADER  subroutine cidt19( length, volts )
+cd
+cd		integer length
+cd		real 	volts(length)
+cd
+cdPARAMETERS
+cd	input	length	 number of samples in input buffer
+cd		volts    input array in volts
+cd      output  volts    output array in volts
+cd
+cdUSE	The nineth sample of each second is corrected, either
+cd	with the average of the embracing samples 8 and 10,
+cd	or by subtracting a maximum value.
+cd
+cdEXTERNALS
+cd
+cdREFERENCES
+cd
+cdDEPENDENCE
+
+	subroutine cidt19( length, volts )
+
+	implicit	none
+
+	integer 	length
+	real 		volts(length)
+	real		dmax, d19r, d19c
+	integer		i9, rate
+
+	data dmax / 1.1e-4 /
+
+c get number of seconds
+	rate = 16			! det 19 is in band 2
+c correct detector 19 for coherent noise
+	do i9 = 9, length, rate
+	  d19r = ( volts(i9 - 1) + volts(i9 + 1) ) / 2.
+	  d19c = volts(i9) - d19r
+	  if ( d19c .le. dmax ) then
+	     volts(i9) = d19r
+          else
+	     volts(i9) = volts(i9) - dmax
+	  endif
+	enddo
+
+	return
+	end
+
+#<
+
+#>            cidt43.f
+cdNAME		CIDT43
+cd
+cdDATE		890703 SWheelock
+cd
+cdPURPOSE to correct detector 43 for coherent noise
+cd
+cdHEADER  subroutine cidt43( length, volts )
+cd
+cd		integer length
+cd		real 	volts
+cdPARAMETERS
+cd	input	length  number of samples in input buffer
+cd		volts   input buffer
+cd      output  volts   output buffer
+cd
+cdUSE   There is coherent noise in sample numbers 9 and 10.
+cd	Two fixed numbers, con9 and con10 are added to them.
+cd
+cdEXTERNALS
+cd
+cdREFERENCES
+cd
+cdDEPENDENCE
+
+	subroutine cidt43( length, volts )
+
+	implicit 	none
+
+	integer		length
+	real 		volts(length)
+	integer 	rate, ismp1, ismp2
+	real 		con9, con10
+
+	data con9, con10 / 27e-6, -15e-6 /
+
+c get number of seconds
+	rate = 16		! det 43 is in band 2
+c correct detector 43 for coherent noise
+	do ismp1 = 9, length, rate
+	  ismp2 = ismp1 + 1
+	  volts(ismp1) = volts(ismp1) - con9
+	  volts(ismp2) = volts(ismp2) - con10
+	enddo
+
+	return
+	end
+
+#<
+
+#>            ciical.f
+cdNAME		CIICAL
+cd
+cdDATE		890629 SWheelock
+cd
+cdPURPOSE calibration flow program
+cd
+cdHEADER  subroutine ciical( det, utmbb, bbd, snutc, utcinc, 
+cd	   		     satcal, length, raw, amps, conv )
+cd
+cd	  integer det, satcal, length
+cd	  real 	  raw(length), amps(length), utmbb, bbd, utcinc, conv
+cd	  real*8  snutc
+cd
+cdPARAMETERS
+cd      input   unitl   unit number LOG file
+cd		det	detector number
+cd		utmbb	utc's since last bias boost
+cd		bbd	duration of that bias boost
+cd		snutc   time of start of buffer (utcs)
+cd		utcinc  utc increment per sample
+cd		satcal  number of seconds from obs start
+cd		raw     input data buffer (dn's)
+cd		length  buffer size
+cd      output	amps    output buffer in amperes
+cd		conv	conversion factor
+cd
+cdUSE CIICAL converts the raw data into amperes. It first obtains
+cd	the commandable gain and offset, applies them to get volts.
+cd	The two electronic baselines (vfets and GXN correction)
+cd	are subtracted. The coherent noise in three detectors is
+cd	corrected. Lastly the volts are converted into amperes.
+cd
+cdEXTERNALS cidt43, cioffs, cidt19, cidt05, cidn2v, ciamps,
+cd	    cicmgo
+cd
+cdREFERENCES
+cd
+cdDEPENDENCE
+
+	subroutine ciical( det, utmbb, bbd, snutc, utcinc, 
+     #	   		     satcal, length, raw, amps, conv )
+
+	implicit 	none
+
+	integer 	det, satcal, length
+	real 		raw(length), amps(length), conv
+	real		utmbb, bbd, utcinc
+	real*8  	snutc
+
+	integer		cgain, coff, maxv, k
+	parameter	( maxv = 48000 )
+	real		volts(maxv)
+
+c determine gain and offset command for this detector at this
+c   snutc which is valid for a stretch of length samples
+	call cicmgo( snutc, length, det, cgain, coff )
+
+c  convert DN's to volts
+	call cidn2v( det, cgain, coff, length, raw, volts, conv )
+
+c  subtract off the electronic baselines (vfets and gxn )
+	call cioffs( det, cgain, utmbb, bbd, snutc, utcinc,
+     #		     length, volts )
+
+c  correct detectors 5,19,43 for coherent noise
+	if ( det .eq.  5 ) call cidt05( length, satcal, volts )
+
+	if ( det .eq. 19 ) call cidt19( length, volts )
+
+	if ( det .eq. 43 ) call cidt43( length, volts )
+
+c  convert volts to amps with load resistor computation
+	call ciamps( volts, length, amps, conv )
+
+	return
+	end
+
+#<
+
+#>            cioffs.f
+cdNAME		CIOFFS
+cd
+cdDATE		900129 DK, rewrite
+cd		890629 SWheelock
+cd
+cdPURPOSE apply computed offsets to data buffer
+cd
+cdHEADER subroutine cioffs( det, cgain, utmbb, bbd, snutcs, utcinc,
+cd                length, volts )
+cd
+cd		integer det, cgain, rate, length
+cd		real 	volts(length), utcinc
+cd		real*8 	snutcs
+cdPARAMETERS
+cd      input   det	the present detector number
+cd		cgain	the gain command
+cd		utmbb	utc's since last bias boost
+cd		bbd	duration of that bias boost
+cd		snutcs  start time of buffer in utcs
+cd		utcinc	utc increment per sample
+cd      i/o	volts	input/output data buffer
+cd
+cdUSE CIOFFS will call appropriate routines to calculate the
+cd	electronic offsets and then apply the offsets to
+cd	the input buffer.
+cd    CIRDVT will return the electronic baseline, vfet and dvfet,
+cd	for this detector snip.
+cd    CIGXNC will return the 'gxn' correction constants for the detector
+cd	This is only applied to the 60 and 100 micron detectors.
+cd
+cd	Note: SLW calculated the corrections for every second; 
+cd	      it turned out to be simpler to do it for every sample.
+cd
+cdEXTERNALS 	cirdvt ccgxnc
+cd
+cdREFERENCES
+cd
+cdDEPENDENCE
+	subroutine cioffs( det, cgain, utmbb, bbd, snutcs, utcinc, 
+     #    		   length, volts )
+
+	implicit	none
+
+	integer 	det, cgain, length
+	real		utmbb, bbd, volts(length), utcinc
+	real*8		snutcs
+	integer 	k, ok, ierr
+	parameter 	( ok = 0 )
+	real*8 		vutcs
+	real 		vfet, dvfet, alpha, kappa, tau
+	real 		vfetc, gxnc, kab, intau, dvutc, dbutc
+
+c get vfet value and increment for this detector snip
+	ierr = 0
+	call cirdvt( snutcs, cgain, det, vutcs, vfet, dvfet, ierr )
+
+c get the GXN correction constants (band 3 and 4 only)
+c  alpha and kappa are set to 0 in ccgxnc for bands 1 & 2
+	call ccgxnc( det, alpha, kappa, tau )
+	kab = kappa + alpha * bbd		! = 0 for bands 1 & 2
+	intau = -1.0 / tau
+
+	dvutc = snutcs - vutcs
+	dbutc = utmbb
+	do k = 1, length
+c get electronic baseline offsets: vfetc and gxnc
+	  vfetc = vfet + dvutc * dvfet
+	  gxnc = kab * exp( dbutc * intau )	! = 0 for bands 1 & 2
+
+	  volts(k) = volts(k) - vfetc - gxnc
+
+	  dvutc = dvutc + utcinc
+	  dbutc = dbutc + utcinc
+	enddo
+
+	return
+	end  
+
+#<
+
+#>            ciprec.f
+cdNAME          CIPREC
+cdDATE  901120  PA return status for no data
+cd 	901107  PA set defaults
+cd	900920  DK make entry point CIPCLS to close the PRHF-file
+cd	900912  Peter Arendz all survey data on disk
+cd	890712  Albrecht de Jonge & Sherry Wheelock
+cdPURPOSE       Retrieve Photon dosage correction for detector response
+cd
+cdHEADER        subroutine CIPREC ( SOP, OBS, DELT, DELTR, IERR )
+cd      integer         SOP, OBS, IERR
+cd      real            DELT, DELTR(31)
+cdPARAMETERS
+cd in:  SOP, OBS:       The SOP/OBS for which data are requested
+cd      IERR:           If non-zero on input, CIPREC does nothing
+cd      DELT:           The time in sec since last bias boost
+cd out: IERR:           0: data found,
+cd                      1: no data available, a warning has been issued.
+cd                      2: something wrong, a warning has been issued.
+cd			3: no correction for this case,
+cd      DELTR:          The photon dosage corrections to the response
+cd	DELT:		The time tag for the correction record
+cd
+cdUSE	For in input value DELT = Din the routine will retrieve a
+cd	photon dosage record with a time tag DELT = Dout such that
+cd      Din - 4 < Dout <= Din + 4
+cd
+cd      If IERR .eq. 3, there is no correction for this SOP, OBS, DELT
+cd	The DELT returned is the closest found.
+cd
+cd      If IERR .eq. 0, the corrections DELTR(i) are applicable
+cd      to detector i+31, i.e. band 3 and 4.
+cd
+cd      CIPREC will use any free unitnumber to read the appropriate
+cd      datafile(s). The default file name can be overridden
+cd      by specifying a 'CIPFIL=' parameter on the command line.
+cd
+cdEXTERNALS     guerra gucall guunit
+cdREFERENCES    -
+cdDEPENDENCE
+cd On the ROG SUNs the default filename is /tables/IPAC/P
+cd This (or its override) must be a directory with one file per sop-obs,
+cd eg, for sop-obs = 333-111 the filename must be  ./PF.333.111
+ 
+        subroutine CIPREC ( sop, obs, delt, deltr, ierr )
+
+	implicit	none
+
+        integer         sop, obs, ierr
+        real            delt, deltr(31)
+ 
+        character * 255         filnam, curnam, mess
+	
+	character*80	initgn
+        character*256   cipfil, cisfil
+        character*256   vfetsg, vfetlg, vfethg
+        character*256   ctype2, bbfile, utcsfl
+        common          /dfault/ vfetsg, vfetlg, vfethg,
+     #                           cipfil, cisfil, initgn,
+     #                           ctype2, bbfile, utcsfl
+
+
+	integer		N8SEC, NDET
+	parameter (	N8SEC = 500, NDET = 31 )	! dets of band 3 & 4
+        integer         unitnr, i, locerr, nelc
+        real            lambda, beta, deltut, dtr(NDET)
+        logical         dummy, opnok
+	real		curdut(N8SEC), curdtr(NDET,N8SEC)
+	integer		cursop, curobs, curlength, curpt, prevpt
+	save		unitnr, curnam, opnok, curlength, curpt,
+     &			curdut, curdtr, cursop, curobs
+ 
+	data	cursop, curobs, curpt / 0, 0, 0 /
+
+        if ( ierr .ne. 0 ) return
+	
+	if ( cursop .ne. sop .or. curobs .ne. obs ) then
+c open a new file
+	  cursop = sop
+	  curobs = obs
+	  filnam = cipfil
+          i = index ( filnam, ' ' )
+          write ( filnam(i:), '(a,i3.3,i3.3)' ) '/IR.PRHF.D0',
+     #          sop, obs
+	  unitnr = 0
+	  call REQLUN( unitnr )
+	  locerr = 0
+	  open( unitnr, file = filnam, status='old', iostat=locerr,
+     &		      access = 'sequential', form = 'unformatted' )
+	  curnam = filnam 
+	  opnok = locerr .eq. 0
+          if ( .not. opnok ) then
+	    ierr = 1
+	    call ERROR( 2, 'No data for: ' // 
+     #				filnam(:NELC( filnam )) )
+	    call RELLUN( unitnr )
+            return
+	  endif
+
+c Start reading the file into the arrays `curdut' and `curdtr'
+	  curpt = 0
+200       continue
+            read ( unitnr, iostat=ierr ) deltut, dtr, lambda, beta
+            dummy = lambda .lt. -1000 .and. beta .lt. -1000
+	    if ( ierr .eq. 0 .and. .not. dummy ) then
+	      curpt = curpt + 1
+	      curdut(curpt) = deltut
+	      do 400 i = 1, NDET
+		curdtr(i,curpt) = dtr(i)
+400	      continue
+	    endif
+	  if ( ierr .eq. 0 .and. curpt .lt. N8SEC ) goto 200
+ 
+          if ( ierr .gt. 0 ) then
+	    write( mess, '(a,i3,a)' ) 'Problem (', ierr, 
+     #			') reading ' // filnam(:NELC(filnam))
+	    call ERROR( 3, mess(:NELC(mess)) )
+	  else if ( curpt .ge. N8SEC ) then
+	    call ERROR( 3, 'File ' // filnam(:NELC( filnam )) //
+     #			' longer than buffer.' )
+          endif
+
+	  curlength = curpt
+	  curpt = 1
+	  close( unitnr )
+	  call rellun( unitnr )
+	endif
+
+	ierr = 0
+	if ( opnok ) then
+500 	  continue
+	    prevpt = curpt
+	    if ( delt - 4 .ge. curdut(curpt) ) curpt = curpt + 1
+	    if ( delt + 4 .lt. curdut(curpt) ) curpt = curpt - 1
+	    if ( curpt .le. 1 .or. curpt .ge. N8SEC ) then
+	      ierr = 3
+	    else 
+	      if ( .not. prevpt .eq. curpt ) goto 500	    
+	    endif
+	  continue
+
+c	  write( mess,'(2i3,a,f8.1,a,f8.1,a,2i3)')
+c     #			sop, obs, ' req delta',
+c     &                  delt, ' from file deltut ', curdut(curpt),
+c     &			' curpt ', curpt, ierr
+c	  call anyout( 0, mess )
+
+	  delt = curdut(curpt)
+	  do 100 i = 1, NDET
+	    deltr(i) = curdtr(i,curpt)
+100	  continue
+	else
+	  ierr = 3
+	endif
+ 
+	return
+
+        end
+#<
+
+#>            ciprhf.f
+cdNAME		CIPRHF
+cd
+cdDATE		901120 Peter Arendz : no data handling
+cd		900124 DK, clean up
+cd		890702 SWheelock
+cd
+cdPURPOSE determine if there is a photon component to response
+cd
+cdHEADER subroutine ciprhf( sop, obs, utmbb, prhdet, nsecs, 
+cd			    utpsc, flamp )
+cd	 integer	sop, obs, prhdet, nsecs
+cd	 real		utmbb, utpsc, flamp(nsecs)
+cdPARAMETERS
+cd	input   sop	current sop
+cd		obs 	current obs
+cd		utmbb	utc since last bias boost
+cd		prhdet	calibration sequence number for prhf
+cd		nsecs	buffer size
+cd		utpsc	utc increment per satcal second
+cd		flamp   input data buffer in amps
+cd      output  flamp   output data buffer in amps
+cd
+cdUSE
+cd
+cdEXTERNALS  ciprec
+cd
+cdREFERENCES
+cd
+cdDEPENDENCE
+
+	subroutine ciprhf( sop, obs, utmbb, prhdet, nsecs, utpsc,
+     #			   flamp )
+
+	implicit	none
+
+	integer 	sop, obs, prhdet, nsecs
+	real 		utmbb, utpsc, flamp(nsecs)
+	integer 	i, ierr, ok
+	parameter 	( ok = 0 )
+	real 		deltr(31), delt, cidelt
+	character*80	mess
+
+c	delt = utmbb		! dk's version
+	delt = utmbb - 4 	! slw's version (seems illogical cf CIPREC)
+	do i = 1, nsecs
+	  ierr = ok
+	  cidelt = delt
+	  call ciprec( sop, obs, cidelt, deltr, ierr )
+cs DEBUG
+c	write ( mess, '(a, i4)' ) 'ciprec err = ', ierr
+c	call ANYOUT( 8, mess )
+ce DEBUG
+	  if ( ierr .eq. ok ) then
+            flamp(i) = flamp(i) / ( 1. - deltr(prhdet) )
+          else if ( ierr .eq. 3 ) then
+	    if(delt .gt. cidelt .and. (delt - cidelt) .le. 5.) then
+c applying prior photon response factors ( in case of eof )
+	      flamp(i) = flamp(i) / ( 1. - deltr(prhdet) )
+	    endif
+	    ierr = ok
+	  else if (ierr .eq. 2) then
+	    write( mess, '(a,2e15.8)' ) 
+     #		' read error in ciprec; delt in and out resp.:',
+     #		delt, cidelt
+	    ierr = 4
+	    call ERROR( ierr, mess )
+	    return
+	  else if (ierr .eq. 1) then
+c no data available : do nothing
+	    return
+	  endif
+	  delt = delt + utpsc
+	enddo
+
+	return
+	end
+#<
+
+#>            cirdsf.f
+cdNAME		CIRDSF
+cd
+cdDATE		901101 Peter Arendz improved error recovery
+cd 		891220 DK clean up
+cd		890629 SWheelock
+cd
+cdPURPOSE read SRHF file for desired sop/obs. 
+cd
+cdHEADER  subroutine cirdsf( sop, obs, ap, bp, tp, ierr )
+cd
+cd	  integer 	sop, obs, ierr
+cd	  real		ap(62), bp(62), tp(62)
+cd
+cdPARAMETERS
+cd      input   sop	sop number of scan
+cd		obs	observation number of scan
+cd      output  ap  - parameters to construct detector response
+cd		bp  - parameters to construct detector response
+cd		tp  - time constant to construct detector response
+cd	i/o	ierr  return code
+cd
+cdUSE CIRDSF will read the desired SRHF file and set
+cd    	     parameter values in common area.
+cd
+cdEXTERNALS 	ciseqn cisrec
+cd
+cdREFERENCES
+cd
+cdDEPENDENCE
+
+	subroutine cirdsf( sop, obs, ap, bp, tp, ierr )
+
+	implicit	none
+
+	integer 	ierr, sop, obs
+	real		ap(62), bp(62), tp(62)
+	integer 	i, k, ciseqn, ok, fatal
+	parameter	( ok = 0, fatal = 2 )
+	real*8 		utc1, utc2
+	real 		apl(62), bpl(62), tpl(62)
+	character*80 	mess
+
+c check ierr on entry
+	if (ierr .ne. ok) return
+
+c read the SRHF file for this sop/obs
+	call cisrec( sop, obs, utc1, utc2, apl, bpl, tpl, ierr )
+	if (ierr .ne. ok) return
+
+c reorder the values in the orthodox detector sequence (IRASES p. II-12&13)
+	do k = 1, 62
+	  i = ciseqn( k )
+	  ap(k) = apl(i)
+	  bp(k) = bpl(i)
+	  tp(k) = tpl(i)
+c check for zero time constant. If so, spawn ERROR call
+	  if ( tp(k) .eq. 0 ) then
+	    ierr = fatal
+	    write( mess, '(a,3i4)' ) 
+     #		'zero time constant found in sop, obs, det:',
+     #		sop, obs, k
+	    ierr = 3
+	    call ERROR( ierr, mess )
+	    return
+	  endif
+	enddo
+
+	return
+	end
+
+#<
+
+#>            cirdvt.f
+cdNAME		CIRDVT
+cd
+cdDATE		901107 PA set default filename
+cd		900809 Peter Arendz improved loop control
+cd		891220 DK, combine cicvft and cirdvt
+cd		890703 SWheelock
+cd
+cdPURPOSE 	get vfet constants appropriate for this snip
+cd
+cdHEADER  subroutine cirdvt( snutcs, gain, det, vutcs,
+cd			     vfet, dvfet, ierr )
+cd
+cd	  integer 	gain, det, ierr
+cd	  real*8	snutcs, vutcs
+cd	  real		vfet, dvfet
+cd
+cdPARAMETERS
+cd      input   snutcs	utcs at the beginning of the snip
+cd		gain    current gain command
+cd		det	detector number 
+cd      output  vutcs	time of vfet 
+cd		vfet    value of the last vfet just before snutcs
+cd		dvfet	change in the embracing vfets
+cd	i/o	ierr    return error code
+cd
+cdUSE	If the current gain command differs from the previous one,
+cd	which is always the case in the first call to this routine,
+cd	the vfet file is opened and read. The default name of the 
+cd	vfet file depends on the gain command:
+cd	  1 (=low gain) 	/tables/IPAC/tables/vfetlg
+cd	  2 (=high gain) 	/tables/IPAC/tables/vfethg
+cd	  3 (=standard gain) 	/tables/IPAC/tables/vfetsg
+cd	Other gain settings will yield an error message.
+cd	The default names can be overruled with the command line
+cd	keywords 'lovfet', 'vfet' or 'hivfet'.
+cd
+cd	The vfet values and the pertaining utcs are read and saved.
+cd	Each call will search the vfet array for the vfets surrounding
+cd	the desired snip.	
+cdEXTERNALS	ciseqn
+cd
+cdREFERENCES
+cd
+cdDEPENDENCE
+
+	subroutine cirdvt( snutcs, gain, det, 
+     #			   vutcs, vfet, dvfet, ierr )
+
+	implicit 	none
+
+	integer		gain, det, ierr
+	real 		vfet, dvfet
+	
+	character*80	initgn
+        character*256   cipfil, cisfil
+        character*256   vfetsg, vfetlg, vfethg
+        character*256   ctype2, bbfile, utcsfl
+        common          /dfault/ vfetsg, vfetlg, vfethg,
+     #                           cipfil, cisfil, initgn,
+     #                           ctype2, bbfile, utcsfl
+
+	integer		NELC
+	real*8  	vutcs, snutcs
+	integer		mvfets, mdets
+	parameter	( mvfets = 295, mdets = 62 )
+	real		vfets(mdets,mvfets)
+	real*8		vutc(mvfets)
+	integer 	i, k, nvfet, prevgn, ios
+	integer		kdet, ciseqn
+	integer 	OK, EOF, unitv, vfptr
+	parameter 	( OK = 0, EOF = -1 )
+	character*80	flname, mess
+	save		vfets, vutc, nvfet, prevgn, vfptr
+
+	data	nvfet, prevgn	/ mvfets, 0 /
+
+c check ierr on entry
+ 	if ( ierr .ne. ok ) return
+
+c if gain is the same as in the previous call, skip reading the file
+ 	if ( gain .ne. prevgn ) then
+
+c get correct file name depending on gain state
+	  if ( gain .eq. 3 ) then		! standard gain
+	    flname = vfetsg
+c	    mess = 'number of vfet records read for standard gain = '
+	  elseif ( gain .eq. 1 ) then		! low gain
+	    flname = vfetlg
+c	    mess = 'number of vfet records read for low gain = '
+	  elseif ( gain .eq. 2 ) then		! high gain
+	    flname = vfethg
+c	    mess = 'number of vfet records read for high gain = '
+	  else					! wrong gain
+	    ierr = 4
+	    write( mess, '(a,a15)' ) 'erroneous gain setting:', gain
+	    call ERROR( ierr, mess )
+	    return
+	  endif
+ 
+c get a free unit number and open file
+	  ierr = ok
+	  unitv = 0
+	  call reqlun( unitv )
+	  open( unitv, file = flname, status='old', iostat = ierr )
+	  if ( ierr .ne. ok ) then
+	    ierr = 4
+	    call ERROR( ierr, 'cannot open ' // flname )
+	  end if
+c read in file
+	  i = 0
+	  ios = ierr
+	  do while ( ios .eq. 0 .and. i .lt. nvfet )
+	    i = i + 1
+	    read( unitv, '(e15.8/(8e15.8))', iostat = ios ) vutc(i),
+     # 		( vfets(k,i), k = 1, 62 )
+	  enddo
+	  nvfet = i - 1				! total number of vfets
+	  vfptr = nvfet / 2			! start in the middle
+	  if ( ios .ne. eof ) then
+	    ierr = 4
+	    write( mess, '(a,i5)' ) 'error while reading ' //
+     #	      flname(:NELC( flname )) // ', at record ', nvfet
+	    call ERROR( ierr, mess )
+	    return
+	  endif
+c write debug message 
+c	  print '(a,i5)', mess, nvfet
+
+c close file and release the unit number
+	  close( unit = unitv )
+	  call rellun( unitv )
+	  prevgn = gain
+	endif
+
+c the detector sequence in the vfet file is garbled
+	kdet = ciseqn( det )
+c Last record of vfet array has earliest utcs
+c hence, the reversed order of the search is necessary.
+	do while ( vfptr .ge. 1 .and. vutc(vfptr) .lt. snutcs )
+	  vfptr = vfptr - 1
+	enddo			! this loop steps until past snutcs
+	do while ( vfptr .le. nvfet 
+     #		  .and. vfptr .ge. 1
+     #		  .and. vutc(vfptr) .gt. snutcs )
+	  vfptr = vfptr + 1
+	enddo			! this loop steps (1) back
+c vfptr now points to the required items
+	if ( vfptr .ge. 1 .and. vfptr .lt. nvfet ) then
+	  vutcs = vutc(vfptr)
+	  vfet = vfets(kdet,vfptr)
+	  dvfet = ( vfets(kdet,vfptr-1) - vfet ) / 
+     #		  ( vutc(vfptr-1) - vutcs )
+	else if ( vfptr .le. 0 ) then
+c snip time is greater than first (=largest) vfet time
+c set the vfet array to this first record
+	  vutcs = vutc(1)
+	  vfet = vfets(kdet,1)
+	  dvfet = 0.0
+	else
+c error if start time of snip is less than last (=smallest) vfet time
+	  ierr = 4
+	  mess = 'snip utcs < last (=smallest) record of vfet file'
+	  call ERROR( ierr, mess )
+	endif
+
+	return
+	end
+#<
+
+#>            ciseqn.f
+cdNAME		CISEQN
+cd
+cdDATE		900131 DK, rewrite
+cd		890702 SWheelock
+cd
+cdPURPOSE determine the calibration sequence number
+cd
+cdHEADER  integer function ciseqn(det)
+cd
+cd	  integer det
+cd
+cdPARAMETERS
+cd      input  det	detector number
+cd
+cd      output returns calibration sequence number
+cd
+cdUSE	Only survey detectors.
+cd
+cdEXTERNALS
+cd
+cdREFERENCES
+cd
+cdDEPENDENCE
+
+	integer function ciseqn( det )
+
+	implicit	none
+
+	integer 	det, cseqn(62)
+
+	data cseqn /
+     4		56, 57, 58, 59, 60, 61, 62,		! module B
+     3		32, 33, 34, 35, 36, 37, 38, 39,		! module B
+     2		25, 26, 27, 28, 29, 30, 31,		! module B
+     1		 1,  2,  3,  4,  5,  6,  7,  8,		! module B
+     3		40, 41, 42, 43, 44, 45, 46, 47,		! module A
+     2		17, 18, 19, 20, 21, 22, 23, 24,		! module A
+     1		 9, 10, 11, 12, 13, 14, 15, 16,		! module A
+     4		48, 49, 50, 51, 52, 53, 54, 55 /	! module A
+
+	if ( det .ge. 1 .and. det .le. 62 ) ciseqn = cseqn(det)
+
+c below follows the original version of SLW
+
+c	data cseqn/23,24,25,26,27,28,29,30,
+c     #             47,48,49,50,51,52,53,54,
+c     #             39,40,41,42,43,44,45,46,
+c     #             16,17,18,19,20,21,22,
+c     #             08,09,10,11,12,13,14,15,
+c     #             31,32,33,34,35,36,37,38,
+c     #             55,56,57,58,59,60,61,62,
+c     #             01,02,03,04,05,06,07/
+c
+c	do 100 i = 1,62
+c	  if (detn .eq. cseqn(i)) then
+c	    ciseqn = i
+c	    return
+c	  endif
+c 100	continue
+c	ciseqn = 0
+
+	return
+	end
+
+#<
+
+#>            cisrec.f
+cdNAME          CISREC
+cdDATE  901107  PA set defaults
+cd	900920  DK close before returning at error condition
+cd		900912  Peter Arendz all survey data on disk
+cd		890712  Albrecht de Jonge & Sherry Wheelock
+cdPURPOSE       Pick up calibration parameters 
+cdHEADER        subroutine CISREC 
+cd			( SOP, OBS, UTC1, UTC2, APL, BPL, TPL, IERR )
+cd      integer                 SOP, OBS, IERR
+cd      double precision        UTC1, UTC2
+cd      real                    APL(62), BPL(62), TPL(62)
+cd
+cdPARAMETERS
+cd input   SOP,OBS:     key on which to search for data
+cd         IERR:        if nonzero on input, CISREC returns immediately
+cd output  UTC1,UTC2:   UTC time of first and second stimflash
+cd         APL, BPL, TPL:
+cd                      parameters for detector responses, see below
+cd         IERR         zero if all OK, if non-zero the data for
+cd                      the SOP OBS given could not be found. 
+cd                      A warning has been given.
+cdUSE
+cd      The call is trivial. 
+cd      
+cd      The response RESP (in amps to the flash) for detector I 
+cd      at time T (in seconds since the last bias boost) is:
+cd
+cd      RESP = APL(I) + BPL(I) * EXP(-T/TPL(I))
+cd      
+cd      CISREC will use any free unitnumber to read the appropriate
+cd      datafile(s). The default file name can be overridden
+cd      by specifying a 'CISFIL=' parameter on the command line.
+cd
+cdEXTERNALS
+cdREFERENCES    -
+cdDEPENDENCE    
+cd On the ROG SUNs the default filename is /tables/IPAC/S
+cd This (or its override) must be a directory with one file per sop-obs, 
+cd eg, for sop-obs = 333-111 the filename must be  ./SF.333.111
+
+        subroutine CISREC ( SOP, OBS, UTC1, UTC2, APL, BPL, TPL, IERR )
+
+	implicit	none
+
+        integer         SOP, OBS, IERR
+        double precision	UTC1, UTC2
+        real*4          APL(62), BPL(62), TPL(62)
+	
+	character*80	initgn
+        character*256   cipfil, cisfil
+        character*256   vfetsg, vfetlg, vfethg
+        character*256   ctype2, bbfile, utcsfl
+        common          /dfault/ vfetsg, vfetlg, vfethg,
+     #                           cipfil, cisfil, initgn,
+     #                           ctype2, bbfile, utcsfl
+
+        character * 256 	buffer
+        integer                 unitnr, i, nelc
+
+        buffer = cisfil
+        i = index ( buffer, ' ' )       
+        write ( buffer(i:), '(a,i3.3,i3.3)' ) '/IR.SRHF.D0', 
+     #          sop, obs
+        unitnr = 0
+	call REQLUN( unitnr )
+	ierr = 0
+        open ( unitnr, file=buffer, status='old',
+     &          iostat=ierr, form='unformatted' )
+        
+        if ( ierr .ne. 0 ) then
+	  ierr = 3
+	  call ANYOUT( 16, 'No data for: ' // buffer(:NELC(buffer)) )
+	else
+          read ( unitnr ) utc1, utc2, apl, bpl, tpl
+        endif
+
+        close ( unitnr )
+	call RELLUN( unitnr )
+        
+        return
+        end
+#<
+
+#>            ciwpm2.f
+cdNAME		CIWPM2
+cd
+cdDATE		900124 DK, clean up and inline cisrhf
+cd		890701 SWheelock
+cd
+cdPURPOSE compute detector's responsivity given utcs
+cd
+cdHEADER  subroutine ciwpm2( sop, obs, det, utmbb, utcinc,
+cd               	     abt, length, amps, wpm2, conv )
+cd
+cd		integer sop, obs, det, length
+cd		real	abt(3), conv
+cd		real    utmbb, utcinc, amps(length), wpm2(length)
+cdPARAMETERS
+cd	input   sop     current sop
+cd		obs     current obs
+cd		utmbb	utc since the last bias boost
+cd		det	detector number
+cd		length	buffer size
+cd		utcinc	utc increment per sample
+cd		abt	alpha, beta, tau, resp. of flash amplitude
+cd		amps	input amperes
+cd      output  wpm2	output watts per meter squared.
+cd	i/o	conv	conversion factor
+cd
+cdUSE   CIRESP will put together the detector's response
+cd	from the SRHF and PRHF files
+cd
+cdEXTERNALS 	ccstim ciprhf ciseqn
+cd
+cdREFERENCES
+cd
+cdDEPENDENCE
+
+	subroutine ciwpm2( sop, obs, det, utmbb, utcinc,
+     #			   abt, length, amps, wpm2, conv )
+
+	implicit 	none
+
+	integer		sop, obs, det, length
+	real 		amps(length), wpm2(length), utmbb, utcinc
+	real		abt(3), conv
+	integer 	i, j, k, nsecs, nsamp, prhdet, ciseqn
+	integer		ok, msecs
+	parameter 	( ok = 0, msecs = 48000 )
+	real		resp, flamp(msecs)
+	real		utpsc, ccstim, dcflux, deltau
+cs DEBUG
+c	character*256	dummy
+ce DEBUG
+
+c the flash amplitude is calculated once per second
+	nsamp = nint( 1.0 / utcinc )		! # samples per second
+	nsecs = length / nsamp			! # seconds in the input
+	utpsc = utcinc * nsamp			! utc increment per satcal
+c compute the reconstructed stimulator amplitude without 
+c photon component; store in flamp
+	deltau = utmbb
+cs DEBUG
+c	write ( dummy, '(4e15.9)' ) abt(1), abt(2), abt(3), deltau
+c	call ANYOUT( 9, dummy )
+c	write ( dummy, '(a,e20.12,e20.12)' ) '(inc,mbb)= ', utmbb, utcinc
+c	call ANYOUT( 9, dummy )
+ce DEBUG
+
+	do i = 1, nsecs
+	  flamp(i) = abt(1) + abt(2) * exp( -deltau / abt(3) )
+cs DEBUG
+c	write ( dummy, '(a,1e15.9)' ) 'deltau = ', deltau
+c	call ANYOUT( 9, dummy )
+ce DEBUG
+	  deltau = deltau + utpsc
+	enddo
+
+c  if detector is in band 3 or 4 , calculate response due
+c  to photon exposure
+	prhdet = ciseqn( det ) - 31		! detector sequence for prhf
+	if ( prhdet .gt. 0 ) then
+	  call ciprhf( sop, obs, utmbb, prhdet, nsecs, utpsc, flamp )
+	endif
+
+c obtain flux of stimflash for detector
+	dcflux = ccstim( det )
+
+c divide by DC flux to get responsivity and divide the amperes
+c   by the responsivity to obtain watts/m2
+	k = 0
+	do i = 1, nsecs
+	  resp = flamp(i) / dcflux
+	  do j = k + 1, k + nsamp
+	    wpm2(j) = amps(j) / resp
+	  enddo
+	  k = k + nsamp
+	enddo
+
+c take the middle value for conversion
+	conv = conv * dcflux / flamp((nsecs+1)/2)
+
+	return
+	end
+
+#<
+
+#>            ccstim.f
+cdNAME        CCSTIM
+cd
+cdVERSION     1.0     900102 Richard van Hees
+cd
+cdREFEREE     Do Kester
+cd
+cdPURPOSE     To give the effective stimulation flash intensity.
+cd
+cdHEADER      real     function ccstim (det)
+cd            integer  det
+cd
+cdPARAMETERS
+cd     input  det     detector number as given in the IRAS Expl. suppl.
+cd                    table II.C.3
+cd
+cd    output          the simulation flash #5 intensity
+cd
+cdINCLUDE     -----
+cd
+cdUSE         For a given detector number, the stimulation flash #5
+cd            intensity is given, corrected with the analog digital
+cd            convertion factor. The values of the stimulation flashes
+cd            and the correction factors are put in DATA statements.
+cd
+cdEXTERNALS   -----
+cd
+cdREFERENCES  -----
+cd
+cdDEPENDENCE  -----
+cd
+cdHISTORY     1.1   900102 Richard van Hees : a new documentation
+cd                         according to the standard of 891213.
+cd
+c***********************************************************************
+ 
+        real    function ccstim (det)
+ 
+        integer det
+ 
+c***** decaration local variables **************************************
+ 
+        integer ndet
+        parameter( ndet = 62 )
+ 
+        real    st5(ndet), acdc(ndet)
+ 
+c*****The values of st5 are sequenced in detector sequence.   **********
+ 
+         data st5 /
+     &   0.838254e-12,  0.904365e-12,  0.864749e-12,  0.811226e-12,
+     &   0.832986e-12,  0.957989e-12,  0.971139e-12,
+     &   0.215303e-11,  0.200418e-11,  0.202432e-11,  0.741735e-12,
+     &   0.155880e-11,  0.213811e-11,  0.191740e-11,  0.227023e-11,
+     &   0.392422e-11,  0.000000e+00,  0.427730e-11,  0.330927e-11,
+     &   0.000000e+00,  0.371521e-11,  0.443437e-11,
+     &   0.334078e-11,  0.312709e-11,  0.313663e-11,  0.917304e-12,
+     &   0.250199e-11,  0.317067e-11,  0.314251e-11,  0.350205e-11,
+     &   0.794343e-12,  0.211903e-11,  0.196415e-11,  0.208528e-11,
+     &   0.224815e-11,  0.000000e+00,  0.198245e-11,  0.138940e-11,
+     &   0.192416e-11,  0.331966e-11,  0.337515e-11,  0.412459e-11,
+     &   0.357591e-11,  0.352088e-11,  0.374580e-11,  0.193974e-11,
+     &   0.892483e-12,  0.310774e-11,  0.337660e-11,  0.339881e-11,
+     &   0.327327e-11,  0.320611e-11,  0.313170e-11,  0.235516e-11,
+     &   0.729108e-12,  0.100974e-11,  0.859967e-12,  0.832541e-12,
+     &   0.810062e-12,  0.953099e-12,  0.809286e-12,  0.584463e-12 /
+ 
+         data acdc /
+     &   7 * 1.00, 8 * 0.92, 7 * 0.82, 8 * 0.78,
+     &   8 * 0.92, 8 * 0.82, 8 * 0.78, 8 * 1.00 /
+ 
+c***********************************************************************
+ 
+         ccstim = st5(det) * acdc(det)
+ 
+c***********************************************************************
+ 
+         return
+         end
+#<
+
+#>            cigbbi.shl
+cdNAME          CCGBBI
+cd
+cdDATE  901107  PA set default filename
+cd      900215  peter arendz removed superfluous declaration
+cd      891107  Do Kester
+cd
+cdPURPOSE       extract last bias boost info
+cd
+cdHEADER        subroutine CCGBBI( utc, lastbb, bbdur, ierr )
+cd
+cd              integer         ierr
+cd              real*8          utc, lastbb
+cd              real            bbdur
+cd
+cdPARAMETERS
+cd      input   utc     for which the info is wanted
+cd      output  lastbb  utc of the last BB
+cd              bbdur   duration of the last bias boost in utc
+cd              ierr    error code
+cd
+cdUSE   On the first call a free unit is connected to the
+cd      BiasBoost file, found on keyword 'BBfile'. (default:
+cd      '$(IRAS_ROOT)IPAC/tables/bbtimes')
+cd
+cd      On each call the difference between the youngest BiasBoost
+cd      and the satcal ( BB - satcal ), and the duration of that
+cd      BiasBoost is returned.
+cd
+cd
+cd
+cd
+cd
+cdEXTERNALS
+cd
+cdREFERENCES
+cd
+cdDEPENDENCE
+ 
+        subroutine cigbbi( utc, lastbb, bbdur, ierr )
+ 
+        real*8          utc, lastbb
+        real            bbdur
+	
+	character*80	initgn
+        character*256   cipfil, cisfil
+        character*256   vfetsg, vfetlg, vfethg
+        character*256   ctype2, bbfile, utcsfl
+        common          /dfault/ vfetsg, vfetlg, vfethg,
+     #                           cipfil, cisfil, initgn,
+     #                           ctype2, bbfile, utcsfl
+
+        real*8          utbb1, utbb2
+        integer         MAXBB, ierr, OK, unitf, izzz01
+        parameter       ( MAXBB = 3400, OK = 0 )
+        character*80    mess
+        integer         bbt(MAXBB), bbd(MAXBB), bbpntr, lastpt
+        logical         first
+        save            first, bbt, bbd, bbpntr, lastpt
+ 
+        data    first, bbpntr   / .true., 1 /
+ 
+        if ierr .ne. ok
+        then
+          return
+        cif
+ 
+        if first
+        then
+          ierr = ok
+          mess = 'cannot open ' // bbfile
+	  unitf = 0
+	  call reqlun( unitf )
+          open( unitf, file = bbfile, status='old', err = fout)
+          mess = 'error while reading ' // bbfile
+          bbpntr = 1
+          while bbpntr .le. maxbb .and. ierr .eq. ok
+            read( unitf, '(2g15.7)', err=fout, end=xwhile )
+     #        utbb1, utbb2
+            bbt(bbpntr) = utbb2
+            bbd(bbpntr) = utbb2 - utbb1
+            bbpntr = bbpntr + 1
+          cwhile
+          lastpt = bbpntr - 1
+          bbpntr = bbpntr / 2
+          first = .false.
+c         print '(a,2i10)', ' lastpointer is ', lastpt, maxbb
+        cif
+ 
+        while bbpntr .lt. lastpt .and. bbt(bbpntr) .lt. utc
+          bbpntr = bbpntr + 1
+        cwhile
+        while bbpntr .gt. 1 .and. bbt(bbpntr) .gt. utc
+          bbpntr = bbpntr - 1
+        cwhile
+        lastbb = bbt(bbpntr)
+        bbdur = bbd(bbpntr)
+ 
+        return
+ 
+        proc fout
+	  ierr = 4
+	  call ERROR( ierr, mess )
+        cproc
+ 
+        end
+#<
+
+#>            guutsc.f
+cdNAME          GUUTSC
+cdDATE          890630  Albrecht de Jonge: overhaul
+cd              861006  Jules van Weerden: format change for CYBER
+cd              861001  Jules van Weerden
+cdPURPOSE       UTCS --> SATCAL conversion
+cdHEADER        double precision function guutsc (utcs)
+cd              double precision        utcs
+cdPARAMETERS
+cd      input   UTSC:   utcs to derive the satcal from
+cd      output          the best possible approximation of SATCAL
+cd
+cdUSE   GUUTSC will convert the given UTCS to a (fractional) SATCAL.
+cd
+cd  GUUTSC will read a reference file for the conversion data.
+cd	The default reference file can be overridden by giving
+cd      the keyword 'UTSCFL' with a filename value on the command line.
+cd	If neither file can be read, a warning is issued and a
+cd      linear approximation used which is accurate to about 10 sec.
+cd         
+cd The reference file must contain time-ordered lines readable by
+cd		read ( un, '(i3,i9,d13.3,i9)' ) SOP, SAT0, UT0, RATE
+cd	meaning that for the SOP starting at satcal SAT0,
+cd	the conversion is ut = UT0 + ( sat - SAT0 )  * RATE
+cd
+cd For values outside the range described in the reference file,
+cd      GUUTSC will return a value based upon extrapolation before
+cd      the first or after the last SATCAL given in the file.
+cd
+cd GUUTSC uses any free unitnumber for the ref-file.
+cd
+cdEXTERNALS     guerra, gucall, guunit
+cdREFERENCES    Geisha Note GI 86/09/30
+cdDEPENDENCE    The default reference file on the ROG SUNs is 
+cd			/geisha.tables/tables/utcs_satc.refs
+
+
+c
+c       method:
+c       Upon first call, read file into tables.
+c       Tables contain SATREF, DELTUT and DELTRT, such that:
+c       0) define functions
+c               RATE(K)  = 1 + DELTRT(K) * 1d-6
+c               UTTAB(K) = UT0 + SATREF(K) * RATE0 + DELTUT(K)
+c       1) determine interval K such that
+c               SATREF(K) < satarg < SATREF(K+1)
+c               UTTAB(K)  < utarg  < UTTAB(K)
+c       2) interpolate
+c               ut = UTTAB(K) + ( satarg - SATREF(K) ) * RATE(K)
+c               satcal = ( utarg - UTTAB(K) ) / RATE(K) + SATREF(K)
+c
+
+        double precision function guutsc (utcs)
+        double precision utcs, guscut, satcal
+
+	character*80	initgn
+        character*256   cipfil, cisfil
+        character*256   vfetsg, vfetlg, vfethg
+        character*256   ctype2, bbfile, utcsfl
+        common          /dfault/ vfetsg, vfetlg, vfethg,
+     #                           cipfil, cisfil, initgn,
+     #                           ctype2, bbfile, utcsfl
+
+        logical         opened
+        integer         k, kmax, tabsiz
+        parameter       ( tabsiz = 650 )
+        real            deltut ( tabsiz )
+        integer         deltrt ( tabsiz ), satref ( tabsiz )
+
+        character       modnam * 6
+        integer         unitus, guunit, ios, sop, satfil, ratfil
+	integer		ierr
+        double precision utfil
+
+        double precision ut0, uttab, rate0, rate
+        parameter       ( rate0 = 1.000054d0, ut0 = 65232005.4d0 )
+
+        save            k, kmax, deltut, deltrt, satref, opened
+        data            opened / .false. /
+999     format (i3,1x,i8,1x,d12.3,1x,i8)
+
+        rate(k)  = deltrt(k) * 1d-6
+        uttab(k) = ut0 + satref(k) * rate0 + deltut(k)
+
+        modnam = 'guutsc'
+        goto 1
+
+        entry guscut ( satcal )
+
+        modnam = 'guscut'
+        goto 1
+
+1       continue
+
+        if ( .not. opened ) then
+		ierr = 0
+		unitus = 0
+		call REQLUN( unitus )
+		open( unitus, file=utcsfl, status='old', iostat=ierr,
+     #		  access='sequential', form='formatted' )
+                if ( unitus .lt. 0 .or. ierr .ne. 0 ) then
+                        call ERROR( 4, 'Cannot open file ' // utcsfl )
+                        return
+                end if
+                kmax = 0
+
+2               continue
+                        read ( unitus, 999, iostat = ios )
+     &                          sop, satfil, utfil, ratfil
+                        if ( ios.ne.0 .or. kmax .eq. tabsiz-1 ) goto 3
+                        kmax = kmax + 1
+                        satref(kmax) = satfil
+                        deltut(kmax) = utfil - satfil * rate0 - ut0
+                        deltrt(kmax) = ratfil
+                        goto 2
+
+3               continue
+
+		if ( unitus .ge. 0 ) then
+		  close( unitus )
+		  call RELLUN( unitus )
+		end if
+                if ( ios .gt. 0 .or. unitus .lt. 0  .or. kmax.eq. 0
+     &                          .or. kmax .eq. tabsiz-1  ) then
+			call ERROR( 4,
+     #				'UTSCFL problems, approximation used' )
+                        kmax = 1
+                        deltrt(1) = nint ( rate0 * 1d6 )
+                        satref(1) = 0
+                        deltut(1) = 0
+                endif
+
+                k = 1
+                opened = .true.
+
+	
+        endif
+
+        if ( modnam .eq. 'guutsc' ) then
+ 4              continue
+                        if ( utcs.ge.uttab(k+1) .and. k.ne.kmax ) then
+                                k = k + 1
+                                goto 4
+                        elseif ( utcs.lt.uttab(k) .and. k.ne.1 ) then
+                                k = k - 1
+                                goto 4
+                        endif
+                guutsc = satref ( k) + ( utcs - uttab(k) ) / rate(k)
+        else
+ 5              continue
+                        if ( satcal.ge.satref(k+1) .and. k.ne.kmax )then
+                                k = k + 1
+                                goto 5
+                        elseif ( satcal.lt.satref(k) .and. k.ne.1 ) then
+                                k = k - 1
+                                goto 5
+                        endif
+                guscut = ( satcal - satref ( k) ) * rate(k) + uttab(k)
+        endif
+
+        return
+        end
+#<
+
+#>            ccesad.shl
+cdNAME          CCESAD
+cd
+cdDATE  900131  Do Kester
+cd
+cdPURPOSE       returns effective solid angle of a detector
+cd
+cdHEADER        real function ccesad( det )
+cd              integer         det
+cd
+cdPARAMETERS
+cd      input   det     detector number
+cd      output          effective soild angle of detector
+cd
+cdUSE   It returns the effective solid angle of a given detector
+cd      as listed in the Explanatory Supplement to the IRAS Faint
+cd      Source Survey, Table number II.D.1 page II-50.
+cd      The solid angles are in steradians.
+cd      The dead detectors have solid angle == 0.0
+cd
+cd      No provisions (yet) for LRS detectors.
+cd
+cdEXTERNALS
+cd
+cdREFERENCES
+cd
+cdDEPENDENCE
+ 
+        real function ccesad( det )
+ 
+        integer         det
+        integer         mdets
+        parameter       ( mdets = 62 )
+        real            esad(mdets)
+ 
+        data    esad /
+     4          14.1, 13.7, 12.9, 13.1, 13.2, 13.2, 13.6,
+     3          6.10, 6.04, 6.07, 1.92, 4.85, 6.10, 6.19, 6.56,
+     2          3.39, 0.00, 3.46, 3.40, 0.00, 3.48, 3.38,
+     1          3.21, 3.22, 3.17, 0.92, 2.41, 2.95, 3.25, 3.25,
+     3          1.97, 6.40, 6.32, 6.25, 6.36, 0.00, 6.37, 4.84,
+     2          1.82, 3.50, 3.44, 3.48, 3.50, 3.45, 3.46, 1.78,
+     1          0.89, 3.31, 3.22, 3.29, 3.25, 3.19, 3.24, 2.45,
+     4           7.9, 13.3, 14.0, 12.9, 14.0, 13.8, 14.2,  6.8 /
+ 
+        if ( det .ge. 1 .and. det .le. mdets )
+        then
+          ccesad = esad(det) * 1.0e-7
+        cif
+ 
+        return
+        end
+ 
+ 
+#<
+
+#>            ccgxnc.shl
+cdNAME          CCGXNC
+cd
+cdVERSION       1.0   890919 Richard van Hees
+cdREFEREE       Do Kester.
+cdPURPOSE       Give alpha, kpar and tau for a given detector.
+cd
+cdHEADER        subroutine ccgxnc( det, alpha, kpar, tau )
+cd              integer    det
+cd              real       alpha, tau, kpar
+cd
+cdPARAMETERS
+cd      input   det    detector number as given in IRAS expl.
+cd                     suppl., table II.C.3, for the 60 and
+cd                     100 mu detectors.
+cd
+cd     output   alpha, kpar : parameter for GXN correction.
+cd                           KPAR is zero.
+cd              tau         : time constant parameter for the
+cd                           GXN correction
+cd
+cdINCLUDE       -----
+cd
+cdUSE           The IPAC values for the GXN correction are
+cd              writen in DATA statements. For a given 60 or
+cd              100 mu detector the subroutine returns the
+cd              correction values, for a 12 or 25 mu detector
+cd              number, the subroutine returns a zero for ALPHA
+cd              and KPAR, and one for TAU.
+cd
+cdEXTERNALS     -----
+cd
+cdREFERENCES    -----
+cd
+cdDEPENDENCE    -----
+cd
+cdHISTORY       1.1  891222  Richard van Hees : a new documentation
+cd                           according to the standard of 891213.
+cd
+c***********************************************************************
+ 
+        subroutine ccgxnc( det, alpha, kpar, tau )
+ 
+c***** declararion input-output variables ******************************
+ 
+        integer det
+        real    alpha, tau, kpar
+ 
+c***** declaration local variables *************************************
+ 
+        integer    ndet
+        parameter( ndet = 62 )
+ 
+        real       a(ndet), t(ndet)
+ 
+c***** The values of a : alpha and t : tau  ****************************
+ 
+       data a /
+     &   -0.50660e-06,   0.38558e-06,  -0.16187e-06,  -0.12623e-06,
+     &   -0.51914e-06,   0.18098e-06,   0.70222e-06,
+     &   -0.23421e-06,  -0.51040e-07,   0.13120e-07,  -0.39730e-07,
+     &   -0.87980e-07,  -0.33010e-07,  -0.13913e-06,   0.19433e-06,
+     &    15 * 0.0,
+     &   -0.20943e-06,   0.21088e-06,  -0.11521e-06,   0.13708e-06,
+     &    0.88130e-07,   0.00000e+00,   0.79650e-07,  -0.17686e-06,
+     &    16 * 0.0,
+     &   -0.12993e-07,   0.46260e-06,  -0.38041e-06,   0.31724e-06,
+     &   -0.55873e-06,   0.00000e+00,   0.44439e-06,   0.15833e-06 /
+ 
+       data t /
+     &    2100.0,   2820.0,   2520.0,   4080.0,
+     &    1980.0,   1920.0,   2940.0,
+     &    2700.0,   4200.0,    660.0,   4620.0,
+     &    4860.0,   1320.0,   2520.0,   2340.0,
+     &    15 * 1.0,
+     &    2520.0,   2340.0,   2220.0,   2940.0,
+     &    6900.0,   1000.0,   3720.0,   2940.0,
+     &    16 * 1.0,
+     &    5400.0,   2460.0,   2580.0,   2340.0,
+     &    2580.0,   1000.0,   2520.0,   1680.0 /
+ 
+c***********************************************************************
+ 
+       alpha = a(det)
+       kpar  = 0.0
+       tau   = t(det)
+ 
+c***********************************************************************
+ 
+       return
+       end
+#<
+
+#>            ipaccal.make
+SHELL = /bin/sh
+# makefile for gipsy tasks, written in sheltran
+# fill in 
+#   PROG : the file name that contains the program-statement
+#   SUBS : the file names containing the subroutines belonging to PROG
+#   EXE  : the name to be assigned to the task; 
+#	   it should be different from PROG
+#
+# for the program `ipaccal'
+PROG =	cimain.f
+SUBS =	ciamps.f cicmgo.f cidn2v.f cidt05.f cidt19.f cidt43.f \
+	ciical.f cioffs.f ciprec.f ciprhf.f \
+	cirdsf.f cirdvt.f ciseqn.f cisrec.f ciwpm2.f ccstim.f \
+	cigbbi.shl guutsc.f ccesad.shl ccgxnc.shl
+HEDR =
+EXE  =	ipaccal
+OBJ  =	ciamps.o cicmgo.o cidn2v.o cidt05.o cidt19.o cidt43.o \
+	ciical.o cioffs.o ciprec.o ciprhf.o \
+	cirdsf.o cirdvt.o ciseqn.o cisrec.o ciwpm2.o cigbbi.o ccstim.o \
+	cimain.o ccgxnc.o guutsc.o ccesad.o
+FOR  =	ciamps.f cicmgo.f cidn2v.f cidt05.f cidt19.f cidt43.f \
+	ciical.f cioffs.f ciprec.f ciprhf.f \
+	cirdsf.f cirdvt.f ciseqn.f cisrec.f ciwpm2.f ccstim.f
+SHL  =  cigbbi.shl ccgxnc.shl ccesad.shl
+
+# define the object files
+# OBJ1 =  $(PROG:.shl=.o)
+# OBJ2 =  $(SUBS:.shl=.o)
+# OBJ  =  $(OBJ1) $(OBJ2)
+# if (temporarily, for debugging) more objectfiles have to be linked,
+#   fill them in here. Otherwise leave empty.
+MOREOBJ = 
+
+# define name of executable
+MAK  =  $(EXE).make
+#define documentation file
+DOC  =  $(EXE).dc1
+# define the source files to be bundled 
+SRC  =  $(DOC) $(PROG) $(SUBS) $(HEDR) $(MAK)
+# define the name of the bundle
+TASK =  $(EXE).src
+
+# Compiler, Options and Libraries for Fortran (Sheltran)
+COMP =	$(FC_COMP)
+# Sun alternative
+OPTS =  $(FC_OPTS) 
+LIBS =  $(FC_LIBS)
+# Compiler, Options and Libraries for C
+# COMP =	$(CC_COMP)
+# OPTS =  	$(CC_OPTS)
+# LIBS =  	$(CC_LIBS)
+
+# rules to make .o files
+.SUFFIXES	:
+.SUFFIXES	: .o .f .shl .c
+.f.o		:
+	$(FC_COMP) -c $(OPTS) $*.f
+.shl.o		:
+	$$gip_exe/sheltran $*.shl
+	$(FC_COMP) -c $(OPTS) $*.f
+.c.o		:
+	$(CC_COMP) -c $(CC_OPTS) $<
+
+# make a local task with the name EXE
+$(EXE)		: $(OBJ) $(MOREOBJ)
+	$(COMP) -o $(EXE) $(OBJ) $(MOREOBJ) $(LIBS)
+
+# The following targets can not be accessed with p/compile; instead use
+# 	make -f ipaccal.make <target> 
+# to access them.
+# bundle the sources and the makefile [make -f ipaccal.make ipaccal.src]
+$(TASK)		: $(SRC) 
+	$$gip_sys/pack.csh $(TASK) $(SRC)
+
+# clean up the files created in compilation
+clean		: 
+	-rmchild -f $(SRC) 2> /dev/null
+	-rm -i $(SRC) 
+
+# print the source files on the laserjet
+print		: $(SRC)
+	qmsprint $?
+	@touch print
+#<

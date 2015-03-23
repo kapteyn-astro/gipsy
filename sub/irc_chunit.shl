@@ -1,0 +1,164 @@
+c#>             irc_chunit.dc2
+c
+cFunction:	IRC_CHUNIT
+c
+cPurpose:	change units in a calibrated irds
+c
+cCategory:	IRAS.
+c
+cFile:		irzc_data.shl.
+c
+cAuthor:	Do Kester
+c 
+cUse: 
+c     integer IRC_CHUNIT(
+c	det,		I	integer
+c	data, 		I/O	real(nd)
+c	nd, 		I	integer
+c	unitsin,	I	character*(*)
+c	unitsout )	I	character*(*)
+c 
+c	returns		0  if OK
+c			-1 at unknown unitsin
+c			-2 at unknown unitsout
+c			-3 both unknown
+c
+c	det		detector number
+c       data    	in calibrated data in unitsin, 
+c			out calibrated data in unitsout
+c       nd      	number of data points
+c       unitsin 	input units
+c	unitsout 	output units
+c 
+cDescription: 
+c	The data are converted from one unit to another.
+c	Known units are:
+c		W/M2	flux		Watts per meter squared 
+c		pW/M2	flux		pico Watts per meter squared 
+c		JY	flux density	Jansky
+c		MJY/SR	intensity	MegaJansky per Steradian
+c		DN-02	intensity	(average) DataNumbers
+c		M	magnitude	magnitude
+c 
+cExternals:  IRCC_SOLID
+c
+cUpdates:
+c 	31 Oct 90 Do Kester
+c	11 Aug 92 DK, pW/M2 added
+c#<
+c@ integer function irc_chunit( integer, real, integer, character, 
+c@				character )
+
+	integer function IRC_CHUNIT( det, data, nd, unitsin, unitsout )
+
+	integer         det, nd
+	real            data(*)
+	character*(*)	unitsin, unitsout
+	integer         i, ki, ko, li, lo, MU, LU, MB, izzzse
+	parameter	( MU = 6, LU = 8, MB = 4 )
+	character*(LU)	units(MU)
+	integer		band, IRCC_BANDET, NELC
+	real		zeromag(MB), w2jy(MB), dn2mjy(MB)
+	real		msolid, IRCC_SOLID, factor
+
+	data	units	/ 'W/M2', 'JY', 'MJY/SR', 'DN-02', 'M', 
+     #			 'PW/M2' /
+c zero magnitude corresponds to Jansky ( IRAS-ES p VI-21 )
+	data	zeromag / 28.3, 6.73, 1.19, 0.43 /
+c conversion from watts to Jansky ( cf IRAS-ES p X-13 )
+	data	w2jy	/ 7.418e12, 19.38e12, 38.76e12, 100.0e12 /
+c conversion of DataNumbers to MJy/sr
+	data	dn2mjy  / 0.415, 0.623, 0.237, 0.13 /
+
+	li = min( LU, NELC( unitsin ) )
+	lo = min( LU, NELC( unitsout ) )
+	ki = 0
+	ko = 0
+	irc_chunit = 0
+c search for the unit numbers, in and out
+	for i = 1, MU
+	  if unitsin(:li) .eq. units(i)(:li)
+	  then
+	    ki = i
+	  cif
+	  if unitsout(:lo) .eq. units(i)(:lo)
+	  then
+	    ko = i
+	  cif
+	cfor
+
+c check validity of input and output units
+	if ki .eq. 0
+	then
+	  irc_chunit = irc_chunit - 1
+	  ki = -1
+	cif
+	if ko .eq. 0
+	then
+	  irc_chunit = irc_chunit - 2
+	  ko = -1
+	cif 
+
+	if ki .eq. ko
+	then
+c input and output units are the same: do nothing
+	  return
+	cif
+
+	band = IRCC_BANDET( det )
+	msolid = IRCC_SOLID( det ) * 1.0e6
+
+c conversion factor from input units to Jansky
+	select ki
+	case 1
+	  factor = w2jy(band)
+	case 2
+	  factor = 1.0
+	case 3
+	  factor = msolid
+	case 4
+	  factor = dn2mjy(band) * msolid
+	case 5
+	  for i = 1, nd
+	    data(i) = zeromag(band) * 10 ** ( -0.4 * data(i) )
+	  cfor
+	  factor = 1.0
+	case 6
+	  factor = w2jy(band) * 1.0e-12
+	other
+	  call ERROR( 3, 'IRC_CHUNIT: unknown units for input' )
+	  return
+	cselect
+
+c conversion factor from Jansky to output units
+	select ko
+	case 1
+	  factor = factor / w2jy(band)
+	case 2, 5
+	  factor = factor
+	case 3
+	  factor = factor / msolid
+	case 4
+	  factor = factor / ( msolid * dn2mjy(band) )
+	case 6
+	  factor = factor / ( w2jy(band) * 1.0e-12 )
+	other
+	  call ERROR( 3, 'IRC_CHUNIT: unknown units for output' )
+	  return
+	cselect
+
+c multiply with conversion factor
+	for i = 1, nd
+	    data(i) = data(i) * factor
+	cfor
+
+c change to magnitudes
+	if ko .eq. 5
+	then
+	  for i = 1, nd
+	    data(i) = -2.5 * alog10( data(i) / zeromag(band) )
+	  cfor
+	cif
+
+	return
+	end

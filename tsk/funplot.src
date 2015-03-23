@@ -1,0 +1,2765 @@
+funplot.src
+
+        Copyright (c) Kapteyn Laboratorium Groningen 2009
+        All Rights Reserved.
+
+Name:         funplot.src
+Creator:      vogelaar
+Host:         albirumi
+Date:         Apr 14, 2009
+Contents:     Makefile.uti funplot.make funplot.c grdevices.c dydxscan.c
+              drawpoints.c fftfun.c fftplot.c labels.c drawpoints.h
+              fftfun.h fftplot.h labels.h grdevices.h funplot.dc1
+
+#>            Makefile.uti
+SHELL  = /bin/sh
+
+pack::
+	$$gip_sys/pack.csh funplot.src Makefile.uti \
+	funplot.make funplot.c grdevices.c \
+	dydxscan.c drawpoints.c fftfun.c fftplot.c labels.c \
+        drawpoints.h  fftfun.h fftplot.h labels.h grdevices.h \
+	funplot.dc1
+#<
+
+#>            funplot.make
+# -X funplot.make
+
+SHELL   = /bin/sh
+
+OBJECTS = funplot.o fftplot.o drawpoints.o fftfun.o grdevices.o dydxscan.o \
+          labels.o
+
+default:: funplot
+
+funplot: $(OBJECTS)
+	$(CC_COMP) -o funplot $(OBJECTS) $(CC_LIBS) $(XT_LIBS)
+
+clean::
+	rm -f funplot $(OBJECTS)
+
+pack::
+	$$gip_sys/pack.csh funplot.src Makefile.uti \
+        funplot.make funplot.c grdevices.c \
+        dydxscan.c drawpoints.c fftfun.c fftplot.c labels.c \
+        drawpoints.h  fftfun.h fftplot.h labels.h grdevices.h \
+        funplot.dc1
+
+.c.o :
+	$(CC_COMP) -c $(CC_OPTS) $(X11_OPTS) $<
+#<
+
+#>            funplot.c
+/* -XT
+                              COPYRIGHT (c) 1997
+                        Kapteyn Astronomical Institute
+         University of Groningen  -  9700 AV Groningen, The Netherlands
+         
+Author: J.P. Terlouw
+
+*/
+
+#include "stddef.h"
+#include "stdio.h"
+#include "stdlib.h"
+#include "string.h"
+#include "math.h"
+#include "float.h"
+#include "ctype.h"
+
+#include "gipsyc.h"
+
+#include "userfio.h"
+#include "init.h"
+#include "setfblank.h"
+#include "finis.h"
+#include "status.h"
+#include "anyout.h"
+#include "userlog.h"
+#include "userreal.h"
+#include "usertext.h"
+#include "userlog.h"
+#include "userint.h"
+#include "decodereal.h"
+#include "cancel.h"
+#include "reject.h"
+#include "wkey.h"
+
+#include "dydx.h"
+#include "nbits.h"
+#include "fieini.h"
+#include "fiedo.h"
+#include "fiepar.h"
+#include "fieclr.h"
+
+#include "pgplot.h"
+#include "keyevents.h"         /* user input keyword event handlers */
+
+#include "ggi.h"               /* "GIPSY graphical user interface" */
+#include "grdevices.h"
+#include "cmain.h"
+#include "drawpoints.h"
+#include "fftplot.h"
+#include "labels.h"
+
+#define New(type) ((type *)calloc(1,sizeof(type)))
+#define NNew(n,type) ((type *)calloc(n,sizeof(type)))
+#define Delete(x)  {free(x); x=NULL;}
+
+#define Equal(x,y) (fabs(x-y)<(fabs(x)>fabs(y)?fabs(x):fabs(y))*0.001)
+
+#define LABLEN          40
+#define MAXVAR          32
+#define MAXVARLEN       16
+#define MAXEXPRLEN     256
+#define MAXDERVLEN    1024
+
+static char *my_resources[] = {
+   "*warning.foreground: red",
+   NULL
+};
+
+static fint fint0=0, fint1=1, fint2=2, fint3=3;  /* 'convenience' variables */
+
+typedef struct _Param {
+   struct _Param *next;    /* next Param in linked list */
+   char    *key;           /* value keyword */
+   char    *minkey;        /* range minimum keyword */
+   char    *maxkey;        /* range maximum keyword */
+   char    *zoominkey;     /* range zoom-in keyword */
+   char    *zoomoutkey;    /* range zoom-out keyword */
+   char    *panrightkey;   /* range shift-right keyword */
+   char    *panleftkey;    /* range shift-left keyword */
+   char    valtext[80];    /* value text to be plotted */
+   ident   key_h;          /* value keyword handler */
+   ident   minkey_h;       /* range minimum keyword handler */
+   ident   maxkey_h;       /* range maximum keyword handler */
+   ident   zoomin_h;       /* range zoom-in handler */
+   ident   zoomout_h;      /* range zoom-out handler */
+   ident   panright_h;     /* range shift-right handler */
+   ident   panleft_h;      /* range shift-left handler */
+   ident   valfield;       /* value input field */
+   ident   minfield;       /* range minimum input field */
+   ident   maxfield;       /* range maximum input field */
+   ident   gauge;          /* value gauge */
+   ident   zoomin;         /* range zoom-in button */
+   ident   zoomout;        /* range zoom-out button */
+   ident   panright;       /* range shift-right button */
+   ident   panleft;        /* range shift-left button */
+   float   leftlimit;      /* gauge's left limit */
+   float   rightlimit;     /* gauge's right limit */
+   float   *value;         /* value destination */
+   bool    data;           /* data-instead-of-parameter flag */
+} _Param, *Param;
+
+typedef enum {PANLEFT, PANRIGHT, PANUP, PANDOWN, ZOOMXIN, ZOOMYIN,
+              ZOOMXOUT, ZOOMYOUT} frbutcode;
+
+static Param parlist=NULL;
+static ident firsttop;
+static ident lastline;
+static ident dervbut;
+static fint  fieid=-1, dervid=-1, nvars;
+static float xmin=-1.0, xmax=1.0, ymin=-1.0, ymax=1.0;
+static bool  framechanged=TRUE;
+static bool  graphchanged=FALSE;
+bool  printing=FALSE;
+
+static char  currexpr[MAXEXPRLEN+1];
+static float *fiepars;
+static float *yvalues, *dvalues;
+static float BLANK;
+static char **plotters;
+static fint  plotter;
+static fint  roman=1, italic=1;
+static bool  drawaxes, drawgrids, drawvalues;
+static fchar xlbl,           ylbl,           zlbl;
+static char  xlbl_c[LABLEN], ylbl_c[LABLEN], zlbl_c[LABLEN];
+static fint  npoints;
+static bool  deriv;    /* plot derivative */
+static bool  fourier;  /* plot FFT */
+static fint  owndev=0; /* main window PGPLOT device */
+
+/* -------------------------------------------------------------------------- */
+/*                                 StrDup                                     */
+/* -------------------------------------------------------------------------- */
+/*  String duplication function.
+ */
+static char *StrDup(char *text)
+{
+   char *result=NULL;
+ 
+   if (text) {
+      result = NNew(strlen(text)+1,char);
+      strcpy(result,text);
+   }
+   return result;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 UserReal                                   */
+/* -------------------------------------------------------------------------- */
+float UserReal(char *key)
+{
+   float result=0.0;
+    
+   (void)userreal_c(&result, &fint1, &fint2, tofchar(key), tofchar(" "));
+   return result;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 UserInt                                    */
+/* -------------------------------------------------------------------------- */
+fint UserInt(char *key)
+{
+   fint result=0;
+    
+   (void)userint_c(&result, &fint1, &fint2, tofchar(key), tofchar(" "));
+   return result;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 UserLog                                    */
+/* -------------------------------------------------------------------------- */
+bool UserLog(char *key)
+{
+   bool result=FALSE;
+    
+   (void)userlog_c(&result, &fint1, &fint2, tofchar(key), tofchar(" "));
+   return result;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 RealDefault                                */
+/* -------------------------------------------------------------------------- */
+/*  RealDefault() attempts to read the input keyword associated with
+ *  'key' and stores it in '*value'.
+ *  If it is not present, it writes the supplied default value -the character
+ *  value 'cvalue', if this is not NULL, otherwise the argument '*value'
+ */
+void RealDefault(char *key, char* cvalue, float *value)
+{
+   fint  nread;
+   fchar text;
+   char  text_c[512];
+    
+   text.a = text_c; text.l = 512;
+   nread = userftext(text, 2, key, " ");
+   if (nread) (void)decodereal_c(text, value, &fint1);
+   if (!nread) {
+      char buffer[40];
+      if (cvalue) {
+         sprintf(buffer, "%s%s", key, cvalue);
+          wkey_c(tofchar(buffer));
+          *value = UserReal(key);
+      } else {
+         sprintf(buffer, "%s%f", key, *value);
+         wkey_c(tofchar(buffer));
+      }
+   }
+}
+
+/* ========================================================================== */
+/*                                 CharDefault                                */
+/* -------------------------------------------------------------------------- */
+void CharDefault(char *key, char* value)
+{
+   fchar test;
+   char  test_c[1];
+    
+   test.l = 1; test.a = test_c;
+   if (usertext_c(test, &fint2, tofchar(key), tofchar(" "))==0) {
+      char *buffer=NNew(strlen(key)+strlen(value)+1,char);
+      sprintf(buffer, "%s%s", key, value);
+      wkey_c(tofchar(buffer));
+      Delete(buffer);
+   }
+}
+
+void myviewport(void)
+{
+   float xleft=0.1, xright=0.9, xbot=0.1, xtop=0.9;
+   pgsvp_c(&xleft, &xright, &xbot, &xtop);
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 quit                                       */
+/* -------------------------------------------------------------------------- */
+/*  QUIT= keyword handler.
+ */
+static void quit(ident id, char *key, int code, void *arg)
+{
+   bool quit=UserLog(key);
+   if (quit) {
+      cancel_c(tofchar(key));           /* remove QUIT= keyword */
+      finis_c();                        /* terminate task */
+   }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 setrange                                   */
+/* -------------------------------------------------------------------------- */
+/*  Min, max keyword handler. Adjusts the gauge's range.
+ */
+static void setrange(ident id, char *key, int code, void *arg)
+{
+   Param current=(Param)arg;
+   float minval=current->leftlimit, maxval=current->rightlimit;
+    
+   if (!strcmp(key,current->minkey)) {
+      minval = UserReal(key);
+   } else {
+      maxval = UserReal(key);
+   }
+   if (minval != maxval) {
+      (void)GgiSetRange(current->gauge,minval,maxval);
+      current->leftlimit  = minval;
+      current->rightlimit = maxval;
+   } else {
+      reject_c(tofchar(key),tofchar("Zero range"));
+   }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 zoomrange                                  */
+/* -------------------------------------------------------------------------- */
+static void zoomrange(ident id, char *key, int code, void *arg)
+{
+   Param current=(Param)arg;
+   char  buffer[80];
+   float value=*(current->value);
+   float factor, refpoint;
+   bool  on=UserLog(key);
+    
+   if (!on) return;
+   if (!strcmp(key,current->zoominkey)) {
+      factor = 1.0/sqrt(2.0);
+      refpoint = value;
+   } else {
+      factor = sqrt(2.0);
+      refpoint = (current->leftlimit+current->rightlimit)/2.0;
+   }
+   current->leftlimit  = refpoint-factor*(refpoint-current->leftlimit);
+   current->rightlimit = refpoint+factor*(current->rightlimit-refpoint);
+   sprintf(buffer,"%sNO %s%-7.3g %s%-7.3g", key,
+                        current->minkey, current->leftlimit,
+                        current->maxkey, current->rightlimit);
+   wkey_c(tofchar(buffer));
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 panrange                                   */
+/* -------------------------------------------------------------------------- */
+static void panrange(ident id, char *key, int code, void *arg)
+{
+   Param current=(Param)arg;
+   char  buffer[80];
+   float leftlimit=current->leftlimit;
+   float rightlimit=current->rightlimit;
+   float offset;
+   bool  on=UserLog(key);
+   
+   if (!on) return;
+   offset = (rightlimit-leftlimit)/2.0;
+   if (strcmp(key,current->panrightkey)) offset = -offset;
+   leftlimit  += offset;
+   rightlimit += offset;   
+   sprintf(buffer,"%sNO %s%-7.3g %s%-7.3g", key, current->minkey, leftlimit,
+                                                 current->maxkey, rightlimit);
+   wkey_c(tofchar(buffer));
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 plotvalues                                */
+/* -------------------------------------------------------------------------- */
+/*  Timer procedure which periodically conditionally draws parameter values.
+ */
+void plotvalues(ident id, void *arg)
+{
+   if (drawvalues && graphchanged) {
+      Param current=parlist;
+      float xtext, ytext, yincr;
+      fint  nchar;
+      fchar value;
+      char  value_c[41];
+       
+      value.l = 40; value.a = value_c;
+      xtext = xmin+0.77*(xmax-xmin);
+      ytext = ymin+0.05*(ymax-ymin);
+      yincr = 0.05*(ymax-ymin);
+      while (current) {
+         pgsci_c(&fint0);
+         pgtext_c(&xtext, &ytext, tofchar(current->valtext));
+         pgsci_c(&fint1);
+         nchar = usertext_c(value, &fint2,
+                            tofchar(current->key), tofchar(" "));
+         value_c[nchar] = '\0';
+         sprintf(current->valtext, "%s %s", current->key, value_c);
+         pgtext_c(&xtext, &ytext, tofchar(current->valtext));
+         ytext += yincr;
+         current = current->next;
+      }
+      graphchanged = FALSE;
+   }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 showgraph                                  */
+/* -------------------------------------------------------------------------- */
+/*  showgraph() evaluates the supplied function for the current parameter
+ *  values and plots the graph. If necessary the axis frame is drawn and
+ *  a previous graph is erased.
+ */
+static void showgraph(void)
+{
+   fint nops=npoints;
+   int  i;
+   static float xtext, ytext;
+   float  float0=0.0;
+   char xopt[20], yopt[20];
+   static bool derivplotted=FALSE;
+   
+
+   if (!printing) pgslct_c(&owndev);
+   if (framechanged) {
+      float *xvalues=fiepars+npoints*(nvars-1);
+      float increment= (xmax-xmin)/(float)npoints;
+      for (i=0; i<npoints; i++) *(xvalues++) = xmin+(float)i*increment;
+      if (!printing) {
+         myviewport();
+         pgpage_c();
+      }
+      pgswin_c(&xmin, &xmax, &ymin, &ymax);
+      xtext = xmin+0.05*(xmax-xmin);
+      ytext = ymax-0.10*(ymax-ymin);
+      derivplotted = FALSE;
+      graphchanged = FALSE;
+   }
+   if (framechanged) {
+      pgsci_c(&fint1);
+      sprintf(xopt,"%sBCINTS",  drawaxes?"A":"");
+      sprintf(yopt,"%sBCINTSV", drawaxes?"A":"");
+      pgbox_c(tofchar(xopt), &float0, &fint0, tofchar(yopt), &float0, &fint0);
+      pglab_c(xlbl, ylbl, zlbl);
+      if (drawgrids) {
+         fint style, gridstyle;
+         pgqls_c(&style);
+         gridstyle = 4;                                      /* dotted grid */
+         pgsls_c(&gridstyle);
+         pgbox_c(tofchar("G"), &float0, &fint0, tofchar("G"), &float0, &fint0);
+         pgsls_c(&style);
+      }
+      pgscf_c(&italic);
+      pgtext_c(&xtext, &ytext, tofchar(currexpr));
+      pgscf_c(&roman);
+      graphchanged = TRUE;
+      plotvalues(NULL,NULL);
+      derivplotted = FALSE;
+      graphchanged = FALSE;
+   }
+   if (fieid>=0 && !framechanged) {
+      if (derivplotted) {
+         pgsci_c(&fint2);
+         drawpoints(npoints, fiepars+npoints*(nvars-1), dvalues);
+         derivplotted = FALSE;
+      }
+      pgsci_c(&fint3);
+                                                     /* erase previous graph */
+      drawpoints(npoints, fiepars+npoints*(nvars-1), yvalues);
+      graphchanged = TRUE;
+   }
+   if (fieid>=0) {
+      (void)fiedo_c(fiepars, &nops, yvalues, &fieid);
+      if (deriv) {
+         (void)fiedo_c(fiepars, &nops, dvalues, &dervid);
+         for (i=0; i<npoints; i++) if (yvalues[i]==BLANK) dvalues[i] = BLANK;
+         pgsci_c(&fint2);
+         drawpoints(npoints, fiepars+npoints*(nvars-1), dvalues);
+         derivplotted = TRUE;
+      }
+      pgsci_c(&fint3);
+      drawpoints(npoints, fiepars+npoints*(nvars-1), yvalues);
+      if (fourier && !printing) {
+         ShowFft(framechanged, npoints, xmin, xmax, yvalues);
+         pgslct_c(&owndev);
+         myviewport();
+         pgswin_c(&xmin, &xmax, &ymin, &ymax);
+         pgscf_c(&roman);
+         pgsci_c(&fint3);
+/*         */
+      }
+   }
+   framechanged = FALSE;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 changeframe                                */
+/* -------------------------------------------------------------------------- */
+/*  Xmin, xmax, ymin, ymax keyword handler. It reads the value, indicates
+ *  that the frame has changed and then causes the function to be replotted.
+ */
+static void changeframe(ident id, char *key, int code, void *arg)
+{
+   float curval=*(float*)arg;
+   
+   *(float*)arg = UserReal(key);
+   if (!Equal(curval,*(float*)arg)) {
+      framechanged = TRUE;
+      showgraph();
+   }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 changeparam                                */
+/* -------------------------------------------------------------------------- */
+/*  Value keyword handler. Updates the parameter value and causes the
+ *  function to be replotted.
+ */
+static void changeparam(ident id, char *key, int code, void *arg)
+{
+   Param current=(Param)arg;
+   int  i;
+   fint nv;
+   float *values;
+    
+   values = current->value;
+   nv = userfreal(values, npoints, 2, key, " ");
+   if (nv>1) {
+      for (i=nv; i<npoints; i++) values[i] = 0.0;        /* append zeroes    */
+      if (!current->data) {
+         GgiDeactivate(dervbut);
+         GgiDeactivate(current->gauge);
+         wkeyf("DERIV=NO");
+         current->data = TRUE;
+      }
+   } else {
+      float value = *values;
+      for (i=0; i<npoints; i++) *(values++) = value;     /* replicate values */
+      if (current->data) {
+         GgiActivate(dervbut);
+         GgiActivate(current->gauge);
+         current->data = FALSE;
+      }
+   }
+   showgraph();
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 NewParam                                   */
+/* -------------------------------------------------------------------------- */
+/*  NewParam() constructs a new parameter "object" associated with the
+ *  function parameter indicated by the argument 'key'.
+ *  The arguments 'value', 'min' and 'max' give defaults for the current
+ *  value of the parameter, and the gauge's limits. If keywords exist for
+ *  these quantities, they will override the supplied defaults.
+ */
+static Param NewParam(char *key, float *value, float min, float max)
+{
+   char buffer[80];
+   Param current = New(_Param);
+   int   i;
+    
+   current->next = parlist;
+   parlist       = current;
+
+   current->key  = StrDup(key);
+   RealDefault(key, NULL, value);
+   for (i=1; i<npoints; i++) value[i] = value[0];      /* replicate values */
+   sprintf(buffer,"MIN_%s",key);                       /* construct keyword */
+   current->minkey = StrDup(buffer);
+   RealDefault(current->minkey, NULL, &min);           /* set default */
+   sprintf(buffer,"MAX_%s",key);                       /* construct keyword */
+   current->maxkey = StrDup(buffer);
+   RealDefault(current->maxkey, NULL, &max);           /* set default */
+   sprintf(buffer,"ZIN_%s",key);
+   current->zoominkey = StrDup(buffer);
+   sprintf(buffer,"ZOUT_%s",key);
+   current->zoomoutkey = StrDup(buffer);
+   sprintf(buffer,"RIGHT_%s",key);
+   current->panrightkey = StrDup(buffer);
+   sprintf(buffer,"LEFT_%s",key);
+   current->panleftkey = StrDup(buffer);
+   strcpy(current->valtext," ");
+   current->valfield = GgiTextField(key, "Current value", 10);
+   current->minfield = GgiTextField(current->minkey, "Left limit", 10);
+   GgiSetLabel(current->minfield, NULL, 1);
+   current->maxfield = GgiTextField(current->maxkey, "Right limit", 10);
+   GgiSetLabel(current->maxfield, NULL, 1);
+   current->gauge = GgiGauge(key, NULL, 250, min, max);
+   current->leftlimit  = min;
+   current->rightlimit = max;
+   GgiSetLabel(current->gauge, NULL, 1);
+   current->zoomin = GgiSetLabel(
+         GgiButton(current->zoominkey, "Narrow range"), "><", 0);
+   current->zoomout = GgiSetLabel(
+         GgiButton(current->zoomoutkey, "Widen range"), "<>", 0);
+   current->panleft = GgiSetLabel(
+         GgiButton(current->panleftkey, "Shift range to left"), "<<", 0);
+   current->panright = GgiSetLabel(
+         GgiButton(current->panrightkey, "Shift range to right"), ">>", 0);
+   current->value = value;
+   GgiSetPosition(current->valfield, 0, NULL,              0, lastline);
+   GgiSetPosition(current->minfield, 0, current->valfield, 0, lastline);
+   GgiSetPosition(current->gauge,    0, current->minfield, 0, lastline);
+   GgiSetPosition(current->maxfield, 0, current->gauge,    0, lastline);
+   GgiSetPosition(current->zoomin,  15, current->maxfield, 0, lastline);
+   GgiSetPosition(current->zoomout,  0, current->zoomin,   0, lastline);
+   GgiSetPosition(current->panleft, 15, current->zoomout,  0, lastline);
+   GgiSetPosition(current->panright, 0, current->panleft,  0, lastline);
+   lastline = current->valfield;
+   current->key_h =
+      ScheduleKeyevent(changeparam, key, KEYCHANGE, current);
+   current->minkey_h =
+      ScheduleKeyevent(setrange, current->minkey, KEYCHANGE, current);
+   current->maxkey_h =
+      ScheduleKeyevent(setrange, current->maxkey, KEYCHANGE, current);
+   current->zoomin_h =
+      ScheduleKeyevent(zoomrange, current->zoominkey, KEYCHANGE, current);
+   current->zoomout_h =
+      ScheduleKeyevent(zoomrange, current->zoomoutkey, KEYCHANGE, current);
+   current->panleft_h =
+      ScheduleKeyevent(panrange, current->panleftkey, KEYCHANGE, current);
+   current->panright_h =
+      ScheduleKeyevent(panrange, current->panrightkey, KEYCHANGE, current);
+   (void)TriggerKey(key);
+ 
+   return current;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 framebutton                                */
+/* -------------------------------------------------------------------------- */
+static void framebutton(ident id, char *key, int code, void *arg)
+{
+   bool on;
+   float offset, factor, center;
+   char  buffer[80];
+    
+   on = UserLog(key);
+   if (!on) return;
+   switch ((int)arg) {
+      case PANLEFT: {
+         offset = (xmin-xmax)/2.0;
+         xmin += offset;
+         xmax += offset;
+         sprintf(buffer,"%sNO XMIN=%-7.3g XMAX=%-7.3g", key, xmin, xmax);
+         break;
+      }
+      case PANRIGHT: {
+         offset = (xmax-xmin)/2.0;
+         xmin += offset;
+         xmax += offset;
+         sprintf(buffer,"%sNO XMIN=%-7.3g XMAX=%-7.3g", key, xmin, xmax);
+         break;
+      }
+      case PANUP: {
+         offset = (ymax-ymin)/2.0;
+         ymin += offset;
+         ymax += offset;
+         sprintf(buffer,"%sNO YMIN=%-7.3g YMAX=%-7.3g", key, ymin, ymax);
+         break;
+      }
+      case PANDOWN: {
+         offset = (ymin-ymax)/2.0;
+         ymin += offset;
+         ymax += offset;
+         sprintf(buffer,"%sNO YMIN=%-7.3g YMAX=%-7.3g", key, ymin, ymax);
+         break;
+      }
+      case ZOOMXIN: {
+         factor = 1.0/sqrt(2.0);
+         center = (xmax+xmin)/2.0;
+         xmin   = center-factor*(center-xmin);
+         xmax   = center+factor*(xmax-center);
+         sprintf(buffer,"%sNO XMIN=%-7.3g XMAX=%-7.3g", key, xmin, xmax);
+         break;
+      }
+      case ZOOMXOUT: {
+         factor = sqrt(2.0);
+         center = (xmax+xmin)/2.0;
+         xmin   = center-factor*(center-xmin);
+         xmax   = center+factor*(xmax-center);
+         sprintf(buffer,"%sNO XMIN=%-7.3g XMAX=%-7.3g", key, xmin, xmax);
+         break;
+      }
+      case ZOOMYIN: {
+         factor = 1.0/sqrt(2.0);
+         center = (ymax+ymin)/2.0;
+         ymin   = center-factor*(center-ymin);
+         ymax   = center+factor*(ymax-center);
+         sprintf(buffer,"%sNO YMIN=%-7.3g YMAX=%-7.3g", key, ymin, ymax);
+         break;
+      }
+      case ZOOMYOUT: {
+         factor = sqrt(2.0);
+         center = (ymax+ymin)/2.0;
+         ymin   = center-factor*(center-ymin);
+         ymax   = center+factor*(ymax-center);
+         sprintf(buffer,"%sNO YMIN=%-7.3g YMAX=%-7.3g", key, ymin, ymax);
+         break;
+      }
+   }
+   framechanged = TRUE;
+   showgraph();
+   wkey_c(tofchar(buffer));
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 DeleteParams                               */
+/* -------------------------------------------------------------------------- */
+/*  DeleteParams() breaks down and deletes all parameter 'objects'.
+ */
+static void DeleteParams(void)
+{
+   Param current;
+   
+   while (parlist) {
+      current = parlist;
+      parlist = current->next;
+      Delete(current->key);
+      Delete(current->minkey);
+      Delete(current->maxkey);
+      Delete(current->zoominkey);
+      Delete(current->zoomoutkey);
+      Delete(current->panleftkey);
+      Delete(current->panrightkey);
+      DescheduleKeyevent(&(current->key_h));
+      DescheduleKeyevent(&(current->minkey_h));
+      DescheduleKeyevent(&(current->maxkey_h));
+      DescheduleKeyevent(&(current->zoomin_h));
+      DescheduleKeyevent(&(current->zoomout_h));
+      DescheduleKeyevent(&(current->panleft_h));
+      DescheduleKeyevent(&(current->panright_h));
+      GgiDelete(&(current->zoomin));
+      GgiDelete(&(current->zoomout));
+      GgiDelete(&(current->panleft));
+      GgiDelete(&(current->panright));
+      GgiDelete(&(current->valfield));
+      GgiDelete(&(current->minfield));
+      GgiDelete(&(current->maxfield));
+      GgiDelete(&(current->gauge));
+      Delete(current);
+   }
+   lastline = firsttop;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 newfun                                     */
+/* -------------------------------------------------------------------------- */
+/*  FUNCTION= keyword handler.
+ *  It reads the function, checks for validity and obtains the parameter
+ *  names. It creates parameter objects for all parameters, calls the
+ *  appropriate fie routines to compile the function for later evaluation
+ *  and finally causes a graph to be drawn.
+ */
+static void newfun(ident id, char *key, int code, void *arg)
+{
+   char   vars_c[MAXVAR*MAXVARLEN];
+   char   expr_out_c[MAXEXPRLEN];
+   char   expr_deriv_c[MAXDERVLEN];
+   fchar  expr_in;
+   char   expr_in_c[MAXEXPRLEN];
+   fchar  vars, expr_out, expr_deriv;
+   fchar  tmpvars;
+   fint   csize = MAXVARLEN;
+   fint   len, r, errpos;
+   int    i;
+    
+   vars.a = vars_c; vars.l = MAXVARLEN;
+   expr_in.a = expr_in_c; expr_in.l = MAXEXPRLEN;
+   expr_out.a = expr_out_c; expr_out.l = MAXEXPRLEN;
+   expr_deriv.a = expr_deriv_c; expr_deriv.l= MAXDERVLEN;
+   len = usertext_c(expr_in, &fint2, tofchar(key), tofchar(" "));
+   for (i=0; i<len; i++) currexpr[i] = expr_in.a[i];
+   currexpr[i] = '\0';
+   for (i=0; i<len; i++) expr_in.a[i] = toupper(expr_in.a[i]);
+   r = dydx_c(expr_in, tofchar("X"), expr_out, expr_deriv, vars,
+              &csize, &nvars);
+   if (r) {
+      reject_c(tofchar(key), tofchar("Invalid expression"));
+      return;
+   }
+   DeleteParams();
+   for (i=nvars-1; i>=0; i--) {
+      char buffer[MAXVARLEN+2];
+      char *curvar;
+       
+      tmpvars=vars;
+      tmpvars.a += i*MAXVARLEN;
+      curvar = zadd(tmpvars); 
+      sprintf(buffer,"%s=", curvar);
+      free(curvar);
+      *(fiepars+i*npoints) = 0.0;
+      (void)NewParam(buffer, fiepars+i*npoints, -1.0, 1.0);
+   }
+   tmpvars = vars;
+   tmpvars.a += nvars*MAXVARLEN;
+   str2char("X", tmpvars); nvars++;
+   if (fieid>=0) {
+      (void)fieclr_c(&fieid);
+      (void)fieclr_c(&dervid);
+   }
+   r = fiepar_c(vars, &nvars);
+   r = fieini_c(expr_out, &fieid, &errpos);
+   r = fiepar_c(vars, &nvars);
+   r = fieini_c(expr_deriv, &dervid, &errpos);
+   framechanged = TRUE;
+   GgiActivate(dervbut);
+   showgraph();
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 selectplotter                              */
+/* -------------------------------------------------------------------------- */
+/*  PLOTTER= keyword handler. Sets the plotter graphics device number and
+ *  sensitizes the PLOT button.
+ */
+void selectplotter(ident id, char *key, int code, void *arg)
+{
+   plotter = UserInt(key);
+   (void)GgiActivate((ident)arg);
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 boxoption                                  */
+/* -------------------------------------------------------------------------- */
+void boxoption(ident id, char *key, int code, void *arg)
+{
+   *(bool*)arg = UserLog(key);
+   framechanged = TRUE;
+   showgraph();
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 hardcopy                                   */
+/* -------------------------------------------------------------------------- */
+/*  PLOT= keyword handler. Opens the plotter, re-plots the current graph(s)
+ *  and closes the plotter.
+ */
+void hardcopy(ident id, char *key, int code, void *arg)
+{
+   bool on=UserLog(key);
+    
+   if (on) {
+      wkey_c(tofchar(key));
+      printing = TRUE;
+      (void)pgopen_c(tofchar(plotters[plotter]));
+      pgsubp_c(&fint1,fourier?&fint2:&fint1);
+      myviewport();
+      pgpage_c();
+      roman = 2; italic = 3;
+      pgscf_c(&roman);
+      framechanged = TRUE;
+      showgraph();
+      if (fourier) {
+         ShowFft(TRUE, npoints, xmin, xmax, yvalues);
+      }
+      roman = 1; italic = 1;
+      pgclos_c();
+      printing = FALSE;
+   }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 toggle                                     */
+/* -------------------------------------------------------------------------- */
+void toggle(ident id, char *key, int code, void *arg)
+{
+   *(bool*)arg = UserLog(key);
+   framechanged = TRUE;
+   showgraph();
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 changepoints                               */
+/* -------------------------------------------------------------------------- */
+void changepoints(ident id, char *key, int code, void *arg)
+{
+   fint newpoints;
+    
+   newpoints = UserInt(key);
+   if (fourier && nbits_c(&newpoints)!=1) {
+      char buffer[40];
+      newpoints = 1 << (int)(log((double)newpoints)/log(2.0)+1);
+      sprintf(buffer,"%s%d", key, newpoints);
+      wkey_c(tofchar(buffer));
+      return;
+   }
+   if (newpoints!=npoints) {
+      if (newpoints>=10) {
+         npoints = newpoints;
+         Delete(fiepars);
+         Delete(yvalues);
+         Delete(dvalues);
+         fiepars = NNew(npoints*MAXVAR, float);
+         yvalues = NNew(npoints, float);
+         dvalues = NNew(npoints, float);
+         newfun(NULL, "FUNCTION=", KEYCHANGE, NULL);      /* fake key event */
+      } else {
+         char buffer[40];
+         sprintf(buffer,"%s16",key);
+         wkey_c(tofchar(buffer));
+      }
+   }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 changelabel                                */
+/* -------------------------------------------------------------------------- */
+/*  Key handler for label texts.
+ */
+static void changelabel(ident id, char *key, int mask, void *arg)
+{
+   fchar label=*(fchar*)arg;
+   if (!userftext(label, 2, key, " ")) {
+      while (label.l--) *(label.a++) = ' ';
+   }
+   framechanged = TRUE;
+   showgraph();
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 cursor                                     */
+/* -------------------------------------------------------------------------- */
+void cursor(ident id, GgiPlotInfo info, void *arg)
+{
+   char buffer[80];
+   static bool blanked=FALSE;
+   
+   sprintf(buffer,"Cursor position ( %f, %f )", info->x, info->y);
+   if (info->button&ggiButn2 && info->state&ggiButn2)
+      anyout_c(&fint0, tofchar(buffer));     /* button 2 click: log          */
+   if (info->button) {
+      GgiSetLabel((ident)arg, buffer, 0);    /* click: display position      */
+      blanked = FALSE;
+   } else if (!blanked) {
+      GgiSetLabel((ident)arg, " ", 0);       /* move: blank position display */
+      blanked = TRUE;
+   }
+   if ((info->button || info->state) && !(info->state&ggiCtrl)) {
+      sprintf(buffer, "XC=%f YC=%f", info->x, info->y); /* write to keywords */
+      wkey_c(tofchar(buffer));
+   }
+}
+   
+/* ========================================================================== */
+/*                                MAIN PROGRAM                                */
+/* -------------------------------------------------------------------------- */
+MAIN_PROGRAM_ENTRY  
+{
+   ident quitbut, plotmenu, doplot, axes, grids, values,
+         fftbut, labbut;
+   ident points, helpbut;
+   ident funfield, xminfield, xmaxfield, yminfield, ymaxfield;
+   ident zoomxin, zoomxout, panleft, panright;
+   ident zoomyin, zoomyout, pandown, panup;
+   ident canvas;
+   ident cursorpos;
+   ident separator;
+   ident logo;
+   int   i;
+   fchar prestest;
+   char  prestest_c[1];
+   static char *help_labels[]={"Program Description", "_LINE",
+                               "User Interface", NULL};
+   static char *help_texts[]={"funplot.dc1", NULL, "ggi.doc"};
+
+   prestest.a = prestest_c; prestest.l = 1;
+   xlbl.l = LABLEN; ylbl.l = LABLEN; zlbl.l = LABLEN;
+   xlbl.a = xlbl_c; ylbl.a = ylbl_c; zlbl.a = zlbl_c;
+   for (i=0; i<LABLEN; i++) xlbl_c[i]=ylbl_c[i]=zlbl_c[i]=' ';
+
+   init_c();
+
+   RealDefault("XMIN=", "-10.0", &xmin);
+   RealDefault("XMAX=",  "10.0", &xmax);
+   RealDefault("YMIN=", "-1.5",  &ymin);
+   RealDefault("YMAX=",  "1.5",  &ymax);
+   CharDefault("FUNCTION=", "A*sinc({pi}*B*(x-C)) A=1 MIN_A=0 MAX_A=1 \
+                             B=1 MIN_B=0 MAX_B=5");
+   CharDefault("AXES=", "YES");
+   CharDefault("GRIDS=", "NO");
+   CharDefault("VALUES=", "NO");
+   CharDefault("NPOINTS=", "128");
+   CharDefault("DERIV=", "NO");
+
+   setfblank_c(&BLANK);
+   drawaxes   = UserLog("AXES=");
+   drawgrids  = UserLog("GRIDS=");
+   drawvalues = UserLog("VALUES=");
+   npoints    = UserInt("NPOINTS=");
+   deriv      = UserLog("DERIV=");
+   fiepars = NNew(npoints*MAXVAR, float);
+   yvalues = NNew(npoints, float);
+   dvalues = NNew(npoints, float);
+
+   GgiAutoLayout(FALSE);                                  /* explicit layout */
+   GgiPostponeRealize(TRUE);
+   GgiSetResources(my_resources);
+   GgiSetHeight(900);
+   GgiSetWidth(750);
+    
+   canvas    = GgiPlotField("OWN", 700, 535);
+   Fftplot();
+   plotters = grdevices('H');
+
+   quitbut   = GgiButton("QUIT=", "Terminate program");       /* quit button */
+   plotmenu  = GgiMenu("PLOTTER=", "Select hardcopy plot device", plotters);
+   doplot    = GgiButton("PLOT=", "Send plot to plotter");
+   if (usertext_c(prestest, &fint2, tofchar("PLOTTER="), tofchar(" "))==0)
+      GgiDeactivate(doplot);
+   axes      = GgiButton("AXES=", "Axes drawing on/off");
+   grids     = GgiButton("GRIDS=", "Grids drawing on/off");
+   values    = GgiButton("VALUES=", "Show parameter values on/off");
+   dervbut   = GgiButton("DERIV=", "Derivative plot on/off");
+   fftbut    = GgiButton("FFT=", "FFT plot on/off");
+   labbut    = GgiButton("LABELS=", "Specify plot labels");
+   points    = GgiTextField("NPOINTS=","Number of points in graph", 5);
+   GgiSetLabel(points,"#PTS",0);
+   helpbut   = GgiHelpMenu("HELP=", "HELP", NULL, help_labels, help_texts);
+   
+   funfield  = GgiTextField("FUNCTION=", "Function to be explored", 80);
+   GgiSetLabel(funfield,"f(x) =",0);
+   xminfield = GgiTextField("XMIN=", "Minimum x-value", 10);
+   GgiSetLabel(xminfield,"x-range:",0);
+   xmaxfield = GgiTextField("XMAX=", "Maximum x-value", 10);
+   GgiSetLabel(xmaxfield,NULL,1);
+   zoomxin   = GgiSetLabel(
+       GgiButton("ZOOMXIN=", "Zoom in on X-range"), "><", 0);
+   zoomxout   = GgiSetLabel(
+       GgiButton("ZOOMXOUT=", "Zoom out on X-range"), "<>", 0);
+   panleft   = GgiSetLabel(
+       GgiButton("PANLEFT=", "Move frame to left"), "<<", 0);
+   panright  = GgiSetLabel(
+       GgiButton("PANRIGHT=", "Move frame to right"), ">>", 0);
+   yminfield = GgiTextField("YMIN=", "Minimum y-value", 10);
+   GgiSetLabel(yminfield,"y-range:",0);
+   ymaxfield = GgiTextField("YMAX=", "Maximum y-value", 10);
+   GgiSetLabel(ymaxfield,NULL,1);
+   zoomyin   = GgiSetLabel(
+       GgiButton("ZOOMYIN=", "Zoom in on Y-range"), "><", 0);
+   zoomyout   = GgiSetLabel(
+       GgiButton("ZOOMYOUT=", "Zoom out on Y-range"), "<>", 0);
+   panup     = GgiSetLabel(
+       GgiButton("PANUP=", "Move frame up"), ">>", 0);
+   pandown   = GgiSetLabel(
+       GgiButton("PANDOWN=", "Move frame down"), "<<", 0);
+   separator = GgiLabel(" ");
+   cursorpos = separator;
+   logo      = GgiLogo(NULL, 0, 0);
+   
+   (void)GgiSetPosition(quitbut,   0, NULL,      0, NULL);
+   (void)GgiSetPosition(plotmenu, 25, quitbut,   0, NULL);
+   (void)GgiSetPosition(doplot,    0, plotmenu,  0, NULL);
+   (void)GgiSetPosition(axes,     25, doplot,    0, NULL);
+   (void)GgiSetPosition(grids,     0, axes,      0, NULL);
+   (void)GgiSetPosition(values,    0, grids,     0, NULL);
+   (void)GgiSetPosition(dervbut,  25, values,    0, NULL);
+   (void)GgiSetPosition(fftbut,    0, dervbut,   0, NULL);
+   (void)GgiSetPosition(labbut,   25, fftbut,    0, NULL);
+   (void)GgiSetPosition(helpbut, -40, canvas,    0, NULL);
+
+   (void)GgiSetPosition(funfield,  0, NULL,      0, quitbut);
+   (void)GgiSetPosition(points,    0, funfield,  0, quitbut);
+
+   (void)GgiSetPosition(xminfield, 0, NULL,      0, funfield);
+   (void)GgiSetPosition(xmaxfield, 0, xminfield, 0, funfield);
+   (void)GgiSetPosition(yminfield,15, panright,  0, funfield);
+   (void)GgiSetPosition(ymaxfield, 0, yminfield, 0, funfield);
+
+   (void)GgiSetPosition(zoomxin,   0, xmaxfield, 0, funfield);
+   (void)GgiSetPosition(zoomxout,  0, zoomxin,   0, funfield);
+   (void)GgiSetPosition(panleft,  15, zoomxout,  0, funfield);
+   (void)GgiSetPosition(panright,  0, panleft,   0, funfield);
+   (void)GgiSetPosition(zoomyin,   0, ymaxfield, 0, funfield);
+   (void)GgiSetPosition(zoomyout,  0, zoomyin,   0, funfield);
+   (void)GgiSetPosition(pandown,  15, zoomyout,  0, funfield);
+   (void)GgiSetPosition(panup,     0, pandown,   0, funfield);
+   (void)GgiSetPosition(canvas,   20, NULL,     20, zoomxin);
+   (void)GgiSetPosition(separator,20, NULL,      0, canvas);
+   firsttop = separator;
+   (void)GgiSetPosition(logo,    -40, canvas,  200, separator);
+
+   Labels("LABELS=");
+   GgiRealize();
+   owndev = pgopen_c(tofchar("OWN"));
+   myviewport();
+   pgscf_c(&roman);
+
+   (void)ScheduleKeyevent(quit, "QUIT=", KEYCHANGE, NULL);
+   (void)ScheduleKeyevent(toggle, "DERIV=", KEYCHANGE, &deriv);
+   (void)ScheduleKeyevent(toggle, "FFT=", KEYCHANGE, &fourier);
+   (void)ScheduleKeyevent(selectplotter, "PLOTTER=", KEYCHANGE, doplot);
+   (void)ScheduleKeyevent(hardcopy, "PLOT=", KEYCHANGE, "OWN");
+   (void)ScheduleKeyevent(newfun, "FUNCTION=", KEYCHANGE, NULL);
+   (void)ScheduleKeyevent(changeframe, "XMIN=", KEYCHANGE, &xmin);
+   (void)ScheduleKeyevent(changeframe, "XMAX=", KEYCHANGE, &xmax);
+   (void)ScheduleKeyevent(changeframe, "YMIN=", KEYCHANGE, &ymin);
+   (void)ScheduleKeyevent(changeframe, "YMAX=", KEYCHANGE, &ymax);
+   (void)ScheduleKeyevent(changelabel, "XLBL=", KEYCHANGE, &xlbl);
+   (void)ScheduleKeyevent(changelabel, "YLBL=", KEYCHANGE, &ylbl);
+   (void)ScheduleKeyevent(changelabel, "ZLBL=", KEYCHANGE, &zlbl);
+   (void)ScheduleKeyevent(framebutton, "PANLEFT=", KEYCHANGE, (void*)PANLEFT);
+   (void)ScheduleKeyevent(framebutton, "PANRIGHT=", KEYCHANGE, (void*)PANRIGHT);
+   (void)ScheduleKeyevent(framebutton, "PANUP=", KEYCHANGE, (void*)PANUP);
+   (void)ScheduleKeyevent(framebutton, "PANDOWN=", KEYCHANGE, (void*)PANDOWN);
+   (void)ScheduleKeyevent(framebutton, "ZOOMXIN=", KEYCHANGE, (void*)ZOOMXIN);
+   (void)ScheduleKeyevent(framebutton, "ZOOMXOUT=", KEYCHANGE, (void*)ZOOMXOUT);
+   (void)ScheduleKeyevent(framebutton, "ZOOMYIN=", KEYCHANGE, (void*)ZOOMYIN);
+   (void)ScheduleKeyevent(framebutton, "ZOOMYOUT=", KEYCHANGE, (void*)ZOOMYOUT);
+   (void)ScheduleKeyevent(boxoption, "AXES=", KEYCHANGE, &drawaxes);
+   (void)ScheduleKeyevent(boxoption, "GRIDS=", KEYCHANGE, &drawgrids);
+   (void)ScheduleKeyevent(boxoption, "VALUES=", KEYCHANGE, &drawvalues);
+   (void)ScheduleKeyevent(changepoints, "NPOINTS=", KEYCHANGE, NULL);
+   (void)ScheduleTimer(plotvalues, 3 SECONDS, NULL);
+   (void)ScheduleGgiPlotCursor(cursor, canvas, cursorpos);
+   if (usertext_c(prestest, &fint2, tofchar("FUNCTION="), tofchar(" "))>0) {
+      newfun(NULL, "FUNCTION=", KEYCHANGE, NULL); /* pseudo key change event */
+   }
+    
+   status_c(tofchar("Explore mathematical function and/or data"));
+   
+   (void)TriggerKey("XLBL=");
+   (void)TriggerKey("YLBL=");
+   (void)TriggerKey("ZLBL=");
+   (void)TriggerKey("SLBL=");
+   (void)TriggerKey("TLBL=");
+   (void)TriggerKey("ULBL=");
+   MainLoop();
+   return( EXIT_SUCCESS );
+}
+#<
+
+#>            grdevices.c
+#include "stddef.h"
+#include "stdlib.h"
+#include "gipsyc.h"
+#include "grexec.h"
+#include "grdevices.h"
+
+#define MAXDEVLEN 20
+#define MAXDEVS   20
+
+extern char **grdevices(char kind)
+{
+   fint   ndevs, idev, ifunc, nbuf, lchr;
+   float  rbuf;
+   fchar  chr;
+   int    mdevs=0;                           /* number of matching devices */
+   char   capabilities[MAXDEVLEN];
+   char   **devnames=(char**)calloc(MAXDEVS+1,sizeof(char**));
+    
+   idev = 0; ifunc = 0; nbuf  = 1; lchr  = 1;
+   grexec_c(&idev, &ifunc, &rbuf, &nbuf, chr, &lchr);
+   ndevs = (fint)rbuf;
+   chr.l = MAXDEVLEN;
+   for (idev=1; idev<=ndevs && mdevs<MAXDEVS; idev++) {
+      chr.a = capabilities;
+      ifunc = 4; nbuf  = 1; lchr  = 1;
+      grexec_c(&idev, &ifunc, &rbuf, &nbuf, chr, &lchr);
+      if (capabilities[0]==kind) {
+         mdevs++;
+         chr.a = (char*)calloc(MAXDEVLEN+1,1);
+         ifunc = 1; nbuf  = 1; lchr  = 1;
+         grexec_c(&idev, &ifunc, &rbuf, &nbuf, chr, &lchr);
+         chr.a[lchr] = '\0';
+         devnames[mdevs-1] = chr.a;
+      }
+   }
+   devnames[mdevs] = NULL;
+   return devnames;
+}
+#<
+
+#>            dydxscan.c
+#include <stdio.h>
+#include <stdlib.h>
+# define U(x) x
+# define NLSTATE dydxYprevious=YYNEWLINE
+# define BEGIN dydxYbgin = dydxYsvec + 1 +
+# define INITIAL 0
+# define YYLERR dydxYsvec
+# define YYSTATE (dydxYestate-dydxYsvec-1)
+# define YYOPTIM 1
+# ifndef YYLMAX 
+# define YYLMAX BUFSIZ
+# endif 
+#ifndef __cplusplus
+# define output(c) (void)putc(c,dydxYout)
+#else
+# define lex_output(c) (void)putc(c,dydxYout)
+#endif
+
+#if defined(__cplusplus) || defined(__STDC__)
+
+#if defined(__cplusplus) && defined(__EXTERN_C__)
+extern "C" {
+#endif
+	int dydxYback(int *, int);
+	int dydxYinput(void);
+	int dydxYlook(void);
+	void dydxYoutput(int);
+	int dydxYracc(int);
+	int dydxYreject(void);
+	void dydxYunput(int);
+	int dydxYlex(void);
+#ifdef YYLEX_E
+	void dydxYwoutput(wchar_t);
+	wchar_t dydxYwinput(void);
+#endif
+#ifndef dydxYless
+	int dydxYless(int);
+#endif
+#ifndef dydxYwrap
+	int dydxYwrap(void);
+#endif
+#ifdef LEXDEBUG
+	void allprint(char);
+	void sprint(char *);
+#endif
+#if defined(__cplusplus) && defined(__EXTERN_C__)
+}
+#endif
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+	void exit(int);
+#ifdef __cplusplus
+}
+#endif
+
+#endif
+# define unput(c) {dydxYtchar= (c);if(dydxYtchar=='\n')dydxYlineno--;*dydxYsptr++=dydxYtchar;}
+# define dydxYmore() (dydxYmorfg=1)
+#ifndef __cplusplus
+# define input() (((dydxYtchar=dydxYsptr>dydxYsbuf?U(*--dydxYsptr):getc(dydxYin))==10?(dydxYlineno++,dydxYtchar):dydxYtchar)==EOF?0:dydxYtchar)
+#else
+# define lex_input() (((dydxYtchar=dydxYsptr>dydxYsbuf?U(*--dydxYsptr):getc(dydxYin))==10?(dydxYlineno++,dydxYtchar):dydxYtchar)==EOF?0:dydxYtchar)
+#endif
+#define ECHO fprintf(dydxYout, "%s",dydxYtext)
+# define REJECT { nstr = dydxYreject(); goto dydxYfussy;}
+int dydxYleng;
+#define YYISARRAY
+char dydxYtext[YYLMAX];
+int dydxYmorfg;
+extern char *dydxYsptr, dydxYsbuf[];
+int dydxYtchar;
+FILE *dydxYin = {NULL}, *dydxYout = {NULL};
+extern int dydxYlineno;
+struct dydxYsvf { 
+	struct dydxYwork *dydxYstoff;
+	struct dydxYsvf *dydxYother;
+	int *dydxYstops;};
+struct dydxYsvf *dydxYestate;
+extern struct dydxYsvf dydxYsvec[], *dydxYbgin;
+
+# line 3 "dydxscan.l"
+/* dydxscan.l
+                              COPYRIGHT (c) 1997
+                        Kapteyn Astronomical Institute
+         University of Groningen  -  9700 AV Groningen, The Netherlands
+
+Lexical scanner for differentiator routine.
+Author: J.P. Terlouw
+*/
+
+#include "dydxcom.h"
+#include "dydxtab.h"                /* = y.tab.h generated by yacc -d */
+
+#define New(type) ((type *)calloc(1,sizeof(type)))
+#define NNew(n,type) ((type *)calloc(n,sizeof(type)))
+#define Delete(x)  {free(x); x=NULL;}
+
+#undef   input                    /* defined internally */
+#undef   unput                    /* defined internally */
+#undef   output                   /* defined internally */
+#define  output(x)                /* no-op */
+#define token(x)  return x
+
+static int identifier();
+static int number();
+static char input(void);
+static void unput(char);
+
+static char  *bufptr;
+static char  ustack[YYLMAX];
+static int   stkptr=0;
+
+# define YYNEWLINE 10
+dydxYlex(){
+int nstr; extern int dydxYprevious;
+#ifdef __cplusplus
+/* to avoid CC and lint complaining dydxYfussy not being used ...*/
+static int __lex_hack = 0;
+if (__lex_hack) goto dydxYfussy;
+#endif
+while((nstr = dydxYlook()) >= 0)
+dydxYfussy: switch(nstr){
+case 0:
+if(dydxYwrap()) return(0); break;
+case 1:
+
+# line 40 "dydxscan.l"
+    {token(number()); }
+break;
+case 2:
+
+# line 41 "dydxscan.l"
+           {token(number()); }
+break;
+case 3:
+
+# line 42 "dydxscan.l"
+   {token(identifier()); }
+break;
+case 4:
+
+# line 43 "dydxscan.l"
+                   {token(*dydxYtext); }
+break;
+case 5:
+
+# line 44 "dydxscan.l"
+                   {token(POWER); }
+break;
+case 6:
+
+# line 45 "dydxscan.l"
+                   {}
+break;
+case 7:
+
+# line 46 "dydxscan.l"
+                     {token('\n');  }
+break;
+case 8:
+
+# line 47 "dydxscan.l"
+                      {token(LEXERR); }
+break;
+case -1:
+break;
+default:
+(void)fprintf(dydxYout,"bad switch dydxYlook %d",nstr);
+} return(0); }
+/* end of dydxYlex */
+
+# line 49 "dydxscan.l"
+
+
+extern void dydx_init(char *text)
+{
+   bufptr = text;
+   stkptr = 0;
+}
+
+static char input(void)
+{
+   if (stkptr) {
+      return ustack[--stkptr];
+   }
+   if (!*(bufptr)) {
+      return '\n';
+   }
+   return *(bufptr++);
+}
+
+static void unput(char c)
+{
+   if (stkptr<YYLMAX) {
+      ustack[stkptr++] = c;
+   }
+}
+
+static char *StrDup (char *orig)
+{
+   char *result=NNew(strlen(orig)+1,char);
+   strcpy(result,orig);
+   return result;
+}
+
+static int identifier()
+{
+   dydxYlval.text = StrDup((char*)dydxYtext);
+   return IDENTIFIER;
+}
+
+static int number()
+{
+   dydxYlval.text = StrDup((char*)dydxYtext);
+   return NUMBER;
+}
+
+extern int dydxYwrap()
+{
+   return 1;
+}
+int dydxYvstop[] = {
+0,
+
+6,
+0, 
+
+6,
+0, 
+
+8,
+0, 
+
+7,
+0, 
+
+6,
+8,
+0, 
+
+4,
+8,
+0, 
+
+4,
+8,
+0, 
+
+8,
+0, 
+
+1,
+8,
+0, 
+
+3,
+8,
+0, 
+
+6,
+0, 
+
+5,
+0, 
+
+2,
+0, 
+
+1,
+0, 
+
+1,
+0, 
+
+3,
+0, 
+
+1,
+0, 
+
+2,
+0, 
+0};
+# define YYTYPE unsigned char
+struct dydxYwork { YYTYPE verify, advance; } dydxYcrank[] = {
+0,0,	0,0,	1,3,	0,0,	
+0,0,	0,0,	0,0,	0,0,	
+0,0,	0,0,	0,0,	1,4,	
+0,0,	0,0,	0,0,	0,0,	
+0,0,	0,0,	0,0,	0,0,	
+0,0,	0,0,	0,0,	0,0,	
+0,0,	0,0,	0,0,	0,0,	
+0,0,	0,0,	0,0,	0,0,	
+0,0,	1,5,	5,11,	0,0,	
+0,0,	0,0,	0,0,	0,0,	
+0,0,	1,6,	0,0,	1,7,	
+1,6,	7,12,	2,7,	1,8,	
+0,0,	1,9,	2,8,	8,13,	
+8,13,	8,13,	8,13,	8,13,	
+8,13,	8,13,	8,13,	8,13,	
+8,13,	0,0,	0,0,	0,0,	
+0,0,	0,0,	1,10,	0,0,	
+9,14,	1,10,	9,15,	9,15,	
+9,15,	9,15,	9,15,	9,15,	
+9,15,	9,15,	9,15,	9,15,	
+0,0,	0,0,	0,0,	0,0,	
+0,0,	13,18,	13,18,	16,19,	
+0,0,	16,19,	9,16,	9,16,	
+16,20,	16,20,	16,20,	16,20,	
+16,20,	16,20,	16,20,	16,20,	
+16,20,	16,20,	0,0,	0,0,	
+0,0,	0,0,	0,0,	10,17,	
+10,17,	10,17,	10,17,	10,17,	
+10,17,	10,17,	10,17,	10,17,	
+10,17,	13,18,	13,18,	0,0,	
+0,0,	0,0,	9,16,	9,16,	
+10,17,	10,17,	10,17,	10,17,	
+10,17,	10,17,	10,17,	10,17,	
+10,17,	10,17,	10,17,	10,17,	
+10,17,	10,17,	10,17,	10,17,	
+10,17,	10,17,	10,17,	10,17,	
+10,17,	10,17,	10,17,	10,17,	
+10,17,	10,17,	0,0,	0,0,	
+0,0,	0,0,	0,0,	0,0,	
+10,17,	10,17,	10,17,	10,17,	
+10,17,	10,17,	10,17,	10,17,	
+10,17,	10,17,	10,17,	10,17,	
+10,17,	10,17,	10,17,	10,17,	
+10,17,	10,17,	10,17,	10,17,	
+10,17,	10,17,	10,17,	10,17,	
+10,17,	10,17,	14,14,	14,14,	
+14,14,	14,14,	14,14,	14,14,	
+14,14,	14,14,	14,14,	14,14,	
+0,0,	0,0,	0,0,	0,0,	
+0,0,	0,0,	0,0,	18,21,	
+0,0,	18,21,	14,16,	14,16,	
+18,22,	18,22,	18,22,	18,22,	
+18,22,	18,22,	18,22,	18,22,	
+18,22,	18,22,	19,20,	19,20,	
+19,20,	19,20,	19,20,	19,20,	
+19,20,	19,20,	19,20,	19,20,	
+21,22,	21,22,	21,22,	21,22,	
+21,22,	21,22,	21,22,	21,22,	
+21,22,	21,22,	14,16,	14,16,	
+0,0};
+struct dydxYsvf dydxYsvec[] = {
+0,	0,	0,
+dydxYcrank+-1,	0,		dydxYvstop+1,
+dydxYcrank+-4,	dydxYsvec+1,	dydxYvstop+3,
+dydxYcrank+0,	0,		dydxYvstop+5,
+dydxYcrank+0,	0,		dydxYvstop+7,
+dydxYcrank+2,	0,		dydxYvstop+9,
+dydxYcrank+0,	0,		dydxYvstop+12,
+dydxYcrank+3,	0,		dydxYvstop+15,
+dydxYcrank+3,	0,		dydxYvstop+18,
+dydxYcrank+22,	0,		dydxYvstop+20,
+dydxYcrank+59,	0,		dydxYvstop+23,
+dydxYcrank+0,	dydxYsvec+5,	dydxYvstop+26,
+dydxYcrank+0,	0,		dydxYvstop+28,
+dydxYcrank+17,	dydxYsvec+8,	dydxYvstop+30,
+dydxYcrank+134,	0,		dydxYvstop+32,
+dydxYcrank+0,	dydxYsvec+9,	dydxYvstop+34,
+dydxYcrank+44,	0,		0,	
+dydxYcrank+0,	dydxYsvec+10,	dydxYvstop+36,
+dydxYcrank+156,	0,		0,	
+dydxYcrank+166,	0,		0,	
+dydxYcrank+0,	dydxYsvec+19,	dydxYvstop+38,
+dydxYcrank+176,	0,		0,	
+dydxYcrank+0,	dydxYsvec+21,	dydxYvstop+40,
+0,	0,	0};
+struct dydxYwork *dydxYtop = dydxYcrank+235;
+struct dydxYsvf *dydxYbgin = dydxYsvec+1;
+char dydxYmatch[] = {
+  0,   1,   1,   1,   1,   1,   1,   1, 
+  1,   1,  10,   1,   1,   1,   1,   1, 
+  1,   1,   1,   1,   1,   1,   1,   1, 
+  1,   1,   1,   1,   1,   1,   1,   1, 
+ 32,   1,   1,   1,   1,   1,   1,   1, 
+ 40,  40,  40,  43,  40,  43,   1,  40, 
+ 48,  48,  48,  48,  48,  48,  48,  48, 
+ 48,  48,   1,   1,   1,   1,   1,   1, 
+  1,  65,  65,  65,  68,  68,  65,  65, 
+ 65,  65,  65,  65,  65,  65,  65,  65, 
+ 65,  65,  65,  65,  65,  65,  65,  65, 
+ 65,  65,  65,   1,   1,   1,   1,   1, 
+  1,  65,  65,  65,  68,  68,  65,  65, 
+ 65,  65,  65,  65,  65,  65,  65,  65, 
+ 65,  65,  65,  65,  65,  65,  65,  65, 
+ 65,  65,  65,  40,   1,  40,   1,   1, 
+  1,   1,   1,   1,   1,   1,   1,   1, 
+  1,   1,   1,   1,   1,   1,   1,   1, 
+  1,   1,   1,   1,   1,   1,   1,   1, 
+  1,   1,   1,   1,   1,   1,   1,   1, 
+  1,   1,   1,   1,   1,   1,   1,   1, 
+  1,   1,   1,   1,   1,   1,   1,   1, 
+  1,   1,   1,   1,   1,   1,   1,   1, 
+  1,   1,   1,   1,   1,   1,   1,   1, 
+  1,   1,   1,   1,   1,   1,   1,   1, 
+  1,   1,   1,   1,   1,   1,   1,   1, 
+  1,   1,   1,   1,   1,   1,   1,   1, 
+  1,   1,   1,   1,   1,   1,   1,   1, 
+  1,   1,   1,   1,   1,   1,   1,   1, 
+  1,   1,   1,   1,   1,   1,   1,   1, 
+  1,   1,   1,   1,   1,   1,   1,   1, 
+  1,   1,   1,   1,   1,   1,   1,   1, 
+0};
+char dydxYextra[] = {
+0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,
+0};
+/*	Copyright (c) 1989 AT&T	*/
+/*	  All Rights Reserved  	*/
+
+/*	THIS IS UNPUBLISHED PROPRIETARY SOURCE CODE OF AT&T	*/
+/*	The copyright notice above does not evidence any   	*/
+/*	actual or intended publication of such source code.	*/
+
+#pragma ident	"@(#)ncform	6.11	97/01/06 SMI"
+
+int dydxYlineno =1;
+# define YYU(x) x
+# define NLSTATE dydxYprevious=YYNEWLINE
+struct dydxYsvf *dydxYlstate [YYLMAX], **dydxYlsp, **dydxYolsp;
+char dydxYsbuf[YYLMAX];
+char *dydxYsptr = dydxYsbuf;
+int *dydxYfnd;
+extern struct dydxYsvf *dydxYestate;
+int dydxYprevious = YYNEWLINE;
+#if defined(__cplusplus) || defined(__STDC__)
+int dydxYlook(void)
+#else
+dydxYlook()
+#endif
+{
+	register struct dydxYsvf *dydxYstate, **lsp;
+	register struct dydxYwork *dydxYt;
+	struct dydxYsvf *dydxYz;
+	int dydxYch, dydxYfirst;
+	struct dydxYwork *dydxYr;
+# ifdef LEXDEBUG
+	int debug;
+# endif
+	char *dydxYlastch;
+	/* start off machines */
+# ifdef LEXDEBUG
+	debug = 0;
+# endif
+	dydxYfirst=1;
+	if (!dydxYmorfg)
+		dydxYlastch = dydxYtext;
+	else {
+		dydxYmorfg=0;
+		dydxYlastch = dydxYtext+dydxYleng;
+		}
+	for(;;){
+		lsp = dydxYlstate;
+		dydxYestate = dydxYstate = dydxYbgin;
+		if (dydxYprevious==YYNEWLINE) dydxYstate++;
+		for (;;){
+# ifdef LEXDEBUG
+			if(debug)fprintf(dydxYout,"state %d\n",dydxYstate-dydxYsvec-1);
+# endif
+			dydxYt = dydxYstate->dydxYstoff;
+			if(dydxYt == dydxYcrank && !dydxYfirst){  /* may not be any transitions */
+				dydxYz = dydxYstate->dydxYother;
+				if(dydxYz == 0)break;
+				if(dydxYz->dydxYstoff == dydxYcrank)break;
+				}
+#ifndef __cplusplus
+			*dydxYlastch++ = dydxYch = input();
+#else
+			*dydxYlastch++ = dydxYch = lex_input();
+#endif
+#ifdef YYISARRAY
+			if(dydxYlastch > &dydxYtext[YYLMAX]) {
+				fprintf(dydxYout,"Input string too long, limit %d\n",YYLMAX);
+				exit(1);
+			}
+#else
+			if (dydxYlastch >= &dydxYtext[ dydxYtextsz ]) {
+				int	x = dydxYlastch - dydxYtext;
+
+				dydxYtextsz += YYTEXTSZINC;
+				if (dydxYtext == dydxY_tbuf) {
+				    dydxYtext = (char *) malloc(dydxYtextsz);
+				    memcpy(dydxYtext, dydxY_tbuf, sizeof (dydxY_tbuf));
+				}
+				else
+				    dydxYtext = (char *) realloc(dydxYtext, dydxYtextsz);
+				if (!dydxYtext) {
+				    fprintf(dydxYout,
+					"Cannot realloc dydxYtext\n");
+				    exit(1);
+				}
+				dydxYlastch = dydxYtext + x;
+			}
+#endif
+			dydxYfirst=0;
+		tryagain:
+# ifdef LEXDEBUG
+			if(debug){
+				fprintf(dydxYout,"char ");
+				allprint(dydxYch);
+				putchar('\n');
+				}
+# endif
+			dydxYr = dydxYt;
+			if ( (int)dydxYt > (int)dydxYcrank){
+				dydxYt = dydxYr + dydxYch;
+				if (dydxYt <= dydxYtop && dydxYt->verify+dydxYsvec == dydxYstate){
+					if(dydxYt->advance+dydxYsvec == YYLERR)	/* error transitions */
+						{unput(*--dydxYlastch);break;}
+					*lsp++ = dydxYstate = dydxYt->advance+dydxYsvec;
+					if(lsp > &dydxYlstate[YYLMAX]) {
+						fprintf(dydxYout,"Input string too long, limit %d\n",YYLMAX);
+						exit(1);
+					}
+					goto contin;
+					}
+				}
+# ifdef YYOPTIM
+			else if((int)dydxYt < (int)dydxYcrank) {		/* r < dydxYcrank */
+				dydxYt = dydxYr = dydxYcrank+(dydxYcrank-dydxYt);
+# ifdef LEXDEBUG
+				if(debug)fprintf(dydxYout,"compressed state\n");
+# endif
+				dydxYt = dydxYt + dydxYch;
+				if(dydxYt <= dydxYtop && dydxYt->verify+dydxYsvec == dydxYstate){
+					if(dydxYt->advance+dydxYsvec == YYLERR)	/* error transitions */
+						{unput(*--dydxYlastch);break;}
+					*lsp++ = dydxYstate = dydxYt->advance+dydxYsvec;
+					if(lsp > &dydxYlstate[YYLMAX]) {
+						fprintf(dydxYout,"Input string too long, limit %d\n",YYLMAX);
+						exit(1);
+					}
+					goto contin;
+					}
+				dydxYt = dydxYr + YYU(dydxYmatch[dydxYch]);
+# ifdef LEXDEBUG
+				if(debug){
+					fprintf(dydxYout,"try fall back character ");
+					allprint(YYU(dydxYmatch[dydxYch]));
+					putchar('\n');
+					}
+# endif
+				if(dydxYt <= dydxYtop && dydxYt->verify+dydxYsvec == dydxYstate){
+					if(dydxYt->advance+dydxYsvec == YYLERR)	/* error transition */
+						{unput(*--dydxYlastch);break;}
+					*lsp++ = dydxYstate = dydxYt->advance+dydxYsvec;
+					if(lsp > &dydxYlstate[YYLMAX]) {
+						fprintf(dydxYout,"Input string too long, limit %d\n",YYLMAX);
+						exit(1);
+					}
+					goto contin;
+					}
+				}
+			if ((dydxYstate = dydxYstate->dydxYother) && (dydxYt= dydxYstate->dydxYstoff) != dydxYcrank){
+# ifdef LEXDEBUG
+				if(debug)fprintf(dydxYout,"fall back to state %d\n",dydxYstate-dydxYsvec-1);
+# endif
+				goto tryagain;
+				}
+# endif
+			else
+				{unput(*--dydxYlastch);break;}
+		contin:
+# ifdef LEXDEBUG
+			if(debug){
+				fprintf(dydxYout,"state %d char ",dydxYstate-dydxYsvec-1);
+				allprint(dydxYch);
+				putchar('\n');
+				}
+# endif
+			;
+			}
+# ifdef LEXDEBUG
+		if(debug){
+			fprintf(dydxYout,"stopped at %d with ",*(lsp-1)-dydxYsvec-1);
+			allprint(dydxYch);
+			putchar('\n');
+			}
+# endif
+		while (lsp-- > dydxYlstate){
+			*dydxYlastch-- = 0;
+			if (*lsp != 0 && (dydxYfnd= (*lsp)->dydxYstops) && *dydxYfnd > 0){
+				dydxYolsp = lsp;
+				if(dydxYextra[*dydxYfnd]){		/* must backup */
+					while(dydxYback((*lsp)->dydxYstops,-*dydxYfnd) != 1 && lsp > dydxYlstate){
+						lsp--;
+						unput(*dydxYlastch--);
+						}
+					}
+				dydxYprevious = YYU(*dydxYlastch);
+				dydxYlsp = lsp;
+				dydxYleng = dydxYlastch-dydxYtext+1;
+				dydxYtext[dydxYleng] = 0;
+# ifdef LEXDEBUG
+				if(debug){
+					fprintf(dydxYout,"\nmatch ");
+					sprint(dydxYtext);
+					fprintf(dydxYout," action %d\n",*dydxYfnd);
+					}
+# endif
+				return(*dydxYfnd++);
+				}
+			unput(*dydxYlastch);
+			}
+		if (dydxYtext[0] == 0  /* && feof(dydxYin) */)
+			{
+			dydxYsptr=dydxYsbuf;
+			return(0);
+			}
+#ifndef __cplusplus
+		dydxYprevious = dydxYtext[0] = input();
+		if (dydxYprevious>0)
+			output(dydxYprevious);
+#else
+		dydxYprevious = dydxYtext[0] = lex_input();
+		if (dydxYprevious>0)
+			lex_output(dydxYprevious);
+#endif
+		dydxYlastch=dydxYtext;
+# ifdef LEXDEBUG
+		if(debug)putchar('\n');
+# endif
+		}
+	}
+#if defined(__cplusplus) || defined(__STDC__)
+int dydxYback(int *p, int m)
+#else
+dydxYback(p, m)
+	int *p;
+#endif
+{
+	if (p==0) return(0);
+	while (*p) {
+		if (*p++ == m)
+			return(1);
+	}
+	return(0);
+}
+	/* the following are only used in the lex library */
+#if defined(__cplusplus) || defined(__STDC__)
+int dydxYinput(void)
+#else
+dydxYinput()
+#endif
+{
+#ifndef __cplusplus
+	return(input());
+#else
+	return(lex_input());
+#endif
+	}
+#if defined(__cplusplus) || defined(__STDC__)
+void dydxYoutput(int c)
+#else
+dydxYoutput(c)
+  int c; 
+#endif
+{
+#ifndef __cplusplus
+	output(c);
+#else
+	lex_output(c);
+#endif
+	}
+#if defined(__cplusplus) || defined(__STDC__)
+void dydxYunput(int c)
+#else
+dydxYunput(c)
+   int c; 
+#endif
+{
+	unput(c);
+	}
+#<
+
+#>            drawpoints.c
+#include "stddef.h"
+#include "stdio.h"
+#include "stdlib.h"
+#include "math.h"
+#include "float.h"
+#include "ctype.h"
+#include "gipsyc.h"
+#include "pgplot.h"
+#include "ggi.h"
+#include "setfblank.h"
+
+#include "drawpoints.h"
+
+/* -------------------------------------------------------------------------- */
+/*                                 drawpoints                                 */
+/* -------------------------------------------------------------------------- */
+/*  drawpoints() draws the points of the function graph.
+ *  It skips any BLANK values.
+ */
+void drawpoints(int npoints, float *xvalues, float *yvalues)
+{
+   int   i=0;
+   fint  nops;
+   float *startx, *starty;
+   bool mode;
+   static float BLANK=0.0;
+    
+   mode = GgiPlotXor(TRUE);
+   if (!BLANK) setfblank_c(&BLANK);
+   while (i<npoints) {
+      while (*yvalues == BLANK) {
+         xvalues++; yvalues++;
+         i++;
+         if (i==npoints) return;
+      }
+      nops  = 0;
+      startx = xvalues;
+      starty = yvalues;
+      while (*yvalues != BLANK) {
+         xvalues++; yvalues++;
+         nops++;
+         i++;
+         if (i == npoints) break;
+      }
+      pgline_c(&nops, startx, starty);
+   }
+   (void)GgiPlotXor(mode);
+}
+#<
+
+#>            fftfun.c
+#include "math.h"
+#include "gipsyc.h"
+#include "nbits.h"
+#include "setfblank.h"
+#include "fftfun.h"
+
+void four1( float *data,
+            int    nn,
+            int    isign )
+/*------------------------------------------------------------*/
+/* PURPOSE: Calculate Fourier transform of 'data'. Function   */
+/*          called by function 'realft' from below.           */
+/*------------------------------------------------------------*/
+#define SWAP(a,b) tempr=(a);(a)=(b);(b)=tempr
+{
+   int n,mmax,m,j,istep,i;
+   double wtemp,wr,wpr,wpi,wi,theta;
+   float tempr,tempi;
+
+   n=nn << 1;
+   j=1;
+   for (i = 1; i < n; i += 2) 
+   {
+      if (j > i) 
+      {
+         SWAP(data[j],data[i]);
+         SWAP(data[j+1],data[i+1]);
+      }
+      m = n >> 1;
+      while (m >= 2 && j > m) 
+      {
+         j -= m;
+         m >>= 1;
+      }
+      j += m;
+   }
+   mmax=2;
+   while (n > mmax) 
+   {
+      istep = 2*mmax;
+      theta = 6.28318530717959/(isign*mmax);
+      wtemp = sin(0.5*theta);
+      wpr = -2.0*wtemp*wtemp;
+      wpi = sin(theta);
+      wr = 1.0;
+      wi = 0.0;
+      for (m = 1; m< mmax; m += 2) 
+      {
+         for (i = m; i <= n; i += istep) 
+         {
+            j = i+mmax;
+            tempr = wr*data[j]-wi*data[j+1];
+            tempi = wr*data[j+1]+wi*data[j];
+            data[j] = data[i]-tempr;
+            data[j+1] = data[i+1]-tempi;
+            data[i] += tempr;
+            data[i+1] += tempi;
+         }
+         wr = (wtemp=wr)*wpr-wi*wpi+wr;
+         wi = wi*wpr+wtemp*wpi+wi;
+      }
+      mmax = istep;
+   }
+}
+#undef SWAP
+
+
+
+void realft( float *data,
+             int    n,
+             int    isign )
+/*------------------------------------------------------------*/
+/* PURPOSE: Return the Fourier transform of n real-valued     */
+/*          data points.                                      */
+/* INPUT:   'data' is a float array of length n which contains*/
+/*          only real valued data points.                     */
+/*          'n' is the length of 'data' and must be a power   */
+/*          of 2.                                             */
+/* OUTPUT:  Fourier transform in 'data'.                      */
+/*------------------------------------------------------------*/
+{
+   int     i,i1,i2,i3,i4,n2p3;
+   float   c1=0.5,c2,h1r,h1i,h2r,h2i;
+   double  wr,wi,wpr,wpi,wtemp,theta;
+
+
+   theta=3.141592653589793/(double) n;
+   
+
+   if (isign == 1) 
+   {
+      c2 = -0.5;
+      four1(data,n,1);
+   } 
+   else 
+   {
+      c2=0.5;
+      theta = -theta;
+   }
+   wtemp = sin(0.5*theta);
+   wpr = -2.0*wtemp*wtemp;
+   wpi = sin(theta);
+   wr = 1.0+wpr;
+   wi = wpi;
+   n2p3 = 2*n+3;
+   for (i = 2; i <= n/2; i++) 
+   {
+      i4 = 1+(i3=n2p3-(i2=1+(i1=i+i-1)));
+      h1r = c1*(data[i1]+data[i3]);
+      h1i = c1*(data[i2]-data[i4]);
+      h2r = -c2*(data[i2]+data[i4]);
+      h2i = c2*(data[i1]-data[i3]);
+      data[i1] = h1r+wr*h2r-wi*h2i;
+      data[i2] = h1i+wr*h2i+wi*h2r;
+      data[i3] = h1r-wr*h2r+wi*h2i;
+      data[i4] = -h1i+wr*h2i+wi*h2r;
+      wr = (wtemp=wr)*wpr-wi*wpi+wr;
+      wi = wi*wpr+wtemp*wpi+wi;
+   }
+   if (isign == 1) 
+   {
+      h1r = data[1];
+      data[1] = h1r+data[2];
+      data[2] = h1r-data[2];
+   } 
+   else 
+   {
+      h1r = data[1];
+      data[1] = c1*(h1r+data[2]);
+      data[2] = c1*(h1r-data[2]);
+      four1(data, n, -1);
+   }
+}
+
+
+
+
+int fftfun( float *datain,
+            float range,
+            float *outreal,
+            float *outim,
+            float *work,
+            int    n,
+            int    mode,
+            float *minmax )       
+/*------------------------------------------------------------*/
+/* PURPOSE: Return the positive frequency half of a comples   */
+/*          Fourier transform of n real-valued data points.   */
+/* INPUT:   'data' is a float array of length n which contains*/
+/*          only real valued data points.                     */
+/*          'range' is the actual range in x-values.          */
+/*          'work' is a work array of length 2*n !!!          */
+/*          'n' is the length of 'data' and must be a power   */
+/*          of 2.                                             */
+/*          'mode' sets the mode of the output. This can be:  */
+/*          0 = (Real, Imaginary) or 1 = (Amplitude, Phase)   */
+/*          or 2 = one  array with a power spectrum.          */
+/* OUTPUT:  Fourier transform in 'outreal' and 'outim'. The   */
+/*          return value of the function is 0.                */
+/* ERRORS:  If 'n' is not a power of 2 then -1 is returned.   */
+/*          If there is not enough memory to create a work    */
+/*          array then -2 is returned.                        */
+/*------------------------------------------------------------*/
+#define DEG(a)         ( (a) * 57.295779513082320876798155 )
+{
+   int       result = FFT_SUCCESS;
+   int       isign  = 1;
+   int       n2=n/2;
+   int       i;
+   fint      nfint=n;
+   float     Remin, Remax, Immin, Immax;
+   static float BLANK=0.0;
+   
+   range /= n;
+   if (!BLANK) setfblank_c(&BLANK);
+   if (nbits_c(&nfint)!=1)
+   {
+      /* This is not a power of 2 ! */
+      return(FFT_NOPOWER2);
+   }
+   
+   /* Prepare the array for the fft function */
+   for (i = 0; i < n; i++)
+   {
+      float inval=datain[(i+n2)%n];
+      if (inval==BLANK) {
+         work[2*i] = 0.0;
+         result = FFT_BLANK;
+      } else {
+         work[2*i] = inval;
+      }                                 /* Real part */      
+   }
+   for (i = 0; i < n; i++)
+   {
+      work[2*i+1] = 0.0;                /* Imaginary part */
+   }
+
+   /* Calculate the Fourier Transform */
+   four1( work-1, n, isign );  /* Note the offset in pointer */
+   
+   Remax = 0.0;
+   for (i = 0; i < n; i++)
+   {
+      int ix=(i+n2)%n;
+      float re =  range*work[2*ix];  
+      float im = -range*work[2*ix+1];
+      if (fabs(re) > Remax) Remax = fabs(re);
+      if (fabs(im) > Remax) Remax = fabs(im);
+      
+      outreal[i] = re;
+      outim[i]   = im;
+   }
+   
+   /* Amplitude and phase or Power spectrum */  
+   if (mode == 1 || mode == 2)
+   {
+      for (i = 0; i < n; i++)
+      {
+         float re = outreal[i];
+         float im = outim[i];
+         float m  = sqrt( re*re + im*im );
+
+         outreal[i] = m;
+         outim[i]   = (m>0.03*Remax)?DEG( atan2(im, re) ):BLANK;
+      }
+   }
+    
+   /* Power spectrum */   
+   if (mode == 2)
+   {      
+      for (i = 0; i < n; i++)
+      {
+         outreal[i] *= outreal[i];
+      }               
+   }
+   
+   /* Determine min and max of the arrays */
+   Remin = Remax = outreal[0];
+   Immin = Immax = outim[0];
+   for (i = 1; i < n; i++)   
+   {
+      float val = outreal[i];
+      if (val < Remin)
+         Remin = val;
+      if (val > Remax)
+         Remax = val;
+      val = outim[i];
+      if (val < Immin)
+         Immin = val;
+      if (val > Immax)
+         Immax = val;      
+   }
+   minmax[0] = Remin; minmax[1] = Remax;
+   minmax[2] = Immin; minmax[3] = Immax;
+      
+   return result;
+}
+#undef DEG
+#<
+
+#>            fftplot.c
+/* fftplot.c
+                              COPYRIGHT (c) 1998
+                        Kapteyn Astronomical Institute
+         University of Groningen  -  9700 AV Groningen, The Netherlands
+
+
+Author: J.P. Terlouw
+*/
+
+#define NAME "Fourier Transform"
+
+#include "stddef.h"
+#include "stdlib.h"
+#include "stdio.h"
+#include "math.h"
+#include "gipsyc.h"
+#include "userfio.h"
+#include "wkey.h"
+#include "ggi.h"
+#include "pgplot.h"
+#include "fftfun.h"
+#include "drawpoints.h"
+
+#include "fftplot.h"
+
+#define LABLEN          40
+static fchar xlbl,           ylbl,           zlbl;
+static char  xlbl_c[LABLEN], ylbl_c[LABLEN], zlbl_c[LABLEN];
+
+#define New(type) ((type *)calloc(1,sizeof(type)))
+#define NNew(n,type) ((type *)calloc(n,sizeof(type)))
+#define Delete(x)  {free(x); x=NULL;}
+
+static char *modes[]={"Real, Imaginary","Amplitude, Phase","Power spectrum",NULL};
+
+static bool  initialized=FALSE;         /* initialized flag */
+static ident s_fftplot;                 /* fftplot shell     */
+static ident i_box;                     /* inputs box       */
+static ident modelabel;
+static ident warnlabel;
+
+static int    fftmode=2;
+static float  xmin, xmax;
+static float  maxval=1.0;
+static int    npoints=0;
+
+extern bool printing;
+extern void myviewport(void);
+/* -------------------------------------------------------------------------- */
+/*                                 changelabel                                */
+/* -------------------------------------------------------------------------- */
+/*  Key handler for label texts.
+ */
+static void changelabel(ident id, char *key, int mask, void *arg)
+{
+   fchar label=*(fchar*)arg;
+   if (!userftext(label, 2, key, " ")) {
+      while (label.l--) *(label.a++) = ' ';
+   }
+   (void)TriggerKey("AXES=");                 /* force frame change - TRICK! */
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 initialize                                 */
+/* -------------------------------------------------------------------------- */
+/*  Create pop-up shell and its contents; schedule the appropriate handlers.
+ */
+static void initialize(void)
+{
+   ident closebut, modemenu, scalefield, b_expand, b_contract;
+   ident p_fftplot;
+   ident reflab;
+   int   i;
+   
+   s_fftplot = GgiShell(NAME);
+   (void)GgiUseShell(s_fftplot);
+   closebut = GgiSetLabel(
+                 GgiButton("FFT_CLOSE=", "Close window"),
+                 "CLOSE", 0);
+                 
+   i_box = GgiForm(NAME, 1);
+   (void)GgiUseShell(i_box);
+   modemenu = GgiSetLabel(GgiMenu("FFT_MODE=", "FFT mode", modes), "Mode", 0);
+   scalefield = GgiSetLabel(
+                   GgiTextField(
+                      "FFT_RANGE=",
+                      "Absolute maximum plot value", 8),
+                   "Max:", 0);
+   b_expand =    GgiSetLabel(
+                   GgiButton("FFT_ZOOMOUT=", "Expand vertical range"),
+                   "Zoom out", 0);
+   b_contract = GgiSetLabel(
+                   GgiButton("FFT_ZOOMIN=", "Contract vertical range"),
+                   " Zoom in ", 0);
+   reflab = GgiLabel(" ");
+   (void)GgiUseShell(s_fftplot);
+   modelabel = GgiLabel(" ");
+   warnlabel = GgiSetLabel(GgiLabel("warning"), " ", 0);
+   p_fftplot = GgiPlotField("FFTPLOT", 455, 344);
+   GgiSetPosition(modelabel,   0, NULL,       0, i_box);
+   GgiSetPosition(p_fftplot,   0, NULL,       0, modelabel);
+   GgiSetPosition(i_box,       0, NULL,       0, NULL);
+   GgiSetPosition(closebut,    0, NULL,       0, p_fftplot);
+   GgiSetPosition(warnlabel,  30, closebut,   0, p_fftplot);
+   GgiSetPosition(modemenu,    0, NULL,       0, NULL);
+   GgiSetPosition(scalefield,  0, b_expand,   0, NULL);
+   GgiSetPosition(b_contract, 23, modemenu,   0, NULL);
+   GgiSetPosition(b_expand,    0, b_contract, 0, NULL);
+   GgiSetPosition(reflab, 455-GgiWidth(reflab), NULL, 0, NULL);
+   (void)GgiUseShell(NULL);
+   xlbl.l = LABLEN; ylbl.l = LABLEN; zlbl.l = LABLEN;
+   xlbl.a = xlbl_c; ylbl.a = ylbl_c; zlbl.a = zlbl_c;
+   for (i=0; i<LABLEN; i++) xlbl_c[i]=ylbl_c[i]=zlbl_c[i]=' ';
+   (void)ScheduleKeyevent(changelabel, "SLBL=", KEYCHANGE, &xlbl);
+   (void)ScheduleKeyevent(changelabel, "TLBL=", KEYCHANGE, &ylbl);
+   (void)ScheduleKeyevent(changelabel, "ULBL=", KEYCHANGE, &zlbl);
+   initialized = TRUE;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 setmode                                    */
+/* -------------------------------------------------------------------------- */
+/*  Keyword handler setting the FFT mode
+ */
+static void setmode(ident id, char *key, int code, void *arg)
+{
+   (void)userfint((fint*)arg, 1, 2, key, " ");
+   GgiSetLabel(modelabel, modes[*(fint*)arg], 0);
+   (void)TriggerKey("AXES=");                /* force frame change - TRICK! */
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 setrange                                   */
+/* -------------------------------------------------------------------------- */
+/*  Keyword handler setting the plot range
+ */
+static void setrange(ident id, char *key, int code, void *arg)
+{
+   (void)userfreal((float*)arg, 1, 2, key, " ");
+   (void)TriggerKey("AXES=");                 /* force frame change - TRICK! */
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 zoom                                       */
+/* -------------------------------------------------------------------------- */
+/*  Keyword handler setting the plot range
+ */
+static void zoom(ident id, char *key, int code, void *arg)
+{
+   bool button=FALSE;
+
+   (void)userflog(&button, 1, 2, key, " ");
+   if (button) {
+      wkeyf("FFT_RANGE=%f",maxval*(*(float*)arg));
+      wkeyf(key);
+   }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 fftopen                                    */
+/* -------------------------------------------------------------------------- */
+/*  Keyword handler causing the shell to be popped up.
+ */
+static void fftopen(ident id, char *key, int code, void *arg)
+{
+   bool button=FALSE;
+
+   (void)userflog(&button, 1, 2, key, " ");
+   if (button) {
+      GgiShowShell(s_fftplot, TRUE);
+      wkey_c(tofchar("FFT_CLOSE="));
+      (void)TriggerKey("NPOINTS=");
+   } else {
+      GgiShowShell(s_fftplot, FALSE);
+   }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 fftclose                                   */
+/* -------------------------------------------------------------------------- */
+/*  Keyword handler causing the shell to be popped down.
+ */
+static void fftclose(ident id, char *key, int code, void *arg)
+{
+   bool button=FALSE;
+
+   (void)userflog(&button, 1, 2, key, " ");
+   if (button) {
+      wkey_c(tofchar("FFT="));
+   }
+}
+
+/* ========================================================================== */
+/*                                 ShowFft                                    */
+/* -------------------------------------------------------------------------- */
+void ShowFft(bool framechanged, int npts, float minx, float maxx, float *data)
+{
+   int   i, npts2, r;
+   fint  fint0=0, fint1=1, fint3=3, fint2=2;
+   float float0=0.0;
+   float ymin, ymax;
+   float xtext, ytext;
+   static bool first=TRUE;
+   static int  warnindex=0;
+   static char *messages[]={" ",
+                            "Warning: BLANK(s) in input treated as zero",
+                            "Warning: transform center not on origin"};
+   static bool imagshown;
+   static float *work=NULL, *xdata=NULL, *realdata=NULL, *imagdata=NULL;
+   static float minmax[4];
+   float  pluspi=185.0, minpi=-185.0;
+   float  range=maxx-minx;
+   static fint curdev=0;
+
+                                             /* (re-)allocate buffers */
+   if (npts!=npoints) {
+      npoints = npts;
+      if (realdata) Delete(realdata)
+      realdata = NNew(npoints,real);
+      if (imagdata) Delete(imagdata);
+      imagdata = NNew(npoints,real);
+      if (xdata) Delete(xdata);
+      xdata = NNew(npoints,real);
+      if (work) Delete(work)
+      work = NNew(2*npoints,real);
+   }
+   
+   npts2 = npts/2;
+                                                   /* initialization */
+   if (first) {
+      GgiShowShell(s_fftplot, TRUE);
+      curdev = pgopen_c(tofchar("FFTPLOT"));
+      framechanged = TRUE;
+      first = FALSE;
+   }
+
+   if (!printing) {
+      pgslct_c(&curdev);
+      if (framechanged) {
+         myviewport();
+      }
+   }
+
+   ymin = fftmode!=0?0.0:-maxval*1.1;
+   ymax = maxval*1.1;
+   if (framechanged) {
+      if (fabs(maxx+minx) > 0.1*fabs(maxx-minx)/npts)
+         GgiSetLabel(warnlabel, messages[2], 0);
+       else
+         GgiSetLabel(warnlabel, messages[0], 0);
+      pgsci_c(&fint1);
+      xmax = 0.5*(float)npts/(maxx-minx);
+      xmin = -xmax;
+      pgpage_c();
+      if (fftmode==1) {
+         pgswin_c(&xmin, &xmax, &minpi, &pluspi);
+         pgbox_c(tofchar("ITS"),  &float0, &fint0, 
+                 tofchar("CMTSV"), &float0, &fint0);
+      }
+      pgswin_c(&xmin, &xmax, &ymin, &ymax);
+      xtext = xmin+0.05*(xmax-xmin);
+      ytext = ymax-0.10*(ymax-ymin);
+      pgtext_c(&xtext, &ytext, tofchar(modes[fftmode]));
+      pgsci_c(&fint1);
+      pgbox_c(tofchar("ABCINTS"),  &float0, &fint0,
+              tofchar(fftmode==1?"ABINTSV":"ABCINTSV"), &float0, &fint0);
+      pglab_c(xlbl, ylbl, zlbl);
+      for (i=0; i<npts; i++) xdata[i] = xmin+i*(xmax-xmin)/npts;
+   } else {
+      pgswin_c(&xmin, &xmax, &ymin, &ymax);
+   }
+    
+   if (!framechanged) {
+      pgsci_c(&fint3);
+      drawpoints(npts, xdata, realdata);
+      if (imagshown) {
+         pgsci_c(&fint2);
+         if (fftmode==1) pgswin_c(&xmin, &xmax, &minpi, &pluspi);
+         drawpoints(npts, xdata, imagdata);
+         if (fftmode==1) pgswin_c(&xmin, &xmax, &ymin, &ymax);
+      }
+   }
+   r = fftfun(data, range, realdata, imagdata, work, npts, fftmode, minmax);
+   if (r==FFT_BLANK && warnindex==0) {
+      warnindex = 1;
+      GgiSetLabel(warnlabel, messages[warnindex], 0);
+   } else if (r!=FFT_BLANK && warnindex==1) {
+      warnindex = 0;
+      GgiSetLabel(warnlabel, messages[warnindex], 0);
+   }
+      
+   imagshown = fftmode!=2;
+   pgsci_c(&fint3);
+   drawpoints(npts, xdata, realdata);
+   if (imagshown) {
+      pgsci_c(&fint2);
+      if (fftmode==1) pgswin_c(&xmin, &xmax, &minpi, &pluspi);
+      drawpoints(npts, xdata, imagdata);
+      if (fftmode==1) pgswin_c(&xmin, &xmax, &ymin, &ymax);
+   }
+}
+
+/* ========================================================================== */
+/*                                 Fftplot                                    */
+/* -------------------------------------------------------------------------- */
+/*  Fftplot() creates a pop-up shell for XV-plot display. The argument 'key'
+ *  is the GIPSY keyword (type LOGICAL) which, when set to "YES", will
+ *  cause the shell to be popped up op down.
+ */
+extern ident Fftplot(void)
+{
+   static float infac, outfac;
+   
+   initialize();
+   infac=1.0/sqrt(2.0);
+   outfac=sqrt(2.0);
+   ScheduleKeyevent(fftopen,  "FFT=",         KEYCHANGE, NULL);
+   ScheduleKeyevent(fftclose, "FFT_CLOSE=",   KEYCHANGE, NULL);
+   ScheduleKeyevent(setmode,  "FFT_MODE=",    KEYCHANGE, &fftmode);
+   ScheduleKeyevent(setrange, "FFT_RANGE=",   KEYCHANGE, &maxval);
+   ScheduleKeyevent(zoom,     "FFT_ZOOMIN=",  KEYCHANGE, &infac);
+   ScheduleKeyevent(zoom,     "FFT_ZOOMOUT=", KEYCHANGE, &outfac);
+   wkeyf("FFT=");
+   if (!TriggerKey("FFT_MODE="))  wkeyf("FFT_MODE=0");;
+   if (!TriggerKey("FFT_RANGE=")) wkeyf("FFT_RANGE=1.0");;
+   return s_fftplot;
+}
+#<
+
+#>            labels.c
+/* labels.c
+                              COPYRIGHT (c) 1998
+                        Kapteyn Astronomical Institute
+         University of Groningen  -  9700 AV Groningen, The Netherlands
+
+Author: J.P. Terlouw
+*/
+
+#define NAME "FUNPLOT: labels"
+#define LW 40
+
+#include "stddef.h"
+#include "gipsyc.h"
+#include "userfio.h"
+#include "ggi.h"
+#include "labels.h"
+
+/* -------------------------------------------------------------------------- */
+/*                                 popshell                                   */
+/* -------------------------------------------------------------------------- */
+/*  Keyword handler causing the shell to be popped up or down.
+ */
+static void popshell(ident id, char *key, int code, void *arg)
+{  
+   static bool state=FALSE;
+   bool button=toflog(FALSE);
+ 
+   (void)userflog(&button, 1, 2, key, " ");
+   if (tobool(button)) {
+      GgiShowShell((ident)arg, !state);
+      state = !state;
+      wkeyf(key);
+   }
+}
+
+/* ========================================================================== */
+/*                                 labels                                 */
+/* -------------------------------------------------------------------------- */
+/*  labels() creates a pop-up shell with menus for setting the colour
+ *  of the graphs. The argument 'key' is the GIPSY keyword (type LOGICAL)
+ *  which, when set to "YES", will cause the shell to be popped up or down.
+ *  The same keyword is used for the <CLOSE> button in the shell.
+ */
+void Labels(char *key)
+{
+   static ident s_labels;
+   ident s_prev, f_box;
+   ident t_xlbl, t_ylbl, t_zlbl;
+   ident l_header;
+   ident closebut;
+    
+   s_labels = GgiShell(NAME);
+   s_prev = GgiUseShell(s_labels);
+   l_header = GgiLabel("Main window");
+   GgiSetPosition(l_header, 0, NULL, 0, NULL);
+   f_box = GgiForm(NAME, 2);
+   (void)GgiUseShell(f_box);
+   t_xlbl = GgiSetLabel(
+              GgiTextField("XLBL=", "X label text", LW),
+              "X label", 80);
+   t_ylbl = GgiSetLabel(
+              GgiTextField("YLBL=", "Y label text", LW),
+              "Y label", 80);
+   t_zlbl = GgiSetLabel(
+              GgiTextField("ZLBL=", "Top label text", LW),
+              "Top label", 80);
+   GgiSetPosition(t_xlbl, 0, NULL, 0, NULL);
+   GgiSetPosition(t_ylbl, 0, NULL, 0, t_xlbl);
+   GgiSetPosition(t_zlbl, 0, NULL, 0, t_ylbl);
+   (void)GgiUseShell(s_labels);
+   GgiSetPosition(f_box, 0, NULL, 0, l_header);
+
+   l_header = GgiLabel("Fourier window");
+   GgiSetPosition(l_header, 0, NULL, 15, f_box);
+   f_box = GgiForm(NAME, 2);
+   (void)GgiUseShell(f_box);
+   t_xlbl = GgiSetLabel(
+              GgiTextField("SLBL=", "X label text", LW),
+              "X label", 80);
+   t_ylbl = GgiSetLabel(
+              GgiTextField("TLBL=", "Y label text", LW),
+              "Y label", 80);
+   t_zlbl = GgiSetLabel(
+              GgiTextField("ULBL=", "Top label text", LW),
+              "Top label", 80);
+   GgiSetPosition(t_xlbl, 0, NULL, 0, NULL);
+   GgiSetPosition(t_ylbl, 0, NULL, 0, t_xlbl);
+   GgiSetPosition(t_zlbl, 0, NULL, 0, t_ylbl);
+   (void)GgiUseShell(s_labels);
+   GgiSetPosition(f_box, 0, NULL, 0, l_header);
+
+   closebut = GgiSetLabel(GgiButton(key, "Close window"), "CLOSE", 0);
+   GgiSetPosition(closebut, 0, NULL, 0, f_box);
+
+   (void)GgiUseShell(s_prev);
+   ScheduleKeyevent(popshell, key, KEYCHANGE, s_labels);
+}
+#<
+
+#>            drawpoints.h
+#if !defined (_drawpoints_h_)
+#define _drawpoints_h_
+void drawpoints(int npoints, float *xvalues, float *yvalues);
+#endif
+#<
+
+#>            fftfun.h
+#if !defined(_fftfun_h_)
+#define _fftfun_h_
+#define FFT_SUCCESS   0
+#define FFT_NOPOWER2 -1
+#define FFT_BLANK    -2
+int fftfun( float *datain,
+            float range,
+            float *outreal,
+            float *outim,
+            float *work,
+            int    n,
+            int    mode,
+            float *minmax );
+#endif
+
+#<
+
+#>            fftplot.h
+#if !defined(_fftplot_h_)
+#define _fftplot_h_
+ident Fftplot(void);
+void ShowFft(bool framechanged, int npts, float xmin, float xmax, float *data);
+#endif
+
+#<
+
+#>            labels.h
+#if !defined(_labels_h_)
+#define _labels_h_
+void Labels(char *key);
+#endif
+#<
+
+#>            grdevices.h
+#if !defined(_grdevices_h_)
+#define _grdevices_h_
+extern char **grdevices(char);
+#endif
+
+#<
+
+#>            funplot.dc1
+Program:       FUNPLOT
+
+Purpose:       Interactive function plotting utility.
+
+Category:      MATH, UTILITY
+
+File:          funplot.src
+
+Author:        J.P. Terlouw
+
+Description:   FUNPLOT is an interactive mathematical function plotting
+               utility based on the GIPSY graphical interface routines (Ggi).
+               It is intended to be self-explanatory.
+
+               When FUNPLOT is started, an X-window appears with a number
+               of input fields, push-down buttons, scroll-down menus, and
+               a plotting area. A default function is provided which can
+               be helpful for users who want to explore the program's
+               possibilities.
+
+               One of the most important input fields, labeled "f(x)="
+               allows the user to specify the function to be explored.
+               This is a function of X; other names used is this function
+               are parameters which can be changed interactively.
+               This can be done by typing values in the input fields
+               corresponding with the parameters, or graphically by
+               moving a gauge (valuator) with the mouse. The gauge's range
+               can be specified by typing in its limits fields or by pressing
+               buttons which perform a zoom or translation on the range.
+               The X- and Y-ranges of the plot can be changed in a similar
+               way.
+               Function example: A1*exp(-B1*(x-C1)**2)+A2*exp(-B2*(x-C2)**2)
+               In this example there are six parameters:
+               A1, B1, C1, A2, B2, C2.
+
+               A parameter can be a single value (this is the default)
+               or a list of values, using the GIPSY standard notation
+               for number lists (see input.doc). In the latter case the
+               associated gauge is blocked until a single value is given
+               again. The number of points must not exceed the number
+               in the "#PTS" field.
+
+               With the "DERIV" button the plotting of the derivative
+               can be switched on and off.
+
+               Buttons "AXES", "GRIDS" and "VALUES" allow to enable and
+               disable the plotting of axes, grids and parameter values.
+
+               The "FFT" button pops up a secondary window showing the
+               Fourier transform of the given expression. Display options
+               are: real-imaginary, amplitude-phase and power spectrum.
+
+               The "LABELS" button pops up a secondary window which allows
+               the user to specify axis- and top labels for both the
+               main plot and the FFT plot.
+
+               In the main plot window position information can be obtained
+               with the cursor. Left button: display coordinates below
+               plot; middle button: also log in log file.
+               The x- and y-coordinates are written to keywords XC= and
+               YC=, respectively, so that these values can also be used
+               in the expression (see below). If the control key is pressed,
+               writing to these keywords does not take place.
+               
+               It is possible to make a hardcopy of the displayed plot(s)
+               by first selecting an output device from the menu "PLOTTER"
+               and then pressing the "PLOT" button.
+
+Keywords:      There are many keywords, which can all be set by
+               modifying fields, pressing buttons etc. in the X-window,
+               so knowledge of these is usually not necessary.
+               It is useful however to be aware that all input fields,
+               menus, gauges etc. are tightly coupled with GIPSY keywords.
+               This implies that the state of the program is preserved
+               by Hermes. This state can be used to write a default file
+               or to resume operation by using the macro ("!FUNPLOT").
+               In numerical input fields all GIPSY's number input
+               facilities can be used, e.g. the upper limit of a gauge
+               can be specified as "2*PI".
+
+   FUNCTION=   The function to be explored. This can be any expression in X.
+               The following functions can be used in this expression:
+               
+               SQRT, SIN, ASIN, COS, ACOS, TAN, ATAN, EXP, LN, LOG,
+               SINH, COSH, TANH, RAD, DEG, SINC, SEC, CSC, COT, ACOSH,
+               SECH, CSCH, COTH, BJ, BY, BI, BK, SIGN, STEP, RECT,
+               INT, NINT.
+
+               The following constants are recognized:
+               
+               PI             3.14159....
+               C              speed of light (SI)
+               H              Planck (SI)
+               K              Boltzmann (SI)
+               G              gravitation (SI)
+               S              Stefan-Boltzman (SI)
+               M              mass of sun (SI)
+               P              parsec (SI)
+
+               To prevent that such constants conflict with any parameters,
+               they must be enclosed by braces, e.g. FUNCTION=a*{C}*x .
+
+        XC=    The cursor writes to these keywords, so that the parameters
+        YC=    XC and/or YC, which are coupled to the cursor, can be used
+               in the function.
+
+Updates:       Sep 15, 1997: JPT, Document created.
+               Feb 25, 1998: JPT, Eliminated private Ggi code, library used,
+                                  cursor interaction implemented.
+               Sep 11, 1998: JPT, Added Fourier transform and some other
+                                  improvements.
+               Sep 23, 1998: JPT, Added labels window.
+               Nov 16, 1998: JPT, Changed for PGPLOT multiple device capability.
+               Feb 17, 2000: JPT, Changed help button into help menu.
+               Aug 29, 2000: JPT, cursor keyword interaction corrected.
+               Apr 14, 2009: VOG, Cleaned up a bit and tested new definition
+                                  of fie_nint() in fie.c which uses floor()
+                                  to get the nearest integer
+#<

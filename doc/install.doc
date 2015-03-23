@@ -1,0 +1,40 @@
+
+Script:       install
+
+Purpose:      Installs or reinstalls the GIPSY essentials. It also
+              creates the directory tree.
+
+Category:     MANAGEMENT
+
+File:         install.csh
+
+Author:       K.G. Begeman
+
+Use:          install should be run by the GIPSY manager to (re)install
+              the GIPSY basics on a certain type of machine. The GIPSY
+              environment variables must have been defined (gipenv.csh) and
+              the $gip_sys/setup.mgr file adapted for the host machine.
+
+Description:  install installs the compile program, the Fortran to C
+              interface program, the file extracter, the gipsy file
+              transporter, the gipsy lock server, the Sheltran compiler
+              and the PGPLOT fonts.
+              It creates the system dependent directories for the
+              GIPSY libraries, executables and temporary files (if
+              they do not yet exist!).
+              install also checks whether it can find the X11 libraries
+              and include files.
+
+Warning:      This script runs only on (some) UNIX systems.
+
+Updates:      Apr 24, 1991: KGB, original document.
+              Feb 11, 1993: KGB, Version 3.0.
+              Mar 16, 1993: KGB, Version 3.1.
+              Aug  1, 1993: KGB, Version 3.3.
+              Oct  1, 1993: KGB, Version 3.4.
+              Mar 28, 1994: KGB, Version 3.5.
+              Mar  3, 1995: KGB, Version 3.6.
+              Sep 22, 2000: JPT, Add copy .template files to $gip_loc
+              Dec  8, 2000: JPT, Silently create missing htm directory.
+              Dec 11, 2008, JPT, Removed redundant -I${gip_inc} option.
+

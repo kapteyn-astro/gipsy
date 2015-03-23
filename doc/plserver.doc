@@ -1,0 +1,34 @@
+
+Document:     PLSERVER
+
+Purpose:      Description of the GIPSY PLot SERVER.
+
+Category:     GRAPHICS
+
+File:         plserver.src
+
+Author:       K.G. Begeman
+
+Description:  The plserver is an X11 plot server, which can be started by
+              grexec or by hand.
+
+Use:          plserver -window DEVICENAME
+
+              plserver allows the user to specify some defaults in the
+              .Xdefaults or .Xresources file. The parameters which can
+              be set are the following:
+
+              plserver.plot_height:      height of plotwindow in pixels.
+              plserver.plot_width:       width of plotwindow in pixels.
+              plserver.plot_height_mm:   height of plotwindow in mm.
+              plserver.plot_width_mm:    width of plotwindow in mm.
+              plserver.font:             font for info & menu windows.
+              plserver.backgroundcolor:  color for background.
+              plserver.foregroundcolor:  color for foreground.
+              plserver.xposition:        startup at this x position.
+              plserver.yposition:        startup at this y position.
+
+Updates:      Sep 14, 1993: KGB, Document created.
+              Jan 25, 1995: KGB, User defined back- & foregroundcolors. 
+              May  4, 2007: JPT, Included conditional code for Apple Mac.
+              Jun 16, 2009: JPT, Disabled bzero() declaration (server_main_loop)

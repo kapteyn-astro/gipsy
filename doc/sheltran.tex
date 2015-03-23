@@ -1,0 +1,522 @@
+\documentstyle[rep10]{report}
+\spaceskip=3.33pt plus 3.33pt minus 1pt
+\font\tt=cmtt10
+\begin{document}
+\begin{titlepage}
+\null
+\begin{center}
+{\Large Universiteit Groningen -- Kapteyn Laboratorium}\\
+\vfill
+{\huge SHELTRAN\\}
+
+\end{center}
+\end{titlepage}
+\thispagestyle{empty}
+\tableofcontents
+\newpage
+\pagenumbering{arabic}
+\chapter{Introduction.}
+
+The program SHLTRN accepts a program written in the SHELTRAN language
+and generates the corresponding FORTRAN 77 program and, optionally, a
+source listing. 
+
+SHELTRAN is 'structured FORTRAN' - this being ANSI FORTRAN 77 with
+certain facilities replaced by corresponding 'structured' facilities,
+plus additional facilities with no FORTRAN equivalents. 
+
+SHELTRAN declares statement labels (except for the FORMAT statement)
+illegal, and hence any control statement requiring statement labels as
+arguments is also illegal.  These statements are replaced by
+closely-matching 'structured' facilities with controlled exits. 
+SHELTRAN also provides various forms of the repetition construct
+(allowing controlled exits). 
+
+\chapter{Description of the language.}
+
+In describing the SHELTRAN language the following nomenclature is used:
+
+\begin{itemize}
+
+\item SHELTRAN keywords appear in capitals.  (SHELTRAN keywords always
+start on a new line and must be followed by at least one blank)
+
+\item Syntactic elements are enclosed within $<$ $>$. 
+
+\item Items enclosed within [ ] are optional. 
+
+\item $<$statement$>$ is used to denote any SHELTRAN and/or FORTRAN
+statement(s). 
+
+\end{itemize}
+
+\section{Statement labels.}
+
+In SHELTRAN the statement label is forbidden for all executable
+statements.  The only context in which the statement label is permitted
+is in combination with a FORMAT statement.  In this case the label must
+be less than 10000. 
+
+As a direct consequence the following normal FORTRAN statements become
+unuseable in SHELTRAN:
+
+\begin{itemize}
+
+\item ASSIGN
+
+\item all forms of GOTO
+
+\item all forms of IF
+
+\item DO
+
+\item the RETURN $<$variable$>$ form of the RETURN statement
+
+\item the use of statement numbers in END= or ERR= clauses in I/O
+statements
+
+\item the use of statement numbers as arguments of CALL statements
+
+\end{itemize}
+
+To replace FORTRAN control structures several new SHELTRAN structures
+have been introduced. 
+
+\section{IF construct.}
+\subsection{Form:}
+\begin{verbatim}
+      IF <logical expression>
+      THEN
+         <statement>... 
+    [ ELSEIF <logical expression>
+      THEN
+         <statement>...      ] 
+    [ ELSE
+         <statement>...      ] 
+      CIF 
+\end{verbatim}
+\subsection{Notes:}
+\begin{itemize}
+
+\item $<$logical expression$>$ represents any valid FORTRAN logical
+expression which can take a value .TRUE.  or .FALSE.  It need not be
+surrounded by parentheses. 
+
+\item ELSEIFs when present must precede any corresponding ELSE. 
+
+\item The ELSE clause is optional. 
+
+\item Instead of CIF ENDIF may also be used. 
+
+\end{itemize}
+\subsection{Actions:}
+
+When the IF or ELSEIF condition has the value .TRUE., the statements
+following are executed and control is transferred to the statement
+following the CIF. 
+
+When the value is .FALSE., control is passed to the next ELSEIF and this
+$<$logical expression$>$ is evaluated. 
+
+When the IF and all ELSEIF clauses have a value which is .FALSE.,
+control is passed to the statement following the corresponding ELSE or
+CIF. 
+
+\subsection{Examples:}
+\begin{verbatim}
+      IF KEY.EQ.K1 
+      THEN 
+         KODE=1 
+      ELSEIF KEY.EQ.K2 
+      THEN 
+         KODE=2 
+      ELSE 
+         KODE=-1
+      CIF
+
+
+      IF X.LT.0 
+      THEN
+         X=999.0 
+      CIF 
+\end{verbatim}
+\section{SELECT construct.}
+\subsection{Form:}
+\begin{verbatim}
+      SELECT <arithmetic expression>
+      CASE n1 [,n2...]
+    [    <statement>...         ] 
+    [ CASE m1 [,m2...]
+         <statement>...         ] 
+      OTHER 
+    [    <statement>...         ] 
+      CSELECT 
+\end{verbatim}
+\subsection{Notes:}
+\begin{itemize}
+
+\item n1 [,n2...] represents a series of unsigned integer values,
+separated by commas.  At least one integer must be present for each CASE
+statement. 
+
+\item the integer values may appear in any order in the CASE clause. 
+
+\item the CASE clauses need not contain all values in the range 1 to N,
+where N is the largest integer value used.  However, a specific value
+may only appear once. 
+
+\item the largest value used in a SELECT construct must not exceed 198. 
+
+\item the OTHER clause is mandatory. 
+
+\end{itemize}
+\subsection{Actions:}
+
+The expression after the SELECT is evaluated and truncated to an integer
+value.  Control is transferred to the statements following the CASE
+statement which contains the value of the SELECT expression.  If no such
+value can be found, the OTHER clause is selected.  Finally control is
+transferred to the statement after CSELECT. 
+
+\subsection{Example:}
+\begin{verbatim}
+      SELECT COLOR+1.0
+      CASE 1
+         COLTXT='BLACK'
+      CASE 2
+         COLTXT='RED'
+      CASE 3
+         COLTXT='GREEN'
+      CASE 5
+         COLTXT='BLUE' 
+      CASE 8
+         COLTXT='WHITE'
+      OTHER 
+         COLTXT='MIXTURE'
+      CSELECT 
+\end{verbatim}
+
+\section{WHILE construct.}
+\subsection{Form:}
+\begin{verbatim}
+      WHILE <logical expression>
+         <statement>...
+    [    XWHILE 
+         <statement>...      ] 
+      CWHILE 
+\end{verbatim}
+\subsection{Actions:}
+
+Whilst $<$logical expression$>$ has a value .TRUE., the statements
+within the loop WHILE-CWHILE will be executed, and $<$logical
+expression$>$ re-evaluated.  When $<$logical expression$>$ has a value
+.FALSE., control is transferred to the statement following CWHILE.  At
+any point in the WHILE loop an XWHILE statement may be inserted.  This
+statement transfers control to the statement following CWHILE
+independently of the value of $<$logical expression$>$. 
+
+\subsection{Example:}
+\begin{verbatim}
+      
+      WHILE I.LE.72 
+         CHR=LINE(I) 
+         IF CHR.EQ.BLANK 
+         THEN
+            I=I+1 
+         ELSE
+            IF CHR.GE.'A'.AND.CHR.LE.'Z'
+            THEN
+               XWHILE
+            CIF 
+         CIF 
+      CWHILE
+
+\end{verbatim}
+\section{REPEAT construct. }
+\subsection{Form:}
+\begin{verbatim}
+      
+      REPEAT 
+         <statement>...
+    [    XREPEAT
+         <statement>...  ] 
+      UNTIL <logical expression>
+
+\end{verbatim}
+\subsection{Actions:}
+
+The statements between REPEAT and UNTIL are executed, and $<$logical
+expression$>$ evaluated.  When $<$logical expression$>$ has the value
+.TRUE., control is transferred to the the statement after UNTIL; if it
+is .FALSE., the statement after REPEAT gains control.  At any point in
+the REPEAT loop an XREPEAT statement may be inserted.  This statement
+transfers control to the statement following UNTIL, independently of
+$<$logical expression$>$. 
+
+\subsection{Example:}
+\begin{verbatim}
+
+     REPEAT
+        CALL WAIT(EVENT)
+        SELECT EVENT
+        CASE 1
+           CALL TYPEIN 
+        CASE 2,3,7,4
+           CALL SERVE
+        OTHER 
+           FINISH=.TRUE. 
+        CSELECT 
+     UNTIL FINISH
+
+\end{verbatim}
+\section{FOR construct.}
+\subsection{Form:}
+\begin{verbatim}
+
+      FOR <loop control>
+         <statement>...
+    [    XFOR 
+         <statement>...  ] 
+      CFOR 
+
+\end{verbatim}
+\subsection{Note:}
+
+The rules for writing $<$loop control$>$ are identical to those for the
+FORTRAN DO-loop. 
+
+\subsection{Actions:}
+
+The actions follow the FORTRAN DO-loop control actions.  At any point in
+the FOR-loop an XFOR statement may be inserted.  This statement
+transfers control to the statement following CFOR. 
+
+\subsection{Example:}
+\begin{verbatim}
+ 
+      FOR I=1,80
+         LINE(I)=' ' 
+      CFOR
+
+\end{verbatim}
+\section{PERFORM and PROC.}
+\subsection{Form:}
+\begin{verbatim}
+
+C     To invoke a procedure section: 
+      PERFORM <procedure name> 
+C     To define a procedure section: 
+      PROC <procedure name>
+         <statement>... 
+      CPROC 
+
+\end{verbatim}
+\subsection{Notes:}
+\begin{itemize}
+
+\item The procedure name must not be longer than 31 characters. 
+
+\item The statements in a PROC may not include:
+
+\begin{itemize}
+
+\item STOP or RETURN
+
+\item XWHILE, XREPEAT or XFOR unless the corresponding loop is wholly
+included within the range of the PROC-CPROC construct. 
+
+\end{itemize}
+
+\item A procedure section may only be defined in a program after all
+PERFORMs to that PROC have occurred, i.e.  PROCs normally preceed the
+END statement. 
+
+\item A PERFORM in a FOR-loop causes non-standard FORTRAN to be
+generated. 
+
+\end{itemize}
+\subsection{Actions:}
+
+Whenever a PERFORM statement is encountered, the appropriate statements
+between PROC and CPROC are executed. 
+
+\subsection{Example:}
+\begin{verbatim}
+
+         . 
+         . 
+      PERFORM CLFILE
+         . 
+         . 
+         . 
+         .
+      PROC CLFILE 
+         FOR LUN=1,NUNITS
+            CLOSE(UNIT=LUN) 
+         CFOR
+      CPROC 
+
+\end{verbatim}
+\section{I/O statements.}
+\subsection{Form:}
+\begin{verbatim}
+
+      ...,ERR=<exit specifier>,... 
+      and/or 
+      ...,END=<exit specifier>,... 
+
+\end{verbatim}
+\subsection{Notes:}
+\begin{itemize}
+
+\item The following I/O statements are recognized: READ, WRITE, OPEN,
+CLOSE, REWIND, BACKSPACE, INQUIRE, ENDFILE. 
+
+\item $<$exit specifier$>$ can be any one of the following: XWHILE,
+XREPEAT, XFOR, STOP, RETURN or $<$procedure name$>$. 
+
+\item The exit specification must appear on the first line of the I/O
+statement. 
+
+\end{itemize}
+\subsection{Actions:}
+
+The use of $<$procedure name$>$ is equivalent to a PERFORM of the
+procedure between the I/O statement and the statement following it.  The
+use of the other items will have the normal SHELTRAN meaning. 
+
+\subsection{Example:}
+\begin{verbatim}
+
+      WHILE .TRUE.
+         READ(1,FMT='(A)',END=XWHILE,ERR=ERRPRC) LINE
+         WRITE(2,FMT='(1X,A)',ERR=ERRPRC) LINE 
+      CWHILE
+         .
+         .
+         .
+      PROC ERRPRC 
+         REWIND 1
+         REWIND 2
+      CPROC 
+
+\end{verbatim}
+\section{CALL statement.}
+
+Within the CALL argument list statement label arguments may be replaced
+by one of the same keywords for I/O statements.  Such arguments must be
+preceded by an asterisk (*).  E.g. 
+
+\begin{verbatim}
+
+      CALL sub ( ..., *XWHILE, ... )
+
+\end{verbatim}
+
+\begin{center}
+Notes:
+\end{center}
+
+\begin{itemize}
+
+\item This feature can only be used in calls to existing FORTRAN
+subroutines that specify alternate returns.  The designers of SHELTRAN
+consider this feature undesirable and only provided an interface to
+existing routines, but have intentionally omitted the facility to
+construct them, i.e.  the 'RETURN i' statement is not allowed. 
+
+\item Asterisk arguments must appear on the first line of the CALL
+statement. 
+
+\end{itemize}
+\section{Additional features.}
+\subsection{Comment lines.}
+
+Comment lines follow the same rules as FORTRAN. 
+
+\subsection{Note lines.}
+
+Note lines are identified by an N in column 1, the text area being
+columns 2 to 72.  In the line printer listing the text of a Note line is
+printed in columns 75 to 124 and on the same line as the statement
+following the Note line.  If the next line is also a Note, the text is
+printed in the same columns of an otherwise blank line.  The text of the
+Note line may be 50 characters long and may appear anywhere in columns 2
+to 72.  Leading blanks between column 1 and the start of the Note text
+are ignored, i.e.  in the listing Notes are aligned. 
+
+\subsection{Eject lines.}
+
+Eject lines are identified by an E in column 1, the text area being
+columns 7 to 72.  The action of an Eject line is to force a new page on
+the line printer listing, with the page header taken from the Eject line
+text. 
+
+\subsection{Fortran directive lines.}
+
+Fortran directive lines are identified by an F in column 1.  The
+remainder of the line is written in columns 1 to 79 of the FORTRAN
+output file.  This facility can be used to pass directives to the
+FORTRAN compiler (e.g.  debug directives).  It should not be used to
+bypass SHELTRAN control structures. 
+
+\subsection{Input source deck.}
+
+The input SHELTRAN source deck follows the normal FORTRAN layout rules,
+apart from the above-mentioned features.  No indentation of structures
+need to be included, as the pre-processor will automatically provide
+indentation in the listing. 
+
+\subsection{Output source deck.}
+
+The output source deck consists of the input source deck plus the
+necessary generated FORTRAN statements.  It contains no Comment, Eject
+or Note lines.  The output deck is not indented. 
+
+\subsection{Include Files.}
+
+Code from other SHELTRAN sources can be included by putting an I in
+column 1 followed by the name of the source to be included.  The code
+included in this way will also be processed by the SHELTRAN compiler. 
+
+\section{Limitations.}
+\begin{itemize}
+
+\item The maximum number of procedure sections in a program unit is 99. 
+
+\item The following variable names are reserved by SHELTRAN and must not
+be used: IF, ELSEIF, WHILE, UNTIL, FOR; all 6-character variable names
+beginning with 'IZZZ'
+
+\item It is not allowed to give variable names beginning with 'I' an
+implicit type other than INTEGER. 
+
+\item PERFORM statements in FOR-loops cause non-standard FORTRAN to be
+generated.  This is because after a procedure section has been executed,
+a jump into the generated DO-loop is necessary to resume execution after
+the PERFORM statement.  Most compilers however allow this kind of jump
+which was part of the previous FORTRAN standard (FORTRAN IV). 
+
+\end{itemize}
+
+\chapter{Update history.}
+\begin{verbatim}
+
+ Jan-83  version 5.0: completely revised for FORTRAN 77
+                         J.P. Terlouw 
+
+21-Mar-83: scratch file opening changed; instead of 
+      TAPE2 and TAPE3 we now use SCRAT01 and SCRAT02
+                       J.P.T.
+
+ 3-Apr-84: error message for non-standard Fortran when using
+      PERFORM in for loops suppressed. 
+                       J.P.T.
+ 
+ 1-Nov-88: bug in FOR loop control repaired, procedure names
+      upto 31 characters, no trailing blanks in target and
+      source listing.
+                       K.G.B.
+
+\end{verbatim}
+\end{document}

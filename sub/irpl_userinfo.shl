@@ -1,0 +1,183 @@
+c#>            irpl_userinfo.dc2
+c
+cSubroutine:   irpl_userinfo
+c 
+cPurpose:      read user information to snip a plate
+c 
+cFile:         irpl_userinfo.shl
+c 
+cAuthor:       Do Kester
+c 
+cUse: call irpl_userinfo(
+c       irds,      	O  	character*(*)
+c 	instru,    	O  	character*(*)
+c       center,    	O  	doubleprecision(2)
+c       size,      	O  	doubleprecision(2)
+c       coor,      	O  	integer
+c	plotdevice)	O  	character*(*)
+c
+c       irds,      	name of the IRDS to be made
+c       instru,    	name of the instrument
+c       center,    	longitude and latitude of the center
+c       size,      	lon. and lat. size of the plate
+c       coor,      	coordinate system long and lat are given in
+c	plotdevice)	device to display the plate layout on
+c 
+cDescription:    
+c 	The routine queries the user for items necessary to build
+c 	an IRDS. The folling keywords are (possibly) requested:
+c
+c 	INSTRUME= 	observation mode and band  (in IRUS_INST)
+c 	CENTER=		longitude and latitude of the IRDS center
+c 	SIZE=		longitudinal and latitudinal size of the
+c			IRDS to snip [1.0 1.0]
+c 	COOR=		coordinate system CENTER is given in (in IRUS_COOR)
+c			[EQUATORIAL 2000.0]
+c ***	EPOCH=		( in IRUS_COOR ) [2000.0]
+c ***	POLEDISTANCE=	( in IRUS_COOR ) [0.0]
+c ***	REFNODE=	( in IRUS_COOR ) [0.0]
+c ***   NEWNODE=	( in IRUS_COOR ) [0.0]
+c	IRSET=		name of the IRDS to be made [no snip action]
+c ***	STATUS=		if the IRDS already exists: Overwrite, Error, Merge.
+c			[Overwrite]
+c	OBJECT=		name of the object on the custom plate [none]
+c	OBSERVER=	name of the observer [none]
+c 
+cExternals:    
+c	IRUS_INST IRUS_COOR
+c	IRCC_OBSMODE IRCC_RATE IRCC_NDETS
+c	USERDBLE USERINT USERCHAR USERCHARU
+c	ANYOUT CANCEL NELC 
+c	IRDS_EXIST IRDS_CREATE IRDS_DELETE IRDS_ENQUIRE IRDS_CLOSE
+c	IRCO_NAMEPOCH IRCO_NUMBER
+c 
+cUpdates:       23 Apr  1990 DK, code
+c		 17 July 1990 DK, change coor into integer
+c#<
+c@ subroutine irpl_userinfo( character, character, double precision,
+c@		double precision, integer )
+
+
+	subroutine irpl_userinfo( irds, instru, center, size, coor )
+
+	integer		coor
+	doubleprecision center(2), size(2)
+	character*(*)	irds, instru
+
+	integer		axes(3)
+	character*20	object, observer, object1
+	integer		IRCC_NDETS, IRCC_RATE, IRDS_EXIST, IRCC_OBSMODE
+	integer		USERDBLE, USERCHAR, USERCHARU
+	integer		k, nitem, error, naxis1, axes1(4), nelc
+	integer		obsmode, default, coor1, IRCO_NUMBER, IRUS_COOR
+	doubleprecision center1(2), size1(2)
+	character*10	instru1, irstat
+	character*30	coname
+        character*80    kgb
+	real		epoch
+	doubleprecision xx, yy, EPSILON
+	logical		isequal
+	parameter	( EPSILON = 1.0e-4 )
+
+	isequal( xx, yy ) = abs( xx - yy ) .lt. EPSILON
+
+	data	default, coor1 / 0, 0 /
+
+	while .true.
+	  call IRUS_INST( default, instru )
+	  obsmode = IRCC_OBSMODE( instru )
+	  if ( obsmode .ge. 1 .and. obsmode .le. 3 )
+	  then
+c it is a survey, splines or AOs: find area (to snip)
+	    nitem = USERDBLE( center, 2, 4, 'CENTER=',
+     #      'give the central longitude and latitude of the plate' )
+	    size(1) = 1.0
+	    nitem = USERDBLE( size, 2, 1, 'SIZE=',
+     #	      'give (long. and lat.) size of the plate [1.0]' )
+	    if ( nitem .le. 1 )
+	    then
+	      size(2) = size(1)
+	    cif
+	    coor = IRUS_COOR( 1, 1, 'COOR=' )
+	    xwhile
+	  elseif ( obsmode .eq. 4 )
+	  then
+c it is FLASH: don't know how to handle this case (yet)
+	    call ANYOUT( 1, 
+     #		'It is not yet possible to handle flash data.' )
+	  else
+c its is unknown: can not be used in this situation
+	    k = NELC( instru )
+            kgb = instru
+	    call ANYOUT( 1, 'Erroneous band identification: ' // 
+     #        kgb(:k) )
+	  cif
+	  call ANYOUT( 1, 'Use SURVEY, SPLINE or AO, //
+     #         combined with bandnumber or LRS.' )
+	cwhile
+
+	while .true.
+c get a set name to write to
+	  nitem = USERCHAR( irds, 1, 1, 'IRSET=',
+     #		'give set name to write to [no snip action]' )
+	  if ( IRDS_EXIST( irds, error ) .ne. -1 )
+	  then
+c it already exists: check status of the set
+	    k = nelc( irds )
+            kgb = irds
+	    call ANYOUT( 1, 'the irset called: ' // kgb(:k) //
+     #		' already exists; ' )
+	    call ANYOUT( 1, ' there are three options: ' //
+     #		'overwrite, merge or erroneous name' )
+	    irstat = 'overwrite'
+	    nitem = USERCHARU( irstat, 1, 1, 'STATUS=',
+     #		'make your choice [overwrite]' )
+	    if ( irstat(1:1) .eq. 'O' )
+	    then
+c overwrite: delete the existing IRDS
+	      call IRDS_DELETE( irds, error )
+	      xwhile
+	    elseif ( irstat(1:1) .eq. 'M' )
+	    then
+c merge: check whether the centers, coordinates and instruments are the same
+	      call IRDS_ENQUIRE( irds, object1, instru1, naxis1, axes1, 
+     #		center1, size1, coname, epoch, error )
+	      coor1 = irco_number( coname, epoch )
+	      if ( error .eq. 0 .and. 
+     #            isequal( center(1), center1(1) ) .and.
+     #            isequal( center(2), center1(2) ) .and.
+     #            instru .eq. instru1 .and. coor .eq. coor1 )
+	      then
+	        xwhile
+	      else
+	        call IRDS_CLOSE( irds, error )
+	        call ANYOUT( 1, 'the irset does not have the same ' 
+     #	 	          // 'coordinates as the one to snip.' )
+	      cif
+	    cif
+	    call CANCEL( 'IRSET=' )
+	    call CANCEL( 'STATUS=' )
+	  else
+	    xwhile
+	  cif
+	cwhile
+
+	if ( IRDS_EXIST( irds, error ) .eq. -1 )
+	then
+c the IRDS does not yet exist: create a new one with dummy lengths
+	  axes(1) = IRCC_RATE( instru )
+	  axes(2) = 1
+	  axes(3) = IRCC_NDETS( instru )
+	  object = ' '
+	  observer = ' '
+	  k = USERCHAR( object, 1, 1, 'OBJECT=',
+     #	     'give name of the object [no name]' )
+	  k = USERCHAR( observer, 1, 1, 'OBSERVER=',
+     #	     'give name of the observer [no name]' )
+	  call IRCO_NAMEPOCH( coor, coname, epoch )
+	  call IRDS_CREATE( irds, instru, axes, center, size, coname,
+     #	    epoch, object, observer, error )
+	cif
+
+	return
+	end

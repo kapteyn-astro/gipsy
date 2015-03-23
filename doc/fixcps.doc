@@ -1,0 +1,26 @@
+Script:      fixcps
+
+Purpose:     Convert PGPLOT colour PostScript files incompatible with
+             Ghostscript version >=9.00.
+
+File:        fixcps.py
+
+Author:      J.P. Terlouw
+
+Use:         $gip_sys/fixcps.py infile outfile
+
+             infile   incorrectly rendered PostScript file
+             outfile  corrected file; may be the same as infile which
+                      then will be overwritten.
+
+Description: This Python script converts existing PGPLOT PostScript files
+             with colour images which are not rendered correctly by
+             Ghostscript version >= 9.00. These versions handle color spaces
+             differently from previous versions. A symptom is completely
+             black images. Also certain PostScript printers may have similar
+             problems.
+
+             Files written with GIPSY's new PGPLOT PostScript driver
+             (June 2012) shouldn't have these problems anymore.
+
+Updates:     Jun  8, 2012: JPT, Document created.

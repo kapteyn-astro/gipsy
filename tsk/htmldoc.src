@@ -1,0 +1,2248 @@
+htmldoc.src
+
+        Copyright (c) Kapteyn Astronomical Institute, Groningen 2012
+        All Rights Reserved.
+
+Name:         htmldoc.src
+Creator:      terlouw
+Host:         azarquiel
+Date:         Aug 15, 2012
+Contents:     Makefile.uti htmldoc.make htmldoc.doc alloc.c alloc.h
+              catlist.c catlist.h filecontents.c filecontents.h htmldoc.c
+              htmldoc.h srtdir.c srtdir.h htmlink.c htmlink.h
+              docentry.l docentry.c docentry.h
+
+#>            Makefile.uti
+SHELL  = /bin/sh
+
+pack::
+	$$gip_sys/pack.csh htmldoc.src \
+	Makefile.uti htmldoc.make htmldoc.doc \
+	alloc.c alloc.h catlist.c catlist.h filecontents.c filecontents.h \
+	htmldoc.c htmldoc.h srtdir.c srtdir.h htmlink.c htmlink.h \
+	docentry.l docentry.c docentry.h
+
+clean::
+	rm -f htmldoc *.o
+
+
+#<
+
+#>            htmldoc.make
+SHELL   = /bin/sh
+#C_OPTS  = -g -I. -I$(gip_inc) -I- -I/usr/include/bsd -ansi -pedantic -Wall
+C_OPTS   = $(CC_OPTS)
+OBJECTS = htmldoc.o docentry.o alloc.o filecontents.o catlist.o srtdir.o \
+          htmlink.o
+
+default:: htmldoc
+
+.c.o :
+	$(CC_COMP) -c $(C_OPTS) $<
+
+docentry.c : docentry.l
+	-@if [ -r docentry.c ] ; then \
+	touch docentry.c ; else \
+	lex -t docentry.l | sed -e's/stdin/NULL/g' -e's/stdout/NULL/g' > docentry.c ;\
+	fi
+
+htmldoc: $(OBJECTS)
+	$(CC_COMP) -o htmldoc $(C_OPTS) $(OBJECTS) $(CC_LIBS)
+
+
+#<
+
+#>            htmldoc.doc
+Program:      htmldoc
+
+Purpose:      Generate .html files containing links to the ASCII-based
+              documentation (-.dc1, -.dc2, -.dc3, -.doc).
+
+Category:     MANAGEMENT
+
+File:         htmldoc.src
+
+Author:       J.P. Terlouw
+
+Use:          $gip_exe/htmldoc type
+              
+              type is the documentation type: "dc1", "dc2", "dc3" or "doc".
+
+Description:  The program generates a number of html files in the current
+              working directory, depending on 'type'.
+
+              dc1:
+                   alltasks.html with links to the .dc1 documents;
+                   cattasks.html with links to catagorized .html documents;
+                   <category>_tasks.html with links to .dc1 documents for
+                   every category.
+              dc2:
+                   alldc2subs.html with links to the .dc2 documents;
+                   catdc2subs.html with links to catagorized .html documents;
+                   <category>_dc2subs.html with links to .dc2 documents for
+                   every category.
+              dc3:
+                   alldc3subs.html with links to the .dc3 documents;
+                   catdc3subs.html with links to catagorized .html documents;
+                   <category>_dc3subs.html with links to .dc3 documents for
+                   every category.
+              doc:
+                   alldocs.html with links to the .doc documents;
+                   catdocs.html with links to catagorized .html documents;
+                   <category>_docs.html with links to .doc documents for
+                   every category.
+
+              As input it takes the documents of the designated type for
+              the purpose lines and source file names and it reads
+              the document 'categories.doc' for the category descriptions.
+
+              The program also detects whether there is an html file with the
+              name $gip_htm/<name>/index.html, where <name> is the name
+              of the document file, with the type stripped off.
+              If such a file exists, htmldoc will extract the information
+              in the html TITLE field and uses this to create a link to
+              the file. E.g.: "See also: Supplementary documentation".
+
+              The generated files will usually be placed in $gip_htm/dc123doc.
+                   
+
+Updates:      Aug 16, 1995: JPT original document created.
+              Nov 13, 1995: JPT disallow leading blanks before section keyword.
+              Feb 22, 1996: JPT detect presence of associated html files.
+              May 29, 1999: JPT ignore "Called output()" internal error.
+              Aug 11, 2009: JPT renamed getline to GetLine.
+              Jul 11, 2011: JPT do not write links to source files anymore.
+              Aug 15, 2012: JPT added missing include alloc.h to filecontents.c.
+#<
+
+#>            alloc.c
+/*
+ *  alloc.c
+ *
+ *  Checking substitute for malloc, realloc and calloc.
+ *  Its sole purpose is to eliminate numerous checks in different places
+ *  where graceful correction of the problem of allocation failure is
+ *  not possible.
+ *
+ *  The function StrDup returns a pointer to a duplicate of the argument.
+ *
+ *  It just stops the program in case of allocation failure.
+ *
+ */
+#include "alloc.h"
+#include "stdio.h"
+#include "stdlib.h"
+
+static void Fail(void);
+
+#define RCHECK if (ptr) return ptr; else Fail();
+
+static void *ptr;
+
+extern void *Malloc(int size)
+{
+   ptr = malloc(size);
+   RCHECK
+}
+
+extern void *Realloc(void *orig, int newsize)
+{
+   ptr = realloc((char*)orig, newsize);
+   RCHECK
+}
+
+extern void *Calloc(int nelem, int elsize)
+{
+   ptr = calloc(nelem, elsize);
+   RCHECK
+}
+
+extern void Free(void *ptr)
+{
+   if (ptr)
+      free(ptr);
+   else {
+       printf("\nDynamic memory de-allocation failure\n");
+       exit(1); /* When this happens, it is due to a programming error */
+   }
+}
+
+extern char *StrDup (char *src)
+{
+   char *orig=src;
+   char *result;
+    
+   if (!orig) orig="";
+   result=NNew(strlen(orig)+1,char);
+   strcpy(result,orig);
+   return result;
+}
+
+
+static void Fail(void)
+{
+   printf("\nDynamic memory allocation failure\n");
+   exit(1); /* Hope this does not happen. Don't know what to do otherwise... */
+}
+#<
+
+#>            alloc.h
+#if !defined(_alloc_h_)
+#define _alloc_h_
+extern void       *Malloc    (int size);
+extern void       *Realloc   (void *orig, int newsize);
+extern void       *Calloc    (int nelem, int elsize);
+extern void        Free      (void* ptr);
+extern char       *StrDup    (char *orig);
+#define New(type) ((type *)Calloc(1,sizeof(type)))
+#define NNew(n,type) ((type *)Calloc(n,sizeof(type)))
+#define Delete(x)  {Free(x); x=NULL;}
+#endif
+#<
+
+#>            catlist.c
+/* catlist.c
+                              COPYRIGHT (c) 1995
+                        Kapteyn Astronomical Institute
+         University of Groningen  -  9700 AV Groningen, The Netherlands
+*/
+
+#define CATFILE "categories.doc"
+#define STRLEN 120
+
+#include "stdlib.h"
+#include "stddef.h"
+#include "stdio.h"
+#include "string.h"
+#include "alloc.h"
+#include "catlist.h"
+
+static int GetLine( char *line, int maxlen, FILE *fp );
+
+/* ========================================================================== */
+/*                                 catlist                                    */
+/* -------------------------------------------------------------------------- */
+/*  Build a list of _catinfo structs, containing category information
+ *  for the specified section. See catlist.h for the layout of _catinfo.
+ *  The information is obtained from the file "$gip_doc/categories.doc".
+ */
+extern catinfo catlist(char *section)
+{
+   char *path, *filename;
+   FILE *fp;
+   int  found=0;
+   int  ncats=0;
+   int  len, slen;
+   catinfo result=NULL;
+   catinfo *current=&result;
+   char docline[STRLEN];
+
+   slen = strlen(section);
+   path = StrDup(getenv("gip_doc"));
+   filename = Malloc(strlen(path)+strlen(CATFILE)+2);
+   (void)sprintf(filename, "%s/%s", path,CATFILE);
+   fp = fopen( filename, "r" );
+   Delete(path);
+   Delete(filename);
+   if (!fp) return NULL;
+    
+   while( !(feof(fp) || found) ) {
+      len = GetLine( docline, STRLEN, fp );
+      if ((len > 0) && (strncmp(docline, section, slen) == 0)) found = 1;
+   }
+   if (!found) {
+      fclose(fp);
+      return NULL;
+   }
+    
+   while (!feof(fp) && (GetLine( docline, STRLEN, fp ) !=0)) {
+      int namelen, i;
+       
+      if ((++ncats)>MAXCATS) {
+         fprintf(stderr,"Too many categories in %s\n",CATFILE);
+         exit(1);
+      }
+      *current = New(_catinfo);
+      namelen = strchr(docline,' ')-docline;
+      (*current)->name = Calloc(namelen+1,1);
+      for (i=0; i<namelen; i++) (*current)->name[i] = docline[i];
+      (*current)->description = StrDup(strchr(docline,'/')+1);
+      current = &((*current)->next);
+   }
+   return result;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                GetLine                                     */
+/* -------------------------------------------------------------------------- */
+/*  Read a line from file, check on end of line character and
+ *  remove trailing white space.
+ */
+static int GetLine( char *line, int maxlen, FILE *fp )
+{
+   int  len = 0;
+   int  i;
+   char ch;
+      
+    
+   if (!feof(fp)) {                          /* Quit when EOF */
+      while ((ch = fgetc( fp )) != EOF) {    /* Loop until EOF */
+         if (ch == '\n') break;
+         if (ch == '\t') ch = ' ';
+         if (len < maxlen) line[len++] = ch;
+      }
+      line[len] = '\0';
+      while (len && line[len-1] == ' ') line[--len] = '\0';
+   }
+   return( len );
+}
+
+#if defined(TESTBED)
+void main(void)
+{
+   catinfo categories;
+    
+   categories = catlist("#subroutines:");
+   while (categories) {
+      printf("%s, %s\n", categories->name,categories->description);
+      categories = categories->next;
+   }
+}
+#endif
+#<
+
+#>            catlist.h
+#if !defined(_catlist_h_)
+#define _catlist_h_
+
+#include "htmldoc.h"
+
+#define MAXCATS (CATMAPS*8*sizeof(int))
+
+typedef struct _catinfo {
+   char *name;
+   char *description;
+   int  used;
+   struct _catinfo *next;
+} _catinfo, *catinfo;
+
+catinfo catlist(char* catsection);
+
+#endif
+#<
+
+#>            filecontents.c
+/*  filecontents.c
+                              COPYRIGHT (c) 1992
+                        Kapteyn Astronomical Institute
+         University of Groningen  -  9700 AV Groningen, The Netherlands
+
+Author: J.P. Terlouw
+
+*/
+#include "stddef.h"
+#include <sys/file.h>
+#ifndef	O_CREAT
+#include <fcntl.h>
+#endif
+#ifdef	__sysv__
+#include <unistd.h>
+#endif
+#ifndef	L_XTND
+#define	L_XTND	SEEK_END
+#endif
+#include "filecontents.h"
+#include "alloc.h"
+
+/* ========================================================================== */
+/*                             FileContents                                   */
+/* -------------------------------------------------------------------------- */
+/*  FileContents returns a character pointer to a dynamic block of data
+ *  containing a copy of the contents of the file designated by 'path'.
+ *  If the file cannot be opened or cannot be accessed or has length
+ *  zero, a null pointer is returned. Through the argument 'fsize' the
+ *  size of the file in bytes is returned, or -1 if the file could not
+ *  be opened.
+ *  It is the responsibility of the caller to release the memory.
+ */
+extern char *FileContents(char *path, int *fsize)
+{
+   int fd = open(path,O_RDONLY,NULL);
+   char *contents;
+   int  size, nread=0;
+
+   if (fd<0) {
+      *fsize = -1;
+      return NULL;               /* error: could not open */
+   }
+   size = lseek(fd,0,L_XTND);    /* determine file length */
+   *fsize = size;
+   if (size<=0) return NULL;     /* error: zero length or couldn't access */
+   (void)lseek(fd,0,L_SET);      /* go back to beginning of file */
+   contents = (char *)Malloc(size+1);  /* allocate space + trailer byte */
+   while (nread<size) nread += read(fd,contents+nread,size-nread);
+   contents[nread] = 0;
+   close(fd);
+   return contents;
+}
+#<
+
+#>            filecontents.h
+#if !defined(_filecontents_h_)
+#define _filecontents_h_
+extern char *FileContents(char *path, int *fsize);
+#endif
+#<
+
+#>            htmldoc.c
+/* htmldoc.c
+                              COPYRIGHT (c) 1994
+                        Kapteyn Astronomical Institute
+         University of Groningen  -  9700 AV Groningen, The Netherlands
+
+
+
+*/
+
+#define USER_HEAD \
+   "<HTML>\n"\
+   "<HEAD>\n"\
+   "<TITLE>%s</TITLE>\n"\
+   "</HEAD>\n"\
+   "<BODY>\n"\
+   "<H1><IMG SRC=\"../logos/Gipsylogo.gif\" ALIGN=MIDDLE ALT=\"\">\n"\
+   "%s"\
+   "</H1>\n"\
+   "<HR>\n"
+
+#define USER_TAIL \
+   "<HR>\n"\
+   "<A HREF=\"../index.html\"><IMG SRC=\"../logos/gipsylogo.gif\" ALT=\"GIPSY\"></A>\n"\
+   "</BODY>\n"\
+   "</HTML>\n"
+
+#define PROG_HEAD \
+   "<HTML>\n"\
+   "<HEAD>\n"\
+   "<TITLE>%s</TITLE>\n"\
+   "</HEAD>\n"\
+   "<BODY>\n"\
+   "<H1><IMG SRC=\"../logos/Programlogo.gif\" ALIGN=MIDDLE ALT=\"\">\n"\
+   "%s"\
+   "</H1>\n"\
+   "<HR>\n"
+
+#define PROG_TAIL \
+   "<HR>\n"\
+   "<A HREF=\"../pguide/index.html\"><IMG SRC=\"../logos/programlogo.gif\" ALT=\"GIPSY\"></A>\n"\
+   "<A HREF=\"../index.html\"><IMG SRC=\"../logos/gipsylogo.gif\" ALT=\"GIPSY\"></A>\n"\
+   "</BODY>\n"\
+   "</HTML>\n"
+
+#include "stddef.h"
+#include "stdio.h"
+#include "stdlib.h"
+#include "string.h"
+
+#include "alloc.h"
+#include "htmldoc.h"
+#include "docentry.h"
+#include "srtdir.h"
+#include "catlist.h"
+#include "htmlink.h"
+
+
+static int file_select(char *);
+static int name_compare(char**, char**);
+static char extsel[5];
+
+void main(int argc, char *argv[])
+{
+   catinfo cat, cats;
+   docinfo doc, docs=NULL;
+   docinfo *dptr=&docs;
+    
+   char filename[128];
+   char cat_title[80];
+   char *loc;
+   char **filelist, **file;
+   int nfiles, i, j;
+   FILE  *html, *html_cat;
+   char *exts[]={"dc1","dc2","dc3","doc"};
+   char *link[]={"../tsk","../sub","../sub","../doc"};
+   char *cnms[]={"#tasks:","#subroutines:","#subroutines:","#general:"};
+   char *locs[]={"gip_tsk","gip_sub","gip_sub","gip_doc"};
+   char *modn[]={"task","general subroutine","low level subroutine",
+                 "general document"};
+   char *titl[]={"All Task Documents",
+                 "All general subroutine documents",
+                 "All low level subroutine documents",
+                 "All general documents"};
+   char *titc[]={"Categorized Task Lists",
+                 "Categorized General Subroutine Lists",
+                 "Categorized Low-level Subroutine Lists",
+                 "Categorized General Documents"};
+   
+   char *docn[]={"tasks","dc2subs","dc3subs","docs"};
+   char *heads[]={USER_HEAD,PROG_HEAD,PROG_HEAD,PROG_HEAD};
+   char *tails[]={USER_TAIL,PROG_TAIL,PROG_TAIL,PROG_TAIL};
+   char *htmtitle, htmref[80], seealso[128];
+   
+   int mode, nmodes=(sizeof(exts)/sizeof(exts[0]));
+/*
+ *   Intro
+ */
+   if (argc!=2) {
+      fprintf(stderr,"Usage: %s dc1, dc2, dc3 or doc\n",argv[0]);
+      exit(-1);
+   }
+   for (mode=0; mode<nmodes; mode++) {
+      if (!strcmp(argv[1],exts[mode])) break;
+   }
+   if (mode>=nmodes) {
+      fprintf(stderr,"Usage: %s dc1, dc2, dc3 or doc\n",argv[0]);
+      exit(-1);
+   }
+
+/*
+ *   obtain file list
+ */
+   sprintf(extsel,".%s",exts[mode]);
+   cats = catlist(cnms[mode]);
+   loc = StrDup(getenv(locs[mode]));
+   nfiles = srtdir(loc,&filelist,file_select,name_compare);
+   if (nfiles<0) {
+      fprintf(stderr,"Cannot read directory %s\n",loc);
+      exit(1);
+   } else if (nfiles==0) {
+      fprintf(stderr,"No documents in %s\n",loc);
+      exit(1);
+   }
+/*
+ *   parse all files in list
+ */
+   for (i=0, file=filelist; i<nfiles; i++) {
+      strcpy(filename,loc);
+      strcat(filename,"/");
+      strcat(filename,*file);
+      doc = parsefile(filename,cats);
+      if (doc) {
+         strcpy(doc->filename,*file); /* use relative file name */
+         *dptr = doc;
+         dptr = &(doc->next);
+      }
+      free(*file);
+      *file++;
+   }
+   free(filelist);
+/*
+ *   create html document for all modules
+ */
+   sprintf(filename,"all%s.html",docn[mode]);
+   html = fopen(filename,"w");
+   fprintf(html,heads[mode], titl[mode], titl[mode]);
+   fprintf(html,"Below is a list of all %ss.\n"
+                "In parentheses the name of the source file is given.\n<HR>\n",
+                modn[mode]);
+   fprintf(html,"<DL>\n");
+   for (doc=docs; doc; doc=doc->next) {
+      htmtitle = htmlink(doc->filename);
+      if (htmtitle) {
+         strcpy(htmref,"**/");
+         strcat(htmref,doc->filename);
+         for (j=0; htmref[j]; j++) {
+            if (htmref[j]=='.') {
+               htmref[j] = '\0';
+               break;
+            }
+            if (htmref[j]=='*') htmref[j] = '.';
+         }
+         strcat(htmref,"/index.html");
+         sprintf(seealso,
+         "<EM>See also:</EM> <A HREF=%s>%s</A>.", htmref, htmtitle);
+      } else *seealso = '\0';
+      if (mode==3) {
+         fprintf(html,"<DT><A HREF=%s/%s>%s</A>\n<DD>%s %s (%s)\n",
+                 link[mode],doc->filename, doc->name,doc->purpose,
+                 seealso, doc->source);
+      } else {
+         fprintf(html,"<DT><A HREF=%s/%s>%s</A>\n<DD>%s\n"
+                      "%s (%s)\n",
+                 link[mode],doc->filename, doc->name, doc->purpose,
+                 seealso,doc->source);
+      }
+   }
+   fprintf(html,"</DL>\n");
+   fprintf(html,tails[mode]);
+   fclose(html);
+/*
+ *  create categorized module lists
+ */
+   sprintf(filename,"cat%s.html",docn[mode]);
+   html = fopen(filename,"w");
+   fprintf(html,heads[mode], titc[mode], titc[mode]);
+   fprintf(html,"<DL COMPACT>\n");
+   for (cat=cats, i=0; cat; i++,cat=cat->next) {
+      if (cat->used) {
+         char catfilename[128]; char cattitle[80];
+         int map, mask;
+          
+         map = i/(8*sizeof(int)); mask = 1<<(i%(8*sizeof(int)));
+         sprintf(catfilename,"%s_%s.html",cat->name,docn[mode]);
+         fprintf(html,"<DT><A HREF=%s>%s</A>\n<DD>%s\n",
+                 catfilename, cat->name, cat->description);
+         html_cat = fopen(catfilename,"w");
+         sprintf(cattitle, "%s %ss", cat->name, modn[mode]);
+         fprintf(html_cat,heads[mode],cattitle,cattitle);
+         fprintf(html_cat,
+                 "The following %ss belong to the category %s:<BR>\n"
+                 "<strong>``%s''</strong>\n"
+                 "In parentheses the name of the source file is given.\n<HR>\n",
+                 modn[mode], cat->name, cat->description);
+         fprintf(html_cat,"<DL>\n");
+         for (doc=docs; doc; doc=doc->next) {
+            if (doc->catmap[map] & mask) {
+               htmtitle = htmlink(doc->filename);
+               if (htmtitle) {
+                  strcpy(htmref,"**/");
+                  strcat(htmref,doc->filename);
+                  for (j=0; htmref[j]; j++) {
+                     if (htmref[j]=='.') {
+                        htmref[j] = '\0';
+                        break;
+                     }
+                     if (htmref[j]=='*') htmref[j] = '.';
+                  }
+                  strcat(htmref,"/index.html");
+                  sprintf(seealso,
+                  "<EM>See also:</EM> <A HREF=%s>%s</A>.",
+                  htmref, htmtitle);
+               } else *seealso = '\0';
+               if (mode==3) {
+                  fprintf(html_cat,"<DT><A HREF=%s/%s>%s</A>\n<DD>%s\n"
+                                   "%s (%s)\n",
+                          link[mode],doc->filename, doc->name, doc->purpose,
+                          seealso, doc->source);
+               } else {
+               fprintf(html_cat,"<DT><A HREF=%s/%s>%s</A>\n<DD>%s\n"
+                                "%s (%s)\n",
+                       link[mode],doc->filename, doc->name, doc->purpose,
+                       seealso,doc->source);
+               }
+            }
+         }
+         fprintf(html_cat,"</DL>\n");
+         fprintf(html_cat,tails[mode]);
+         fclose(html_cat);
+      }
+   }
+   fprintf(html,"</DL>\n");
+   fprintf(html,tails[mode]);
+   fclose(html);
+}
+
+/* 
+ *   compare routine to be used in the sorting done by strdir
+ */
+static int name_compare(char **name1, char **name2)
+{
+   return strcmp(*name1,*name2);
+}
+
+/*
+ *   directory entry selector be used by strdir
+ */
+static int file_select(char *name)  
+{
+   return (int)strstr(name,extsel);
+}
+
+#<
+
+#>            htmldoc.h
+#if !defined(_htmldoc_h_)
+#define _htmldoc_h_
+
+#define CATMAPS 4           /* number of int's to be used as category bitmap */
+
+#endif
+#<
+
+#>            srtdir.c
+/* srtdir.c
+                              COPYRIGHT (c) 1995
+                        Kapteyn Astronomical Institute
+         University of Groningen  -  9700 AV Groningen, The Netherlands
+
+Author: J.P. Terlouw
+*/
+
+#include "stddef.h"
+#include "stdlib.h"
+#include <sys/types.h>
+#if defined(__bsd__)
+#include <sys/dir.h>
+#define DIRENT direct
+#else
+#include <dirent.h>
+#define DIRENT dirent
+#endif
+#include "string.h"
+#include "alloc.h"
+#include "srtdir.h"
+
+#define INITIAL_SIZE	100               /* initial estimate of array size */
+
+/* ========================================================================== */
+/*                                 srtdir                                     */
+/* -------------------------------------------------------------------------- */
+/*  srtdir() reads the directory 'name' and builds an array of pointers to
+ *  the file names found in this directory.
+ *
+ *  Arguments:
+ *             name     -  the directory to be read;
+ *             list     -  address of pointer to which the array is returned;
+ *             selector -  function which determines which file names
+ *                         are to be included;
+ *             sorter   -  function to be passed to qsort for comparing
+ *                         the file names.
+ * Return value:
+ *                         the number of file names in the array.
+ * See also:
+ *             qsort(3) scandir(3).
+ */
+extern int srtdir(char *name, char ***list, selfun selector, sortfun sorter)
+{
+    char  **names;
+    struct DIRENT *entp;
+    DIR	  *dirp;
+    int	   i;
+    int	   size;
+
+    /* Get initial list space and open directory. */
+    size = INITIAL_SIZE;
+    names = (char **)Malloc(size * sizeof names[0]);
+    if (names == NULL) return -1;
+    dirp = opendir(name);
+    if (dirp == NULL) return -1;
+
+    /* Read entries in the directory. */
+    for (i = 0; entp = readdir(dirp); )
+	if (selector == NULL || (*selector)(entp->d_name)) {
+	    /* User wants them all, or he wants this one. */
+	    if (++i >= size) {
+		size *= 2;       
+		names = (char **)Realloc(names, size * sizeof names[0]);
+		if (names == NULL) {
+		    closedir(dirp);
+		    return -1;
+		}
+	    }
+
+	    /* Copy the entry. */
+	    names[i - 1] = StrDup(entp->d_name);
+	    if (names[i - 1] == NULL) {
+		closedir(dirp);
+		return -1;
+	    }
+	}
+
+    /* Close things off. */
+    names[i] = NULL;
+    *list = names;
+    closedir(dirp);
+
+    /* Sort? */
+    if (i && sorter)
+	qsort(names, i, sizeof names[0], sorter);
+
+    return i;
+}
+#<
+
+#>            srtdir.h
+#if !defined(_srtdir_h_)
+#define _srtdir_h_
+
+typedef int (*selfun)(char *);
+/* typedef int (*sortfun)(char **, char **); */
+typedef int (*sortfun)();
+
+extern int srtdir(char *name, char ***list, selfun selector,  sortfun sorter);
+
+#endif
+#<
+
+#>            htmlink.c
+/* htmlink.c
+                              COPYRIGHT (c) 1996
+                        Kapteyn Astronomical Institute
+         University of Groningen  -  9700 AV Groningen, The Netherlands
+
+*/
+
+#define RSIZE 128
+
+#include "stdlib.h"
+#include "string.h"
+#include "alloc.h"
+#include "filecontents.h"
+
+char *htmlink(char *dcname)
+{
+   char  htmname[128];
+   static char  result[RSIZE];
+   char *htmtext, *title;
+   int   i, size;
+      
+   strcpy(htmname,getenv("gip_htm")); /*  may crash when gip_htm undefined */
+   strcat(htmname,"/");
+   strcat(htmname,dcname);
+   for (i=0; htmname[i]; i++) {
+      if (htmname[i]=='.') {
+         htmname[i] = '\0';
+         break;
+      }
+   }
+   strcat(htmname,"/index.html");
+   htmtext = FileContents(htmname, &size);
+   if (htmtext) {
+      title = strstr(htmtext,"<TITLE>");
+      if (!title) title = strstr(htmtext,"<title>");
+      if (!title) {
+         title = "additional document";
+      } else {
+         title += 7;                                 /* Skip tag */
+         *strchr(title,'<') = '\0';
+      }
+      strncpy(result,title,RSIZE);
+      Delete(htmtext);
+      return result;
+   } else return NULL;
+}
+#<
+
+#>            htmlink.h
+#if !defined(_htmlink_h_)
+#define _htmlink_h_
+char *htmlink(char *dcname);
+#endif
+#<
+
+#>            docentry.l
+%{
+/*
+                              COPYRIGHT (c) 1995
+                        Kapteyn Astronomical Institute
+         University of Groningen  -  9700 AV Groningen, The Netherlands
+
+
+Author: J.P. Terlouw
+
+*/
+#define PBL 1000                       /* Purpose lines buffer length */
+#define NBL 40                         /* Name buffer length */
+#define USL 400                        /* unput() stack size */
+
+#define TESTPRINT noprint
+
+#undef YYLMAX
+#define YYLMAX USL
+
+#undef output
+static void my_output(char);
+#define output my_output
+#undef input
+static char my_input(void);
+#define input my_input
+#undef unput
+static void my_unput(char);
+#define unput my_unput
+
+#include <ctype.h>
+#include "filecontents.h"
+#include "alloc.h"
+#include "catlist.h"
+#include "docentry.h"
+
+static void section(unsigned char*);
+static char *purpchar(unsigned char*);
+static char *name(unsigned char*);
+static int  category(unsigned char*);
+static int  noprint();
+
+static char *bufptr;                   /* Input text buffer pointer */
+static char *filename;
+static catinfo clist=NULL;
+static docinfo result=NULL;
+static int baddoc=0;
+
+static char ustack[USL];               /* unput() stack */
+static int  usp=0;                     /* unput() stack pointer */
+
+
+static int  first=1;
+/* -------------------------------------------------------------------------- */
+%}
+%START NORMAL NAME PURPOSE CATEGORY SOURCE
+%%
+                      start();                 /* initialize */
+
+^[A-Za-z0-9]+:    section(yytext);         /* start of section */
+
+<NAME>.*$             (void)name(yytext);      /* name section */
+
+<CATEGORY>[A-Za-z\- ]+ (void)category(yytext);  /* category */
+<CATEGORY>.           ;                        /* skip separators etc. */
+<CATEGORY>\n          BEGIN NORMAL;            /* end of category line */
+
+<PURPOSE>.            |                       
+<PURPOSE>\n           (void)purpchar(yytext);  /* purpose section character */
+
+<SOURCE>[0-9A-Za-z_\.]+  result->source = StrDup((char*)yytext);
+<SOURCE>.             ;
+<SOURCE>\n            BEGIN NORMAL;
+
+<NORMAL>.             |                        /* default action: discard */
+<NORMAL>\n            ;
+
+%%
+
+/* ========================================================================== */
+/*                                 parsefile                                  */
+/* -------------------------------------------------------------------------- */
+/*  parsefile() parses a GIPSY document file (.dc1, .dc2, .dc3 or .doc).
+ */
+extern docinfo parsefile(char *fname, catinfo cats)
+{
+   char *file;
+   int  filesize;
+
+   baddoc = 0;
+   clist = cats;
+   filename = fname;
+   file = FileContents(filename,&filesize);
+   bufptr = file;
+   result = New(_docinfo);
+   yylex();
+   Free(file);
+   if (baddoc) {
+      Delete(result);
+      return NULL;
+   }
+   if (!result->source) result->source = "";
+   result->filename = StrDup(filename);
+   result->name = StrDup(name(NULL));
+   result->purpose = StrDup(purpchar(NULL));
+   return result;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 start                                      */
+/* -------------------------------------------------------------------------- */
+/*  start() initializes the parser.
+ */
+start()
+{
+   BEGIN NORMAL; 
+   first = 1;
+   usp   = 0;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 section                                    */
+/* -------------------------------------------------------------------------- */
+/*  section() processes a document section.
+ */
+static void section(unsigned char *sname)
+{
+   char   c;
+    
+   while (*sname==' ') sname++;
+   BEGIN NORMAL;
+   if (first) {
+      BEGIN NAME;
+      first = 0;
+   } else {
+      if (!strcmp(sname,"Purpose:")) {
+         (void)purpchar(NULL);
+         BEGIN PURPOSE;
+      } else if (!strcmp(sname,"Category:")) {
+         BEGIN CATEGORY;
+      } else if (!strcmp(sname,"File:") || !strcmp(sname,"Files:")) {
+         BEGIN SOURCE;
+      }
+   }
+}
+
+
+/* -------------------------------------------------------------------------- */
+/*                                 name                                       */
+/* -------------------------------------------------------------------------- */
+/*  name() accepts the document name from the lexical scanner.
+ *  It retuns a pointer to its internal buffer.
+ *  If the found name argument is NULL, the buffer is not modified, so
+ *  a call with this argument can be used to obtain a previously filled
+ *  buffer.
+ */
+static char *name(unsigned char *nfound)
+{
+   static char namebuf[NBL];
+   int namlen;
+    
+   if (nfound) {
+      while (*nfound==' ') nfound++;
+      namlen = strlen(nfound);
+      if (namlen>=NBL) {
+         fprintf(stderr,"%s -- document name too long (%d)\n", filename, namlen);
+         baddoc = 1;
+         return namebuf;
+      }
+      strcpy(namebuf,nfound);
+      while (namebuf[--namlen]==' ') namebuf[namlen] = '\0';
+      TESTPRINT("\nNAME=%s",namebuf); /* TEST */
+   }
+   BEGIN NORMAL;
+   return namebuf;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 purpchar                                   */
+/* -------------------------------------------------------------------------- */
+/*  purpchar() acceps a character from the lexical scanner and append it to
+ *  its buffer. If the argument is NULL, purpchar() is initialized.
+ *  It returns a pointer to the buffer.
+ */
+static char *purpchar(unsigned char *c)
+{
+   static char purplines[PBL];
+   static int  plp;
+   static int  pblank=0;
+   
+   if (!c) {
+      TESTPRINT("\nPURPOSE="); /* TEST */
+      purplines[plp] = '\0';
+      plp = 0;
+      pblank = 0;
+      return purplines;
+   }
+
+   if (*c==' ') {
+      if (!pblank) {
+         pblank = 1;
+         purplines[plp++] = ' ';
+         TESTPRINT(" "); /* TEST */
+      }
+   } else {
+      pblank = 0;
+      purplines[plp++] = *c;
+      TESTPRINT("%c",*c); /* TEST */
+   }
+   if (plp>(PBL-2)) {
+      fprintf(stderr,"%s -- purpose section too long",filename);
+      exit(1);
+   }
+   return purplines;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 category                                   */
+/* -------------------------------------------------------------------------- */
+/*  category() processes the category document section.
+ */
+static int category(unsigned char *ctext)
+{
+   int icat=0;
+   catinfo cat;
+   unsigned char *i; 
+   int l;
+    
+#if 1
+   while (*ctext==' ') ctext++;
+   l = strlen(ctext)-1;
+   while (ctext[l]==' ') {
+      ctext[l] = '\0';
+      l--;
+   }
+#endif
+   for (i=ctext; *i; i++) {
+      *i = (char)toupper((int)*i);
+#if 1
+      if (*i==' ') *i = '-';
+#endif
+   }
+   TESTPRINT("\nCATEGORY= %s",ctext); /* TEST */
+   for (cat=clist; cat; cat=cat->next) {
+      if (!strcmp(cat->name,ctext)) {
+         cat->used = 1;                 /* mark category as used             */
+         result->catmap[icat/(8*sizeof(int))] |= 1<<(icat%(8*sizeof(int)));
+                                        /* add category to document's bitmap */
+         result->ncats++;
+         TESTPRINT(" (%d)",icat);
+         return icat;
+      }
+      icat++;
+   }
+   printf("%s: undefined category: %s\n",filename,ctext);
+   result->nbadcats++;
+   return -1;
+}
+   
+
+/* -------------------------------------------------------------------------- */
+/*                                 input                                      */
+/* -------------------------------------------------------------------------- */
+/* lex input substitute.
+ */
+static char my_input(void)
+{
+   static int newfile=1;
+    
+   if (newfile) {
+      newfile = 0;
+      return '\n';
+   }  
+   if (usp) {
+      return ustack[--usp];
+   } else {
+      if (!*(bufptr)) return '\00';
+      if (*bufptr=='\t') *bufptr = ' ';
+      return *(bufptr++);
+   }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 output                                     */
+/* -------------------------------------------------------------------------- */
+/*  lex output substitute. Should not be called.
+ */
+static void my_output(char c)
+{
+   fprintf(stderr,"Called output() - internal error - warning\n");
+/*   exit(1); */
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 unput                                      */
+/* -------------------------------------------------------------------------- */
+/*  lex unput substitute.
+ */
+static void my_unput(char c)
+{
+   if (usp<USL) {
+      ustack[usp++] = c;
+   } else {
+      fprintf(stderr,"Too many unputs\n");
+      exit(1);
+   }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 yywrap                                     */
+/* -------------------------------------------------------------------------- */
+/*  lex yywrap substitute.
+ */
+int yywrap(void)
+{
+   usp = 0;
+   first = 1;
+   BEGIN NORMAL;
+   return 1;
+}
+
+static int noprint()
+{
+}
+#<
+
+#>            docentry.c
+# include "stdio.h"
+#if defined(__cplusplus)
+   extern "C" {
+#endif
+#if (defined(__cplusplus) || defined(__STDC__))
+     extern int yyreject();
+     extern int yywrap();
+     extern int yylook();
+     extern int yyback(int *, int);
+     extern int yyinput();
+     extern void yyoutput(int);
+     extern void yyunput(int);
+     extern int yylex();
+     extern int yyless(int);
+#ifdef LEXDEBUG
+     extern void allprint();
+     extern void sprint();
+#endif
+#if defined(__cplusplus)
+   }
+#endif
+#endif	/* __cplusplus or __STDC__ */
+# define U(x) x
+# define NLSTATE yyprevious=YYNEWLINE
+# define BEGIN yybgin = yysvec + 1 +
+# define INITIAL 0
+# define YYLERR yysvec
+# define YYSTATE (yyestate-yysvec-1)
+# define YYOPTIM 1
+# define YYLMAX 200
+# define output(c) putc(c,yyout)
+# define input() (((yytchar=yysptr>yysbuf?U(*--yysptr):getc(yyin))==10?(yylineno++,yytchar):yytchar)==EOF?0:yytchar)
+# define unput(c) {yytchar= (c);if(yytchar=='\n')yylineno--;*yysptr++=yytchar;}
+# define yymore() (yymorfg=1)
+# define ECHO fprintf(yyout, "%s",yytext)
+# define REJECT { nstr = yyreject(); goto yyfussy;}
+int yyleng;
+int yylenguc;
+extern unsigned char yytextarr[];
+# ifdef YYCHAR_ARRAY
+extern char yytext[];
+# else
+extern unsigned char yytext[];
+# endif
+int yyposix_point=0;
+int yynls16=0;
+int yynls_wchar=0;
+char *yylocale = "C C C C C C";
+int yymorfg;
+extern unsigned char *yysptr, yysbuf[];
+int yytchar;
+FILE *yyin = {NULL}, *yyout = {NULL};
+extern int yylineno;
+struct yysvf { 
+	int yystoff;
+	struct yysvf *yyother;
+	int *yystops;};
+struct yysvf *yyestate;
+extern struct yysvf yysvec[], *yybgin;
+/*
+                              COPYRIGHT (c) 1995
+                        Kapteyn Astronomical Institute
+         University of Groningen  -  9700 AV Groningen, The Netherlands
+
+
+Author: J.P. Terlouw
+
+*/
+#define PBL 1000                       /* Purpose lines buffer length */
+#define NBL 40                         /* Name buffer length */
+#define USL 400                        /* unput() stack size */
+
+#define TESTPRINT noprint
+
+#undef YYLMAX
+#define YYLMAX USL
+
+#undef output
+static void my_output(char);
+#define output my_output
+#undef input
+static char my_input(void);
+#define input my_input
+#undef unput
+static void my_unput(char);
+#define unput my_unput
+
+#include <ctype.h>
+#include "filecontents.h"
+#include "alloc.h"
+#include "catlist.h"
+#include "docentry.h"
+
+static void section(unsigned char*);
+static char *purpchar(unsigned char*);
+static char *name(unsigned char*);
+static int  category(unsigned char*);
+static int  noprint();
+
+static char *bufptr;                   /* Input text buffer pointer */
+static char *filename;
+static catinfo clist=NULL;
+static docinfo result=NULL;
+static int baddoc=0;
+
+static char ustack[USL];               /* unput() stack */
+static int  usp=0;                     /* unput() stack pointer */
+
+
+static int  first=1;
+/* -------------------------------------------------------------------------- */
+# define NORMAL 2
+# define NAME 4
+# define PURPOSE 6
+# define CATEGORY 8
+# define SOURCE 10
+# define YYNEWLINE 10
+yylex(){
+   int nstr; extern int yyprevious;
+                     start();
+                 /* initialize */
+   while((nstr = yylook()) >= 0)
+yyfussy: switch(nstr){
+case 0:
+   if(yywrap()) return(0); break;
+case 1:
+   section(yytext);
+break;
+case 2:
+            (void)name(yytext);
+break;
+case 3:
+(void)category(yytext);
+break;
+case 4:
+          ;
+break;
+case 5:
+         BEGIN NORMAL;
+break;
+case 6:
+           case 7:
+          (void)purpchar(yytext);
+break;
+case 8:
+ result->source = StrDup((char*)yytext);
+break;
+case 9:
+            ;
+break;
+case 10:
+           BEGIN NORMAL;
+break;
+case 11:
+            case 12:
+           ;
+break;
+case -1:
+break;
+default:
+   fprintf(yyout,"bad switch yylook %d",nstr);
+} return(0); }
+/* end of yylex */
+
+#ifndef __cplusplus
+static void __yy__unused() { main(); }
+#endif
+
+/* ========================================================================== */
+/*                                 parsefile                                  */
+/* -------------------------------------------------------------------------- */
+/*  parsefile() parses a GIPSY document file (.dc1, .dc2, .dc3 or .doc).
+ */
+extern docinfo parsefile(char *fname, catinfo cats)
+{
+   char *file;
+   int  filesize;
+
+   baddoc = 0;
+   clist = cats;
+   filename = fname;
+   file = FileContents(filename,&filesize);
+   bufptr = file;
+   result = New(_docinfo);
+   yylex();
+   Free(file);
+   if (baddoc) {
+      Delete(result);
+      return NULL;
+   }
+   if (!result->source) result->source = "";
+   result->filename = StrDup(filename);
+   result->name = StrDup(name(NULL));
+   result->purpose = StrDup(purpchar(NULL));
+   return result;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 start                                      */
+/* -------------------------------------------------------------------------- */
+/*  start() initializes the parser.
+ */
+start()
+{
+   BEGIN NORMAL; 
+   first = 1;
+   usp   = 0;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 section                                    */
+/* -------------------------------------------------------------------------- */
+/*  section() processes a document section.
+ */
+static void section(unsigned char *sname)
+{
+   char   c;
+    
+   while (*sname==' ') sname++;
+   BEGIN NORMAL;
+   if (first) {
+      BEGIN NAME;
+      first = 0;
+   } else {
+      if (!strcmp(sname,"Purpose:")) {
+         (void)purpchar(NULL);
+         BEGIN PURPOSE;
+      } else if (!strcmp(sname,"Category:")) {
+         BEGIN CATEGORY;
+      } else if (!strcmp(sname,"File:") || !strcmp(sname,"Files:")) {
+         BEGIN SOURCE;
+      }
+   }
+}
+
+
+/* -------------------------------------------------------------------------- */
+/*                                 name                                       */
+/* -------------------------------------------------------------------------- */
+/*  name() accepts the document name from the lexical scanner.
+ *  It retuns a pointer to its internal buffer.
+ *  If the found name argument is NULL, the buffer is not modified, so
+ *  a call with this argument can be used to obtain a previously filled
+ *  buffer.
+ */
+static char *name(unsigned char *nfound)
+{
+   static char namebuf[NBL];
+   int namlen;
+    
+   if (nfound) {
+      while (*nfound==' ') nfound++;
+      namlen = strlen(nfound);
+      if (namlen>=NBL) {
+         fprintf(stderr,"%s -- document name too long (%d)\n", filename, namlen);
+         baddoc = 1;
+         return namebuf;
+      }
+      strcpy(namebuf,nfound);
+      while (namebuf[--namlen]==' ') namebuf[namlen] = '\0';
+      TESTPRINT("\nNAME=%s",namebuf); /* TEST */
+   }
+   BEGIN NORMAL;
+   return namebuf;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 purpchar                                   */
+/* -------------------------------------------------------------------------- */
+/*  purpchar() acceps a character from the lexical scanner and append it to
+ *  its buffer. If the argument is NULL, purpchar() is initialized.
+ *  It returns a pointer to the buffer.
+ */
+static char *purpchar(unsigned char *c)
+{
+   static char purplines[PBL];
+   static int  plp;
+   static int  pblank=0;
+   
+   if (!c) {
+      TESTPRINT("\nPURPOSE="); /* TEST */
+      purplines[plp] = '\0';
+      plp = 0;
+      pblank = 0;
+      return purplines;
+   }
+
+   if (*c==' ') {
+      if (!pblank) {
+         pblank = 1;
+         purplines[plp++] = ' ';
+         TESTPRINT(" "); /* TEST */
+      }
+   } else {
+      pblank = 0;
+      purplines[plp++] = *c;
+      TESTPRINT("%c",*c); /* TEST */
+   }
+   if (plp>(PBL-2)) {
+      fprintf(stderr,"%s -- purpose section too long",filename);
+      exit(1);
+   }
+   return purplines;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 category                                   */
+/* -------------------------------------------------------------------------- */
+/*  category() processes the category document section.
+ */
+static int category(unsigned char *ctext)
+{
+   int icat=0;
+   catinfo cat;
+   unsigned char *i; 
+   int l;
+    
+#if 1
+   while (*ctext==' ') ctext++;
+   l = strlen(ctext)-1;
+   while (ctext[l]==' ') {
+      ctext[l] = '\0';
+      l--;
+   }
+#endif
+   for (i=ctext; *i; i++) {
+      *i = (char)toupper((int)*i);
+#if 1
+      if (*i==' ') *i = '-';
+#endif
+   }
+   TESTPRINT("\nCATEGORY= %s",ctext); /* TEST */
+   for (cat=clist; cat; cat=cat->next) {
+      if (!strcmp(cat->name,ctext)) {
+         cat->used = 1;                 /* mark category as used             */
+         result->catmap[icat/(8*sizeof(int))] |= 1<<(icat%(8*sizeof(int)));
+                                        /* add category to document's bitmap */
+         result->ncats++;
+         TESTPRINT(" (%d)",icat);
+         return icat;
+      }
+      icat++;
+   }
+   printf("%s: undefined category: %s\n",filename,ctext);
+   result->nbadcats++;
+   return -1;
+}
+   
+
+/* -------------------------------------------------------------------------- */
+/*                                 input                                      */
+/* -------------------------------------------------------------------------- */
+/* lex input substitute.
+ */
+static char my_input(void)
+{
+   static int newfile=1;
+    
+   if (newfile) {
+      newfile = 0;
+      return '\n';
+   }  
+   if (usp) {
+      return ustack[--usp];
+   } else {
+      if (!*(bufptr)) return '\00';
+      if (*bufptr=='\t') *bufptr = ' ';
+      return *(bufptr++);
+   }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 output                                     */
+/* -------------------------------------------------------------------------- */
+/*  lex output substitute. Should not be called.
+ */
+static void my_output(char c)
+{
+   fprintf(stderr,"Called output() - internal error - warning\n");
+/*   exit(1); */
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 unput                                      */
+/* -------------------------------------------------------------------------- */
+/*  lex unput substitute.
+ */
+static void my_unput(char c)
+{
+   if (usp<USL) {
+      ustack[usp++] = c;
+   } else {
+      fprintf(stderr,"Too many unputs\n");
+      exit(1);
+   }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 yywrap                                     */
+/* -------------------------------------------------------------------------- */
+/*  lex yywrap substitute.
+ */
+int yywrap(void)
+{
+   usp = 0;
+   first = 1;
+   BEGIN NORMAL;
+   return 1;
+}
+
+static int noprint()
+{
+}
+int yyvstop[] = {
+0,
+
+-2,
+0,
+
+-2,
+0,
+
+11,
+0,
+
+12,
+0,
+
+11,
+0,
+
+2,
+0,
+
+-2,
+0,
+
+6,
+0,
+
+7,
+0,
+
+6,
+0,
+
+4,
+0,
+
+5,
+0,
+
+3,
+4,
+0,
+
+4,
+0,
+
+3,
+4,
+0,
+
+9,
+0,
+
+10,
+0,
+
+8,
+9,
+0,
+
+8,
+9,
+0,
+
+1,
+0,
+
+1,
+-2,
+0,
+
+3,
+0,
+
+3,
+0,
+
+8,
+0,
+
+8,
+0,
+0};
+# define YYTYPE unsigned char
+struct yywork { YYTYPE verify, advance; } yycrank[] = {
+{0,0},	{0,0},	{0,0},	{0,0},	
+{0,0},	{0,0},	{0,0},	{0,0},	
+{0,0},	{0,0},	{0,0},	{0,0},	
+{0,0},	{0,0},	{0,0},	{0,0},	
+{0,0},	{0,0},	{0,0},	{0,0},	
+{0,0},	{0,0},	{0,0},	{0,0},	
+{0,0},	{0,0},	{0,0},	{0,0},	
+{0,0},	{0,0},	{0,0},	{0,0},	
+{0,0},	{0,0},	{0,0},	{0,0},	
+{0,0},	{0,0},	{0,0},	{0,0},	
+{0,0},	{0,0},	{0,0},	{0,0},	
+{0,0},	{0,0},	{0,0},	{0,0},	
+{0,0},	{2,13},	{2,13},	{2,13},	
+{2,13},	{2,13},	{2,13},	{2,13},	
+{2,13},	{2,13},	{2,13},	{13,31},	
+{16,31},	{21,31},	{25,31},	{0,0},	
+{0,0},	{0,0},	{2,13},	{2,13},	
+{2,13},	{2,13},	{2,13},	{2,13},	
+{2,13},	{2,13},	{2,13},	{2,13},	
+{2,13},	{2,13},	{2,13},	{2,13},	
+{2,13},	{2,13},	{2,13},	{2,13},	
+{2,13},	{2,13},	{2,13},	{2,13},	
+{2,13},	{2,13},	{2,13},	{2,13},	
+{0,0},	{0,0},	{0,0},	{0,0},	
+{0,0},	{0,0},	{2,13},	{2,13},	
+{2,13},	{2,13},	{2,13},	{2,13},	
+{2,13},	{2,13},	{2,13},	{2,13},	
+{2,13},	{2,13},	{2,13},	{2,13},	
+{2,13},	{2,13},	{2,13},	{2,13},	
+{2,13},	{2,13},	{2,13},	{2,13},	
+{2,13},	{2,13},	{2,13},	{2,13},	
+{3,14},	{4,16},	{6,18},	{5,5},	
+{7,19},	{8,21},	{10,25},	{9,22},	
+{11,27},	{3,15},	{12,30},	{18,18},	
+{5,17},	{7,20},	{0,0},	{0,0},	
+{9,23},	{11,28},	{4,16},	{6,18},	
+{0,0},	{18,32},	{8,21},	{10,26},	
+{0,0},	{0,0},	{0,0},	{12,30},	
+{18,18},	{0,0},	{0,0},	{3,14},	
+{0,0},	{0,0},	{5,5},	{7,19},	
+{0,0},	{0,0},	{9,24},	{11,27},	
+{0,0},	{0,0},	{0,0},	{24,33},	
+{0,0},	{3,14},	{0,0},	{3,14},	
+{5,5},	{7,19},	{5,5},	{7,19},	
+{9,22},	{11,29},	{9,22},	{11,29},	
+{24,33},	{0,0},	{0,0},	{0,0},	
+{0,0},	{0,0},	{0,0},	{0,0},	
+{3,14},	{0,0},	{0,0},	{5,5},	
+{7,19},	{0,0},	{0,0},	{9,24},	
+{11,29},	{0,0},	{0,0},	{0,0},	
+{24,33},	{24,33},	{24,33},	{24,33},	
+{24,33},	{24,33},	{24,33},	{24,33},	
+{24,33},	{24,33},	{24,33},	{24,33},	
+{24,33},	{24,33},	{24,33},	{24,33},	
+{24,33},	{24,33},	{24,33},	{24,33},	
+{24,33},	{24,33},	{24,33},	{24,33},	
+{24,33},	{24,33},	{0,0},	{0,0},	
+{0,0},	{0,0},	{0,0},	{0,0},	
+{24,33},	{24,33},	{24,33},	{24,33},	
+{24,33},	{24,33},	{24,33},	{24,33},	
+{24,33},	{24,33},	{24,33},	{24,33},	
+{24,33},	{24,33},	{24,33},	{24,33},	
+{24,33},	{24,33},	{24,33},	{24,33},	
+{24,33},	{24,33},	{24,33},	{24,33},	
+{24,33},	{24,33},	{26,33},	{0,0},	
+{0,0},	{0,0},	{0,0},	{0,0},	
+{0,0},	{0,0},	{0,0},	{0,0},	
+{0,0},	{0,0},	{0,0},	{26,33},	
+{0,0},	{0,0},	{0,0},	{0,0},	
+{0,0},	{0,0},	{0,0},	{0,0},	
+{0,0},	{0,0},	{0,0},	{0,0},	
+{26,31},	{0,0},	{0,0},	{0,0},	
+{0,0},	{0,0},	{0,0},	{26,34},	
+{26,34},	{26,34},	{26,34},	{26,34},	
+{26,34},	{26,34},	{26,34},	{26,34},	
+{26,34},	{26,34},	{26,34},	{26,34},	
+{26,34},	{26,34},	{26,34},	{26,34},	
+{26,34},	{26,34},	{26,34},	{26,34},	
+{26,34},	{26,34},	{26,34},	{26,34},	
+{26,34},	{0,0},	{0,0},	{0,0},	
+{0,0},	{0,0},	{0,0},	{26,34},	
+{26,34},	{26,34},	{26,34},	{26,34},	
+{26,34},	{26,34},	{26,34},	{26,34},	
+{26,34},	{26,34},	{26,34},	{26,34},	
+{26,34},	{26,34},	{26,34},	{26,34},	
+{26,34},	{26,34},	{26,34},	{26,34},	
+{26,34},	{26,34},	{26,34},	{26,34},	
+{26,34},	{29,35},	{0,0},	{29,35},	
+{29,35},	{29,35},	{29,35},	{29,35},	
+{29,35},	{29,35},	{29,35},	{29,35},	
+{29,35},	{0,0},	{0,0},	{0,0},	
+{0,0},	{0,0},	{0,0},	{0,0},	
+{29,35},	{29,35},	{29,35},	{29,35},	
+{29,35},	{29,35},	{29,35},	{29,35},	
+{29,35},	{29,35},	{29,35},	{29,35},	
+{29,35},	{29,35},	{29,35},	{29,35},	
+{29,35},	{29,35},	{29,35},	{29,35},	
+{29,35},	{29,35},	{29,35},	{29,35},	
+{29,35},	{29,35},	{0,0},	{0,0},	
+{0,0},	{0,0},	{29,35},	{0,0},	
+{29,35},	{29,35},	{29,35},	{29,35},	
+{29,35},	{29,35},	{29,35},	{29,35},	
+{29,35},	{29,35},	{29,35},	{29,35},	
+{29,35},	{29,35},	{29,35},	{29,35},	
+{29,35},	{29,35},	{29,35},	{29,35},	
+{29,35},	{29,35},	{29,35},	{29,35},	
+{29,35},	{29,35},	{30,36},	{30,36},	
+{30,36},	{30,36},	{30,36},	{30,36},	
+{30,36},	{30,36},	{30,36},	{30,36},	
+{30,31},	{0,0},	{0,0},	{0,0},	
+{0,0},	{0,0},	{0,0},	{30,36},	
+{30,36},	{30,36},	{30,36},	{30,36},	
+{30,36},	{30,36},	{30,36},	{30,36},	
+{30,36},	{30,36},	{30,36},	{30,36},	
+{30,36},	{30,36},	{30,36},	{30,36},	
+{30,36},	{30,36},	{30,36},	{30,36},	
+{30,36},	{30,36},	{30,36},	{30,36},	
+{30,36},	{0,0},	{0,0},	{0,0},	
+{0,0},	{0,0},	{0,0},	{30,36},	
+{30,36},	{30,36},	{30,36},	{30,36},	
+{30,36},	{30,36},	{30,36},	{30,36},	
+{30,36},	{30,36},	{30,36},	{30,36},	
+{30,36},	{30,36},	{30,36},	{30,36},	
+{30,36},	{30,36},	{30,36},	{30,36},	
+{30,36},	{30,36},	{30,36},	{30,36},	
+{30,36},	{34,33},	{0,0},	{0,0},	
+{0,0},	{0,0},	{0,0},	{0,0},	
+{0,0},	{0,0},	{0,0},	{0,0},	
+{0,0},	{0,0},	{34,33},	{0,0},	
+{0,0},	{0,0},	{0,0},	{0,0},	
+{0,0},	{0,0},	{0,0},	{0,0},	
+{0,0},	{0,0},	{0,0},	{34,31},	
+{0,0},	{0,0},	{0,0},	{0,0},	
+{0,0},	{0,0},	{34,34},	{34,34},	
+{34,34},	{34,34},	{34,34},	{34,34},	
+{34,34},	{34,34},	{34,34},	{34,34},	
+{34,34},	{34,34},	{34,34},	{34,34},	
+{34,34},	{34,34},	{34,34},	{34,34},	
+{34,34},	{34,34},	{34,34},	{34,34},	
+{34,34},	{34,34},	{34,34},	{34,34},	
+{0,0},	{0,0},	{0,0},	{0,0},	
+{0,0},	{0,0},	{34,34},	{34,34},	
+{34,34},	{34,34},	{34,34},	{34,34},	
+{34,34},	{34,34},	{34,34},	{34,34},	
+{34,34},	{34,34},	{34,34},	{34,34},	
+{34,34},	{34,34},	{34,34},	{34,34},	
+{34,34},	{34,34},	{34,34},	{34,34},	
+{34,34},	{34,34},	{34,34},	{34,34},	
+{36,36},	{36,36},	{36,36},	{36,36},	
+{36,36},	{36,36},	{36,36},	{36,36},	
+{36,36},	{36,36},	{36,31},	{0,0},	
+{0,0},	{0,0},	{0,0},	{0,0},	
+{0,0},	{36,36},	{36,36},	{36,36},	
+{36,36},	{36,36},	{36,36},	{36,36},	
+{36,36},	{36,36},	{36,36},	{36,36},	
+{36,36},	{36,36},	{36,36},	{36,36},	
+{36,36},	{36,36},	{36,36},	{36,36},	
+{36,36},	{36,36},	{36,36},	{36,36},	
+{36,36},	{36,36},	{36,36},	{0,0},	
+{0,0},	{0,0},	{0,0},	{0,0},	
+{0,0},	{36,36},	{36,36},	{36,36},	
+{36,36},	{36,36},	{36,36},	{36,36},	
+{36,36},	{36,36},	{36,36},	{36,36},	
+{36,36},	{36,36},	{36,36},	{36,36},	
+{36,36},	{36,36},	{36,36},	{36,36},	
+{36,36},	{36,36},	{36,36},	{36,36},	
+{36,36},	{36,36},	{36,36},	{0,0},	
+{0,0}};
+struct yysvf yysvec[] = {
+{0,	0,	0},
+{0,	0,		0},	
+{1,	0,		0},	
+{-123,	0,		0},	
+{-77,	yysvec+3,	0},	
+{-126,	0,		yyvstop+1},
+{-78,	yysvec+5,	yyvstop+3},
+{-127,	0,		0},	
+{-81,	yysvec+7,	0},	
+{-130,	0,		0},	
+{-82,	yysvec+9,	0},	
+{-131,	0,		0},	
+{-86,	yysvec+11,	0},	
+{1,	yysvec+2,	0},	
+{0,	0,		yyvstop+5},
+{0,	0,		yyvstop+7},
+{2,	yysvec+2,	yyvstop+9},
+{0,	0,		yyvstop+11},
+{-87,	yysvec+5,	yyvstop+13},
+{0,	0,		yyvstop+15},
+{0,	0,		yyvstop+17},
+{3,	yysvec+2,	yyvstop+19},
+{0,	0,		yyvstop+21},
+{0,	0,		yyvstop+23},
+{135,	0,		yyvstop+25},
+{4,	yysvec+2,	yyvstop+28},
+{226,	yysvec+2,	yyvstop+30},
+{0,	0,		yyvstop+33},
+{0,	0,		yyvstop+35},
+{303,	0,		yyvstop+37},
+{378,	yysvec+29,	yyvstop+40},
+{0,	0,		yyvstop+43},
+{0,	yysvec+5,	yyvstop+45},
+{0,	yysvec+24,	yyvstop+48},
+{469,	yysvec+2,	yyvstop+50},
+{0,	yysvec+29,	yyvstop+52},
+{544,	yysvec+29,	yyvstop+54},
+{0,	0,	0}};
+struct yywork *yytop = yycrank+666;
+struct yysvf *yybgin = yysvec+1;
+unsigned char yymatch[] = {
+00  ,01  ,01  ,01  ,01  ,01  ,01  ,01  ,
+01  ,01  ,012 ,01  ,01  ,01  ,01  ,01  ,
+01  ,01  ,01  ,01  ,01  ,01  ,01  ,01  ,
+01  ,01  ,01  ,01  ,01  ,01  ,01  ,01  ,
+040 ,01  ,01  ,01  ,01  ,01  ,01  ,01  ,
+01  ,01  ,01  ,01  ,01  ,040 ,'.' ,01  ,
+'0' ,'0' ,'0' ,'0' ,'0' ,'0' ,'0' ,'0' ,
+'0' ,'0' ,01  ,01  ,01  ,01  ,01  ,01  ,
+01  ,'A' ,'A' ,'A' ,'A' ,'A' ,'A' ,'A' ,
+'A' ,'A' ,'A' ,'A' ,'A' ,'A' ,'A' ,'A' ,
+'A' ,'A' ,'A' ,'A' ,'A' ,'A' ,'A' ,'A' ,
+'A' ,'A' ,'A' ,01  ,01  ,01  ,01  ,'.' ,
+01  ,'A' ,'A' ,'A' ,'A' ,'A' ,'A' ,'A' ,
+'A' ,'A' ,'A' ,'A' ,'A' ,'A' ,'A' ,'A' ,
+'A' ,'A' ,'A' ,'A' ,'A' ,'A' ,'A' ,'A' ,
+'A' ,'A' ,'A' ,01  ,01  ,01  ,01  ,01  ,
+01  ,01  ,01  ,01  ,01  ,01  ,01  ,01  ,
+01  ,01  ,01  ,01  ,01  ,01  ,01  ,01  ,
+01  ,01  ,01  ,01  ,01  ,01  ,01  ,01  ,
+01  ,01  ,01  ,01  ,01  ,01  ,01  ,01  ,
+01  ,01  ,01  ,01  ,01  ,01  ,01  ,01  ,
+01  ,01  ,01  ,01  ,01  ,01  ,01  ,01  ,
+01  ,01  ,01  ,01  ,01  ,01  ,01  ,01  ,
+01  ,01  ,01  ,01  ,01  ,01  ,01  ,01  ,
+01  ,01  ,01  ,01  ,01  ,01  ,01  ,01  ,
+01  ,01  ,01  ,01  ,01  ,01  ,01  ,01  ,
+01  ,01  ,01  ,01  ,01  ,01  ,01  ,01  ,
+01  ,01  ,01  ,01  ,01  ,01  ,01  ,01  ,
+01  ,01  ,01  ,01  ,01  ,01  ,01  ,01  ,
+01  ,01  ,01  ,01  ,01  ,01  ,01  ,01  ,
+01  ,01  ,01  ,01  ,01  ,01  ,01  ,01  ,
+01  ,01  ,01  ,01  ,01  ,01  ,01  ,01  ,
+0};
+unsigned char yyextra[] = {
+0,0,1,0,0,0,0,0,
+0,0,0,0,0,0,0,0,
+0};
+/* @(#) A.10.32.03 HP C LANGUAGE TOOL (NCFORM) 960517 $      */
+int yylineno =1;
+# define YYU(x) x
+# define NLSTATE yyprevious=YYNEWLINE
+ 
+#ifdef YYNLS16_WCHAR
+unsigned char yytextuc[YYLMAX * sizeof(wchar_t)];
+# ifdef YY_PCT_POINT /* for %pointer */
+wchar_t yytextarr[YYLMAX];
+wchar_t *yytext;
+# else               /* %array */
+wchar_t yytextarr[1];
+wchar_t yytext[YYLMAX];
+# endif
+#else
+unsigned char yytextuc;
+# ifdef YY_PCT_POINT /* for %pointer */
+unsigned char yytextarr[YYLMAX];
+unsigned char *yytext;
+# else               /* %array */
+unsigned char yytextarr[1];
+# ifdef YYCHAR_ARRAY
+char yytext[YYLMAX];
+# else
+unsigned char yytext[YYLMAX];
+# endif
+# endif
+#endif
+
+struct yysvf *yylstate [YYLMAX], **yylsp, **yyolsp;
+unsigned char yysbuf[YYLMAX];
+unsigned char *yysptr = yysbuf;
+int *yyfnd;
+extern struct yysvf *yyestate;
+int yyprevious = YYNEWLINE;
+yylook(){
+	register struct yysvf *yystate, **lsp;
+	register struct yywork *yyt;
+	struct yysvf *yyz;
+	int yych, yyfirst;
+	struct yywork *yyr;
+# ifdef LEXDEBUG
+	int debug;
+# endif
+/*	char *yylastch;
+ * ***** nls8 ***** */
+	unsigned char *yylastch, sec, third, fourth;
+	/* start off machines */
+# ifdef LEXDEBUG
+	debug = 0;
+# endif
+	yyfirst=1;
+	if (!yymorfg)
+#ifdef YYNLS16_WCHAR
+		yylastch = yytextuc;
+#else
+# ifdef YYCHAR_ARRAY
+		yylastch = (unsigned char *)yytext;
+# else
+		yylastch = yytext;
+# endif
+#endif
+	else {
+		yymorfg=0;
+#ifdef YYNLS16_WCHAR
+		yylastch = yytextuc+yylenguc;
+#else
+# ifdef YYCHAR_ARRAY
+		yylastch = (unsigned char *)yytext+yyleng;
+# else
+		yylastch = yytext+yyleng;
+# endif
+#endif
+		}
+	for(;;){
+		lsp = yylstate;
+		yyestate = yystate = yybgin;
+		if (yyprevious==YYNEWLINE) yystate++;
+		for (;;){
+# ifdef LEXDEBUG
+			if(debug)fprintf(yyout,"state %d\n",yystate-yysvec-1);
+# endif
+			yyt = &yycrank[yystate->yystoff];
+			if(yyt == yycrank && !yyfirst){  /* may not be any transitions */
+				yyz = yystate->yyother;
+				if(yyz == 0)break;
+				if(yyz->yystoff == 0)break;
+				}
+			*yylastch++ = yych = input();
+			yyfirst=0;
+		tryagain:
+# ifdef LEXDEBUG
+			if(debug){
+				fprintf(yyout,"char ");
+				allprint(yych);
+				putchar('\n');
+				}
+# endif
+			yyr = yyt;
+			if ( (int)yyt > (int)yycrank){
+				yyt = yyr + yych;
+				if (yyt <= yytop && yyt->verify+yysvec == yystate){
+					if(yyt->advance+yysvec == YYLERR)	/* error transitions */
+						{unput(*--yylastch);break;}
+					*lsp++ = yystate = yyt->advance+yysvec;
+					goto contin;
+					}
+				}
+# ifdef YYOPTIM
+			else if((int)yyt < (int)yycrank) {		/* r < yycrank */
+				yyt = yyr = yycrank+(yycrank-yyt);
+# ifdef LEXDEBUG
+				if(debug)fprintf(yyout,"compressed state\n");
+# endif
+				yyt = yyt + yych;
+				if(yyt <= yytop && yyt->verify+yysvec == yystate){
+					if(yyt->advance+yysvec == YYLERR)	/* error transitions */
+						{unput(*--yylastch);break;}
+					*lsp++ = yystate = yyt->advance+yysvec;
+					goto contin;
+					}
+				yyt = yyr + YYU(yymatch[yych]);
+# ifdef LEXDEBUG
+				if(debug){
+					fprintf(yyout,"try fall back character ");
+					allprint(YYU(yymatch[yych]));
+					putchar('\n');
+					}
+# endif
+				if(yyt <= yytop && yyt->verify+yysvec == yystate){
+					if(yyt->advance+yysvec == YYLERR)	/* error transition */
+						{unput(*--yylastch);break;}
+					*lsp++ = yystate = yyt->advance+yysvec;
+					goto contin;
+					}
+				}
+			if ((yystate = yystate->yyother) && (yyt = &yycrank[yystate->yystoff]) != yycrank){
+# ifdef LEXDEBUG
+				if(debug)fprintf(yyout,"fall back to state %d\n",yystate-yysvec-1);
+# endif
+				goto tryagain;
+				}
+# endif
+			else
+				{unput(*--yylastch);break;}
+		contin:
+# ifdef LEXDEBUG
+			if(debug){
+				fprintf(yyout,"state %d char ",yystate-yysvec-1);
+				allprint(yych);
+				putchar('\n');
+				}
+# endif
+			;
+			}
+# ifdef LEXDEBUG
+		if(debug){
+			fprintf(yyout,"stopped at %d with ",*(lsp-1)-yysvec-1);
+			allprint(yych);
+			putchar('\n');
+			}
+# endif
+		while (lsp-- > yylstate){
+			*yylastch-- = 0;
+			if (*lsp != 0 && (yyfnd= (*lsp)->yystops) && *yyfnd > 0){
+				yyolsp = lsp;
+				if(yyextra[*yyfnd]){		/* must backup */
+					while(yyback((*lsp)->yystops,-*yyfnd) != 1 && lsp > yylstate){
+						lsp--;
+						unput(*yylastch--);
+						}
+					}
+				yyprevious = YYU(*yylastch);
+				yylsp = lsp;
+#ifdef YYNLS16_WCHAR
+				yylenguc = yylastch-yytextuc+1;
+				yytextuc[yylenguc] = 0;
+#else
+# ifdef YYCHAR_ARRAY
+				yyleng = yylastch-(unsigned char*)yytext+1;
+# else
+				yyleng = yylastch-yytext+1;
+# endif
+				yytext[yyleng] = 0;
+#endif
+# ifdef LEXDEBUG
+				if(debug){
+					fprintf(yyout,"\nmatch ");
+#ifdef YYNLS16_WCHAR
+					sprint(yytextuc);
+#else
+					sprint(yytext);
+#endif
+					fprintf(yyout," action %d\n",*yyfnd);
+					}
+# endif
+				return(*yyfnd++);
+				}
+			unput(*yylastch);
+			}
+#ifdef YYNLS16_WCHAR
+		if (yytextuc[0] == 0  /* && feof(yyin) */)
+#else
+		if (yytext[0] == 0  /* && feof(yyin) */)
+#endif
+			{
+			yysptr=yysbuf;
+			return(0);
+			}
+#ifdef YYNLS16_WCHAR
+		yyprevious = yytextuc[0] = input();
+#else
+		yyprevious = yytext[0] = input();
+#endif
+		if (yyprevious>0) {
+			output(yyprevious);
+#ifdef YYNLS16
+                        if (yynls16) {
+			int noBytes;
+                        sec = input();
+                        third = input();
+                        fourth = input();
+#ifdef YYNLS16_WCHAR
+                        noBytes = MultiByte(yytextuc[0],sec,third,fourth);
+#else 
+                        noBytes = MultiByte(yytext[0],sec,third,fourth);
+#endif          
+     					switch(noBytes) {
+     					case 2:
+#ifdef YYNLS16_WCHAR
+ 						output(yyprevious=yytextuc[0]=sec);
+#else
+ 						output(yyprevious=yytext[0]=sec);
+#endif
+                                                 unput(fourth);
+                                                 unput(third);
+                                                 break;
+     					case 3:
+#ifdef YYNLS16_WCHAR
+ 						output(yyprevious=yytextuc[0]=sec);
+ 						output(yyprevious=yytextuc[0]=third);
+#else
+ 						output(yyprevious=yytext[0]=sec);
+ 						output(yyprevious=yytext[0]=third);
+#endif
+                                                 unput(fourth);
+                                                 break; 
+                                         case 4:
+#ifdef YYNLS16_WCHAR
+ 						output(yyprevious=yytextuc[0]=sec);
+ 						output(yyprevious=yytextuc[0]=third);
+ 						output(yyprevious=yytextuc[0]=fourth);
+#else
+ 						output(yyprevious=yytext[0]=sec);
+ 						output(yyprevious=yytext[0]=third);
+ 						output(yyprevious=yytext[0]=fourth);
+#endif
+                                                 break;                                                                                            
+					default:
+					        unput(fourth);
+					        unput(third);
+						unput(sec);
+						break;
+						}
+					}
+#endif
+                }
+#ifdef YYNLS16_WCHAR
+		yylastch=yytextuc;
+#else
+# ifdef YYCHAR_ARRAY
+		yylastch=(unsigned char*)yytext;
+# else
+		yylastch=yytext;
+# endif
+#endif
+# ifdef LEXDEBUG
+		if(debug)putchar('\n');
+# endif
+		}
+	}
+
+# ifdef __cplusplus
+yyback(int *p, int m)
+# else
+yyback(p, m)
+	int *p;
+# endif
+{
+if (p==0) return(0);
+while (*p)
+	{
+	if (*p++ == m)
+		return(1);
+	}
+return(0);
+}
+	/* the following are only used in the lex library */
+yyinput(){
+	return(input());
+	
+	}
+
+#if (defined(__cplusplus) || defined(__STDC__))
+void yyoutput(int c)
+#else
+yyoutput(c)
+  int c;
+# endif
+{
+	output(c);
+}
+
+#if (defined(__cplusplus) || defined(__STDC__))
+void yyunput(int c)
+#else
+yyunput(c)
+   int c;
+#endif
+{
+	unput(c);
+}
+#<
+
+#>            docentry.h
+#if !defined(_docentry_h_)
+#define _docentry_h_
+#include "htmldoc.h"
+#include "catlist.h"
+
+typedef struct _docinfo {
+   char *filename;                  /* full document file name */
+   char *source;                    /* document source file name */
+   char *name;                      /* document name */
+   char *purpose;                   /* document's purpose section */
+   int  catmap[CATMAPS];            /* category bitmap */ 
+   int  ncats;                      /* number of categories found */
+   int  nbadcats;                   /* number of bad categories */
+   struct _docinfo *next;
+} _docinfo, *docinfo;
+
+extern docinfo parsefile(char *fname, catinfo cats);
+
+#endif
+#<

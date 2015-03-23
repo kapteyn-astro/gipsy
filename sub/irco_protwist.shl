@@ -1,0 +1,68 @@
+c@ subroutine IRCO_PROTWIST( integer, double precision, double precision,
+c@   double precision, double precision, double precision, integer )
+
+c#>	irco_protwist.dc2
+c Subroutine:	IRCO_PROTWIST
+c
+c Purpose:	Project points and twist angles onto a plane.
+c
+c File: 	irproject.shl.
+c
+c Author:	Do Kester
+c
+c Use:
+c	call IRCO_PROTWIST(
+c		prid,	I	integer,
+c 		xyz,	I	doubleprecision array (3,N),
+c 		twv,	I/S	doubleprecision array (3,N),
+c  		x, 	O	doubleprecision array (n),
+c  		y,	O	doubleprecision array (n),
+c  		t,	O	doubleprecision array (n),
+c		n 	I	integer.
+c		)
+c	prid	a projections system number (see IRCO_PRNAME),
+c	xyz	3-dimensional coordinates of the points on the sphere,
+c	twv	3-dimensional coordinates of the twistangles on the sphere,
+c	x, y	the corresponding coordinates on the plane,
+c	t	the projected twist angles on the plane
+c	n	number of points to be projected.
+c Description:
+c     	The xyz-vectors are projected using IRCO_PROJECT.
+c     	To find the projected twist angles a small fraction of the
+c	twist angle vector (length: 3.85 arcmin) is added to the
+c	xyz-vector to simulate the shift in xyz during one second.
+c	The resulting vector is projected too and the twist angle
+c	is calculated from the difference between the original
+c	and the shifted projections.
+c
+c	The twv-vector is used as scartch space; it is destroyed.
+c
+c References:
+c	IRCPO_PROJECT IRCO_PRNAME.
+c Updates:
+c#<
+
+	subroutine IRCO_PROTWIST( prid, xyz, twv, x, y, t, n )
+
+	integer		prid, n
+	doubleprecision	xyz(3*n), twv(3*n), x(n), y(n), t(n)
+	doubleprecision	SHIFT, RADIUS
+	parameter	( SHIFT = 0.001119919604 )
+	parameter	( RADIUS = 0.9999993729 )
+	integer		i
+
+	call irco_project( prid, xyz, x, y, n )
+
+	for i = 1, n * 3
+	    twv(i) = twv(i) * SHIFT + xyz(i) * RADIUS
+	cfor
+c project the shifted vector
+	call irco_project( prid, twv, twv, t, n )
+
+	for i = 1, n
+	  t(i) = atan2( t(i) - y(i), twv(i) - x(i) )
+	cfor
+
+	return
+	end
+

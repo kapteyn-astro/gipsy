@@ -1,0 +1,1829 @@
+points.src
+
+        Copyright (c) Kapteyn Laboratorium Groningen 1994
+        All Rights Reserved.
+
+Name:         points.src
+Creator:      freddy
+Host:         guspace
+Date:         Sep 7, 1994
+Contents:     points.dc1 points.c autohist.h objects.h main.h
+              defs.h points.make
+
+#>            points.dc1
+
+Program:	points
+
+Purpose:	Automatic point source extractor. Uses a histogram 
+		method to determine the zerolevel and the noise in
+		a map.
+
+Category:	ANALYSIS
+
+File:		points.src
+
+Author:		Fred Lahuis
+
+Keywords:
+
+   INSET=	Input set. The subsets of the input have
+		to be two dimensional.
+
+   OUTSET=      The output set will have a parameter         [none]
+		axis added, called PARAM_POINT. If such an
+		axis already exists in the input set, an index
+		number will be attached to it.
+		If the output set already exists it will be assumed
+		to have a dimension of at least three and the 
+		third axis will be assumed to be the parameter axis.
+		The parameter axis runs from 0 to 3.
+		  0 --> original image
+		  1 --> background subtracted image
+		  2 --> background
+		  3 --> noise
+	
+(**)OVERWRITE=	Asked if the output set already exists.        y/[n]
+		If no is entered OUTSET= will be asked again.
+		If yes is entered the output set is assumed
+		to be of the proper dimensions (including
+		the parameter axis). if this is not the case
+		the program may crash.
+
+   MASKSET=	Set used to indicate the points to be         [none]  
+		or not to be used in the determination of
+		the background and the noise. The points not 
+		to be used have the value blank.
+		The subsets have to be two dimensional.
+		If the number of subsets equals the number
+		of subsets of the input set, each subset will
+		be assumed to contain a mask for the corresponding
+		subset of the input set. Otherwise the 
+		subset at the highest level is used as a mask
+		for all the input subsets.
+
+   BOX=		Area in subset(s) to work on             [whole set]
+
+   OBJFILE=     Base name of output file                      [none]
+		   <filename>.objs
+		In the file .objs information on the found 
+		pointsources is given.
+		All subsets are written to this file and only
+		the last iteration is saved.
+
+   HISTFILE=    Base name of output file                      [none]
+		   <filename>.hist
+		In .hist the results of the histogram determination
+		of zero and noise for all areas are given.
+		All subsets are written to this file and only
+		the last iteration is saved.
+
+   RCLFILE=	Filename for recall file                      [none]
+		The file will get the extension .rcl and can be 
+		used as input for e.g. CPLOT.
+		The files will (if necessary) get an extension
+		for the subset number. The recall files are 
+		rewritten after each iteration, so only the result
+		for the last iteration is saved.
+
+   SIDE=        Square size of the subareas                    [100]
+
+   SEP=		Separation between subarea centers              [50]
+		The resolution in the resulting background
+		and noise images is directly dependent on this
+		parameter. To obtain a maximum resolution 
+		SEP=1 should be used.
+
+   AREA=	Size of the area around a pixel.                [10]
+		If a pixel is the local maximum in this area 
+		the intensity weighted mean is used as the position
+		for the 'point'source.
+		There may not be any blanks in the area.
+
+   EDGE=	Minimum distance from the side of the map   [area/2]
+
+   SN=		Minimum signal to noise for point source       [3.0]
+		The value for the point sources must be
+		larger than the 'calculated' ZERO + SN * NOISE
+
+ **NOISE=	If this keyword is specified, this value is used
+		in the selection of pointsources instead of the 
+		calculated value of the noise.
+
+ **NPOINTS=	Minimum number of points      [20 percent of subarea]
+		required to accept the histogram result.
+
+Description:
+
+	This program creates a background image and a noise
+	image of the input image. From this it extracts point sources.
+	It divides the map into sub areas of (side) by (side) pixels. 
+	The area centers are separated by (sep) pixels. So every
+	pixels is within (side/sep)^2 areas. This means that maximum 
+	coverage, and so maximum resolution in the background and
+	noise image, is obtained when sep=1. 
+	In each area the program determines the zerolevel and noise 
+	in a two step histogram method. In the first step a rough
+	estimate of the zerolevel is made. This is used to limit the 
+	number of points in the determination of the zero and noise.
+	In the second step only the points left of the maximium are used
+	to avoid confusion by extended sources or a large number of
+	smaller sources. The zerolevel is taken as being the maximum
+	point in the distribution. The noise at the half maximum point.
+
+	The background and noise maps are determined by taking the plain
+	average of all coverages.
+	From background and noise maps the 'pointsources' are extracted 
+	as being those points that have a value higher than the zerolevel 
+	plus (sigma) times the noise and have the highest value in an 
+	(area) by (area) pixel area.
+
+	In the outfile the following values are written for each 
+	pointsource:
+
+	xpos, ypos, st.dev. x, st.dev. y, background, noise, peak level, SN
+	
+	The peak level is the data value minus the background value.
+	SN is the peak level divided by he noise.
+
+	The positions as listed in the .objs and .rcl files are
+	intensity weighted averages in an (area) by (area) pixel area.
+	In the .objs file also the standard deviations are listed.
+
+Comments:
+
+	All keywords, except for INSET and FILENAME are repeated
+	keywords. This makes interactive use of the program 
+	possible.
+
+Examples:
+
+	Example of an .objs file. In this file the
+	first line contains the parameters used.
+
+# side = 75 sep = 25 subbox = 10 sn = 3.0 3.0 edge = 10
+# set=test subset 0, box [-127,128,-127,128]
+#          ra              dec   sd_ra  sd_dec    zero   noise     peak   intens      SN  
+ 2h 17m 53.8s    61d 26m 31.5s   0.010   0.012   6.675   1.261   15.601    8.925    7.08  
+ 2h 18m  9.6s    61d 28m 34.9s   0.008   0.007   6.898   1.071  113.824  106.926   99.87  
+ 2h 18m  9.9s    61d 39m 15.9s   0.012   0.012   6.908   0.958   12.220    5.313    5.54  
+ 2h 18m 33.2s    62d 14m 39.7s   0.011   0.011   0.970   1.087    8.233    7.263    6.68  
+ 2h 18m 56.9s    61d 36m 38.7s   0.011   0.011   6.838   1.039   31.965   25.127   24.18  
+ 2h 20m 53.4s    62d 11m 45.8s   0.011   0.011   0.450   1.027    7.746    7.296    7.10  
+ 2h 21m 32.4s    61d 47m 31.2s   0.011   0.011   9.753   4.967  260.092  250.340   50.40  
+ 2h 21m 38.1s    61d 50m 16.3s   0.011   0.011   9.753   4.967  222.079  212.327   42.75  
+ 2h 21m 50.8s    61d 53m  4.2s   0.011   0.011   7.522   4.333  575.238  567.716  131.04  
+ 2h 22m 12.5s    62d  6m 22.1s   0.009   0.009   4.361   2.299   71.737   67.377   29.31  
+
+	Example of a .hist file
+	Listed here is the pixel position of the lower
+	left corner of the subarea, the number of pixels 
+	in that area, the zerolevel and noise for that area.
+	When the histogram method is not succesful a
+	- - is written where the zero and noise should be.
+
+# set=test subset 0, box [-119,120,-119,120]
+# side=100 sep=50
+   0    0      900  +0.0084   0.0548
+  50    0     5900  -0.0577   0.0746
+ 100    0     5126  -0.0330   0.0867
+ 150    0      126  -0.0089   0.1341
+ 200    0        0 - -
+   0   50      900  +0.0195   0.0772
+  50   50     5900  -0.0245   0.0930
+ 100   50     5170  -0.0106   0.1087
+ 150   50      170  +0.0336   0.1690
+ 200   50        0 - -
+   0  100      900  -0.0234   0.0892
+  50  100     5900  -0.0480   0.1728
+ 100  100     5196  -0.0300   0.1252
+ 150  100      196  +0.0855   0.1188
+ 200  100        0 - -
+   0  150      801  -0.1109   0.1069
+  50  150     5251  -0.1427   0.1487
+ 100  150     4628  -0.1624   0.1396
+ 150  150      178  -0.1508   0.0938
+ 200  150        0 - -
+   0  200      351  -0.1630   0.0536
+  50  200     2301  -0.1949   0.0996
+ 100  200     2028  -0.1935   0.0977
+ 150  200       78  -0.3101   0.0976
+ 200  200        0 - -
+
+
+	Example of a recall file:
+
+*1950.0 2 17 53.8 *1950.0 61 26 31.5
+*1950.0 2 18 9.6 *1950.0 61 28 34.9
+*1950.0 2 18 9.9 *1950.0 61 39 15.9
+*1950.0 2 18 33.2 *1950.0 62 14 39.7
+*1950.0 2 18 56.9 *1950.0 61 36 38.7
+*1950.0 2 20 53.4 *1950.0 62 11 45.8
+*1950.0 2 21 32.4 *1950.0 61 47 31.2
+*1950.0 2 21 38.1 *1950.0 61 50 16.3
+*1950.0 2 21 50.8 *1950.0 61 53 4.2
+*1950.0 2 22 12.5 *1950.0 62 6 22.1
+
+
+Updates:	             ROBAS Original Program.
+		June 1993:   FL Program adapted to Gipsy.
+		             Document created.
+		August 1993: FL Background and noise maps added.
+		Sep 15 1993: FL First Gipsy version installed.
+		Feb 22 1993: FL Default SN changed and Bug removed.
+		June   1994: FL Histogram method simplified.
+		Sept 7 1994: FL New version installed
+
+#<
+
+#>            points.c
+#include "main.h"
+#include "defs.h"
+#include "autohist.h"
+#include "objects.h" 
+
+/* points
+
+        Copyright (c) Kapteyn Laboratorium Groningen 1991
+        All Rights Reserved.
+
+*/
+
+/**
+	in set_area the subarea is initialised.
+**/
+int set_area(	map_type  *map,
+		area_type *area )
+{
+fint	pointer ;
+int x, y;
+int npix = 0;
+
+/** the subarea should be confined to the user defined box **/
+	area->x_ur = min(area->x_ll + area->side, map->naxis1 ) ;
+	area->y_ur = min(area->y_ll + area->side, map->naxis2 ) ;
+
+/** the minumum and maximum value in the subarea is determined **/
+	area->max = map->min;
+	area->min = map->max;
+	for( x = area->x_ll; x < area->x_ur; x++ ){
+		for( y = area->y_ll; y < area->y_ur; y++ ){
+			pointer = x+y*map->naxis1 ;
+			if( (float) map->data[pointer] != (float) blank ){
+				npix++;
+				area->max = max(area->max, map->data[pointer]);
+				area->min = min(area->min, map->data[pointer]);
+			}
+		}
+	}
+	area->dmin = area->min ;
+	area->dmax = area->max ;
+
+	return(npix);
+}
+
+/**
+	in get_data the data for the user defined box is
+	read in for the set and when requested the maskset
+**/
+int get_data(	set_type *inset, 
+		set_type *mask,
+		set_type *outset,
+		map_type *map )
+{
+fint	pointer ;
+fint	id, id_m ;
+fint	nodone, nodone_m ;
+fint	nblank, count, row ;
+fint	bufsize = BUFSIZE ;
+float	indata[BUFSIZE] ;
+float	maskdata[BUFSIZE] ;
+fint	clow_m, cupp_m ;
+
+	map->ndata = map->naxis1*map->naxis2 ;
+
+	clow = gdsc_fill_c( inset->name, &inset->subset[inset->ssno], 
+			inset->blo ) ;
+        cupp = gdsc_fill_c( inset->name, &inset->subset[inset->ssno], 
+			inset->bhi ) ;
+	if( mask->nsub ){
+		clow_m = gdsc_fill_c( mask->name, &mask->subset[inset->ssno], 
+				mask->blo ) ;
+		cupp_m = gdsc_fill_c( mask->name, &mask->subset[inset->ssno], 
+				mask->bhi ) ;
+	}
+
+	id = nodone = count = row = i = 0 ;
+	id_m = nodone_m = 0 ;
+	pointer = 0 ;
+
+	map->min = FLT_MAX ;
+	map->max = -FLT_MAX ;
+
+/** read in chuncks of size bufsize and fill the data arrays **/
+	do{
+		gdsi_read_c( inset->name, &clow, &cupp, indata, 
+				&bufsize, &nodone, &id ) ;
+		if( mask->nsub ) gdsi_read_c( mask->name, &clow_m, &cupp_m, 
+					maskdata, &bufsize, &nodone_m, &id_m ) ;
+		minmax3_c( indata, &nodone, &map->min, &map->max, 
+				&nblank, &count ) ;
+		for( no = 0 ; no < nodone ; no++ ){
+			if( mask->nsub ){
+				if( (float) maskdata[no] == (float) blank )
+					map->mask[pointer] = 1 ;
+			}
+			map->data[pointer] = indata[no] ;
+			pointer++ ;
+		}
+	}while( id != 0 ) ;
+	anyoutf( TEST, "minmax %.2f %.2f", map->min, map->max ) ;
+	anyoutf( TEST, "data read" ) ;
+	return(1) ;
+}
+
+/**
+	get_axinfo reads all the needed axes parameters from the set
+**/
+void get_axinfo(fchar set,
+                fint *axnum,
+                double *cdelt,
+                double *crota,
+                double *crpix,
+                double *crval,
+                fchar ctype,
+                fchar cunit )
+{
+fchar   axname ;
+
+        fmake( axname, 30 ) ;
+
+        sprintf( axname.a, "CDELT%d", *axnum ) ;
+        status = 0 ;
+        gdsd_rdble_c( set, axname, &zero, cdelt, &status ) ;
+        sprintf( axname.a, "CROTA%d", *axnum ) ;
+        status = 0 ;
+        gdsd_rdble_c( set, axname, &zero, cdelt, &status ) ;
+        sprintf( axname.a, "CRPIX%d", *axnum ) ;
+        status = 0 ;
+        gdsd_rdble_c( set, axname, &zero, crpix, &status ) ;
+        sprintf( axname.a, "CRVAL%d", *axnum ) ;
+        status = 0 ;
+        gdsd_rdble_c( set, axname, &zero, crval, &status ) ;
+        sprintf( axname.a, "CTYPE%d", *axnum ) ;
+        status = 0 ;
+        gdsd_rchar_c( set, axname, &zero, ctype, &status ) ;
+        sprintf( axname.a, "CUNIT%d", *axnum ) ;
+        status = 0 ;
+        gdsd_rchar_c( set, axname, &zero, cunit, &status ) ;
+
+        return ;
+}
+
+/**
+	get the needed header info 
+**/
+void get_headinfo(	set_type *set, 
+			map_type *map )
+{
+fint	prosys, velsys ;
+fchar	axname ;
+fchar	dunit, cunit ;
+
+	fmake( axname, 30 ) ;
+	fmake( cunit, 30 ) ;
+	fmake( dunit, 30 ) ;
+
+	anyoutf( TEST, "get_headinfo" ) ;
+	for( i = 0 ; i < 2 ; i++ ){
+		sprintf( axname.a, "CDELT%d", set->axnum[i] ) ;
+		status = 0 ;
+		gdsd_rdble_c( set->name, axname, &zero, 
+			&map->cdelt[i], &status ) ;
+		status = 0 ;
+		map->crpix[i] = gdsc_origin_c( set->name,
+			&set->axnum[i], &status ) ;
+	}
+	gdsc_name_c( axname, set->name, &set->axnum[0], &status ) ;
+	status = axtype_c( axname, cunit, dunit, &set->skysys,
+				&prosys, &velsys ) ;
+	if( status <= 0 ) errorf( MINOR, "error with axtype: error %d",
+				status ) ;
+	gdsd_rdble_c( set->name, tofchar("EPOCH"), &zero, 
+			&set->epoch, &status ) ;
+	if( status < 0 ) {
+		errorf( MINOR,
+			"error with EPOCH: error %d, EPOCH = 1950.0 assumed",
+			status ) ;
+		set->epoch = 1950.0;
+	}
+	return ;
+}
+
+/**
+	does the user want to use a mask?
+**/
+void get_maskset(	set_type *inset,
+			set_type *mask )
+{
+fint	subdim = 2 ;
+
+	anyoutf( TEST, "maskset" ) ;
+        mask->nsub = gdsinp_c( mask->name, mask->subset, &mask->nsub,
+                                &REQUEST, MASK_KEY, MASK_MES,
+                                &STDOUT, mask->axnum, mask->axis,
+                                &maxaxis, &mask->class, &subdim ) ;
+	if( !mask->nsub ) return ;
+	for( i = 0 ; i < 2 ; i ++ ){
+		mask->blo[i] = inset->blo[i] ;
+		mask->bhi[i] = inset->bhi[i] ;
+	}
+	if( mask->nsub != inset->nsub ){	/** dirty **/
+		for( i = 1 ; i < inset->nsub ; i++ ) 
+			mask->subset[i] = mask->subset[0] ;	
+	}
+}
+
+/**
+	where should the data be written to
+**/
+void get_outset(set_type *inset,
+		set_type *outset )
+{
+fint	subdim ;
+fint	overwrite = 0 ;
+fint	pmask = 47 ;
+fint	exists ;
+fchar	axname, name ;
+double	cdelt, crota, crval, crpix ;
+fchar	ctype, cunit ;
+
+	fmake( name, MAXTXTLEN ) ;
+	fmake( axname, MAXTXTLEN ) ;
+	fmake( ctype, MAXTXTLEN ) ;
+	fmake( cunit, MAXTXTLEN ) ;
+
+	outset->class = 2 ; /** !!! **/
+	do{
+		outset->nsub = userchar_c( outset->name, &one, &REQUEST, 
+			OUTSET_KEY, OUTSET_MES ) ;
+		if( !outset->nsub ) return ;
+		status = 0 ;
+		if( gds_exist_c( outset->name, &status ) ){
+			anyoutf( TEST, "OUTSET exists" ) ;
+			overwrite = 0 ;
+			no = userflog( &overwrite, one, REQUEST, "OVERWRITE=",
+				"Output set already exists, overwrite? Y/[N]" ) ;
+			if( overwrite ) break ;
+			else cancel_c( OUTSET_KEY ) ;
+		}
+		else{
+			anyoutf( TEST, "OUTSET does not exist" ) ;
+			break ;
+		}
+	}while(1) ;
+		
+if( !overwrite ){
+	anyoutf( TEST, "checking axis names" ) ;
+	sprintf( axname.a, "%s", POINTNAME ) ;
+	anyoutf( TEST, "pointaxis name %.*s", nelc_c(axname), axname.a ) ;
+	for( no = 2 ; no < inset->dim ; no++ ){
+		status = 0 ;
+		gdsc_name_c( name, inset->name, &inset->axnum[no], &status ) ;
+		anyoutf( TEST, "axname %d %.*s", status, nelc_c(name), name.a ) ;
+		if( !strncmp( name.a, axname.a, max(nelc_c(axname),nelc_c(name))) ){
+			anyoutf( TEST, "pointaxname exists" ) ;
+			pointax = -no ;
+			break ;
+		}
+	}
+	if( pointax <= 0 ){
+		if( pointax < 0 ){
+			i = 1 ;
+			do{
+				exists = 0 ;
+				sprintf( axname.a, "%s_%d", 
+					POINTNAME, i ) ;
+				for( no = 2 ; no < inset->dim ; no++ ){
+					gdsc_name_c( name, inset->name, &inset->axnum[no], &status ) ;
+					if( !strncmp(name.a,axname.a,
+					    max(nelc_c(axname),nelc_c(name))) ){
+						exists = 1 ;
+						break ;
+					}
+				}
+				no++ ;
+			}while(1) ;
+		}
+	}
+	gdsasn_c( INSET_KEY, OUTSET_KEY, &outset->class ) ;
+	status = 0 ;
+	gdsc_range_c( inset->name, &zero, &clow, &cupp, &status ) ;
+	for( no = 0 ; no < inset->dim ; no++ ){
+		status = 0 ;
+		outset->blo[no] = gdsc_grid_c( inset->name, &inset->axnum[no],
+						&clow, &status ) ;
+		status = 0 ;
+		outset->bhi[no] = gdsc_grid_c( inset->name, &inset->axnum[no],
+						&cupp, &status ) ;
+	}
+	for( no = 0 ; no < inset->dim ; no++ ){
+		outset->axis[no] = outset->bhi[no] - outset->blo[no] + 1 ;
+		outset->axnum[no] = inset->axnum[no] ;
+	}
+
+	pointax = inset->dim ;
+	outset->axnum[pointax] = pointax + 1 ;
+	outset->axis[pointax] = 4 ;
+	outset->blo[pointax] = 0 ;
+	outset->bhi[pointax] = 3 ;
+	outset->dim = inset->dim + 1 ;
+
+	outset->nsub = 1 ;
+	for( no = 2 ; no < outset->dim ; no++ )
+		outset->nsub *= outset->axis[no] ;
+	outset->nsub += 1 ;
+
+	anyoutf( TEST, "inset dimension %d", inset->dim ) ;
+	anyoutf( TEST, "nsub in %d", inset->nsub ) ;
+	anyoutf( TEST, "nsub out %d", outset->nsub ) ;
+	anyoutf( TEST, "axnum out %d", outset->axnum[pointax] ) ;
+	anyoutf( TEST, "dim out %d", outset->dim ) ;
+
+	for( no = 2 ; no < outset->dim ; no++ ){
+		if( no == pointax ){
+			pmask = 47 ;
+			cdelt = 1.0 ;
+			crota = 0.0 ;
+			crval = 1.0 ;
+			crpix = 1.0 ;
+			sprintf( ctype.a, "%.*s", nelc_c(axname), 
+						axname.a ) ;
+			sprintf( cunit.a, "" ) ;
+		}
+		else{
+			pmask = 63 ;
+			get_axinfo( inset->name, &inset->axnum[no], &cdelt,
+			&crota, &crpix, &crval, ctype, cunit ) ;
+		}
+		gdscpa_c( OUTSET_KEY, &outset->axnum[no],
+			&outset->axis[no], &cdelt, &crota,
+			&crpix, &crval, ctype, cunit, &pmask ) ;
+		anyoutf( TEST, "axis %d added", no + 1 ) ;
+	}
+	gdscss_c( OUTSET_KEY, outset->blo, outset->bhi ) ;
+	outset->nsub = gdsout_c( outset->name, outset->subset, &outset->nsub,	
+				&REQUEST, OUTSET_KEY, OUTSET_MES,
+				&TEST, outset->axnum, outset->axis,
+				&maxaxis ) ;
+	copyhead_level_c( inset->name, outset->name, &zero, &zero ) ;
+}
+else{
+	cancel_c( OUTSET_KEY ) ;
+	outset->class = 1 ;
+	subdim = 0 ;
+	outset->nsub = gdsinp_c( outset->name, outset->subset, &outset->nsub, 
+				&HIDDEN, OUTSET_KEY, OUTSET_MES,
+				&STDOUT, outset->axnum, outset->axis, 
+				&maxaxis, &outset->class, &subdim ) ;
+	outset->dim = gdsc_ndims_c( outset->name, &zero ) ;
+	if( outset->dim < 3 ){
+		errorf( FATAL, "Output set should have a dimension of at least three" ) ;
+		finis_c() ;
+	}
+	else pointax = outset->dim-1 ;
+	if( outset->axis[pointax] < 4 ){
+		errorf( FATAL, "parameter axis should have a size of at least four" ) ;
+		finis_c() ;
+	}
+
+        gdsc_range_c( outset->name, &zero, &clow, &cupp, &status ) ;
+        for( no = 0 ; no < outset->dim ; no++ ){
+                status = 0 ;
+                outset->blo[no] = gdsc_grid_c( outset->name, &outset->axnum[no],
+                                                &clow, &status ) ;
+                status = 0 ;
+                outset->bhi[no] = gdsc_grid_c( outset->name, &outset->axnum[no],
+                                                &cupp, &status ) ;
+        }
+	
+}
+return ;
+}
+
+/**
+	write the data to the output set
+**/
+void writedata(	set_type *inset,
+		set_type *outset,
+		map_type *map)
+{
+fint	pointer ;
+static float	*outdata = NULL ;
+static size = 0 ;
+fint	row, item ;
+fint	nodone, total, id ;
+fint	axis_low ;
+
+if( size < map->naxis1 ){
+	free( outdata ) ;
+	outdata = malloc(map->naxis1*sizeof(float)) ;
+}
+anyoutf( TEST, "writedata" ) ;
+if( !outset->nsub ) return ;
+
+axis_low = outset->blo[pointax] ;
+anyoutf( TEST, "blo %d: %d", pointax+1, axis_low ) ;
+
+for( item = 0 ; item <= 3 ; item ++ ){
+	statusf( "writing data for plane %d to outset", item ) ;
+	anyoutf( TEST, "writing data for plane %d", item ) ;
+	outset->blo[pointax] = axis_low + item ;
+	outset->bhi[pointax] = axis_low + item ;
+	clow = cupp = 0 ;
+	for( no = 0 ; no < outset->dim ; no++ ){
+		status = 0 ;
+		clow = gdsc_word_c( outset->name, &outset->axnum[no], 
+				&outset->blo[no], &clow, &status ) ;
+		if( status < 0 )
+			errorf( SERIOUS, "cwlow, error %d", status ) ; 
+		cupp = gdsc_word_c( outset->name, &outset->axnum[no], 
+				&outset->bhi[no], &cupp, &status ) ;
+		if( status < 0 )
+			errorf( SERIOUS,
+				"chigh axis %d bhi %d, error %d", 
+				no+1, outset->bhi[no], status ) ; 
+	}
+	row = nodone = id = 0 ;
+	pointer = total = 0 ;
+	bufsize = map->naxis1 ;
+	anyoutf( TEST, "getting outdata" ) ;
+	do{
+		switch( item ){
+		case 0: for( no = 0 ; no < bufsize ; no++ ){
+				outdata[no] = map->data[pointer++] ;
+			}
+			break ;
+		case 1: for( no = 0 ; no < bufsize ; no++ ){
+				if( (float) map->data[pointer] != (float) blank 
+						&&
+			    	    (float) map->zero[pointer] != (float) blank 
+				  )
+					outdata[no] = map->data[pointer]
+						- (float) map->zero[pointer] ;
+				else outdata[no] = blank ;
+				pointer++ ;
+			}
+			break ;
+		case 2:	for( no = 0 ; no < bufsize ; no++ ){
+				outdata[no] = (float) map->zero[pointer++] ;
+			}
+			break ;
+		case 3: for( no = 0 ; no < bufsize ; no++ ){
+				outdata[no] = (float) map->noise[pointer++] ;
+			}
+			break ;
+		default:break ;
+		}
+		gdsi_write_c( outset->name, &clow, &cupp, 
+			outdata, &bufsize, &nodone, &id ) ;
+		if( id < 0 ){
+			errorf( SERIOUS, 
+			    "error writing background data %d, id: %d", 
+			     item, id ) ;
+			break ;
+		}
+	}while( id != 0 ) ;
+	anyoutf( TEST, "written data for plane %d", item ) ;
+}
+anyoutf( TEST, "data written" ) ;
+return ;
+}
+
+/**
+	get the settings for the subarea from the user
+**/
+int userio(	set_type   *inset, 
+		map_type   *map,
+		area_type  *area, 
+		point_type *point, 
+		out_type   *out )
+{
+fint input = 0 ;
+static fint first = 1 ;
+
+	anyoutf( TEST, "userio" ) ;
+	if( first ) input = 1 ;
+	first = 0 ;
+
+	if( userfint(&area->side,one,REQUEST,SIDE_KEY,
+		"Side of subarea [%d]",area->side) ) input = 1 ;
+	if( userfint(&area->sep,one,REQUEST,SEP_KEY, 
+		"seperation of subarea centers [%d]",area->sep ) ) input = 1 ;
+	if( userfint(&point->subbox,one,REQUEST,AREA_KEY, 
+		"size of area around point source [%d]",
+		point->subbox ) ) input = 1 ;
+	point->edge = point->subbox;
+	if( userfint(&point->edge,one,REQUEST,EDGE_KEY, 
+		"minimum distance from blank [%d]", point->edge ) ) input = 1 ;
+	if( userfreal(&point->sigma,one,REQUEST,SIGMA_KEY, 
+		"minimum signal to noise for point source [%.1f]",
+		point->sigma ) ) input += 2 ;
+	no = map->usernoise = userfreal( &map->noiselevel, one, HIDDEN, 
+				NOISE_KEY, "" ) ;
+	if( map->usernoise != 0 ) 
+		anyoutf( STDOUT, "noiselevel %f", map->noiselevel ) ;
+	if( no && input < 2 ) input += 2 ;
+
+	cancel_c( tofchar(SIDE_KEY) ) ;
+	cancel_c( tofchar(SEP_KEY) ) ;
+	cancel_c( tofchar(AREA_KEY) ) ;
+	cancel_c( tofchar(SIGMA_KEY) ) ;
+	cancel_c( tofchar(EDGE_KEY) ) ;
+	cancel_c( tofchar(NOISE_KEY) ) ;
+
+
+	if( input ){
+		anyoutf( TEST, "Command line parameters:\nmap = %.*s", 
+			nelc_c(inset->name), inset->name.a);
+		anyoutf( TEST, " side = %d", area->side);
+		anyoutf( TEST, " sep = %d", area->sep);
+		anyoutf( TEST, " subbox = %d", point->subbox);
+		anyoutf( TEST, " sigma = %f", point->sigma);
+		anyoutf( TEST, " edge = %d", point->edge);
+	}
+	return(input) ;
+}
+
+/**
+	calculate the zero and mean in the map
+**/
+int analyse(	set_type   *inset,
+		map_type   *map, 
+		point_type *point, 
+		out_type   *out )
+{
+fint	pointer ;
+int	x, y ;
+
+anyoutf( TEST, "analyse" ) ;
+for( x = 0 ; x < map->naxis1 ; x++ ){
+	for( y = 0 ; y < map->naxis2 ; y++ ){
+		pointer = x + y*map->naxis1 ;
+		if( (float) map->weight[pointer] != 0 ){
+			map->zero[pointer] /= (double)map->weight[pointer] ;
+			map->noise[pointer] /= (double)map->weight[pointer] ;
+			map->weight[pointer] = 0 ;
+		}
+		else{
+			map->zero[pointer] = blank ;
+			map->noise[pointer] = blank ;
+		}
+	}
+}
+/** find pointsources **/
+no = find_obj( inset, map, point, out ) ;
+return(no) ;
+
+}
+
+/**
+	do some bookkeeping for the zero and noise
+**/
+void do_book(	map_type *map,
+		area_type *area,
+		int nhist )
+{
+fint	pointer ;
+int	x, y ;
+int	weight ;
+
+for( x = area->x_ll ; x < area->x_ur ; x++ ){
+	for( y = area->y_ll ; y < area->y_ur ; y++ ){
+		pointer = x+y*map->naxis1 ;
+		if( (float) map->data[pointer] != (float) blank && 
+		    (float) area->hwhm != 0.0 ){		
+			weight = 1 ;
+/*			weight = nhist ;*/
+			if( map->weight[pointer] == 0 ){
+				map->weight[pointer] = weight ;
+				map->zero[pointer] = weight*area->zerolevel ;
+				map->noise[pointer] = weight*area->hwhm ;
+			}
+			else{
+				map->weight[pointer] += weight ;
+				map->zero[pointer] += weight*area->zerolevel ;
+				map->noise[pointer] += weight*area->hwhm ;
+			}
+		}
+	}
+}
+return ;
+}
+
+/**
+	allocate memory
+**/
+void alloc_arrays(	set_type *inset,
+			set_type *mask,
+			map_type *map ) 
+{
+static fint	bufsize_new ;
+fint	allocate = 1 ;
+
+	anyoutf( TEST, "allocating memory" ) ;
+	bufsize_new = 1.0*map->naxis1*map->naxis2 ;
+/** if the memory is not sufficient allocate less **/
+	do{
+		if( (map->bufsize != 0 && bufsize_new > map->bufsize) ||
+		    !allocate ){
+			free( map->data ) ;
+			free( map->zero ) ;
+			free( map->weight ) ;
+			free( map->noise ) ;
+			free( map->mask ) ;
+		}
+		map->bufsize = bufsize_new ;
+		allocate = 1 ;
+		if( (map->zero=malloc(map->bufsize*sizeof(double))) == NULL )
+			allocate = 0 ;
+		anyoutf( TEST, "allocated zero" ) ;
+		if( allocate ){
+			if( (map->data=malloc(map->bufsize*sizeof(float))) == NULL )
+			allocate = 0 ;
+			anyoutf( TEST, "allocated data" ) ;
+		}
+		if( allocate ){
+			if( (map->weight=malloc(map->bufsize*sizeof(fint))) == NULL )
+			allocate = 0 ;
+			anyoutf( TEST, "allocated weight" ) ;
+		}
+		if( allocate ){
+			if( (map->noise=malloc(map->bufsize*sizeof(double))) == NULL )
+			allocate = 0 ;
+			anyoutf( TEST, "allocated noise" ) ;
+		}
+		if( mask->nsub != 0 && allocate ){
+			if( (map->mask=malloc(map->bufsize*sizeof(fint))) == NULL ) allocate = 0 ;
+			anyoutf( TEST, "allocated mask" ) ;
+		}
+		if( !allocate ) bufsize_new *= 0.95 ;
+	}while( !allocate ) ;
+/** weight is the only aray which needs to be initialized **/
+	for( no = 0 ; no < map->bufsize ; no++ ) map->weight[no] = 0 ;
+	anyoutf( TEST, "<alloc_arrays> okee" ) ;
+	return ;
+}
+
+void get_box(	set_type *inset,
+		set_type *outset,
+		set_type *mask,
+		map_type *map )
+{
+static int first = 1 ;
+fint	zero = 0 ;
+
+char	message[250] ;
+
+	if( first ) sprintf( message, 
+			"Box to work on [whole (sub)set]" ) ;
+	else sprintf( message, 
+			"Box for subset %d [%d %d %d %d]",
+			inset->ssno, inset->blo[0], inset->bhi[0], 
+			inset->blo[1], inset->bhi[1] ) ;
+
+	gdsbox_c( inset->blo, inset->bhi, inset->name, 
+			&inset->subset[inset->ssno], &REQUEST, BOX_KEY,
+			tofchar(message), &STDOUT, &zero ) ;
+	cancel_c( BOX_KEY ) ;
+	map->naxis1 = inset->bhi[0] - inset->blo[0] + 1 ;
+	map->naxis2 = inset->bhi[1] - inset->blo[1] + 1 ;
+
+	alloc_arrays( inset, mask, map ) ;
+/** the maximum box to be used is limited by the available memory **/
+	while( map->naxis1*map->naxis2 > map->bufsize ){
+		statusf( "box is too large, maximum size %d", map->bufsize ) ;
+		sprintf( message, "Give box, maximum are %d pixels", 
+				map->bufsize ) ;
+		cancel_c( BOX_KEY ) ;
+		gdsbox_c( inset->blo, inset->bhi, inset->name, 
+				&inset->subset[inset->ssno], &REQUEST, BOX_KEY,
+				tofchar(message), &STDOUT, &zero ) ;
+		map->naxis1= inset->bhi[0] - inset->blo[0] ;
+		map->naxis2= inset->bhi[1] - inset->blo[1] ;
+	}
+	for( no = 0 ; no < 2 ; no++ ){
+		outset->blo[no] = inset->blo[no] ;
+		outset->bhi[no] = inset->bhi[no] ;
+		anyoutf( TEST, "axis %d blo %d bhi %d", 
+				no+1, outset->blo[no], outset->bhi[no] ) ;
+	}
+	gdsc_range_c( inset->name , &inset->subset[inset->ssno], 
+			&clow, &cupp, &status ) ;
+	for( no = 2 ; no < inset->dim ; no++ ){
+		status=0 ;
+		outset->blo[no] = gdsc_grid_c( inset->name, &inset->axnum[no],
+					&clow, &status ) ;
+		status = 0 ;
+		outset->bhi[no] = gdsc_grid_c( inset->name, &inset->axnum[no],
+					&cupp, &status ) ;
+	}
+	return ;
+}
+
+
+MAIN_PROGRAM_ENTRY
+{
+fint	user_min = 0 ;
+int	nhist = 0 ;
+fint	statusno = 0 ;
+fint	npix, nobj = 0 ;
+fint	status ;
+fint	first = 1 ;
+fint	minhist ;
+fint	input ;
+fint	subdim = 2 ;
+
+fchar	rclname, prgname ;
+char	r_name[64], h_name[64], o_name[64] ;
+
+set_type	*inset = NULL ;
+set_type	*mask = NULL ;
+set_type	*outset = NULL ;
+map_type	*map = NULL ;
+area_type	*area = NULL ;
+out_type	*out = NULL ;
+point_type	*point = NULL ;
+
+	init_c() ;
+	IDENTIFICATION( PROGRAM, VERSION ) ;
+
+	setfblank_c( &blank ) ;
+
+	SET_INIT( inset ) ;
+	SET_INIT( mask ) ;
+	SET_INIT( outset ) ;
+	MAP_INIT( map ) ;
+	AREA_INIT( area ) ;
+	OUT_INIT( out ) ;
+	POINT_INIT( point ) ;
+
+	anyoutf( TEST, "structs initialized" ) ;
+
+	fmake( prgname, MAXTXTLEN ) ;
+	fmake( rclname, MAXTXTLEN ) ;
+
+
+/** get inset and box **/
+	inset->nsub = gdsinp_c( inset->name, inset->subset, &inset->nsub, 
+				&NONE, INSET_KEY, INSET_MES,
+				&STDOUT, inset->axnum, inset->axis, 
+				&maxaxis, &inset->class, &subdim ) ;
+	status = 0 ;
+	inset->dim = gdsc_ndims_c( inset->name, &zero ) ;
+
+	get_headinfo( inset, map ) ;	
+	get_outset( inset, outset ) ;
+	get_maskset( inset, mask ) ;
+	
+/** get output filenames **/
+	out->obj = userfchar( prgname, one, HIDDEN, FILENAME_KEY, 
+		"Give object filename [none]" ) ;
+	if(out->obj){
+		sprintf( o_name,"%.*s.objs",nelc_c(prgname),prgname.a ) ;
+		sprintf( h_name,"%.*s.objs",nelc_c(prgname),prgname.a ) ;
+		out->his = 1 ;
+	}
+
+	out->obj = userfchar( prgname, one, REQUEST, OBJFILE_KEY, 
+		"Give object filename [none]" ) ;
+	if(out->obj) sprintf( o_name,"%.*s.objs",nelc_c(prgname),prgname.a ) ;
+	out->his = userfchar( prgname, one, REQUEST, HISFILE_KEY, 
+		"Give history filename [none]" ) ;
+	if(out->his) sprintf( h_name,"%.*s.hist",nelc_c(prgname),prgname.a ) ;
+		
+	out->rcl = userfchar( rclname, one, REQUEST, RCLFILE_KEY, 
+		"Give name for rcl files[none]" ) ;
+
+
+while( (input = userio(inset, map, area, point, out)) ){
+/***
+   keep on going as long as the user wants to 
+***/
+/* you require a minimun numnber of points for the histogram */
+	if( !user_min ) minhist = 0.2 * sqr(area->side) ;
+	user_min = userfint( &minhist, one, HIDDEN, POINT_KEY, 
+		"minimum number of points required for histogram [%d]",minhist);
+	cancel_c(tofchar(POINT_KEY)) ;
+	if( out->obj ){
+		if( (out->objfp = fopen(o_name, "w")) == NULL){
+			errorf(SERIOUS,"cannot open objects file: %s",o_name);
+			out->obj = 0 ;
+		}
+	}
+	if( out->his ){
+		if( (out->histfp = fopen(h_name, "w")) == NULL){
+			errorf(SERIOUS,"cannot open histogram file: %s",h_name);
+			out->his = 0 ;
+		}
+	}
+	if( out->obj ) fprintf( out->objfp, 
+			"# side = %d sep = %d subbox = %d sn = %.1f edge=%d\n",
+			area->side, area->sep, point->subbox, point->sigma,
+			point->edge );
+
+for( inset->ssno = 0 ; inset->ssno < inset->nsub ; inset->ssno ++ ){
+	first = 1 ;
+	if( out->rcl ){
+		if( inset->nsub > 1 ) sprintf( r_name, "%.*s_%d", 
+			nelc_c(rclname), rclname.a, inset->ssno ) ;
+		else sprintf( r_name, "%.*s", nelc_c(rclname),
+				rclname.a ) ;
+		sprintf( r_name, "%s.rcl", r_name ) ;
+		if( (out->rclfp = fopen(r_name, "w") ) == NULL ){
+			errorf( SERIOUS, "cannot open recall file: %s", r_name ) ;
+			out->rcl = 0 ;
+		}
+	}
+	get_box( inset, outset, mask, map ) ;
+
+	if( input == 1 || input == 3 ){
+		status = get_data( inset, mask, outset, map ) ;
+		if( out->obj ){
+			fprintf( out->objfp, 
+				"# set=%.*s subset %d, box [%d,%d,%d,%d]\n",
+				nelc_c(inset->name), inset->name.a, inset->ssno, 
+				inset->blo[0], inset->bhi[0], 
+				inset->blo[1], inset->bhi[1] ) ;
+			if( inset->skysys == 1 ) 
+				fprintf(out->objfp, 
+					"#%12s %16s %7s %7s",
+					"ra", "dec", "sd_ra", "sd_dec" ) ;
+			else fprintf(out->objfp, 
+				"#%12s %16s %7s %7s",
+				"lon", "lat", "sd_lon", "sd_lat" ) ;
+			fprintf(out->objfp,
+				" %7s %7s %8s %8s %7s\n",
+				"zero", "noise", "peak",
+				"intens", "SN" ) ;
+		}
+		if( out->his ){
+			fprintf( out->histfp, 
+				"# set=%.*s subset %d, box [%d,%d,%d,%d]\n",
+				nelc_c(inset->name), inset->name.a, inset->ssno, 
+				inset->blo[0], inset->bhi[0], 
+				inset->blo[1], inset->bhi[1] ) ;
+			fprintf(out->histfp, 
+				"# side=%d sep=%d\n", area->side, area->sep);
+		}
+
+/** step through the map with the subarea **/
+	map->corner[0] = inset->blo[0]  ;
+	map->corner[1] = inset->blo[1]  ; 
+	for( area->y_ll = 0 ; area->y_ll < map->naxis1 ; area->y_ll += area->sep){
+		for ( area->x_ll = 0 ; area->x_ll < map->naxis2 ; area->x_ll += area->sep){
+			if( fmod(statusno++,500) == 0 ){
+				statusf( "Working on ssno %d pos %d %d", 
+					inset->ssno, 
+					area->x_ll+map->corner[0],
+					area->y_ll+map->corner[1]) ;
+				anyoutf( STDOUT, "Working on ssno %d pos %d %d",
+					inset->ssno, 
+					area->x_ll+map->corner[0],
+					area->y_ll+map->corner[1]) ;
+			}
+			npix = set_area(map, area) ;
+			if( npix >= minhist ){	
+/**
+   if less than the minimum number of pixels
+   needed, there is no need to do a histogram 
+   detemination
+**/
+				anyoutf( TEST, 
+					"%4d %4d npix=%7d min=%+7.4f max=%+9.4f",
+					area->x_ll+map->corner[0], 
+					area->y_ll+map->corner[1], 
+					npix, area->dmin, area->dmax);
+				nhist = do_histo( map, mask, area ) ;
+				if( out->his ){
+					if( nhist ) fprintf(out->histfp, 
+						"%4d %4d %8d %8d %8.4f %8.4f\n",
+						area->x_ll+map->corner[0], 
+						area->y_ll+map->corner[1], 
+						npix, nhist, 
+						area->zerolevel, area->hwhm);
+					else fprintf(out->histfp,"%4d %4d %8d - -\n", 
+						area->x_ll+map->corner[0], 
+						area->y_ll+map->corner[1], 
+						npix);
+				}
+/**
+    a minumum number of pixels have to be 
+    used in the histogram determination 
+**/
+				if( nhist >= minhist )
+					do_book( map, area, nhist ) ;
+			} else{
+				anyoutf(TEST, "%4d %4d %8d - -\n", 
+					area->x_ll+map->corner[0], 
+					area->y_ll+map->corner[1], 
+					npix);
+			if( out->his ){
+				fprintf(out->histfp, 
+					"%4d %4d %8d - -\n", 
+					area->x_ll+map->corner[0], 
+					area->y_ll+map->corner[1], 
+					npix);
+			}
+			}
+		}
+	} /** loop over the subareas **/
+}
+
+		nobj = analyse( inset, map, point, out ) ;
+		anyoutf( STDOUT, "");
+		anyoutf( STDOUT, "#NOBJ = %d", nobj);
+		writedata( inset, outset, map ) ;
+		anyoutf( TEST, "written data" ) ;
+		if( out->rcl ) fclose( out->rclfp ) ;
+		first = 0 ;
+	} /** loop over subsets **/
+	if( out->obj ) fclose(out->objfp);
+	if( out->his ) fclose(out->histfp) ;
+}/** while input **/
+
+anyoutf( STDOUT, "Ready");
+finis_c() ;
+return(0);
+}
+#<
+
+#>            autohist.h
+/******************************************************************************
+NAME	autohist.c : determine zero level and noise using histogram method 
+
+DESCRIPTION
+	With the functions in this file the zero level and noise of a
+	subarea will be calculated using a histogram method. The method
+	is as follows: for the whole subarea the pixel values within a
+	data range are binned into MAXBIN ([100]) groups; the histogram
+	is supposed to peak at the zerolevel of the subarea; the half
+	width of the peak at half maximum is supposed to be the noise.
+
+	The method is used in two steps, the first step is used to get
+	a rough estimate of the zerolevel. This is used to limit the 
+	datarange. In the second step the zerolevel and the noise are 
+	determined, using only the points left of the maximium to avoid 
+	confusion by weak extended sources or a large number of small
+	sources.
+END
+*/
+
+double ddelt;
+float histdata[MAXBINS];	/* storage for histogram */
+
+#define LOW	0
+#define HIGH	1
+float histrange[MAXBINS][2];	/* LOW and HIGH value for bins */
+
+/******************************************************************************
+MANUAL
+NAME	fill_range : fill the range array
+
+SYNOPSIS
+	void fill_range( *area )
+		used
+	area->dmax	maximum in the area
+	area->dmin	minimum in the area
+
+DESCRIPTION
+	Given the number of bins and the data range, the LOW and HIGH 
+	values for the bins are determined and stored in histrange
+
+END
+*/
+void fill_range( area_type *area )
+{
+	ddelt = (area->dmax - area->dmin)/(double)(MAXBINS);
+	for(i = 0; i < MAXBINS; i++){
+		histrange[i][LOW] = area->dmin + i*ddelt;
+		histrange[i][HIGH] = histrange[i][LOW] + ddelt;
+	}
+}
+
+/******************************************************************************
+MANUAL
+NAME	checkhist : extracts relevant numbers from histogram
+
+SYNOPSIS
+	int checkhist( *area )
+
+RETURN
+	maxbin
+END
+*/
+int checkhist( area_type *area, int first )
+{
+double	step ;
+float	maxval ;
+int	maxbin ;
+int	lo, hi, lhm, zero ;
+
+	step = histrange[0][HIGH] - histrange[0][LOW];
+
+/* search bin with maximum number of pixels */
+	maxval = 0 ;
+	maxbin = -1 ;
+	for (i = 0; i < MAXBINS; i++){
+		if( histdata[i] > maxval){
+			maxval = histdata[i];
+			maxbin = i;
+		}
+	}
+
+
+/* new maximum for new histogram (used in second iteration) */
+/***
+   for the first iteration add 1 to maxbin, to make sure that you
+   get the noise in case the maximum signal is high and all noise
+   initially falls into the first bin. So you are somewhat over the
+   noisepeak in the second iteration 
+***/
+	if( first == 1 ){
+		area->dmax = (maxbin + 1) * step + histrange[0][LOW];
+	}
+	else{
+		zero = maxbin ;
+
+		for( hi = maxbin ; hi > 0 ; hi-- )
+			if( (float) histdata[hi] < (float) 0.4*maxval && 
+			    (float) histdata[hi] != 0 )
+				break ; 
+		for( lo = 0 ; lo < maxbin ; lo++ )
+			if( (float) histdata[lo] > (float) 0.6*maxval ) break ; 
+		lhm = (lo+hi)/2.0 ;
+
+/* zero is bin with maximum number if points */
+/* noise is the distance between lower half maximum point 
+   and maximum point */
+                area->zerolevel = (zero+0.5) * step + histrange[0][LOW];
+                area->hwhm = (maxbin - lhm) * step;
+	}
+	return(maxbin);
+}
+/******************************************************************
+MAPHIST
+fill the histogram with data
+*/
+int maphist(	map_type *map,
+		set_type *mask,
+		area_type *area)
+{
+fint	pointer ;
+int	npix = 0;
+
+for(i = 0; i < MAXBINS; histdata[i++] = 0);
+
+if( ddelt == 0.0 ) errorf(SERIOUS, "<MAPHIST> min and max equal") ;
+for(i = area->x_ll; i < area->x_ur; i++){
+	for(j = area->y_ll; j < area->y_ur; j++){
+		pointer = i + j*map->naxis1 ;
+		if( mask->nsub )
+			if( (float)map->mask[pointer] == (float)blank)continue ;
+		if( (float)map->data[pointer] == (float)blank) continue;
+		if( (float)map->data[pointer] < (float)area->dmin ) continue;
+		if( (float)map->data[pointer] >= (float)area->dmax ) continue;
+
+		n = (int)((map->data[pointer]-area->dmin)/ddelt) ;
+		if( (n >= 0) && (n < MAXBINS) ){
+			histdata[n]++;
+			npix++;
+		} else {
+			errorf( MINOR, "histogram index out of range, don't worry");
+		}
+	}
+}
+return(npix);
+}
+
+/******************************************************************************
+MANUAL
+NAME	area_hist : determine zerolevel and noise for area
+SYNOPSIS
+	int area_hist(dmin, dmax)
+	double dmin, dmax;		: data range
+RETURN
+	number of non-blank pixels in area
+END
+*/	
+int area_hist(	map_type *map,
+		set_type *mask, 
+		area_type *area )
+{
+int npix ;
+int first ;
+
+	fill_range( area );
+	npix = maphist(map, mask, area ) ;
+	if( npix != 0 ){
+/* first iteration, to limit range for second iteration */
+		first = 1 ;
+		status = checkhist( area, first );
+		anyoutf( TEST, "    min  %+8.4f max %+8.4f maxbin %d, %8d pixels used", 
+			area->zerolevel, area->dmax, status, npix);
+		fill_range(area);
+		npix = maphist(map, mask, area );
+		if( npix != 0 ){
+/* second iteration to determine zero and noise */
+			first = 0 ;
+			status  = checkhist( area, first ) ;
+			anyoutf( TEST, "    zero %+8.4f rms %+8.4f maxbin %d, %8d pixels used", 
+				area->zerolevel, area->hwhm, status, npix);
+		}
+	}
+	else {
+		anyoutf( TEST, "No data points for %d,%d %d,%d", 
+			area->x_ll, area->y_ll, area->x_ur, area->y_ur);
+		return(0);
+	}
+	return(npix);
+}
+
+
+/******************************************************************************
+MANUAL
+NAME	do_histo : determine histogram values (entry point of functions)
+SYNOPSIS
+	do_histo(min, max)
+	double min, max;	limits for pixelvalues
+END
+*/
+int do_histo(	map_type *map,
+		set_type *mask, 
+		area_type *area )
+{
+int npix;
+
+        npix = area_hist( map, mask, area );
+	if( (float) area->hwhm == 0.0 ){
+		anyoutf( STDOUT, "Zero HWHM for %4d %4d", 
+			area->x_ll + map->corner[0], 
+			area->y_ll + map->corner[1] ) ;
+		return(0);
+	}
+	return(npix);
+}
+#<
+
+#>            objects.h
+int localmax(	map_type   *map,
+		point_type *point )
+{
+fint	pointer ;
+int	x0 = 0, x, x1 = 0, y0 = 0, y, y1 = 0;
+int	di, dj;
+float	maxval;
+double	sum[2][2] , weight = 0.0 ;
+
+	sum[0][0] = 0.0 ;
+	sum[0][1] = 0.0 ;
+	sum[1][0] = 0.0 ;
+	sum[1][1] = 0.0 ;
+
+	x0 = max( 0, point->pos[0] - point->subbox/2 ) ;
+	x1 = min( map->naxis1, point->pos[0] + point->subbox/2 ) ;
+	y0 = max( 0, point->pos[1] - point->subbox/2 ) ;
+	y1 = min( map->naxis2, point->pos[1] + point->subbox/2 ) ;
+
+	maxval = map->data[point->pos[0]+point->pos[1]*map->naxis1];
+	for( x = x0 ; x < x1 ; x++ ){
+		for( y = y0 ; y < y1 ; y++ ){
+			pointer = x + y*map->naxis1 ;
+			if( (float) map->data[pointer] == (float) blank )		/* no blanks in box */
+				return(0);
+			if( (x == point->pos[0]) && (y == point->pos[1]) )	/* ignore center */
+				continue;
+			if( (float) map->data[pointer] > (float) maxval)		/* if no local max */
+				return(0);
+			di = x - point->pos[0];
+			dj = y - point->pos[1];
+			if( (di == 1 || dj == 1) && 
+			    (float) map->data[pointer] == (float) maxval ){
+				return(0);
+			}
+		}
+	}
+
+	for( x = x0 ; x < x1 ; x++ ){
+		for( y = y0 ; y < y1 ; y++ ){
+			pointer = x + y*map->naxis1 ;
+			if( (float) map->data[pointer] != (float) blank ){
+				sum[0][0] += map->data[pointer] * x ;
+				sum[1][0] += map->data[pointer] * y ;
+				sum[0][1] += map->data[pointer] * sqr(x) ;
+				sum[1][1] += map->data[pointer] * sqr(y) ;
+				weight += map->data[pointer] ;
+			}
+		}
+	}
+	for( i = 0 ; i < 2 ; i++ ){
+		if( (float) weight != 0.0 ){
+			point->wpos[i] = sum[i][0]/weight ;
+			fvar = sum[i][1]/weight-sqr(point->wpos[i]) ;
+			if( (float) fvar > 0.0 )
+				point->wsd[i] = sqrt( sum[i][1]/weight - 
+						      	sqr(point->wpos[i]) ) ;
+			else point->wsd[i] = 0.0 ;
+		}
+		else{
+			point->wpos[i] = (float)point->pos[i] ;
+			point->wsd[i] = -1.0 ;
+		}
+		point->wpos[i] += map->corner[i] ;
+		point->wsd[i] *= fabs(map->cdelt[i]) ;
+	}
+	anyoutf( STDOUT, "maxpos %4d %4d weighted pos %8.2f(%5.2f) %8.2f(%5.2f)",
+		point->pos[0]+map->corner[0], point->pos[1]+map->corner[1], 
+		point->wpos[0], point->wsd[0],
+		point->wpos[1], point->wsd[1] ) ;
+
+	return(1);
+}
+
+int on_edge( map_type *map, point_type *point )
+{
+	if( point->pos[0] - point->edge < 0 ) return(1);
+	if( point->pos[0] + point->edge >= map->naxis1 ) return(1);
+	if( point->pos[1] - point->edge < 0 ) return(1);
+	if( point->pos[1] + point->edge >= map->naxis2 ) return(1);
+	return(0);
+}
+
+int find_obj(	set_type   *inset,
+		map_type   *map, 
+		point_type *point,
+		out_type   *out )
+{
+fint	pointer ;
+int	nobj = 0;
+float	peak, intens, sigma;
+double	zerolevel, noise ;
+double	pos[2], lonpos[3], latpos[3] ;
+fchar	lon, lat ;
+char	string1[MAXTXTLEN], string2[MAXTXTLEN] ;
+
+fmake( lon, MAXTXTLEN ) ;
+fmake( lat, MAXTXTLEN ) ;
+
+for( point->pos[0] = map->naxis1-1 ; point->pos[0] >= 0 ; point->pos[0]--){
+	for( point->pos[1] = 0 ; point->pos[1] < map->naxis2 ; point->pos[1]++){
+		pointer = point->pos[0] + point->pos[1]*map->naxis1 ;
+
+/** if one of these is not defined, go to next point **/
+		if( (float) map->data[pointer] == (float) blank) continue;
+		if( (float) map->zero[pointer] == (float) blank) continue;
+
+		peak = map->data[pointer];
+		zerolevel = map->zero[pointer] ;
+/** if noise is predefined use that, else use calculated noise **/
+		if( map->usernoise == 0 ){
+			if( (float) map->noise[pointer] == (float) blank) continue;
+			noise = map->noise[pointer] ;
+		}
+		else noise = map->noiselevel ;
+
+		intens = peak - zerolevel ;
+		sigma = intens / noise ;
+		if( sigma < point->sigma ) continue ;
+/** it shlould not be on the edge **/
+		if( on_edge(map, point) ) continue;
+/** local maximum? **/
+		if( localmax(map, point) ){
+			nobj++;
+			status = cotrans_c( inset->name, 
+					&inset->subset[inset->ssno],
+					point->wpos, pos, &one ) ;
+/** get physical coordinates **/
+			if( out->obj || out->rcl ){
+				if( inset->skysys == 1 )
+					hms_c(&pos[0],lon,lonpos,&one,&zero) ;
+				else dms_c(&pos[0],lon,lonpos,&one,&zero) ;
+				dms_c( &pos[1], lat, latpos, &one, &zero ) ;
+				sprintf( string1, "%.*s", nelc_c(lon), lon.a ) ;
+				sprintf( string2, "%.*s", nelc_c(lat), lat.a ) ;
+			}
+			if( out->obj ){
+				fprintf(out->objfp,
+					"%13s %16s %7.3f %7.3f %7.3f %7.3f %8.3f %8.3f %7.2f\n",
+					string1, string2, 
+					point->wsd[0], point->wsd[1],
+					zerolevel, noise, 
+					peak, intens, sigma );
+			}
+/** create propper output for recall file depending on coordinate system **/
+			if( out->rcl ){
+				switch( inset->skysys ){
+				case 1: fprintf( out->rclfp, 
+					"*%.1f %d %d %.1f *%.1f %d %d %.1f\n", 
+						inset->epoch, 
+						(int)lonpos[0],
+						(int)lonpos[1],
+						lonpos[2],
+						inset->epoch, 
+						(int)latpos[0],
+						(int)latpos[1],
+						latpos[2] ) ;
+						break ;
+				case 2: fprintf( out->rclfp, 
+						"G %d %d %.1f G %d %d %.1f\n", 
+						(int)lonpos[0],
+						(int)lonpos[1],
+						lonpos[2],
+						(int)latpos[0],
+						(int)latpos[1],
+						latpos[2] ) ;
+						break ;
+				case 3: fprintf( out->rclfp, 
+						"E %d %d %.1f E %d %d %.1f\n", 
+						(int)lonpos[0],
+						(int)lonpos[1],
+						lonpos[2],
+						(int)latpos[0],
+						(int)latpos[1],
+						latpos[2] ) ;
+						break ;
+				case 4: fprintf( out->rclfp, 
+						"S %d %d %.1f S %d %d %.1f\n", 
+						(int)lonpos[0],
+						(int)lonpos[1],
+						lonpos[2],
+						(int)latpos[0],
+						(int)latpos[1],
+						latpos[2] ) ;
+						break ;
+				default:fprintf( out->rclfp, "%.2f %.2f\n",
+						point->wpos[0],
+						point->wpos[1] ) ;
+						break ;
+				}
+			}
+		}
+	}
+}
+return(nobj);
+}
+
+
+#<
+
+#>            main.h
+#include "stdio.h"
+#include "stdlib.h"
+#include "gipsyc.h"
+#include "cmain.h"
+#include "string.h"
+#include "math.h"
+#include "float.h"
+#include "limits.h"
+#include "nelc.h"
+#include "srvreq.h"
+#include "userfio.h"
+#include "gdsd_rint.h"
+#include "gdsd_rdble.h"
+#include "gdsd_rchar.h"
+#include "gdsd_wdble.h"
+
+#include "gdsc_origin.h"
+#include "gdsc_range.h"
+#include "gdsc_grid.h"
+#include "gdsc_word.h"
+#include "gdsc_ndims.h"
+#include "gdsc_name.h"
+#include "gdsc_ndims.h"
+#include "gdsc_size.h"
+#include "gdsc_fill.h"
+
+#include "gdsbox.h"
+#include "gdsinp.h"
+#include "gdsasn.h"
+#include "gdscpa.h"
+#include "gdscss.h"
+#include "gdsout.h"
+
+#include "gdsi_read.h"
+#include "gdsi_write.h"
+
+#include "gds_create.h"
+#include "gds_exist.h"
+#include "gds_extend.h"
+#include "gds_close.h"
+#include "gds_rename.h"
+#include "gds_delete.h"
+
+#include "minmax3.h"
+#include "setfblank.h"
+#include "assert.h"
+#include "wkey.h"
+#include "copyhead_level.h"
+#include "cotrans.h"
+#include "hms.h"
+#include "dms.h"
+#include "axtype.h"
+#include "spline1.h"
+#include "gauest.h"
+
+#define  VERSION     "3.0"
+#define  PROGRAM     "POINTS"
+
+#define INSET_KEY       tofchar("INSET=")
+#define INSET_MES       tofchar("inset to work on")
+#define MASK_KEY        tofchar("MASKSET=")
+#define MASK_MES        tofchar("Mask to use over inset [none]")
+#define OUTSET_KEY      tofchar("OUTSET=")
+#define OUTSET_MES	tofchar("")
+#define BOX_KEY         tofchar("BOX=")
+#define AREA_KEY	"AREA="
+#define SIGMA_KEY	"SN="
+#define NOISE_KEY	"NOISE="
+#define SEP_KEY         "SEP="
+#define EDGE_KEY	"EDGE="
+#define SIDE_KEY	"SIDE="
+#define OBJFILE_KEY     "OBJFILE="
+#define HISFILE_KEY     "HISTFILE="
+#define RCLFILE_KEY     "RCLFILE="
+#define FILENAME_KEY    "FILENAME="
+#define POINT_KEY	"NPOINTS="
+
+static fint NONE = 0 ;
+static fint REQUEST = 1 ;
+static fint HIDDEN = 2 ;
+
+static fint STDOUT = 11 ;
+static fint TEST = 16 ;
+
+#define fmake(fchr,size){ \
+	static char buff[size+1] ; \
+	int i ; \
+	for( i = 0 ; i < size ; buff[i++] = ' ') ; \
+	buff[i] = 0 ; \
+	fchr.a = buff ; \
+	fchr.l = size ; \
+}
+#define max(a,b)	(a)>(b)?(a):(b)
+#define min(a,b)	(a)<(b)?(a):(b)
+#define sqr(a)		(a)*(a)
+#define nint(a)         ( (int)( (a) + 0.5 ) )
+
+#define STATUS		statflag = 1
+#define NOSTATUS	statflag = 0
+
+#define MAXIT	10
+#define MAXBINS	100
+#define MAPSIZE 1024
+#define BUFSIZE	1024
+static fint bufsize = BUFSIZE ;
+#define MAXTXTLEN	128
+#define MAXSUB		100
+#define MAXAXIS		20
+static fint maxaxis = MAXAXIS ;
+
+#define POINTNAME	"PARAM_POINT"
+
+static fint	zero = 0, one = 1 ;
+static float	blank ;
+static float	fvar ;
+static fint	status ;
+static fint	clow, cupp ;
+static fint	no, i, j, n ;
+static fint	pointax = 0 ;
+#<
+
+#>            defs.h
+typedef struct{
+        float	*data ;
+	double 	*zero ;
+	fint	*weight ;
+	double	*noise ;
+	fint	*mask ;
+        fint	naxis1 ;
+        fint	naxis2 ;
+        float	max ;
+        float	min ;
+	fint	ndata ;
+	float	noiselevel ;
+	fint	usernoise ;
+	double	cdelt[2] ;
+	double	crpix[2] ;
+	fint	bufsize ;
+	fint	corner[2] ;
+}map_type ;
+#define MAP_INIT( map ){\
+        map = (map_type*)malloc( sizeof( map_type ) ) ;\
+        assert( map ) ;\
+	map->noiselevel = 0.0 ; \
+	map->cdelt[0] = 1.0 ; \
+	map->cdelt[1] = 1.0 ; \
+	map->crpix[0] = 0.0 ; \
+	map->crpix[1] = 0.0 ; \
+	map->bufsize = 0 ;\
+	map->data = NULL ;\
+	map->noise = NULL ;\
+	map->zero = NULL ;\
+	map->mask = NULL ;\
+	map->weight = NULL ;\
+}
+typedef struct{
+	fchar	name ;
+	fint	naxis ;
+	fint	axnum[MAXAXIS] ;
+	fint	axis[MAXAXIS] ;
+	fint	subset[MAXSUB] ;
+	fint	ssno ;
+	fint	blo[MAXAXIS] ;
+	fint	bhi[MAXAXIS] ;
+	fint	nsub ;
+	fint	class ;
+	fint	dim ;
+	fint	skysys ;
+	double	epoch ;
+} set_type ;
+#define SET_INIT( set ){\
+	set = (set_type*)malloc( sizeof( set_type ) ) ;\
+	assert(set) ;\
+	fmake( set->name, MAXTXTLEN ) ;\
+	set->class = 1 ;\
+	set->skysys = 0 ;\
+	set->nsub = MAXSUB ;\
+}
+typedef struct{
+	int obj ;
+	int his ;
+	int rcl ;
+	FILE *objfp ;
+	FILE *histfp ;
+	FILE *rclfp ;
+} out_type ;
+#define OUT_INIT( out ){\
+	out = (out_type*)malloc( sizeof( out_type ) ) ;\
+	assert( out ) ;\
+}
+
+typedef struct{
+        fint	side ;
+        fint	sep ;
+        fint	x_ll ;
+        fint	x_ur ;
+        fint	y_ll ;
+        fint	y_ur ;
+        double	zerolevel ;
+        double	hwhm ;
+        double	clip ;
+        float	min ;
+        float	max ;
+        float	dmin ;
+        float	dmax ;
+}area_type ;
+#define AREA_INIT( area ){\
+        area = (area_type*)malloc( sizeof( area_type ) ) ;\
+        assert( area ) ;\
+        area->side = 100 ;\
+        area->sep = 50 ;\
+}
+typedef struct{
+	fint	pos[2] ;
+	double	wpos[2] ;
+	float	wsd[2] ;
+        fint	edge ;
+        fint	subbox ;
+        float	sigma ;
+} point_type ;
+#define POINT_INIT( point ){\
+	point = (point_type*)malloc( sizeof( point_type ) ) ;\
+	assert(point) ;\
+	point->subbox= 10 ;\
+	point->edge = 5 ;\
+	point->sigma = 3.0 ;\
+}
+#<
+
+#>            points.make
+EXE	= points
+PROG	= $(EXE).c
+DOC	= $(EXE).dc1
+MAKE	= $(EXE).make
+TASK	= $(EXE).src
+
+INCL	= autohist.h objects.h 
+HEAD	= main.h defs.h
+
+COMP	= $(CC_COMP)
+OPTS	= $(CC_OPTS)
+
+SRC	= $(DOC) $(PROG) $(INCL) $(HEAD) $(MAKE)
+
+$(EXE)		: $(PROG) $(INCL) $(HEAD)
+	$(COMP) -o $(EXE) $(OPTS) $(PROG) $(CC_LIBS)
+
+$(TASK)		: $(SRC)
+	$$gip_sys/pack.csh $(TASK) $(SRC)
+	-rm -f $(TASK).bak
+#<

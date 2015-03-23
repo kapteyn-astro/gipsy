@@ -1,0 +1,2896 @@
+antpat.src
+
+        Copyright (c) Kapteyn Laboratorium Groningen 2009
+        All Rights Reserved.
+
+Name:         antpat.src
+Creator:      vogelaar
+Host:         albirumi
+Date:         Apr 14, 2009
+Contents:     antpat.dc1 antpat.make antpat.h utils.h antpat.c
+              plot.c gaussrelated.c
+
+#>            antpat.dc1
+
+Program:       ANTPAT
+
+Purpose:       Calculate beam width (Full Widths at Half Maximum) and
+               position angle of synthesized beam.
+
+Category:      RADIO
+
+File:          antpat.c
+
+Author:        M.G.R. Vogelaar
+
+Keywords:
+
+   APSET=      Give antenna pattern set, subsets:
+
+               Enter here the name of the antenna pattern optionally
+               followed by one or more subsets. The subsets must be 
+               2 dimensional. Maximum number of subsets is 1024.
+
+
+** BOX=        Give box in .....                        [entire subset]
+
+               The data enclosed by this box will be used to estimate
+               the beam parameters: Full Width At Half Maximum (FWHM)
+               of major axis, FWHM of minor axis and the position angle 
+               Only the data within the box that belong to the first 
+               maximum of the antenna pattern with a value greater than
+               or equal to CLIP= will be used in the calculations.
+
+
+   UPSET=      Enter other set,(subset(s)) for header update:    [NONE]
+
+               Besides the header of the antenna pattern itself,
+               write beam properties also to the header(s) of UPSET=
+               The same information is written to all subsets of UPSET=
+               The maximum number of subsets is 1024.
+
+
+** GRIDS=      FWHM's in grids anyway?                            Y/[N}
+ 
+               If it is possible to convert grids to seconds of arc,
+               the output will be in arcsecs. If however you want
+               the output in grids anyway enter GRIDS=Y at the
+               command line.
+
+
+   OVERLAY=    Overlay ellipse(s) in GIDS?                        Y/[N]
+
+               If GIDS displays a set with the same name as APSET=
+               then you are prompted with this keyword. It is asked
+               hidden if the names do not match and the keyword is
+               skipped if GIDS is not in use.
+               The program will mark the data used in the fit and will
+               draw the ellipse that corresponds to the fitted beam.
+
+
+   RESCALE=    Do you want to rescale the AP?                     [Y]/N
+
+               Only asked if the maximum value in the pattern is not
+               equal (or very close) to 1.0. If the user responds
+               with [Y], the AP is rescaled in a way such that this
+               central value becomes 1.0.  In fact application
+               SCALE is started. You will be asked to enter the
+               destination set (OUTSET=).
+               The program continues to fit the input AP.
+
+
+** CLIP=       Enter threshold for first max. in map units:[calculated]
+
+               Only the data within BOX= that belong to the first
+               maximum of the antenna pattern with a value greater than
+               or equal to CLIP= will be used in the calculations.
+               The default is the absolute value of the minimum in 
+               BOX=
+               If you are sure that the first minimum is < 0 at all
+               positions, it is save to use CLIP=0 to get the maximum
+               number of data points.
+               This keyword must be set for all subsets, otherwise the
+               default is substituted.
+
+
+** BEAM=       Initial estimates for maj.,min. axes:       [calculated]
+
+               Overrule the calculated initial estimates by specifying 
+               new values for the major and minor axis in arcsecs. 
+               or in grids if you are working in grids.
+               Note that the beam parameters are always free parameters 
+               in the least squares fit.
+
+
+** POSANG=     Enter in.est. for the PA wrt. Y-axis (deg): [calculated]
+
+               Overrule the calculated initial estimate for 
+               the position angle in degrees. The angle needs not to
+               be corrected for the rotation of the map, so it is always 
+               an angle in degrees with respect to the positive Y-axis.
+               This parameter can be set to a fixed parameter in the 
+               least squares fit. See remarks at FIXPA= 
+
+
+** FIXPA=      Fix PA in fit with value 0 or 90 deg.:             Y/[N]
+
+               If you want to fix the position angle (PA) at
+               0 (or 90) degrees, then the axes of the beam will
+               be fitted as if they were aligned to your grid axes.
+
+
+** TOLERANCE=  Fractional tolerance for the chi square:           [0.0]
+ 
+               Fitting is stopped when successive iterations fail
+               to produce a decrement in reduced chi-squared less
+               than TOLERANCE=   The value cannot be less than a
+               certain minimum as set by the system. This means that
+               maximum accuracy can be obtained with TOLERANCE=0.0
+
+
+** MAXITS=     Maximum number of iterations in fit:                [50]
+
+               If this number is exceeded, no parameters could be
+               fitted and blanks are written to the output set.
+
+
+** LAB=        Value for mixing parameter:                      [0.001]
+
+               Mixing parameter in the least squares fit function.
+               LAB= determines the initial weight of steepest descent
+               method relative to the Taylor method. LAB= should be
+               a small value (i.e. 0.001).
+
+
+   FITAGAIN=   Do you want to fit again?                          Y/[N]
+   
+               If there was a fit, the default is to write the
+               beam parameters to the header and then end the program.
+               
+               Do you want to fit again?                          {Y}/N
+               The fitting procedure could not obtain any parameters. 
+               The default is to rerun the fitting procedure. Now 
+               you are prompted with the keywords 
+               ESTIMATES=, FIXPA=, TOLERANCE=, MAXITS= and LAB= 
+               (all hidden before). The values for these keywords all 
+               have their effect on the fitting procedure.
+               
+
+
+Description:   ANTPAT calculates the synthesized beam by fitting a 2-dim
+               gaussian to all the data connected -through neighbouring 
+               pixels- to the first maximum i.e. only pixels within BOX=
+               that have a value greater than CLIP= and are connected to the 
+               maximum are involved in the calculations. The least squares
+               fit needs a set of initial estimates. We use a moments
+               method to calculate these estimates. The expression for
+               the 2-dim gaussian that is used is:
+               
+               z(x,y) = z0.exp[-{a(x-xc)^2+b(y-yc)^2+2c(x-xc)(y-yc)}]
+               
+               and ANTPAT tries to make a best fit for the parameters
+               a, b and c. The amplitude z0 is a fixed parameter with a
+               value calculated by the moments method. The parameters
+               a,b and c can be transformed to ellipse parameters. 
+               It is common to fix an ellipse at z(x,y)=z0/2.
+               The axes and position angle of this ellipse give us the 
+               beam parameters which we are looking for.
+               Beam parameters are Full Widths at Half Maximum (the major 
+               and minor axes of the ellipse in arcsec) and 
+               a position angle (defined as the smallest angle from 
+               the +M axis -direction of constant longitude- to the
+               major axis of the ellipse in the direction of the +x axis
+               (FITS definition). The position angle that is displayed
+               and written to one or more set headers, is corrected
+               for the map rotation if the header indicates that 
+               there is such a rotation (map is spatial and 'CROTA' 
+               keyword in header has value unequal to 0).
+               The errors on the parameters as returned by the least
+               squares fit are standard errors.
+
+               The standard antenna pattern has a maximum at grid 
+               position (0,0) and the value of this maximum is 1.0.
+               If one of these conditions is not true, a warning is 
+               generated, but the fitting procedure will continue.
+               However, for a maximum unequal (within a certain range) 
+               to 1, it is possible to rescale the data. Program SCALE 
+               will be started to perform this task. 
+
+               Results of the fit will be written in the header of the 
+               antenna pattern set at subset level. The parameters can 
+               be found in keywords BMMIN, BMMAJ, BMPA and APSET.
+               The parameters are only stored if a fit could be 
+               made and a conversion of grids to arcsec is possible. 
+               The position angle is stored in degrees and in APSET we
+               find the name and subset level of the origin of the data.
+               You can also write the results to the header of another
+               set. The name of that set is entered with UPSET=  
+               You can enter a maximum of 1024 subsets to update UPSET=
+               
+
+Notes:         
+
+Example:       
+               <USER> antpat          (start antpat)     24/04/96 16:24:00
+               <USER> ANTPAT APSET=mkap 0
+               <USER> ANTPAT UPSET=
+               <USER> ANTPAT OVERLAY=
+               ====================== ANTPAT =======================
+               Antenna pattern: mkap FREQ 0  Box: [ -65 -64 62 63 ]
+               Gridspacing x,y:  -79.999920  x 97.181640 (arcsec)
+                
+               Initial values used for LSQ fit (Moments method):
+               -------------------------------------------------
+               Major FWHM:            187.044 (arcsec)
+               Minor FWHM:            186.851 (arcsec)
+               Position angle:        93.6941 (degrees)
+               (wrt. +Y axis)
+                
+               Results of least squares fit after 8 iterations:
+               -------------------------------------------------
+               Major FWHM:            203.789 +/-      2.35715 (arcsec)
+               minor FWHM:            203.659 +/-       2.2852 (arcsec)
+               Position angle:        90.2709 +/-    0.0489883 (degrees)
+               Corrected for a
+               map rotation of
+               3.80 deg.
+                
+               Tolerance in the fit: 0. Mixing factor: 0.001
+               ======================================================
+                
+               <USER> ANTPAT FITAGAIN=y
+               <USER> ANTPAT BEAM=
+               <USER> ANTPAT POSANG=
+               <USER> ANTPAT FIXPA=y
+               <USER> ANTPAT TOLERANCE=
+               <USER> ANTPAT MAXITS=
+               <USER> ANTPAT LAB=
+               ====================== ANTPAT =======================
+               Antenna pattern: mkap FREQ 0  Box: [ -65 -64 62 63 ]
+               Gridspacing x,y:  -79.999920  x 97.181640 (arcsec)
+                
+               Initial values used for LSQ fit (Moments method):
+               -------------------------------------------------
+               Major FWHM:            186.677 (arcsec)
+               Minor FWHM:            187.101 (arcsec)
+               Position angle:             90 (degrees)
+               (wrt. +Y axis)
+                
+               Results of least squares fit after 9 iterations:
+               -------------------------------------------------
+               Major FWHM:            203.301 +/-      2.39837 (arcsec)
+               minor FWHM:            204.037 +/-      2.35652 (arcsec)
+               Position angle:           86.2 +/-            0 (degrees)
+               Corrected for a
+               map rotation of
+               3.80 deg.
+                
+               Tolerance in the fit: 0. Mixing factor: 0.001
+               ======================================================
+               <USER> ANTPAT FITAGAIN=n  
+               (end   antpat)     24/04/96 16:25:18
+               <STATUS>  ANTPAT   +++ FINISHED +++
+
+
+Updates:       Mar 26, 1996: VOG, Document created.
+               Apr 14, 2009: VOG, Removed NINT macro in utils.h
+
+#<
+
+#>            antpat.make
+#----------------------------------------------------------------------
+# Makefile for ANTPAT, Dec 18, 1998
+#
+#
+# Pack sources into antpat.src with:     > make -f antpat.make pack
+# Clean executable and objects           > make -f antpat.make clean
+# Unpack source files with:              > $gip_exe/xfile antpat.src
+# Install source file with:              > p -reserve antpat.src
+#                                        > p -install antpat.src
+#
+# Local compilation for testing:         > p antpat.make
+#
+# The CC_OPTS etc. are set by 'compile'
+#----------------------------------------------------------------------
+SHELL = /bin/sh
+
+OPTS  = $(CC_OPTS)
+COMP  = $(CC_COMP)
+OPTS  = $(CC_OPTS)
+LIBS  = $(CC_LIBS)
+
+.SUFFIXES: .c .o
+
+DOCUMENTS = antpat.dc1
+
+INCLUDES  = antpat.h utils.h
+
+SOURCES   = antpat.c plot.c gaussrelated.c
+
+OBJECTS   = antpat.o plot.o gaussrelated.o
+
+default:: antpat
+
+pack::
+	$${gip_sys}/pack.csh antpat.src $(DOCUMENTS) antpat.make $(INCLUDES) $(SOURCES)
+
+clean::
+	rm -f antpat $(OBJECTS)
+
+.c.o:
+	@echo "$(COMP) -c $(OPTS) $< ";\
+	$(COMP) -c $(OPTS) $<
+   
+antpat:  $(INCLUDES) $(OBJECTS)
+	@echo "$(COMP) -o antpat $(OBJECTS) $(LIBS)";\
+	$(COMP) -o antpat $(OBJECTS) $(LIBS)
+
+#<
+
+#>            antpat.h
+/* antpat.h
+
+                
+                          COPYRIGHT (c) 1996
+                    Kapteyn Astronomical Institute
+               University of Groningen, The Netherlands
+                        All Rights Reserved.
+                                                                                                            
+*/
+
+
+/*  antpat.c: include files     */
+
+#include    "stdio.h"        /* Defines ANSI C input and output utilities */
+#include    "stdlib.h"       /* Defines the ANSI C functions for number */
+                             /* conversion, storage allocation, and similar tasks.*/
+#include    "string.h"       /* Declares the ANSI C string functions*/
+                             /* like:strcpy, strcat etc.*/
+#include    "math.h"         /* Declares the mathematical functions and macros.*/
+#include    "gipsyc.h"       /* Defines the ANSI-F77 types for Fortran to C intface */
+                             /* including def. of char2str,str2char,tofchar,zadd */
+                             /* and macros tobool and toflog */
+#include    "float.h"        /* Definition of FLT_MAX etc.*/
+#include    "ctype.h"        /* Declares ANSI C functions for testing characters */
+                             /* like: isalpha, isdigit etc. also tolower, toupper.*/
+
+
+/* Common includes */
+
+#include    "init.h"         /* Declare task running to HERMES and initialize.*/
+#include    "finis.h"        /* Informs HERMES that servant quits and cleans up the mess.*/
+#include    "anyout.h"       /* General character output routine for GIPSY programs.*/
+#include    "setfblank.h"    /* Subroutine to set a data value to the universal BLANK.*/
+#include    "error.h"        /* User error handling routine. */
+#include    "myname.h"       /* Obtain the name under which a GIPSY task is being run.*/
+#include    "nelc.h"         /* Characters in F-string discarding trailing blanks.*/
+#include    "lsqfit.h"
+#include    "getpath.h"
+#include    "deputy.h"
+#include    "wkey.h"
+#include    "factor.h"
+#include    "skyrot.h"       /* Returns the rotation angle of the sky in a set. */
+
+/* User input routines */
+
+#include    "userfio.h"      /* Easy-C companions for user interface routines.*/
+#include    "userint.h"      /* User input interface routines.*/
+#include    "userlog.h"      
+#include    "userreal.h"     
+#include    "userdble.h"     
+#include    "usertext.h"     
+#include    "usercharu.h"    
+#include    "reject.h"       /* Reject user input.*/
+#include    "cancel.h"       /* Remove user input from table maintained by HERMES.*/
+
+
+/* Input of sets */
+
+#include    "gdsinp.h"       /* Input of set, subsets, return # subsets.*/
+#include    "gdspos.h"       /* Define a position in a subset.*/
+#include    "gdsbox.h"       /* Define a box inside/around a subset.*/
+#include    "gds_errstr.h"
+#include    "gdsc_range.h"   /* Return lower left and upper right corner of a subset.*/
+#include    "gdsc_ndims.h"   /* Return the dimensionality of a coordinate word.*/
+#include    "gdsc_grid.h"    /* Extract grid value.*/
+#include    "gdsc_fill.h"    /* return coordinate word filled with a grid */
+                             /* value for each axis.*/
+#include    "gdsc_name.h"
+#include    "gdsd_rdble.h"
+#include    "gdsi_read.h"    /* Reads data from (part of) a set.*/
+#include    "gdsd_rchar.h"
+#include    "gdsd_wdble.h"
+#include    "gdsd_delete.h"
+#include    "gdsd_writec.h"
+#include    "minmax3.h"      /* Find min, max and #blanks in subset. */
+#include    "wminmax.h"      /* Writes (new) minimum and maximum and number */
+                             /* of blanks of subsets in the descriptor file */
+                             /* and optionally deletes the MINMAX descriptors */
+                             /* at intersecting levels. */
+
+
+/* Output set related */
+
+#include    "gdsasn.h"       /* GDSASN copies the coordinate system of a */
+                             /* previously opened input set obtained with */
+                             /* GDSINP to the output set to be obtained */
+                             /* with GDSOUT. */
+#include    "gdsout.h"       /* GDSOUT prompts the user to enter the */
+                             /* name of an output set and the subsets, */
+                             /* and returns the number of subsets entered. */
+#include    "gdsi_write.h"   /* Writes data to (part of) an set. */
+
+
+
+
+/* External function prototypes */
+
+extern void grid2arcsec(       double *,
+                               double,
+                               double,  
+                               double *,
+                               double * );
+
+extern void gauss2array(       double, 
+                               double, 
+                               double, 
+                               double, 
+                               double, 
+                               double, 
+                               fint   *, 
+                               fint   *, 
+                               float  * );
+                               
+extern int gauss2ellipse(      double, 
+                               double, 
+                               double, 
+                               double *, 
+                               double *, 
+                               double *);
+
+
+extern int err_gauss2ellipse(  double, 
+                               double, 
+                               double, 
+                               double,
+                               double,
+                               double,
+                               double *, 
+                               double *, 
+                               double *);
+
+
+extern int ellipse2gauss(      double,
+                               double,
+                               double,
+                               double *,
+                               double *,   
+                               double * );
+
+                              
+extern int  gauestmom2dim(     float  *, 
+                               fint   *, 
+                               fint   *, 
+                               double * );
+                               
+extern int  fit2dimgausspars(  float  *, 
+                               fint   *, 
+                               fint   *, 
+                               double *, 
+                               double *,
+                               fint   *, 
+                               double, 
+                               fint, 
+                               float );
+                               
+extern int purifybox(          int,
+                               int,
+                               fint   *,
+                               fint   *,                             
+                               float  *,
+                               float   );
+
+
+extern int checkbox(           float  *,
+                               fint   *,
+                               fint   *,
+                               int    *,
+                               int    *,
+                               float  *,
+                               float  * );
+
+extern void lsqerr(            int );
+
+extern void setcolor(          fint );
+
+extern void setwidth(          fint );
+
+extern void initplot(          void );
+
+extern void plmove(            float,
+                               float );
+
+extern void pldraw(            float,
+                               float );
+
+extern void drawbox(           float   *,
+                               float   *,
+                               fint    *,
+                               fint    *,
+                               char    * );
+                               
+extern bool preparegids(       fchar,
+                               fint,
+                               fint    *,
+                               fint    *,
+                               float   *,
+                               float   * );
+
+extern void plotellipse(       double  * );
+
+
+extern void markfirstmax(      fint    *,
+                               fint    *,
+                               float   * );
+#<
+
+#>            utils.h
+/* utils.h
+
+                
+                          COPYRIGHT (c) 1996
+                    Kapteyn Astronomical Institute
+               University of Groningen, The Netherlands
+                        All Rights Reserved.
+                                                                                                            
+*/
+
+
+#define STRLEN         256        /* Max length of strings */
+#define FILENAMELEN    256        /* Max length of file names */
+#define FITSLEN        20         /* Max length of header items etc.*/
+
+
+#define MYMAX(a,b)     ( (a) > (b) ? (a) : (b) )
+#define MYMIN(a,b)     ( (a) > (b) ? (b) : (a) )
+#define ABS(a)         ( (a) < 0 ? (-(a)) : (a) )
+#define PI             3.141592653589793
+#define RAD(a)         ( a * 0.017453292519943295769237 )
+#define DEG(a)         ( a * 57.295779513082320876798155 )
+#define NONE           0          /* Default levels in userxxx routines */
+#define REQUEST        1          
+#define HIDDEN         2          
+#define EXACT          4          
+#define YES            1          /* C versions of .TRUE. and .FALSE. */
+#define NO             0          
+#define DELTA          0.000001
+#define MAXPAR         6
+
+
+/* Initialize Fortran compatible string with macro 'fmake' */
+
+#define fmake(fchr,size) { \
+                           static char buff[size+1]; \
+                           int i; \
+                           for (i = 0; i < size; buff[i++] = ' '); \
+                           buff[i] = 0; \
+                           fchr.a = buff; \
+                           fchr.l = size; \
+                         } 
+
+
+/* Malloc version of 'fmake. Strings allocated with'  */
+/* finit, must be freed with free( fc.a ) */
+#define finit( fc , len ) { fc.a = malloc( ( len + 1 ) * sizeof( char ) ) ;  \
+                            fc.a[ len ] = '\0' ; \
+                            fc.l = len ; }  
+
+
+
+/* PGPLOT colours */
+
+#define   BACKGROUND    0      /* Color definitions for PGPLOT. */
+#define   FOREGROUND    1      /* Black if background is white. */
+#define   RED           2
+#define   GREEN         3
+#define   BLUE          4
+#define   CYAN          5
+#define   MAGENTA       6
+#define   YELLOW        7
+#define   ORANGE        8
+#define   GREENYELLOW   9
+#define   GREENCYAN    10
+#define   BLUECYAN     11
+#define   BLUEMAGENTA  12
+#define   REDMAGENTA   13
+#define   DARKGRAY     14
+#define   LIGHTGRAY    15
+
+
+#define   NORMAL       1
+#define   ROMAN        2
+#define   ITALIC       3
+#define   SCRIPT       4
+
+                                                                                               
+int ellipse2gauss( double  maj,
+                   double  min,
+                   double  phi,
+                   double  *a,
+                   double  *b,
+                   double  *c );
+int gauss2ellipse( double   a,
+                   double   b,
+                   double   c,
+                   double   *maj,
+                   double   *min,
+                   double   *phi );
+#<
+
+#>            antpat.c
+/*
+                            COPYRIGHT (c) 1996
+                      Kapteyn Astronomical Institute
+                University of Groningen, The Netherlands
+                           All Rights Reserved.
+*/
+
+
+#include    "cmain.h"        /* Defines the main body of a C program with */
+                             /* MAIN_PROGRAM_ENTRY and IDENTIFICATION */
+#include    "antpat.h"
+#include    "pgplot.h"       /* All PGPLOT includes. */
+#include    "utils.h"
+
+
+#define RELEASE        "1.0"      /* Version number */
+#define MAXAXES        10         /* Max. axes in a set */
+#define MAXSUBSETS     1024       /* Max. allowed subsets */
+#define TSK_SCALE      tofchar("scale")
+
+
+/* Defines for in/output routines etc.*/
+
+#define KEY_APSET      tofchar("APSET=")
+#define MES_APSET      tofchar("Give antenna pattern set, subsets:")
+#define KEY_BOX        tofchar("BOX=")
+#define MES_BOX        tofchar(" ")
+#define KEY_UPSET      tofchar("UPSET=")
+#define MES_UPSET      tofchar("Enter other set,(subset(s)) for header update:  [NONE]")
+#define KEY_OVERLAY    tofchar("OVERLAY=")
+#define MES_OVERLAY    tofchar("Overlay beam in GIDS?                    Y/[N]")
+#define KEY_TOLERANCE  tofchar("TOLERANCE=")
+#define MES_TOLERANCE  tofchar("Fractional tolerance for chi square:     [0.0]")
+#define KEY_LAB        tofchar("LAB=")
+#define KEY_MAXITS     tofchar("MAXITS=")
+#define MES_MAXITS     tofchar("Maximum number of iterations in fit:      [50]")
+#define KEY_FIXPA      tofchar("FIXPA=")
+#define MES_FIXPA      tofchar("Fix PA in fit with value 0 or 90 deg.:   Y/[N]")
+#define KEY_BEAM       tofchar("BEAM=")
+#define KEY_POSANG     tofchar("POSANG=")
+#define KEY_FITAGAIN   tofchar("FITAGAIN=")
+#define KEY_GRIDS      tofchar("GRIDS=")
+#define MES_GRIDS      tofchar("FWHM's in grids anyway?                  Y/[N]")
+#define KEY_RESCALE    tofchar("RESCALE=")
+#define MES_RESCALE    tofchar("Do you want to rescale the AP?           [Y]/N" )
+#define KEY_CLIP       tofchar("CLIP=")
+
+
+/* Variables for input */
+
+static fchar    Setin;              /* Name of input set */
+static fint     subin[MAXSUBSETS];  /* Subset coordinate words */
+static fint     axnum[MAXAXES];     /* Array of size MAXAXES containing the */
+                                    /* axes numbers.  The first elements (upto */
+                                    /* the dimension of the subset) contain the */
+                                    /* axes numbers of the subset, the other */
+                                    /* ones ontain the axes numbers outside the */
+                                    /* the subset ordered ccording to the */
+                                    /* specification by the user. */
+static fint     axcount[MAXAXES];   /* Array of size MAXAXES containing the */
+                                    /* number of grids along an axes as */
+                                    /* specified by the user. The first elements */
+                                    /* (upto the dimension of the subset) contain */
+                                    /* the length of the subset axes, the other */
+                                    /* ones contain the the number of grids along */
+                                    /* an axes outside the subset. */
+                                    /* the operation for each subset, Class 2 */
+                                    /* is for applications for which the operation */
+                                    /* requires an interaction between the different */
+                                    /* subsets. */
+static fint     subdim;             /* Dimensionality of the subsets for class 1 applications */
+static fint     setdim;             /* Dimension of set. */
+
+
+/* Box and frame related */
+
+static fint     flo[MAXAXES];       /* Low  edge of frame in grids */
+static fint     fhi[MAXAXES];       /* High edge of frame in grids */
+static fint     blo[MAXAXES];       /* Low  edge of box in grids */
+static fint     bhi[MAXAXES];       /* High edge of box in grids */
+                                    /*  1 box may exceed subset size */
+                                    /*  2 default is in BLO */
+                                    /*  4 default is in BHI */
+                                    /*  8 box restricted to size defined in BHI*/
+                                    /*  These codes work additive.*/
+                                    /*  When boxopt is 0 or 1, the default is the */
+                                    /*  is the entire subset. */
+
+
+/* Reading data */
+
+
+static fint     subnr;              /* Counter for subset loop. */
+
+
+/* OUTSET related variables */
+
+static fchar    Setout;
+static fint     subout[MAXSUBSETS];  /* Output subset coordinate words */
+static fint     nsubsout;
+static fint     axnumout[MAXAXES];
+static fint     axcountout[MAXAXES];
+
+
+/* Miscellaneous */
+
+static fint     setlevel = 0;       /* To get header items at set level. */
+static float    blank;              /* Global value for BLANK. */
+static fint     r1, r2;             /* Result values for different routines. */
+static char     message[STRLEN];    /* All purpose character buffer. */
+static bool     agreed = NO;        /* Loop guard. */
+
+
+
+static void printstatus( fchar Tsk,
+                         fint  status )
+/*------------------------------------------------------------*/
+/* PURPOSE: Display error for deputy call.                    */
+/*------------------------------------------------------------*/
+{
+   if (status == -6)
+      anyoutf( 1, "Called task (%.*s) not present", nelc_c(Tsk), Tsk.a );
+   if (status == -7)
+      anyoutf( 1, "Max. number of tasks already active" );
+}
+
+
+
+
+static void rescalesubset( fchar  Setin,
+                           fint   subset,
+                           fint  *axnum,
+                           float  apmax )
+/*------------------------------------------------------------*/
+/* PURPOSE: Rescale the given subset.                         */
+/*------------------------------------------------------------*/
+{
+   fint   setdim, subdim;
+   int    n;
+   fchar  Axisname;
+   char   mbuff[80];
+   fint   r1, r2;
+   fint   grid;
+   fint   status;
+
+
+   setdim = gdsc_ndims_c( Setin, &setlevel );
+   subdim = gdsc_ndims_c( Setin, &subset );
+   sprintf( message, "INSET=%.*s ", nelc_c(Setin), Setin.a );
+   fmake( Axisname, FITSLEN );
+   if (setdim > subdim)
+   {
+      for (n = subdim; n < setdim; n++)
+      {
+         char  *cptr;
+         r2 = r1 = 0;
+         gdsc_name_c( Axisname, Setin, &axnum[n], &r1 );
+         grid = gdsc_grid_c( Setin, &axnum[n], &subset, &r2 );
+         cptr = strtok( Axisname.a, " -" );
+         if (cptr != NULL)
+            sprintf( mbuff, "%s %d ", cptr, grid );
+         else
+            strcpy( mbuff, "?" );
+         strcat( message, mbuff );
+      }
+   }
+   anyoutf( 16, "Deputy call 1: %s", message );
+
+   /* Substitute in Hermes parameter list */
+   wkey_c( tofchar(message) );
+   sprintf( message, "AB=%f", 1.0 / apmax );
+   wkey_c( tofchar(message) );
+
+   /* Execute application SCALE */
+   deputy_c( TSK_SCALE, &status );                       /* Spawn HEADER task */
+   if (status != 1)                                       /* Something wrong? */
+      printstatus( TSK_SCALE, status );
+}
+
+
+
+static int equalset( fchar Set1,
+                     fchar Set2 )
+/*------------------------------------------------------------*/
+/* PURPOSE: Check whether two set names are equal.            */
+/* Include path names in comparison. But before including a   */
+/* path, copy the set names so that input is not changed!     */
+/*------------------------------------------------------------*/
+{
+   int    i;
+   fint   l1, l2;
+   fchar  S1, S2;
+
+
+   fmake( S1, STRLEN );         /* Set1/2 also have length 'STRLEN' */
+   fmake( S2, STRLEN );
+
+   for (i = 0; i < nelc_c(Set1) && i < S1.l; i++)  /* Copy all characters in src */
+      S1.a[i] = Set1.a[i];
+   while (i < S1.l)                                /* Pad with blanks */
+      S1.a[i++] = ' ';
+
+   for (i = 0; i < nelc_c(Set2) && i < S2.l; i++)
+      S2.a[i] = Set2.a[i];
+   while (i < S2.l)
+      S2.a[i++] = ' ';
+
+   l1 = getpath_c( S1 );
+   l2 = getpath_c( S2 );
+   if (l1 != 0 || l2 != 0)
+   {
+      anyoutf( 8, "Cannot get full pathname for set name" );
+      if (l1 == -1 || l2 == -1)
+         anyoutf( 8, "Cannot get entry from password file.");
+      if (l1 == -2 || l2 == -2)
+         anyoutf( 8, "Full pathname too long for PATH" );
+      return( 0 );
+   }
+
+   l1 = nelc_c( S1 );
+   l2 = nelc_c( S2 );
+
+   if (l1 != l2)
+      return( 0 );
+   return( strncmp( S1.a, S2.a, l1 ) == 0 );
+}
+
+
+
+void askparams( fint     dfault,
+                double   *pars,
+                fint     *mpar,
+                int      startx,
+                int      starty,
+                double   apmax,
+                double   *xtol,
+                fint     *xits,
+                double   *xlab,
+                double   cfact,
+                double   *cdelt )
+/*------------------------------------------------------------*/
+/* PURPOSE: Ask user to enter parameters for lsqfit.          */
+/*------------------------------------------------------------*/
+{
+   double   tol, lab;
+   double   f1, f2;
+   fint     its;
+   fint     nitems;
+   int      conversion = (cfact != 0.0);
+   bool     fixpa;
+
+
+   if (apmax == 1.0)
+      pars[0] = 1.0;
+   if (startx == 0)
+      pars[1] = 0.0;
+   if (starty == 0)
+      pars[2] = 0.0;
+
+   (void) gauss2ellipse( pars[3],  pars[4],  pars[5],
+                        &pars[3], &pars[4], &pars[5] );
+
+   if (conversion)
+   {
+      /* Convert to arcsec */
+      double   radphi = RAD(pars[5]);
+      double   sin2 = sin(radphi) * sin(radphi);
+      double   cos2 = cos(radphi) * cos(radphi);
+
+      f1 = cfact * sqrt( cdelt[0]*cdelt[0]*sin2 + cdelt[1]*cdelt[1]*cos2 );
+      f2 = cfact * sqrt( cdelt[0]*cdelt[0]*cos2 + cdelt[1]*cdelt[1]*sin2 );
+      pars[3] *= f1;
+      pars[4] *= f2;
+   }
+
+   sprintf( message, "Initial estimates for maj.,min. axes:     [%g %g]",
+            pars[3], pars[4] );
+   nitems = 2;
+   r1  = userdble_c( &pars[3],
+                     &nitems,
+                     &dfault,
+                     KEY_BEAM,
+                     tofchar(message) );
+
+   if (conversion)
+   {
+      /* Convert back to pixels */
+      pars[3] /= f1;
+      pars[4] /= f2;
+   }
+
+   sprintf( message, "Enter initial estimate for the PA (deg):     [%.2f]",
+            pars[5] );
+   nitems = 1;
+   r1  = userdble_c( &pars[5],
+                     &nitems,
+                     &dfault,
+                     KEY_POSANG,
+                     tofchar(message) );
+
+
+   (void) ellipse2gauss( pars[3],  pars[4],  pars[5],
+                        &pars[3], &pars[4], &pars[5] );
+
+
+   /*--------------------------------------------------*/
+   /* Determine which parameters z0,xc,yc,a,b,c in the */
+   /* fit are fixed and which are free.                */
+   /*--------------------------------------------------*/
+   mpar[0] = 0;           /* Fix z0 (max amplitude) */
+   mpar[1] = 0;           /* Fix xc (Centre X) */
+   mpar[2] = 0;           /* Fix yc (Centre Y) */
+   mpar[3] = 1;           /* Free parameter a */
+   mpar[4] = 1;           /* Free parameter b */
+   nitems  = 1;
+   fixpa   = toflog( NO );
+   r1      = userlog_c( &fixpa,
+                        &nitems,
+                        &dfault,
+                        KEY_FIXPA,
+                        MES_FIXPA );
+   fixpa   = tobool( fixpa );
+   if (fixpa)
+   {
+      mpar[5] = 0;
+      pars[5] = 0.0;
+   }
+   else
+      mpar[5] = 1;
+
+
+   /*--------------------------------------------------*/
+   /* ('lsqfit') Fitting of the profile stops when     */
+   /* successive iterations fail to produce a decrement*/
+   /* in reduced chi-squared less than TOLERANCE. If   */
+   /* its value is less than the minimum tolerance     */
+   /* possible, it will be set to this value. This     */
+   /* means that maximum accuracy can be obtained by   */
+   /* setting TOLERANCE=0.0.                           */
+   /*--------------------------------------------------*/
+   nitems = 1;
+   tol = 0.0;
+   r1  = userdble_c( &tol,
+                     &nitems,
+                     &dfault,
+                     KEY_TOLERANCE,
+                     MES_TOLERANCE );
+   if (tol < 0.0)
+   {
+      anyoutf( 1, "WARNING: !!! Tolerance assumed to be 0.0 (must be >= 0)" );
+      tol = 0.0;
+   }
+
+   /*--------------------------------------------------*/
+   /* Maximum number of iterations in 'lsqfit'.        */
+   /*--------------------------------------------------*/
+   nitems = 1;
+   its    = 50;
+   r1     = userint_c( &its,
+                       &nitems,
+                       &dfault,
+                       KEY_MAXITS,
+                       MES_MAXITS );
+   if (its < 1)
+   {
+      anyoutf( 1, "WARNING: !!! # iterations 1 assumed. Max. number must be > 1" );
+      its = 1;
+   }
+
+   /*--------------------------------------------------*/
+   /* Mixing parameter in 'lsqfit' , 'lab' determines  */
+   /* the initial weight of steepest descent method    */
+   /* relative to the Taylor method. 'lab' should be   */
+   /* a small value (i.e. 0.01). 'lab' can only be     */
+   /* zero when the partial derivatives are independent*/
+   /* of the parameters. In fact in this case 'lab'    */
+   /* should be exactly equal to zero.                 */
+   /*--------------------------------------------------*/
+   lab     = 0.001;
+   nitems  = 1;
+   (void) sprintf( message, "Value for mixing parameter:   [%f]", lab );
+   r1      = userdble_c( &lab,
+                         &nitems,
+                         &dfault,
+                         KEY_LAB,
+                         tofchar(message) );
+   lab = fabs( lab );
+
+   cancel_c( KEY_BEAM );
+   cancel_c( KEY_POSANG );   
+   cancel_c( KEY_FIXPA );
+   cancel_c( KEY_TOLERANCE );
+   cancel_c( KEY_MAXITS );
+   cancel_c( KEY_LAB );
+
+   *xtol = tol;
+   *xlab = lab;
+   *xits = its;
+}
+
+
+
+
+static int convfact( fchar    Setin,
+                     fint     subset,
+                     fint     *axnum,
+                     double   *cdelt,
+                     double   *cfact )
+/*------------------------------------------------------------*/
+/* PURPOSE: */
+/*------------------------------------------------------------*/
+{
+   fchar   Cunit[MAXAXES];
+   fint    setdim, subdim;
+   fint    r1;
+   int     n;
+   int     conversion = YES;
+
+
+   setdim = gdsc_ndims_c( Setin, &setlevel );
+   subdim = gdsc_ndims_c( Setin, &subset );
+
+   *cfact = 0.0;                                      /* Essential to preset! */
+   for (n = 0; n < subdim; n++)
+   {
+      sprintf( message, "CDELT%d", n + 1 );
+      r1 = 0;
+      gdsd_rdble_c( Setin, tofchar(message), &setlevel, &cdelt[n], &r1 );
+      anyoutf( 16, "Grid spacing: %f", cdelt[n] );
+      finit( Cunit[n], FITSLEN );
+      sprintf( message, "CUNIT%d", n + 1 );
+      r1 = 0;
+      gdsd_rchar_c( Setin, tofchar(message), &setlevel, Cunit[n], &r1 );
+      anyoutf( 16, "Units in header: %.*s", nelc_c( Cunit[n] ), Cunit[n].a );
+      if (conversion)
+      {
+         double dummy;
+         conversion = ( factor_c(Cunit[axnum[0]-1],
+                                 tofchar("ARCSEC"),
+                                 &dummy) == 0 );
+         if (conversion)
+         {
+            if (*cfact == 0.0)
+               *cfact = dummy;
+            else
+               conversion = (*cfact == dummy);
+         }
+      }
+   }
+   if (!conversion)
+      *cfact = 0.0;
+
+   for (n = 0; n < subdim; n++)
+      free( Cunit[n].a );
+   return( conversion );
+}
+
+
+
+static void cword2string( fchar    Setin,
+                          fint     subset,
+                          fint    *axnum,
+                          char    *str )
+/*------------------------------------------------------------*/
+/* PURPOSE: Return a string  SETNAME AXISNAME1 GRID1, .....   */
+/*------------------------------------------------------------*/
+{
+   fchar   Axisname;
+   char    cbuf[FITSLEN];
+   fint    setdim, subdim;
+   fint    r1, r2;
+   fint    grid;
+   int     n;
+
+
+   setdim = gdsc_ndims_c( Setin, &setlevel );
+   subdim = gdsc_ndims_c( Setin, &subset );
+
+
+   fmake( Axisname, FITSLEN );
+
+   sprintf( str, "%.*s ", nelc_c(Setin), Setin.a );
+   if (setdim > subdim)
+   {
+      for (n = subdim; n < setdim; n++)
+      {
+         char   *cptr;
+         r2 = r1 = 0;
+         gdsc_name_c( Axisname, Setin, &axnum[n], &r1 );
+         grid = gdsc_grid_c( Setin, &axnum[n], &subset, &r2 );
+         cptr = strtok( Axisname.a, " -" );
+         if (cptr != NULL)
+            sprintf( cbuf, "%s %d", cptr, grid );
+         else 
+            sprintf( cbuf, "? %d", grid );
+         strcat( str, cbuf );
+         if ((n+1) < setdim)
+             strcat( str, "," );
+      }
+   }   
+}
+
+
+
+static void printGDSerror( fint err )
+/*-----------------------------------------------------------*/
+/* PURPOSE: Print an error message associated with this error*/
+/*-----------------------------------------------------------*/
+{
+   fchar Errstr;
+   fmake( Errstr, STRLEN );
+   gds_errstr_c( Errstr, &err );
+   anyoutf( 1, "Error: %.*s", nelc_c(Errstr), Errstr.a );
+}
+                     
+
+
+static void updatehead( fchar    Setin,
+                        fint     subset,
+                        fchar    Apset,
+                        fint     subap,
+                        fint    *axnum,
+                        double   cfact,
+                        double  *cdelt,
+                        double   maprotation,
+                        double  *pars )
+/*------------------------------------------------------------*/
+/* PURPOSE: Write items BMMAJ, BMMIN, BMPA and APSET in the   */
+/*          header of 'Setin' at subset level.                */
+/*------------------------------------------------------------*/
+{
+   double  maj, min, phi;
+   int     conversion = (cfact != 0.0);
+   char    cwordstr[256];
+   fint    r1, w;
+   fint    len;
+   fint    one = 1;
+
+
+   if (!conversion)   
+   {
+      anyoutf( 1, "WARNING: !!! Cannot update header because axis lengths cannot" );
+      anyoutf( 1, "             be converted to seconds of arc." );
+      return;
+   }
+   cword2string( Apset, subap, axnum, cwordstr );
+   gauss2ellipse( pars[3], pars[4], pars[5], &maj, &min, &phi );   
+   grid2arcsec( cdelt, phi, cfact, &maj, &min );
+   r1 = 0;
+   gdsd_wdble_c( Setin, tofchar("BMMIN"), &subset, &min, &r1 );
+   if (r1 < 0)
+      printGDSerror( r1 );
+   r1 = 0;
+   gdsd_wdble_c( Setin, tofchar("BMMAJ"), &subset, &maj, &r1 );
+   if (r1 < 0)
+      printGDSerror( r1 );
+
+
+   if (maprotation != 0.0)
+   {
+      if (cdelt[0] < 0.0)
+         phi -= maprotation;
+      else 
+         phi += maprotation;
+   }
+
+   r1 = 0;
+   gdsd_wdble_c( Setin, tofchar("BMPA"), &subset, &phi, &r1 );
+   if (r1 < 0)
+      printGDSerror( r1 );
+   r1 = 0;
+   
+   gdsd_delete_c( Setin, tofchar("APSET"), &subset, &r1 );  /* No message if this fails */      
+   /*--------------------------------------------------*/
+   /* We are ready to write the string that contains   */
+   /* information about the name of the antenna pattern*/
+   /* and the subset level.                            */
+   /*--------------------------------------------------*/
+   len = strlen( cwordstr );   
+   r1  = w = 0;
+   gdsd_writec_c( Setin, 
+                  tofchar("APSET"), 
+                  &subset, 
+                  tofchar(cwordstr), 
+                  &len, 
+                  &one, 
+                  &w, 
+                  &r1 );
+    if (r1 < 0)
+       printGDSerror( r1 );
+}
+
+
+
+static void displayresults( fchar    Setin,
+                            fint     subset,
+                            fint    *axnum,
+                            double   cfact,
+                            double  *cdelt,
+                            double   maprotation,
+                            fint    *blo,
+                            fint    *bhi,
+                            double  *storepars,
+                            double  *pars,
+                            double  *err,
+                            fint     iters,
+                            double   tol,
+                            double   lab  )
+/*------------------------------------------------------------*/
+/* PURPOSE: Display a table with results on screen and in the */
+/* GIPSY log file.                                            */
+/*------------------------------------------------------------*/
+{
+   fchar   Axisname;
+   char    cbuf[FITSLEN];
+   char    cwordstr[256];
+   double  maj, min, phi;
+   double  Dmaj, Dmin, Dphi;
+   fint    setdim, subdim;
+   fint    r1;
+   int     n;
+   int     conversion = (cfact != 0.0);
+
+
+   setdim = gdsc_ndims_c( Setin, &setlevel );
+   subdim = gdsc_ndims_c( Setin, &subset );
+
+
+   fmake( Axisname, FITSLEN );
+   anyoutf( 3, " " );
+   anyoutf( 3, "====================== ANTPAT =======================" );
+
+   strcpy( message, "Antenna pattern: ");
+   cword2string( Setin, subset, axnum, cwordstr );
+   strcat( message, cwordstr );
+
+   strcat( message, "  Box: [ ");
+   for (n = 0; n < subdim; n++)
+   {
+      sprintf( cbuf, "%d ", blo[n] );
+      strcat( message, cbuf );
+   }
+   for (n = 0; n < subdim; n++)
+   {
+      sprintf( cbuf, "%d ", bhi[n] );
+      strcat( message, cbuf );
+   }
+   strcat( message, "]");
+   anyoutf( 3, message );
+   if (conversion)
+   {
+      if (subdim == 1)
+         anyoutf( 3, "Gridspacing: %f (arcsec)", cdelt[0]*cfact );
+      if (subdim == 2)
+         anyoutf( 3, "Gridspacing x,y:  %f  x %f (arcsec)",
+                  cdelt[0]*cfact, cdelt[1]*cfact );
+   }
+
+   anyoutf( 3, " " );
+   anyoutf( 3, "Initial values used for LSQ fit (Moments method):" );
+   anyoutf( 3, "-------------------------------------------------" );
+   gauss2ellipse( storepars[3], storepars[4], storepars[5], &maj, &min, &phi );
+
+   if (conversion)
+   {
+      grid2arcsec( cdelt, phi, cfact, &maj, &min );
+      anyoutf( 3, "Major FWHM:       %12g (arcsec)", maj );
+      anyoutf( 3, "Minor FWHM:       %12g (arcsec)", min );
+   }
+   else
+   {
+      anyoutf( 3, "Major FWHM:       %12g (pixels)", maj );
+      anyoutf( 3, "Minor FWHM:       %12g (pixels)", min );
+   }
+   anyoutf( 3, "Position angle:   %12g (degrees)", phi );
+   anyoutf( 3, "(wrt. +Y axis)" );
+   anyoutf( 3, " " );
+   anyoutf( 3, "Results of least squares fit after %d iterations:", iters );
+   anyoutf( 3, "-------------------------------------------------" );
+
+   gauss2ellipse( pars[3], pars[4], pars[5], &maj, &min, &phi );
+   r1 = err_gauss2ellipse( pars[3], pars[4], pars[5], err[3], err[4], err[5],
+                           &Dmaj, &Dmin, &Dphi );
+
+   if (conversion)
+   {
+      grid2arcsec( cdelt, phi, cfact, &maj, &min );
+      grid2arcsec( cdelt, phi, cfact, &Dmaj, &Dmin );
+      anyoutf( 3, "Major FWHM:       %12g +/- %12g (arcsec)", maj, Dmaj );
+      anyoutf( 3, "minor FWHM:       %12g +/- %12g (arcsec)", min, Dmin );
+   }
+   else
+   {
+      anyoutf( 3, "Major FWHM:       %12g +/- %12g (pixels)", maj, Dmaj );
+      anyoutf( 3, "minor FWHM:       %12g +/- %12g (pixels)", min, Dmin );
+   }
+   /*--------------------------------------------------*/
+   /* We follow the definition of a maprotation of     */
+   /*'Representations of Celestial Coordinates in FITS'*/
+   /* by Greisen and Calabretta. The rotation can be   */
+   /* found as item CROTA in the header of a set. It   */
+   /* is the angle from the +y axis to the +M (direc-  */
+   /* tion of constant longitude) in the direction of  */
+   /* the +x axis.                                     */
+   /*--------------------------------------------------*/   
+   if (maprotation == 0.0)
+      anyoutf( 3, "Position angle:   %12g +/- %12g (degrees)", phi, Dphi );
+   else
+   {
+      double   angle;
+      if (cdelt[0] < 0.0)
+         angle = phi - maprotation;
+      else 
+         angle = phi + maprotation;
+      anyoutf( 3, "Position angle:   %12g +/- %12g (degrees)", angle, Dphi );
+      anyoutf( 3, "Corrected for a" );
+      anyoutf( 3, "map rotation of" );
+      anyoutf( 3, "%.2f deg. (Header)", maprotation );
+   }
+
+   anyoutf( 3, " " );
+   anyoutf( 3, "Tolerance in the fit: %g. Mixing factor: %g", tol, lab );
+   anyoutf( 3, "======================================================" );
+   anyoutf( 3, " " );
+}
+
+
+
+MAIN_PROGRAM_ENTRY
+/*-------------------------------------------------------------------------*/
+/* The macro MAIN_PROGRAM_ENTRY replaces the C-call main() to start the    */
+/* main body of your GIPSY application. Variables defined as 'fchar' start */
+/* with a capital.                                                         */
+/*-------------------------------------------------------------------------*/
+{
+   fint     maxsubs = MAXSUBSETS;
+   fint     maxaxes = MAXAXES;           /* Max num. of axes the program can deal with.*/
+   fint     class   = 1;                 /* Class 1 is for applications which repeat */
+   fint     showdev = 1;
+   fint     nsubs;                       /* Number of input subsets */
+   fint     dfault;                      /* Default option for input etc */
+   fint     nitems;
+   fint     r;
+   fint     maxIObuf;                    /* Maximum size of read buffer. */
+   float    *data = NULL;                /* Buffer for image data */
+   double   cdelt[MAXAXES];              /* Grid spacings */
+   double   cfact;                       /* Conversion to arcsec */
+   double   maprotation;
+   bool     updateset;
+   fchar    APstring;
+
+
+   /* GIDS related */
+
+   bool     Gidsoverlay;                 /* Overlay plot in GIDS ? */
+   fint     Gidsblo[2], Gidsbhi[2];
+   fint     Gidssubset = 0;
+   float    Gidsflo[2], Gidsfhi[2];      /* Corners of total GIDS area in grids */
+   fchar    Gidsset;
+
+
+
+   init_c();                             /* contact Hermes */
+   /* Task identification */
+   {
+      fchar    Task;                     /* Name of current task */
+      fmake( Task, 20 );                 /* Macro 'fmake' must be available */
+      myname_c( Task );                  /* Get task name */
+      Task.a[nelc_c(Task)] = '\0';       /* Terminate task name with null char. */
+      IDENTIFICATION( Task.a, RELEASE ); /* Show task and version */
+   }
+   setfblank_c( &blank );
+
+   /*--------------------------------------------------*/
+   /* Get the input set. Documentation can be found in */
+   /* $gip_sub/gdsinp.dc2. For antenna patterns we     */
+   /* allow 1 and 2 dimensional structures.            */
+   /*--------------------------------------------------*/
+   do
+   {
+      fmake( Setin, STRLEN );
+      dfault  = NONE;
+      subdim  = 2;                  /* Allow only 2-dim structures. */
+      nsubs = gdsinp_c( Setin,      /* Name of input set. */
+                        subin,      /* Array containing subsets coordinate words. */
+                        &maxsubs,   /* Maximum number of subsets in 'subin'.*/
+                        &dfault,    /* Default code as is USERxxx. */
+                        KEY_APSET,  /* Keyword prompt. */
+                        MES_APSET,  /* Keyword message for the user. */
+                        &showdev,   /* Device number (as in ANYOUT). */
+                        axnum,      /* Array of size 'maxaxes' containing the axes numbers. */
+                                    /* The first elements (upto the dimension of the subset) */
+                                    /* contain the axes numbers of the subset, */
+                                    /* the other ones contain the axes numbers */
+                                    /* outside the subset ordered according to the */
+                                    /* specification by the user. */
+                        axcount,    /* Number of grids on axes in 'axnum' */
+                        &maxaxes,   /* Max. number of axes. */
+                                    /* the operation for each subset. */
+                        &class,     /* Class 1 is for applications which repeat */
+                        &subdim );  /* Dimensionality of the subsets for class 1 */
+      agreed = (subdim == 1 || subdim == 2);
+      if (!agreed)
+         reject_c( KEY_APSET, tofchar("Dim. must be 1 or 2 !") );
+   }
+   while (!agreed);
+   setdim  = gdsc_ndims_c( Setin, &setlevel );
+
+
+   fmake( APstring, STRLEN );
+   dfault = HIDDEN;
+   r = usertext_c( APstring,            /* Copy the APSET= input to APstring' */
+                   &dfault,
+                   KEY_APSET,
+                   tofchar("") );
+
+   /*--------------------------------------------------*/
+   /* Determine edges of this frame                    */
+   /*--------------------------------------------------*/
+   {
+      fint cwlo, cwhi;                              /* Local coordinate words */
+      int  m;
+      r1 = 0;
+      gdsc_range_c( Setin, &setlevel, &cwlo, &cwhi, &r1 );
+      for (m = 0; m < (int) setdim; m++)
+      {
+         r1 = r2 = 0;
+         flo[m] = gdsc_grid_c( Setin, &axnum[m], &cwlo, &r1 );
+         fhi[m] = gdsc_grid_c( Setin, &axnum[m], &cwhi, &r2 );
+      }
+   }
+
+   /*--------------------------------------------------*/
+   /* Prepare grid ranges for APSET. This will be the  */
+   /* minimum box in which an antenna pattern will be  */
+   /* extracted.                                       */
+   /*--------------------------------------------------*/
+   {
+      fint     boxopt = 0;
+      dfault  = HIDDEN;
+      showdev = 16;
+      gdsbox_c( blo, bhi,
+                Setin, subin,
+                &dfault,
+                KEY_BOX,
+                MES_BOX,
+                &showdev,
+                &boxopt );
+   }
+
+   /*--------------------------------------------------*/
+   /* Ask set and subsets of other sets that have to   */
+   /* be updated, i.e. the string that is entered at   */
+   /* the APSET= prompt will be written to the header  */
+   /* along with the FWHM's and position angle.        */
+   /*--------------------------------------------------*/
+   do
+   {
+      fint    subdimout = 0;
+      fmake( Setout, STRLEN );
+      dfault   = REQUEST;
+      showdev  = 16;                      /* Info only in Hermes test mode */
+      nsubsout = gdsinp_c( Setout,        /* Name of the output set. */
+                           subout,        /* Output array with subsets coordinate words.*/
+                           &maxsubs,      /* Maximum number of subsets in subout. */
+                           &dfault,       /* Default code as in USERxxx. */
+                           KEY_UPSET,     /* User keyword prompt. */
+                           MES_UPSET,     /* Message for the user. */
+                           &showdev,      /* Device number (as in ANYOUT). */
+                           axnumout,      /* Array of size 'maxaxes' containing the axes numbers. */
+                           axcountout,    /* Array with the axis sizes. */
+                           &maxaxes,      /* Max axes the program can deal with. */
+                           &class,
+                           &subdimout );
+
+      agreed = YES;
+#ifdef GGSHHSS      
+      agreed = (nsubsout == nsubs || nsubsout == 0);
+      if (!agreed)
+         reject_c( KEY_UPSET, tofchar("#out != #in") );
+#endif         
+   }
+   while (!agreed);
+   updateset = (nsubsout > 0);
+
+   /*--------------------------------------------------*/
+   /* Check whether there is a GIDS window open. If so,*/
+   /* get the properties (box etc.) of the displayed   */
+   /* set. If it is possible to overlay, ask user if he*/
+   /* wants to overlay one or more ellipses. The       */
+   /* keyword is asked hidden if the displayed set is  */
+   /* not the same as the ELLINT set entered with      */
+   /* 'gdsinp'.                                        */
+   /*--------------------------------------------------*/
+   fmake( Gidsset, STRLEN );
+   Gidsoverlay = preparegids( Gidsset, Gidssubset,
+                              Gidsblo, Gidsbhi,
+                              Gidsflo, Gidsfhi );
+   if (Gidsoverlay)
+   {
+      int equal;
+      equal = equalset( Setin, Gidsset );
+      if (equal)
+      {
+         dfault = REQUEST;
+         sprintf( message, "Overlay beam in Gids?   [Y]/N" );
+      }
+      else
+      {
+         Gidsoverlay = NO;
+         dfault = HIDDEN;
+         sprintf( message, "Overlay beam in Gids?   Y/[N]");
+      }
+      nitems = 1;
+      r1 = userlog_c( &Gidsoverlay,
+                      &nitems,
+                      &dfault,
+                      KEY_OVERLAY,
+                      tofchar(message) );
+      Gidsoverlay = tobool( Gidsoverlay );
+   }
+
+
+   if (Gidsoverlay)                         /* Initialize plot and draw a box */
+   {
+      initplot();
+      drawbox( Gidsflo, Gidsfhi, Gidsblo, Gidsbhi, "Beam" );
+      plmove( 0.0, Gidsflo[1] );
+      pldraw( 0.0, Gidsfhi[1] );
+      plmove( Gidsflo[0], 0.0 );
+      pldraw( Gidsfhi[0], 0.0 );
+      /* Plot BOX= frame */
+
+      plmove( (float) blo[0], (float) blo[1] );
+      pldraw( (float) bhi[0], (float) blo[1] );
+      pldraw( (float) bhi[0], (float) bhi[1] );
+      pldraw( (float) blo[0], (float) bhi[1] );
+      pldraw( (float) blo[0], (float) blo[1] );
+   }
+
+   /*--------------------------------------------------*/
+   /* Create buffer space for the data.                */
+   /*--------------------------------------------------*/
+   maxIObuf = (bhi[0]-blo[0]+1) * (bhi[1]-blo[1]+1);
+   data = (float *) calloc( (int) maxIObuf, sizeof(float) );
+   if (data == NULL)
+      errorf( 4, "Cannot allocate memory for antenna pattern" );
+
+   /*--------------------------------------------------*/
+   /* Check whether axis lengths can be expressed in   */
+   /* arcsec. If not, generate a warning.              */
+   /*--------------------------------------------------*/
+   r = convfact( Setin, subin[0], axnum, cdelt, &cfact );
+   if (!r)
+   {
+      anyoutf( 1, "WARNING: !!! Cannot convert header units to arcsec." );
+      anyoutf( 1, "             Result will be in pixels!" );
+   }
+   else
+   {
+      bool grids = toflog( NO );
+      nitems = 1;
+      dfault = HIDDEN;
+      r1     = userlog_c( &grids, &nitems, &dfault, KEY_GRIDS, MES_GRIDS );
+      grids  = tobool( grids );
+      if (grids)
+         cfact = 0.0;
+   }
+
+   r1 = skyrot_c( Setin, &maprotation );
+   if (r1 != 0)
+      maprotation = 0.0;
+
+   /*--------------------------------------------------*/
+   /* Start the main loop over all subsets. Calculate  */
+   /* for each subset new coordinate words and reset   */
+   /* the transfer id's.                               */
+   /*--------------------------------------------------*/
+   for (subnr = 0; subnr < nsubs; subnr++)
+   {
+      fint    tid = 0;               /* Transfer id's */
+      fint    cwlo, cwhi;            /* Coordinate words */
+      fint    pixelsread;            /* Number of pixels read by read routine. */
+      int     startx, starty;
+      float   apmax, apmin;
+      float   clipval;
+      double  pars[MAXPAR];
+
+
+      cwlo   = gdsc_fill_c( Setin, &subin[subnr], blo );
+      cwhi   = gdsc_fill_c( Setin, &subin[subnr], bhi );
+      tid    = 0;
+      /* Read 'maxIObuf' values in data'. */
+      gdsi_read_c( Setin,
+                   &cwlo, &cwhi,
+                   data,
+                   &maxIObuf,
+                   &pixelsread,
+                   &tid );
+
+      if (pixelsread != maxIObuf)
+         errorf( 4, "Could not read all data from disk, aborting... !" );
+
+      /*--------------------------------------------------*/
+      /* is the maximum value in the box really 1.0? Is   */
+      /* the position of the maximum really (0,0)?        */
+      /*--------------------------------------------------*/
+      checkbox( data, blo, bhi, &startx, &starty, &apmin, &apmax );
+      if (startx != 0.0 || starty != 0.0 || 
+          apmax > 1.0+DELTA || apmax < 1.0-DELTA )
+      {
+         anyoutf( 1, " " );
+         anyoutf( 1, "WARNING !!! This is NOT a standard antenna pattern.");
+         if (apmax != 1.0)
+         {
+            bool    rescale;
+            anyoutf( 1, "            The value of its maximum is %g != 1.0",
+                     apmax );
+            dfault = REQUEST;
+            nitems = 1;
+            rescale = toflog( YES );
+            r = userlog_c( &rescale,
+                           &nitems,
+                           &dfault,
+                           KEY_RESCALE,
+                           MES_RESCALE );
+            rescale = tobool( rescale );
+            cancel_c( KEY_RESCALE );
+            if (rescale)
+            {
+               /*----------------------------------------*/
+               /* Start program SCALE with a deputy call.*/
+               /*----------------------------------------*/
+               rescalesubset( Setin, subin[subnr], axnum, apmax );
+            }
+         }
+         else
+            anyoutf( 1, "            The position of its maximum is (%d,%d) != (0,0)",
+                     startx, starty );
+      }
+      
+      /*--------------------------------------------------*/
+      /* A pixel belongs to the first maximum if it is    */
+      /* connected to the maximum and has a value greater */
+      /* than or equal to CLIP=                           */
+      /* The default is the absolute value of the mimimum */
+      /* value in the initial box.                        */
+      /*--------------------------------------------------*/                  
+      clipval = ABS( apmin );
+      nitems  = 1;
+      dfault  = HIDDEN;     
+      sprintf( message, 
+              "Enter threshold for first max. in map units: [%g]", 
+               clipval );
+      r = userreal_c( &clipval, 
+                      &nitems, 
+                      &dfault, 
+                      KEY_CLIP, 
+                      tofchar(message) );
+
+      /*--------------------------------------------------*/
+      /* We want to include only the pixels that belong   */
+      /* to the first maximum of the antenna pattern.     */
+      /*--------------------------------------------------*/
+      purifybox( startx, starty, blo, bhi, data, clipval );
+      if (Gidsoverlay)
+         markfirstmax( blo, bhi, data );
+
+      /*---------------------------------------------------------*/
+      /* Get initial estimates for the fit. The 2-dim. function  */
+      /* z(x,y) = z0.exp[-{a(x-xc)^2+b(y-yc)^2+2c(x-xc)(y-yc)}]  */
+      /* sets parameters for the data in 'image' enclosed by the */
+      /* box 'blo, bhi'.                                         */
+      /*---------------------------------------------------------*/
+      r = 0;
+      if (subdim == 2)
+         r = gauestmom2dim( data, blo, bhi, pars );
+      if (r == 0)
+         anyoutf( 1, "Could not find any parameters using moments method !");
+      else if (r == 1)
+         anyoutf( 1, "Found only one axis !" );
+      else if (r == 2)
+      /*---------------------------------------------------------*/
+      /* Try a fit now using these initial estimates for z0, and */
+      /* a,b,c.                                                  */
+      /*---------------------------------------------------------*/
+      {
+            double   err[MAXPAR];
+            fint     mpar[MAXPAR];
+            int      i;
+            bool     fitagain = NO;
+            double   tol;
+            double   lab;
+            double   storepars[MAXPAR];            
+            double   estimates[MAXPAR];
+            fint     its;
+
+            for (i = 0; i < MAXPAR; i++)
+               storepars[i] = pars[i];
+            do
+            {
+               for (i = 0; i < MAXPAR; i++)
+                  pars[i] = storepars[i];
+               if (fitagain)
+                  dfault = REQUEST;
+               else 
+                  dfault = HIDDEN;
+               askparams( dfault, 
+                          pars, 
+                          mpar, 
+                          startx, starty, 
+                          apmax,
+                          &tol, 
+                          &its, 
+                          &lab, 
+                          cfact, 
+                          cdelt );
+               for (i = 0; i < MAXPAR; i++)   /* Store user initial estimates */
+                  estimates[i] = pars[i];
+               r = fit2dimgausspars( data,
+                                     blo, bhi,
+                                     pars,
+                                     err,
+                                     mpar,
+                                     tol,
+                                     its,
+                                     lab );
+               if (r < 0)
+               {
+                  fitagain = YES;
+                  lsqerr( r );
+               }
+               else
+               {
+                  fitagain = NO;
+                  /*----------------------------------------*/
+                  /* Display results in log file and update */
+                  /* header at subset level.                */
+                  /*----------------------------------------*/
+                  displayresults( Setin,
+                                  subin[subnr],
+                                  axnum,
+                                  cfact,
+                                  cdelt,
+                                  maprotation,
+                                  blo,
+                                  bhi,
+                                  estimates,
+                                  pars,
+                                  err,
+                                  r,
+                                  tol,
+                                  lab  );                  
+                  if (Gidsoverlay)
+                     plotellipse( pars );
+
+                  updatehead( Setin, subin[subnr], Setin, subin[subnr], axnum, 
+                              cfact, cdelt, maprotation, pars );
+                  if (updateset)
+                  {
+                     int h;
+                     for (h = 0; h < nsubsout; h++)
+                     {                  
+                        /* Setin is the name of the AP. */
+                        updatehead( Setout, subout[h], Setin, subin[subnr], axnum, 
+                                    cfact, cdelt, maprotation, pars );
+                     }
+                  }
+               }
+
+               nitems = 1;
+               dfault = REQUEST;
+               if (fitagain)
+                  strcpy( message, "Do you want to fit again?  {Y}/N");
+               else
+                  strcpy( message, "Do you want to fit again?  Y/[N]");
+               fitagain = toflog( fitagain );
+               r1 = userlog_c( &fitagain, &nitems, &dfault, KEY_FITAGAIN, tofchar(message) );
+               fitagain = tobool( fitagain );
+               cancel_c( KEY_FITAGAIN );
+            }
+            while (fitagain);
+      } /* End of fit */
+   }
+   
+   /*-------------------------------------------------------*/
+   /* To end the program, make sure files opened with fopen */
+   /* are closed, allocated memory is released, PGPLOT is   */
+   /* closed and HERMES is instructed to stop.              */
+   /*-------------------------------------------------------*/
+   pgend_c();
+   free( data );
+   finis_c();
+   return(EXIT_SUCCESS);   /* Dummy return */
+}
+#<
+
+#>            plot.c
+/* plot.c
+
+                
+                          COPYRIGHT (c) 1996
+                    Kapteyn Astronomical Institute
+               University of Groningen, The Netherlands
+                        All Rights Reserved.
+                                                               
+*/
+
+#include    "stdio.h"
+#include    "stdlib.h"       /* Defines the ANSI C functions for number */
+                             /* conversion, storage allocation, and similar tasks.*/
+#include    "gipsyc.h"       /* Defines the ANSI-F77 types for Fortran to C intface */
+                             /* including def. of char2str,str2char,tofchar,zadd */
+                             /* and macros tobool and toflog */
+#include    "math.h"                             
+
+/* Common includes */
+
+#include    "userfio.h"      /* Easy-C companions for user interface routines.*/
+#include    "gds_exist.h"
+#include    "gdsc_ndims.h"
+#include    "nelc.h"
+#include    "setfblank.h"
+
+
+/* PGPLOT includes */
+
+#include    "pgplot.h"       /* All PGPLOT includes. */
+#include    "pgellipse.h"
+#include    "utils.h"
+
+
+/* GIDS overlays */
+      
+#include    "gdi_iinfo.h"
+#include    "gdi_open2.h"
+#include    "gdi_close.h"
+#include    "gdi_frame.h"
+
+
+
+
+void setcolor( fint col )
+/*-------------------------------------------------------------*/
+/* PURPOSE: Set color to 'col'.                                */
+/* Alternative pgsci.                                          */
+/*-------------------------------------------------------------*/
+{
+   pgsci_c( &col );
+}
+
+
+void setwidth( fint width )
+/*-------------------------------------------------------------*/
+/* PURPOSE: Set line width to 'width'.                         */
+/* Alternative pgslw.                                          */
+/*-------------------------------------------------------------*/
+{
+   pgslw_c( &width );
+}
+
+
+void plmove( float x, float y )
+/*-------------------------------------------------------------*/
+/* PURPOSE: Alternative for pgmove.                            */
+/*-------------------------------------------------------------*/
+{
+   pgmove_c( &x, &y );
+}
+
+
+void pldraw( float x, float y )
+/*-------------------------------------------------------------*/
+/* PURPOSE: Alternative for pgdraw.                            */
+/*-------------------------------------------------------------*/
+{
+   pgdraw_c( &x, &y );
+}
+
+
+static void setmarker( float x, float y, fint sym )
+/*-------------------------------------------------------------*/
+/* PURPOSE: Set marker op x, y.                                */
+/*-------------------------------------------------------------*/
+{
+   fint one = 1;
+   pgpt_c( &one, &x, &y, &sym );
+}
+
+
+void initplot( void )
+/*------------------------------------------------------------*/
+/* PURPOSE: Initialize plot software. Set viewport and output */
+/*          dimensions.                                       */
+/* If output device is a printer, ask user for line width.    */
+/*------------------------------------------------------------*/
+{
+   fint    pgunit;                 /* Ignored by 'pgbeg', use 0 */
+   fchar   Ffile;                  /* Device specification */
+   fint    nxysub[2];              /* Number of subdivisions */
+   fint    r1;                     /* Return value or level */
+   fint    off;
+
+
+   pgunit = 0;                     /* Ignored by 'pgbeg' */
+   fmake( Ffile, 10 );
+   Ffile = tofchar( "?" );         /* 'pgbeg' will prompt the user */
+                                   /* to supply a string. */
+   nxysub[0] = 1;                  /* Default no subdivisions in plot */
+   nxysub[1] = 1;
+
+
+   /* Set window and viewport */
+
+   r1 = pgbeg_c( &pgunit,
+                 tofchar( "gids//append" ),
+                 &nxysub[0],
+                 &nxysub[1] );
+
+   if (r1 != 1)
+      errorf( 4, "Cannot open output device" );
+
+   /* No NEXTPAGE= keyword */
+   off = tobool( 0 );
+   pgask_c( &off );
+}
+
+
+
+void drawbox( float   *Gidsflo,
+              float   *Gidsfhi,
+              fint    *Gidsblo,
+              fint    *Gidsbhi,
+              char    *toptitle )
+/*------------------------------------------------------------*/
+/* PURPOSE: Draw box and labels etc. for ellipse overview.    */
+/*------------------------------------------------------------*/
+{
+   float   charsize;
+   float   Xtick, Ytick;           /* Tick values for plot box */
+   fint    nxsub, nysub;           /* Subintervals of major coordinate interval */
+   fchar   FXlabel, FYlabel;
+   fint    font;
+   float   Xmin, Xmax, Ymin, Ymax;
+
+
+   setcolor( FOREGROUND );
+   charsize = 1.0;                         /* Set character height */
+   pgsch_c( &charsize );
+   pgpage_c();                             /* Start with new page */
+
+
+   /*----------------------------------------*/
+   /* Adjust window for GIDS overlays.       */
+   /*----------------------------------------*/
+   {
+      float     Xl, Xr, Yb, Yt;
+
+      Xl = (Gidsblo[0]-Gidsflo[0])/(Gidsfhi[0]-Gidsflo[0]);
+      Xr = (Gidsbhi[0]-Gidsflo[0])/(Gidsfhi[0]-Gidsflo[0]);      
+      Yb = (Gidsblo[1]-Gidsflo[1])/(Gidsfhi[1]-Gidsflo[1]);      
+      Yt = (Gidsbhi[1]-Gidsflo[1])/(Gidsfhi[1]-Gidsflo[1]);
+      pgsvp_c(&Xl, &Xr, &Yb, &Yt);
+
+   }
+
+   Xmin = Gidsblo[0];
+   Xmax = Gidsbhi[0];
+   Ymin = Gidsblo[1];
+   Ymax = Gidsbhi[1];
+   pgswin_c( &Xmin, &Xmax, &Ymin, &Ymax );   /* Set window to draw box with physical coords */
+   font   = ROMAN;
+   pgscf_c( &font );                         /* Normal font */
+   Xtick  = 0.0;
+   Ytick  = 0.0;                             /* PGPLOT selects tick intervals */
+   nxsub = nysub = 0;                        /* Default subintervals */
+   pgbox_c( tofchar("BCINST"),
+            &Xtick, &nxsub,
+            tofchar("BCINSTV"),
+            &Ytick, &nysub );
+
+   /* Labels: */
+   fmake( FXlabel,    STRLEN );
+   fmake( FYlabel,    STRLEN );
+   FYlabel = tofchar("Y pixels" );
+   FXlabel = tofchar("X pixels" );
+   pglab_c( FXlabel, FYlabel, tofchar(toptitle) );
+}
+
+
+
+bool preparegids( fchar  Gidsset,
+                  fint   Gidssubset,
+                  fint  *Gidsblo,
+                  fint  *Gidsbhi,
+                  float *Gidsflo,
+                  float *Gidsfhi )
+/*------------------------------------------------------------*/
+/* PURPOSE: Check whether a GIDS window is open and a set is  */
+/*          displayed.                                        */
+/* Get info about size and position of the displayed image.   */
+/* Calculate the offset (from lower left corner) in mm        */
+/*------------------------------------------------------------*/
+{
+   fint         display_id;                     /* id of display */
+   fint         display_stat;                   /* display operation status */
+   fint         gerror = 0;
+   fint         R1;
+   char         messbuf[256];
+
+
+   display_id = gdi_open2_c( tofchar(" ") );    /* open display device */
+   if (display_id < 0)                          /* error opening display */
+   {
+      anyoutf( 16, "Cannot interact with GIDS: No display server running!" );
+      return( NO );
+   }
+   display_stat = gdi_iinfo_c( &display_id ,    /* id of display */
+                               Gidsset ,        /* name of set */
+                               &Gidssubset ,    /* subset level */
+                               Gidsblo,         /* lower left frame boundary */
+                               Gidsbhi );       /* upper right frame boundary */
+
+   if (display_stat < 0)                        /* error obtaining info */
+   {
+      anyoutf( 1, "No image loaded! Use VIEW if you want to overlay ellipses!" );
+      return( NO );
+   }
+   if ( !tobool(gds_exist_c(Gidsset, &gerror)) )
+   {
+      anyoutf( 1, "Cannot open GIDS: displayed set not present in current directory!" );
+      return( NO );
+   }
+   if (gdsc_ndims_c( Gidsset, &Gidssubset ) != 2)
+   {
+      anyoutf( 1, "Wrong dimension!" );
+      return( NO );
+   }
+   (void) sprintf( messbuf,
+                  "Displayed set [%.*s] has box [%d %d %d %d]",
+                   nelc_c(Gidsset),
+                   Gidsset.a,
+                   Gidsblo[0],
+                   Gidsblo[1],
+                   Gidsbhi[0],
+                   Gidsbhi[1] );
+   anyoutf( 16, messbuf );
+
+
+   R1 = gdi_frame_c( &display_id ,    /* id of display */
+                     Gidsflo,         /* lower left frame boundary of total GIDS area in grids */
+                     Gidsfhi );
+
+   if (R1 != 0)
+   {
+      anyoutf( 1,
+               "Cannot obtain info about frame currently on display! (err=%d)",
+               R1 );
+      Gidsflo[0] = (float) Gidsblo[0];
+      Gidsfhi[0] = (float) Gidsbhi[0];
+      Gidsflo[1] = (float) Gidsblo[1];
+      Gidsfhi[1] = (float) Gidsbhi[1];
+   }
+
+   (void) sprintf( messbuf, "Displayed set [%.*s] has frame [%f %f %f %f]",
+                   nelc_c(Gidsset), Gidsset.a,
+                   Gidsflo[0], Gidsflo[1], Gidsfhi[0], Gidsfhi[1] );
+   
+   anyoutf( 16, messbuf );
+
+   display_stat = gdi_close_c( &display_id );   /* close display */
+   return( YES );
+}
+
+
+static void rotate( float  X,
+                    float  Y,
+                    float  CposX,
+                    float  CposY,
+                    float  Angle,
+                    float *Xrot,
+                    float *Yrot )
+/*------------------------------------------------------------*/
+/* PURPOSE: Rotate over 'Angle' degrees anti clockwise wrt.   */
+/*          central position given in Cpos.                   */
+/*------------------------------------------------------------*/
+{
+   float    Xx, Yy;
+   float    CosP, SinP;
+    
+   
+   CosP = (float)cos( RAD(Angle) );
+   SinP = (float)sin( RAD(Angle) );
+   
+   Xx = X * CosP - Y * SinP;
+   Yy = X * SinP + Y * CosP;
+                    
+   *Xrot = Xx + CposX;
+   *Yrot = Yy + CposY;
+   return;
+}
+   
+
+void plotellipse( double *pars )
+/*------------------------------------------------------------*/
+/* PURPOSE: */
+/*------------------------------------------------------------*/
+{   
+   float   start = 0.0;
+   float   end   = 360.0;            
+   float   Xc    = (float) pars[1];
+   float   Yc    = (float) pars[2];
+   float   Maj, Min, Phi;
+   float   xr, yr;
+   float   delta = 1.0;
+   double  maj, min, phi;   
+   
+   
+   gauss2ellipse( pars[3], pars[4], pars[5], &maj, &min, &phi );  
+   Maj   = 0.5 * (float) maj;
+   Min   = 0.5 * (float) min;
+   Phi   = (float) phi - 90.0;   /* wrt. x axis */
+
+   setcolor( RED );
+   setwidth( 6 );
+   rotate( -Maj, 0.0, Xc, Yc, Phi, &xr, &yr );
+   plmove( xr, yr );
+   rotate( Maj, 0.0, Xc, Yc, Phi, &xr, &yr );
+   pldraw( xr, yr );
+   rotate( 0.0, -Min, Xc, Yc, Phi, &xr, &yr );
+   plmove( xr, yr );
+   rotate( 0.0, Min, Xc, Yc, Phi, &xr, &yr );
+   pldraw( xr, yr );
+   setcolor( YELLOW );
+   pgellipse_c( &Xc, &Yc, &Maj, &Min, &Phi, &start, &end, &delta );
+   setcolor( FOREGROUND );
+   setwidth( 1 );
+}
+
+
+
+void markfirstmax( fint   *blo, 
+                   fint   *bhi, 
+                   float  *data )
+/*------------------------------------------------------------*/
+/* PURPOSE: Mark the points (in GIDS) that are used in the    */
+/* fit.                                                       */
+/*------------------------------------------------------------*/
+{
+   int     i, j;
+   int     indx = 0;
+   float   blank;
+   
+   setfblank_c( &blank );
+   setcolor( CYAN );
+   for (j = blo[1]; j <= bhi[1]; j++)
+   {
+      for (i = blo[0]; i <= bhi[0]; i++)
+      {
+         if (data[indx] != blank)
+            setmarker( i, j, 9 ); /* Plot dot in circle */
+         indx++;
+      }
+   }
+}
+#<
+
+#>            gaussrelated.c
+/* gaussrelated.c
+
+                
+                          COPYRIGHT (c) 1996
+                    Kapteyn Astronomical Institute
+               University of Groningen, The Netherlands
+                        All Rights Reserved.
+                                                                                                            
+*/
+
+#include    "math.h"         /* Declares the mathematical functions and macros.*/
+#include    "gipsyc.h"       /* Defines the ANSI-F77 types for Fortran to C interface */
+                             /* including def. of char2str,str2char,tofchar,zadd */
+                             /* and macros tobool and toflog */
+#include    "stdlib.h"       /* Defines the ANSI C functions for number */
+                             /* conversion, storage allocation, and similar tasks.*/
+
+/* Common includes */
+
+#include    "setfblank.h"    /* Subroutine to set a data value to the universal BLANK.*/
+#include    "lsqfitd.h"
+#include    "userfio.h"      /* Easy-C companions for user interface routines.*/
+
+#include    "utils.h"
+
+
+static       float           blank;
+
+
+
+
+void grid2arcsec( double   *cdelt,
+                  double   phi,
+                  double   cfact,
+                  double   *maj,
+                  double   *min )
+/*------------------------------------------------------------*/
+/* PURPOSE: */
+/* Phi enters in degrees.                                     */
+/*------------------------------------------------------------*/
+{
+   double   radphi = RAD(phi);
+   double   sin2 = sin(radphi) * sin(radphi);
+   double   cos2 = cos(radphi) * cos(radphi);
+               
+   *maj = (*maj) * cfact * sqrt( cdelt[0]*cdelt[0]*sin2 + cdelt[1]*cdelt[1]*cos2 );
+   *min = (*min) * cfact * sqrt( cdelt[0]*cdelt[0]*cos2 + cdelt[1]*cdelt[1]*sin2 );
+}
+
+
+
+void gauss2array( double  z0,
+                  double  xc, 
+                  double  yc,
+                  double  a, 
+                  double  b,
+                  double  c,
+                  fint    *blo,
+                  fint    *bhi,
+                  float   *data )
+/*------------------------------------------------------------*/
+/* PURPOSE: Fill array with 2-dim gaussian according to;      */
+/*    z(x,y) = z0.exp[-{a(x-xc)^2+b(y-yc)^2+2c(x-xc)(y-yc)}]  */
+/*------------------------------------------------------------*/
+{
+   int   i, j;
+   int   indx = 0;
+  
+ 
+   for (j = blo[1]; j <= bhi[1]; j++)
+   {
+      for (i = blo[0]; i <= bhi[0]; i++)
+      {
+         double x   = (double) i;
+         double y   = (double) j;         
+         double arg = a*(x-xc)*(x-xc)+b*(y-yc)*(y-yc)+2.0*c*(x-xc)*(y-yc);
+         double val = z0 * exp( -1.0*arg );
+         
+         data[indx] = (float) val;
+         indx++;  
+      }
+   }
+}
+
+
+
+
+void checkneighbours( int    x, 
+                      int    y, 
+                      float  *data, 
+                      float  *cpdata,
+                      fint   *blo,
+                      fint   *bhi,
+                      int    lenx,
+                      float  clipval )
+/*------------------------------------------------------------*/
+/* PURPOSE: Check neighbours on connectivity.                 */
+/* The array 'cpdata' was initially filled with blanks. At the*/
+/* end of the scan, it will be filled with values copied from */
+/* the orignal array 'data' on those positions where pixels   */
+/* are connected to the position of the maximum pixel value.  */
+/* The 'cpdata' array is also used to keep track of pixels    */
+/* that have already been examined.                           */
+/*------------------------------------------------------------*/
+{
+   int  indx = (y-blo[1])*lenx + (x-blo[0]);
+   
+   if (x > bhi[0] ||
+       x < blo[0] ||
+       y > bhi[1] ||
+       y < blo[1] || cpdata[indx] != blank )
+   return;
+
+   /* A pixel is connected if it has a value > 'clipval' */
+   
+   if (data[indx] > clipval && data[indx] != blank)
+   {
+      cpdata[indx] = data[indx];
+      checkneighbours( x+1, y-1, data, cpdata, blo, bhi, lenx, clipval );
+      checkneighbours( x+1, y  , data, cpdata, blo, bhi, lenx, clipval );
+      checkneighbours( x+1, y+1, data, cpdata, blo, bhi, lenx, clipval );
+      checkneighbours( x  , y-1, data, cpdata, blo, bhi, lenx, clipval );
+      checkneighbours( x  , y+1, data, cpdata, blo, bhi, lenx, clipval );
+      checkneighbours( x-1, y-1, data, cpdata, blo, bhi, lenx, clipval );
+      checkneighbours( x-1, y  , data, cpdata, blo, bhi, lenx, clipval );
+      checkneighbours( x-1, y+1, data, cpdata, blo, bhi, lenx, clipval );
+   }
+   return;
+}
+
+
+
+int checkbox( float  *data,
+              fint   *blo,
+              fint   *bhi,
+              int    *startx,
+              int    *starty,
+              float  *minval,
+              float  *maxval )
+/*------------------------------------------------------------*/
+/* PURPOSE: Find position of maximum in box.                  */
+/*------------------------------------------------------------*/
+{
+   int    i, j;
+   int    indx = 0;
+   int    ret;
+  
+   setfblank_c( &blank );
+   *maxval = *minval = blank;
+   *startx = blo[0];
+   *starty = blo[1];
+   for (j = blo[1]; j <= bhi[1]; j++)
+   {
+      for (i = blo[0]; i <= bhi[0]; i++)
+      {
+         float  val = data[indx];
+         if (val != blank)
+         {
+            if (*minval == blank)
+               *minval = val;
+            else if (val < *minval)
+               *minval = val;
+            if (*maxval == blank)
+               *maxval = val;
+            else if (val > *maxval)
+            {
+               *startx = i;
+               *starty = j;
+               *maxval = val;            
+            }
+         }         
+         indx++;         
+      }
+   }   
+   anyoutf( 16, "INFO: Minimum value of data in box is [%f]", *minval );   
+   anyoutf( 16, "INFO: Maximum value of data in box is [%f]", *maxval );   
+  
+   if (*maxval == blank || *minval == blank)
+      ret = 0;
+   else 
+      ret = 1;
+   return( ret );
+}
+
+
+
+int purifybox( int    startx,
+               int    starty,
+               fint   *blo,
+               fint   *bhi,                             
+               float  *data,
+               float  clipval )
+/*------------------------------------------------------------*/
+/* PURPOSE: Prepare a box with suitable data to fit.          */
+/* Use position of maximum as a starting point to assemble all*/
+/* data > 0.0 connected to this position so that we will end  */
+/* up with data > 0 or data that belongs to the first maximum */
+/* of an antenna pattern. Recursion is used (function 'check')*/
+/* to find the connected pixels.                              */
+/*------------------------------------------------------------*/
+{
+   int    i;
+   int    len = (bhi[0]-blo[0]+1) * (bhi[1]-blo[1]+1);
+   int    lenx = (bhi[0]-blo[0]+1);
+   float  *cpdata = NULL;
+   float  minval;
+   
+     
+   cpdata = (float *) calloc( len, sizeof(float) );
+   if (cpdata == NULL)
+   {
+      anyoutf( 1, "Cannot allocate memory for work space while finding min. box" );
+      return( 0 );
+   }
+   minval = blank;
+   for (i = 0; i < len; i++)
+      cpdata[i] = blank;
+
+   checkneighbours( startx, starty, data, cpdata, blo, bhi, lenx, clipval );
+   
+   for (i = 0; i < len; i++)
+   {
+      data[i] = cpdata[i];
+/*           if (cpdata[i] != blank)
+             anyoutf( 1, "i=%d, val=%f", i, cpdata[i] );
+*/         
+   }
+   free( cpdata );
+   return( 1 );
+}
+
+
+
+int gauss2ellipse( double   a,
+                   double   b,
+                   double   c,
+                   double   *maj,
+                   double   *min,
+                   double   *phi )
+/*------------------------------------------------------------*/
+/* PURPOSE: Convert gauss parameters a,b,c to ellipse         */
+/*          parameters major axis, minor axis, position angle */
+/*          The axis are the Full Widths at Half Maximum.     */
+/* The equation of the gaussian is:                           */
+/*                                                            */
+/* z(x,y) = z0.exp[-{a(x-xc)^2+b(y-yc)^2+2c(x-xc)(y-yc)}]     */
+/*------------------------------------------------------------*/
+{
+   double    p;
+   double    theta;
+   double    twoln2 = 2.0*log(2.0);
+   
+    
+   if (a*b-c*c <= 0.0)
+   {
+      anyoutf( 1, "a=%f, b=%f, c=%f do not make an ellipse!", a, b, c );
+      return( 0 );
+   }   
+   if (a == b) 
+      theta = 0.0;    
+   else               
+   {
+      /*--------------------------------------------------*/
+      /* Use atan (instead of atan2) because result must  */
+      /* be between -PI/2 and PI/2                        */
+      /*--------------------------------------------------*/
+      theta = DEG( 0.5 * atan(2.0*c/(a-b)) );
+   }
+          
+   if (a > b && theta < 0.0) 
+      theta += 180.0;
+   if (a < b)
+      theta += 90.0;      
+   if (theta == 180.0)
+      theta = 0.0;
+
+   p = sqrt( (a-b)*(a-b)+4.0*c*c );
+   *maj = 2.0 * sqrt( twoln2/(a+b-p) );
+   *min = 2.0 * sqrt( twoln2/(a+b+p) );
+   *phi = theta;
+   return( 1 );
+}
+
+
+
+int err_gauss2ellipse( double  a,
+                       double  b,
+                       double  c,
+                       double  Da,
+                       double  Db,
+                       double  Dc,
+                       double *Dmaj, 
+                       double *Dmin, 
+                       double *Dphi )
+/*------------------------------------------------------------*/
+/* PURPOSE: Convert DELTA(a,b,c) ===> DELTA(min,maj,pa)       */
+/* Enter the ellipse parameters a,b,c and the errors on these */
+/* values as returned by 'lsqfit'. Return the errors on the   */
+/* converted parameters major axis, minor axis and position   */
+/* angle of the 'half maximum ellipse'.                       */
+/*------------------------------------------------------------*/
+{
+   double   maj, min, phi;
+   double   p = sqrt( (a-b)*(a-b) + 4.0*c*c );
+   double   ln2 = log(2.0);
+   double   dummy;
+   double   f1 = p-(a-b);
+   double   f2 = p+(a-b);
+   
+  
+   if (p == 0.0)
+   {
+      *Dmaj = *Dmin = *Dphi = 0.0;
+      return( 0 );
+   }
+   gauss2ellipse( a, b, c, &maj, &min, &phi );
+   
+   *Dphi = sqrt(c*c*(Db*Db+Da*Da)+(a-b)*(a-b)*Dc*Dc) / (p*p);
+   dummy = f1*f1*Da*Da + f2*f2*Db*Db + 16.0*c*c*Dc*Dc;
+   *Dmaj = maj*maj*maj*sqrt(dummy)/(p*16.0*ln2);
+   dummy = f2*f2*Da*Da + f1*f1*Db*Db + 16.0*c*c*Dc*Dc;
+   *Dmin = min*min*min*sqrt(dummy)/(p*16.0*ln2);   
+
+   return( 1 );
+}
+
+
+
+int ellipse2gauss( double  maj,
+                   double  min,
+                   double  phi,                   
+                   double  *a,
+                   double  *b,
+                   double  *c )
+/*------------------------------------------------------------*/
+/* PURPOSE:  hw1, hw2, theta ==> a, b, c                      */
+/* Convert ellipse major, minor axis lengths (FWHM's) and     */
+/* position angle to 2dim gauss parameters a, b, c in:        */
+/*                                                            */
+/* z(x,y) = z0.exp[-{a(x-xc)^2+b(y-yc)^2+2c(x-xc)(y-yc)}]     */
+/*                                                            */
+/* The ellipse is defined as z(x,y) = 1/2.z0                  */
+/*------------------------------------------------------------*/
+{
+   double  ln2   = log(2.0);
+   double  sint2 = sin( RAD(phi) ) * sin( RAD(phi) ); 
+   double  cost2 = cos( RAD(phi) ) * cos( RAD(phi) );    
+   double  maj2  = maj*maj;
+   double  min2  = min*min; 
+   double  sin2t = sin( 2.0 * RAD(phi) );
+     
+     
+   *a =  4.0 * ln2 * ( sint2/maj2 + cost2/min2 );
+   *b =  4.0 * ln2 * ( cost2/maj2 + sint2/min2 );
+   *c = -2.0 * ln2 * (1.0/maj2-1.0/min2) * sin2t;
+      
+   return( 1 );
+}
+
+
+
+
+double funcd_c( double  *xdat, 
+                double  *pars, 
+                fint    *npar, 
+                fint    *fopt )
+/*----------------------------------------------------------------------
+ PURPOSE: Calculate the value of a gaussian with parameters P at the
+          position Xdat.
+          The parameters are:
+          pars(0) : z0, Amplitude
+          pars(1) : X0, center of gauss
+          pars(2) : Y0, center of gauss
+          pars(3) : a, parameter
+          pars(4) : b
+          pars(5) : c	  
+
+          The 2d-gaussian is:
+          F(x,y) = z0.exp[-{a(x-xc)^2+b(y-yc)^2+2c(x-xc)(y-yc)}] 
+
+----------------------------------------------------------------------*/
+{ 
+   double z0 = (double) pars[0];        
+   double xc = (double) pars[1];
+   double yc = (double) pars[2];
+   double a  = (double) pars[3];
+   double b  = (double) pars[4];
+   double c  = (double) pars[5];
+   double x  = (double) xdat[0];
+   double y  = (double) xdat[1];
+   double arg = a*(x-xc)*(x-xc)+b*(y-yc)*(y-yc)+2.0*c*(x-xc)*(y-yc);
+
+   return( z0 * exp(-1.0*arg) );
+}
+
+
+
+void dervd_c( double  *xdat, 
+             double  *pars, 
+             double  *dervs,
+             fint    *npar, 
+             fint    *fopt )
+/*----------------------------------------------------------------------
+ PURPOSE: Calculate the partial derivatives wrt. the parameters for a
+          gaussian with parameters 'pars' at position Xdat
+          pars(0) : z0, Amplitude
+          pars(1) : X0, center of gauss   
+          pars(2) : Y0, center of gauss  
+          pars(3) : a, parameter
+          pars(4) : b
+          pars(5) : c
+                              
+          The 2d-gaussian is:
+          F(x,y) = z0.exp[-{a(x-xc)^2+b(y-yc)^2+2c(x-xc)(y-yc)}]
+
+----------------------------------------------------------------------*/
+{
+   double z0 = (double) pars[0];        
+   double xc = (double) pars[1];
+   double yc = (double) pars[2];
+   double a  = (double) pars[3];
+   double b  = (double) pars[4];
+   double c  = (double) pars[5];
+   double x  = (double) xdat[0];
+   double y  = (double) xdat[1]; 
+   double arg = a*(x-xc)*(x-xc)+b*(y-yc)*(y-yc)+2.0*c*(x-xc)*(y-yc);
+   double val = z0 * exp( -1.0*arg );
+
+   dervs[0] = (float) exp( -1.0*arg );
+   dervs[1] = (float) ( (2.0*a*(x-xc) + 2.0*c*(y-yc))*val );
+   dervs[2] = (float) ( (2.0*b*(y-yc) + 2.0*c*(x-xc))*val );
+   dervs[3] = (float) ( -1.0*(x-xc)*(x-xc)*val );
+   dervs[4] = (float) ( -1.0*(y-yc)*(y-yc)*val );
+   dervs[5] = (float) ( -2.0*(x-xc)*(y-yc)*val );
+}
+
+
+
+
+
+int gauestmom2dim( float  *data, 
+                   fint   *blo, 
+                   fint   *bhi,
+                   double *pars )
+/*------------------------------------------------------------*/
+/* PURPOSE: return BWHP and position angle of 2dim gaussian   */
+/* represented by data in array 'data' in a box that is set   */
+/* by 'blo', 'bhi'.                                           */
+/*                                                            */
+/* The method that is followed uses the first and second      */
+/* moment of the data to estimate the parameters of the       */
+/* gaussian. The function has no offset wrt. the x axis, and  */
+/* can be represented by:                                     */
+/*                                                            */
+/*   z(x,y) = z0.exp[-{a(x-xc)^2+b(y-yc)^2+2c(x-xc)(y-yc)}]   */
+/*                                                            */
+/* Define the moments:                                        */
+/*                                                            */
+/* First moment M0: M0 = SjSi Tji   (S == Sigma character)    */
+/* For the peak position in gridcoordinates we have:          */
+/* x_av = 1/M0.SjSj[xi.Tji]   and  y_av = 1/M0.SjSj[yi.Tji]   */
+/*                                                            */
+/* Second moments Mxx = 1/M0.SjSi[xi^2.Mji]  - x_av^2         */
+/*                Myy = 1/M0.SjSi[yi^2.Mji]  - y_av^2         */
+/*                Mxy = 1/M0.SjSi[xi.yi.Mji] - y_av.x_av      */
+/*                                                            */
+/* Return values: 0   -- Failure                              */
+/*                1   -- Return parameter for 1-dim gauss in  */
+/*                       'a', centre in 'xc' and 'zo'.        */
+/*                2   -- Parameters of 2 dim gauss            */
+/*------------------------------------------------------------*/  
+{
+   double  S   = 0.0;
+   double  Sx  = 0.0;
+   double  Sy  = 0.0;
+   double  Sxx = 0.0;
+   double  Syy = 0.0;
+   double  Sxy = 0.0;
+   double  x, y;
+   double  Xav, Yav;
+   double  M0, Mxx, Myy, Mxy;
+   double  denom;
+   double  z0, xc, yc, a, b, c;
+   int     i, j;
+   int     indx = 0;
+
+
+
+   setfblank_c( &blank );
+   for (j = blo[1]; j <= bhi[1]; j++)
+   {
+      y = (double) j;
+      for (i = blo[0]; i <= bhi[0]; i++)
+      {
+         x = (double) i;
+         if (data[indx] != blank && data[indx] > 0.0)
+         {
+            double val = (double) data[indx];         
+            S   += val;
+            Sx  += val * x;
+            Sy  += val * y;
+            Sxx += val * x * x;
+            Syy += val * y * y;
+            Sxy += val * x * y;
+         } 
+         indx++;
+      }
+   }
+   M0  = S;
+   if (M0 == 0.0)
+   {
+      anyoutf( 1, "Cannot estimate moments because sum == 0 !" );
+      return( 0 );
+   }
+   Xav = Sx  / M0;
+   Yav = Sy  / M0;
+   Mxx = Sxx / M0 - Xav*Xav;
+   Myy = Syy / M0 - Yav*Yav;
+   Mxy = Sxy / M0 - Xav*Yav;
+   if (Mxx != 0.0 && Myy == 0.0 && Mxy == 0.0)
+   {
+      /* One dimensional gauss in x */
+      a = 1.0 / (2.0*Mxx);
+      xc = Xav;
+      b = c = yc = 0.0;      /* dummies */
+      z0 = M0 / (sqrt(2.0*PI*Mxx)); 
+      pars[0] = z0;
+      pars[1] = xc;
+      pars[2] = yc;  
+      pars[3] = a;
+      pars[4] = b;
+      pars[5] = c;
+      return( 1 );
+   }
+   if (Mxx == 0.0 && Myy != 0.0 && Mxy == 0.0)
+   {
+      /* One dimensional gauss in y */
+      a = 1.0 / (2.0*Myy);
+      xc = Yav;
+      b = c = yc = 0.0;      /* dummies */
+      z0 = M0 / (sqrt(2.0*PI*Myy)); 
+      pars[0] = z0;
+      pars[1] = xc;
+      pars[2] = yc;  
+      pars[3] = a;
+      pars[4] = b;
+      pars[5] = c;
+      return( 1 );
+   }
+   
+   denom = 2.0 * (Mxx*Myy-Mxy*Mxy);
+   if (denom == 0.0)
+   {
+      anyoutf( 1, "Cannot estimate moments because Mxx*Myy-Mxy*Mxy == 0 !" );
+      anyoutf( 1, "Mxx=%f Myy=%f Mxy=%f", Mxx, Myy, Mxy );
+      return( 0 );
+   }
+   a = Myy / denom;
+   b = Mxx / denom;
+   c = -1.0*Mxy/denom;
+   xc = Xav;
+   yc = Yav;
+   z0 = M0 / ( 2.0*PI*sqrt(Mxx*Myy-Mxy*Mxy) );
+   pars[0] = z0;
+   pars[1] = xc;
+   pars[2] = yc;  
+   pars[3] = a;
+   pars[4] = b;
+   pars[5] = c;
+   return( 2 );
+}
+
+
+
+void lsqerr( int err )
+/*------------------------------------------------------------*/
+/* PURPOSE: Display lsqfit error on screen.                   */
+/*------------------------------------------------------------*/
+{
+   if (err == -1)
+      anyoutf( 1, "Too many free parameters, maximum is 32" );
+   else if (err == -2)
+      anyoutf( 1, "No free parameters");
+   else if (err == -3)
+      anyoutf( 1, "Not enough degrees of freedom" );
+   else if (err == -4)
+      anyoutf( 1, "Maximum number of iterations too small to obtain a solution which satisfies TOL" );
+   else if (err == -5)
+      anyoutf( 1, "Diagonal of matrix contains elements which are zero" );
+   else if (err == -6)
+      anyoutf( 1, "Determinant of the coefficient matrix is zero" );
+   else if (err == -7)
+      anyoutf( 1, "Square root of negative number" );
+   else
+      anyoutf( 1, "Unknown error in lsqfit" );
+}
+
+
+
+int fit2dimgausspars(  float   *data, 
+                       fint    *blo, 
+                       fint    *bhi,
+                       double  *par,
+                       double  *err,
+                       fint    *mpar,
+                       double  tol,
+                       fint    its,
+                       double  lab )
+/*------------------------------------------------------------*/
+/* PURPOSE: Least squares fit using estimates.                */
+/*------------------------------------------------------------*/  
+{
+   double    *xydat = NULL;
+   double    *zdat = NULL;
+   double    *wdat = NULL;
+   double    x, y;
+   fint      iters;
+   int       len = (bhi[0]-blo[0]+1) * (bhi[1]-blo[1]+1);
+   int       i, j;
+   int       indx = 0;
+   fint      ndat;
+   fint      npar;
+   fint      xdim = 2;
+   fint      fopt;
+               
+
+   setfblank_c( &blank );                              
+   xydat = (double *) calloc( xdim*len, sizeof(double) );
+   if (xydat == NULL)
+   {
+      anyoutf( 1, "Cannot allocate memory for work space" );
+      return( 0 );
+   }
+   
+   zdat = (double *) calloc( len, sizeof(double) );
+   if (zdat == NULL)
+   {
+      anyoutf( 1, "Cannot allocate memory for work space" );
+      free( xydat );
+      return( 0 );
+   }
+
+   wdat = (double *) calloc( len, sizeof(double) );
+   if (wdat == NULL)
+   {
+      anyoutf( 1, "Cannot allocate memory for work space" );
+      free( zdat );
+      free( xydat );
+      return( 0 );
+   }
+
+
+   for (j = blo[1]; j <= bhi[1]; j++)
+   {
+      y = (double) j;
+      for (i = blo[0]; i <= bhi[0]; i++)
+      {
+         float    val = data[indx];
+         x = (double) i;
+         xydat[xdim*indx]   = x;
+         xydat[xdim*indx+1] = y;
+         if (val == blank || val <= 0.0) 
+         {
+            val = 0.0;
+            wdat[indx] = 0.0;
+         }
+         else
+            wdat[indx] = 1.0;
+         zdat[indx] = (double) val;
+         indx++;
+      }
+   }
+   npar   = 6;
+   ndat   = len;
+   fopt   = 0; 
+   iters  = lsqfitd_c( xydat,   
+                       &xdim,
+                       zdat,
+                       wdat,
+                       &ndat,
+                       par,
+                       err,
+                       mpar,
+                       &npar,
+                       &tol,
+                       &its,
+                       &lab,
+                       &fopt );
+
+   free( wdat );
+   free( zdat );
+   free( xydat );
+   return( (int) iters );   
+}
+
+
+
+#<

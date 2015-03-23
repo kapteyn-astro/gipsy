@@ -1,0 +1,616 @@
+
+E     PROGRAM CREATE
+C     create.shl
+C
+C                           COPYRIGHT (c) 1990
+C                    Kapteyn Astronomical Institute
+C               University of Groningen, The Netherlands
+C                          All Rights Reserved
+C
+C#>            create.dc1
+C
+CProgram:      CREATE
+C
+CPurpose:      Creates a SET (and subsets)
+C
+CCategory:     UTILITY
+C
+CFile:         create.shl
+C
+CAuthor:       K.G. Begeman
+C
+CKeywords:
+C
+C   OUTSET=    Name of set to create.
+C              If the set already exists, the user is asked whether
+C              the set should be deleted with DELETE=
+C
+C   DELETE=    Delete this set ? [N]
+C              This keyword is asked only when the set you want to
+C              create already exists.
+C              If you do not want to delete this set, you are asked
+C              to give another set to create.
+C
+C   INSTRUME=  Give type of instrument.
+C              This item will be put in the header and will determine
+C              the coordinate system
+C
+C   CTYPE1=    Enter axis name of first axis    [stop axis input]
+C              For the n_th axis the keyword will be CTYPEn=, like
+C              all the following keywords
+C
+C   NAXIS1=    Size of axis in grids.
+C
+C   CRPIX1=    Reference pixel of the axis.
+C
+C   CUNIT1=    Physical units of axis [depends on CTYPE]
+C
+C   CRVAL1=    Value at reference pixel in CUNITs.
+C
+C   CDELT1=    Grid separation in CUNISs.
+C
+C   CROTA1=    Rotation angle of axis in degrees [0.0].
+C              This keyword is only asked in case of a DEC axis.
+C
+C   DUNIT1=    Secondary units of axis [depends on CTYPE]
+C              This keyword is only asked in case of a FREQ axis.
+C
+C   DRVAL1=    Secondary reference value in DUNITs.
+C              This keyword is only asked in case of a FREQ axis.
+C
+C   FREQ0=     Give rest frequency in Hz.
+C              This keyword is only asked in case of a FREQ axis.
+C
+C   BUNIT=     Give data units:                           [W.U.]
+C
+C   FUNCTION=  F(RA,...)=                                [empty]
+C              Give an expression using the syntax in the
+C              description. The number of parameters cannot
+C              exceed the number of created axes. The names of
+C              a parameter is the name of an axes. FUNCTION=
+C              will prompt you with all available parameter names.
+C              If carriage return is pressed, the image will be an
+C              empty set.
+C
+CDescription:  Create a set from scratch and fill it with values.
+C              The values are calculated from a user given
+C              expression. The indices of the parameters in that
+C              expression correspond to the indices of the created
+C              axes of the set and each grid is a parameter value.
+C              Illegal operations, like dividing by zero or the
+C              logarithm of a negative value, will cause the result
+C              to be set to BLANK.
+C              For complicated functions the user is advised to
+C              make use of 'recall' files for easy input of the
+C              function definition.
+C
+C              Available mathematics:
+C
+C              1) functions; syntax ff(..); where ff is one of the
+C                 following available functions:
+C                 abs(x)         absolute value of x
+C                 sqrt(x)        square root of x
+C                 sin(x)         sine of x
+C                 asin(x)        inverse sine of x
+C                 cos(x)         cosine of x
+C                 acos(x)        inverse cosine of x
+C                 tan(x)         tangent of x
+C                 atan(x)        inverse tan of x
+C                 atan2(x,y)     inverse tan (mod 2pi) x = sin, y = cos
+C                 exp(x)         exponential of x
+C                 ln(x)          natural log of x
+C                 log(x)         log (base 10) of x
+C                 sinh(x)        hyperbolic sine of x
+C                 cosh(x)        hyperbolic cosine of x
+C                 tanh(x)        hyperbolic tangent of x
+C                 rad(x)         convert x to radians
+C                 deg(x)         convert x to degrees
+C                 erf(x)         error function of x
+C                 erfc(x)        1-error function
+C                 max(x,y)       maximum of x and y
+C                 min(x,y)       minimum of x and y
+C                 sinc(x)        sin(x)/x (sinc function)
+C                 sign(x)        sign of x (-1,0,1)
+C                 mod(x,y)       gives remainder of x/y
+C                 int(x)         truncates to integer
+C                 nint(x)        nearest integer
+C                 ranu(x,y)      generates uniform noise between x and y
+C                 rang(x,y)      generates gaussian noise with mean x
+C                                and dispersion y
+C                 ranp(x)        generates poisson noise with mean x
+C                 ifeq(x,y,a,b)  returns a if x == y, else b
+C                 ifne(x,y,a,b)  returns a if x != y, else b
+C                 ifgt(x,y,a,b)  returns a if x > y, else b
+C                 ifge(x,y,a,b)  returns a if x >= y, else b
+C                 iflt(x,y,a,b)  returns a if x < y, else b
+C                 ifle(x,y,a,b)  returns a if x <= y, else b
+C                 ifblank(x,a,b) returns a if x == BLANK, else b
+C              2) constants; syntax cc; where cc is one of the following
+C                 available constants:
+C                 PI             3.14159....
+C                 C              speed of light (SI)
+C                 H              Planck (SI)
+C                 K              Boltzmann (SI)
+C                 G              gravitation (SI)
+C                 S              Stefan-Boltzman (SI)
+C                 M              mass of sun (SI)
+C                 P              parsec (SI)
+C                 BLANK          Universal undefined value
+C                 Note: the Hubble constant is not included.
+C              3) operators; syntax op; where op is one of the following
+C                 available operators:
+C                 +              addition
+C                 -              subtraction
+C                 *              multiplication
+C                 /              division
+C                 **             power
+C              4) parameters; syntax axisname; (CTYPEn=), max 32 names.
+C
+CUpdates:      Jul  5, 1990: KGB, document created.
+C              Jul 24, 1990: VOG,  function evaluation.
+C              Nov 14, 1991: VOG,  $n replaced by axis name.
+C              Oct 20, 1994: KGB, declared USERCHAR and FIEPAR.
+C              Apr  2, 1998: VOG, Use usertext for instrument name.
+C              Apr 27, 2011: JPT, Also check other gds_extend errors.
+C
+C#<
+E     PROGRAM CREATE
+      program create
+C
+C     parameters:
+C
+N     Maximum size of buffer
+      integer            maxIObuf
+      parameter        ( maxIObuf = 4096)
+      CHARACTER*(*)      ident
+      PARAMETER        ( ident = '  Version 1.0  Jul 22, 1990 ' )
+N     Default options for use in USERxxx() routines
+      INTEGER            none, request, hidden, exact
+      PARAMETER        ( none    = 0 )
+      PARAMETER        ( request = 1 )
+      PARAMETER        ( hidden  = 2 )
+      PARAMETER        ( exact   = 4 )
+      INTEGER            maxaxes
+      PARAMETER        ( maxaxes = 10 )
+N     Coordinate word for whole set
+      INTEGER            wholeset
+      PARAMETER        ( wholeset = 0 )
+N     Remove with 'WMINMAX' old minmax descriptors
+      INTEGER            remove
+      PARAMETER        ( remove = 1 )
+
+C
+C     Variables:
+C
+N     Buffer for keyword
+      character*10       keyword
+N     Character input
+      character*20       ctype, cunit, bunit, nunit, sunit, dunit
+      character*20       instrume
+N     Name of set to create
+      character*80       set
+N     Size of axis
+      integer            naxis
+N     Size of all axes
+      INTEGER            axcount( maxaxes )
+N     Error codes
+      integer            gerror, derror
+N     Coordinate types
+      integer            typ, skysys, prosys, velsys
+N     Coordinate words
+      integer            cwlo, cwhi
+N     Real values
+      double precision   crpix, crval, cdelt, crota, freq0, drval
+N     Logicals
+      logical            del
+N     Axis counter
+      INTEGER            nax
+N     Grid vectors of entire frame of set
+      INTEGER            FgridLO( maxaxes )
+      INTEGER            FgridHI( maxaxes )
+C
+C     Functions:
+C
+N     From integer to character
+      character*1        chrint
+N     Type of axis
+      integer            axtype
+N     Gets anycase user input (text)
+      integer            userchar
+N     Gets uppercase user input (text)
+      integer            usercharu
+N     Gets a double precision value from user
+      integer            userdble
+N     Gets an integer from user
+      integer            userint
+N     Gets a logical from user
+      integer            userlog
+N     Gets a string from user
+      integer            usertext
+N     Checks whether a set exists
+      logical            gds_exist
+N     Decode a string with math expression for FIEDO
+      INTEGER            FIEINI
+N     Evaluate the code generated by FIEINI
+      INTEGER            FIEDO
+N     Define the parameters for FIEINI
+      INTEGER            FIEPAR
+N     Extracts grid coordinate from coord. word
+      INTEGER            GDSC_GRID
+N     Length of a string
+      INTEGER            NELC
+N     Obtain the name under which a GIPSY task runs
+      CHARACTER*9        MYNAME
+
+C     Miscellaneous:
+
+      CHARACTER*80       message
+      CHARACTER*9        task
+N     Result of call to USERxxx
+      INTEGER            result
+N     Loop control variable
+      LOGICAL            agreed
+N     String containing the function definition
+      CHARACTER*120      fiestring
+N     Number of different parameters in the function
+      INTEGER            numpars
+N     If string was not ok, give error position
+      INTEGER            errpos
+N     Id. for a function string
+      INTEGER            fid
+N     Device number for output
+      INTEGER            devnum
+N     Some counters
+      INTEGER            i, j, m, k
+N     Total number of pixels in this set
+      INTEGER            totpixels
+N     One dimensional position in set array
+      INTEGER            pos
+N     Transfer id for output
+      INTEGER            tid
+N     How many pixels are left?
+      INTEGER            pixelsleft
+N     How many pixels have been written?
+      INTEGER            pixelsdone
+N     Counter for MINMAX routine
+      INTEGER            mcount
+N     How many pixels are there in the buffer
+      INTEGER            bufpixels
+N     Variable used to determine n-dim. position
+      INTEGER            remain
+N     Number of pixels in n-1 dim sub structure
+      INTEGER            NN
+N     Number of underlying complete substructures
+      INTEGER            num
+N     Total index in input array
+      INTEGER            ind
+N     Array containing the function parameters
+      REAL               x( maxaxes * maxiobuf )
+N     Array containing the function values
+      REAL               y( maxIObuf )
+N     Running min, max of the set
+      REAL               minval, maxval
+N     Running number of blanks
+      INTEGER            nblanks
+N     Error return codes
+      INTEGER            R1, R2
+      CHARACTER*80       txt
+N     Stripped axnames for use in 'fiepar'
+      CHARACTER*15       fieax(maxaxes), dumstr
+      INTEGER            hyppos, endpos, strip
+
+
+C
+C     Data statements:
+C
+      data gerror / 0 /
+      data derror / 0 /
+C
+C     Executable code:
+C
+N     get in touch with HERMES
+      call init
+N     Get task name
+      task = MYNAME()
+N     Show task and version number
+      CALL ANYOUT( 8, ( task(:NELC(task) ) // ident) )
+      devnum = 11
+      repeat
+N       get name of set to create
+        result = userchar( set, 1, 0, 'OUTSET=', 'Set to create ?' )
+N       Does it exist already?
+        gerror = 0
+        if (gds_exist( set, gerror ))
+        then
+          call anyout( 1, 'Set already exists!' )
+          result = userlog( del, 1, 1, 'DELETE=',
+     #        'Delete this set ? [NO]' )
+          if (result .eq. 0)
+          then
+            del = .false.
+          cif
+          if (del)
+          then
+            call gds_delete( set, gerror )
+            xrepeat
+          else
+            call cancel( 'OUTSET=' )
+            call cancel( 'DELETE=' )
+          cif
+        else
+          xrepeat
+        cif
+      until (.false.)
+N     Create set.
+      call gds_create( set, gerror )
+N     error ?
+      if (gerror .lt. 0)
+      then
+         call error( 4, 'Error while creating set' )
+      cif
+      keyword = 'INSTRUME='
+      result = usertext( instrume, 0, keyword,
+     #    'Give type of instrument' )
+      call gdsd_wchar( set, 'INSTRUME', 0, instrume, derror )
+N     reset axis counter
+      nax = 0
+N     Loop to get the axis from user
+      while (.true.)
+N       Get next axis from user
+        keyword = 'CTYPE' // chrint(nax+1) // '='
+        repeat
+          result = usercharu( ctype, 1, 1, keyword,
+     #        'Give axis name:  [stop axis input]' )
+          if ((result .eq. 0))
+          then
+            xwhile
+          cif
+          typ = axtype( ctype, nunit, sunit, skysys, prosys, velsys )
+          if (typ .eq. 0)
+          then
+            call anyout( 1, 'Unknown type of axis' )
+            call cancel(keyword)
+          else
+C            Copy axname without hyphen
+             endpos = NELC( ctype )
+             hyppos = INDEX( ctype, '-' )
+             IF (hyppos .EQ. 0)
+             THEN
+                strip = MIN( endpos, 15 )
+             ELSE
+                strip = MIN( hyppos-1, 15 )
+             CIF
+             dumstr = ' '
+             FOR k = 1, strip
+                dumstr(k:k) = ctype(k:k)
+             CFOR
+             fieax(nax+1) = dumstr
+          cif
+        until (typ .ne. 0)
+        keyword = 'NAXIS' // chrint(nax+1) // '='
+        result = userint( naxis, 1, 0, keyword,
+     #      'length of axis' )
+        axcount(nax+1) = naxis
+        keyword = 'CRPIX' // chrint(nax+1) // '='
+        result = userdble( crpix, 1, 0, keyword,
+     #      'reference point of the axis' )
+        keyword = 'CUNIT' // chrint(nax+1) // '='
+        result = usercharu( cunit, 1, 1, keyword,
+     #      'give units of axis [' // nunit(:nelc(nunit)) // ']' )
+        if (result .eq. 0)
+        then
+          cunit = nunit
+        cif
+        keyword = 'CRVAL' // chrint(nax+1) // '='
+        result = userdble( crval, 1, 0, keyword,
+     #      'value at reference pixel in ' // cunit )
+        keyword = 'CDELT' // chrint(nax+1) // '='
+        result = userdble( cdelt, 1, 0, keyword,
+     #      'grid separation in ' // cunit )
+        crota = 0.0
+        if (typ .eq. 2)
+        then
+           keyword = 'CROTA' // chrint(nax+1) // '='
+           result = userdble( crota, 1, 1, keyword,
+     #         'sky rotation angle [0.0 degrees]' )
+        cif
+        if ((typ .eq. 3) .and. (velsys .ne. 0))
+        then
+          keyword = 'DUNIT' // chrint(nax+1) // '='
+          result = usercharu( dunit, 1, 1, keyword,
+     #        'Give units in velocity [' //sunit(:nelc(sunit)) // ']' )
+          if (result .eq. 0)
+          then
+            dunit = sunit
+          cif
+          keyword = 'DRVAL' // chrint(nax+1) // '='
+          result = userdble( drval, 1, 0, keyword,
+     #        'Give reference value at reference pixel in ' // dunit )
+          keyword = 'FREQ0='
+          result = userdble( freq0, 1, 0, keyword,
+     #        'Give rest frequency in Hz' )
+        cif
+C       Now create the axis
+        call gds_extend( set, ctype, crpix, naxis , gerror )
+        if (gerror .eq. -28)
+        then
+          call error( 1, 'axis already in use' )
+        elseif (gerror .lt. 0)
+        then
+          call error( 1, 'GDS_EXTEND -- failed' )
+        else
+          nax = nax + 1
+C         write CRVAL
+          call gdsd_wdble( set, 'CRVAL' // chrint(nax), 0,
+     #       crval, derror )
+C         write CDELT
+          call gdsd_wdble( set, 'CDELT' // chrint(nax), 0,
+     #       cdelt, derror )
+C         write CROTA
+          call gdsd_wdble( set, 'CROTA' // chrint(nax), 0,
+     #       crota, derror )
+C         write CUNIT
+          call gdsd_wchar( set, 'CUNIT' // chrint(nax), 0,
+     #       cunit, derror )
+          if ((typ .eq. 3) .and. (velsys .ne. 0))
+          then
+C           write DRVAL
+            call gdsd_wdble( set, 'DRVAL' // chrint(nax), 0,
+     #         drval, derror )
+C           write DUNIT
+            call gdsd_wchar( set, 'DUNIT' // chrint(nax), 0,
+     #         dunit, derror )
+C           write FREQ0
+            call gdsd_wdble( set, 'FREQ0', 0, freq0, derror )
+          cif
+        cif
+      cwhile
+      keyword = 'BUNIT=' 
+      bunit = 'W.U.'
+      result = usercharu( bunit, 1, 1, keyword,
+     #        'give data units:       [W.U.]' )
+      derror = 0
+      call gdsd_wchar( set, 'BUNIT', 0, bunit, derror )
+
+
+C----------------------------------------------------------------------
+C     Evaluate a function with number of parameters equal to or
+C     less than the number of axes in this set.
+C----------------------------------------------------------------------
+      CALL GDSC_RANGE( set, 0, cwlo, cwhi, gerror )
+N     Get corners for all axes
+      FOR i = 1, nax
+        R1 = 0
+        R2 = 0
+        FgridLO(i) = GDSC_GRID( set, i, cwlo, R1 )
+        FgridHI(i) = GDSC_GRID( set, i, cwhi, R2 )
+      CFOR
+      REPEAT
+        agreed  = .FALSE.
+        keyword = 'FUNCTION='
+        message = 'F('
+        FOR k = 1, nax
+          message = message(1:NELC(message)) // fieax(k)
+          IF (k .LT. nax)
+          THEN
+            message = message(1:NELC(message)) // ','
+          CIF
+        CFOR
+        message = message(1:NELC(message)) // ')=             [empty]'
+        result  =  USERTEXT( fiestring, request, keyword, message )
+        IF (result .EQ. 0)
+        THEN
+N          Only a descriptor is made
+           CALL FINIS
+        CIF
+        result  =  FIEPAR( fieax, nax )
+        IF (result .LT. 0)
+        THEN
+           CALL ANYOUT( 8 , 'Too many parameters, max = 32' )
+           CALL FINIS
+        CIF
+        result  =  FIEINI( fiestring, fid, errpos )
+        IF (result .GE. 0)
+        THEN
+          numpars  = result
+          agreed   = (numpars .LE. nax)
+          IF .NOT. agreed
+          THEN
+            txt = ' Number of parameters greater than number of axes.'
+            CALL ANYOUT( devnum, txt )
+          CIF
+        CIF
+        IF (result .EQ. -1)
+        THEN
+          agreed = .FALSE.
+          WRITE( txt, '('' Syntax error in expression at position '',
+     #           I3 )' ) errpos
+          CALL ANYOUT( devnum, txt )
+        CIF
+        IF (result .EQ. -2)
+        THEN
+          agreed = .FALSE.
+          txt = ' No storage space left.'
+          CALL ANYOUT( devnum, txt )
+        CIF
+        IF .NOT. agreed
+        THEN
+          CALL REJECT( keyword, 'Invalid function' )
+        CIF
+      UNTIL agreed
+      CALL ANYOUT( devnum, ' ' )
+      txt = ' Accepted function: F($) = ' // fiestring
+      CALL ANYOUT( devnum, txt )
+N     Determine total number of pixels in set
+      totpixels = 1
+      FOR i = 1, nax
+        totpixels = totpixels * axcount(i)
+      CFOR
+N     Determine function values and write to disk
+      pos = 0
+      pixelsleft = totpixels
+      tid = 0
+      mcount = 0
+      REPEAT
+        bufpixels = MIN( maxIObuf, pixelsleft )
+        FOR m = 1, bufpixels
+C----------------------------------------------------------------------
+C         Determine the positions along the axes. Begin with the
+C         slowest varying axis n and work back to axis 1. In each
+C         stage a certain number depending on the dimension of
+C         the substructure, will be subtracted from the one
+C         dimensional position. The values belonging to a variable
+C         are put in an one dimensional array. Example: suppose
+C         there are 4 axis and the variables $1, $3 and $4 are
+C         specified. The input array for FIEDO will look like this
+C         for 6 parameter values:
+C
+C              $1 block      $2       $3 block      $4 block
+C
+C           -3 -2 -1 0 1 2  dummy    1 1 1 1 1 1   4 4 4 4 4 4
+C
+C         The order of the stacked arrays must be the same as
+C         the order of the axis names
+C----------------------------------------------------------------------
+N         One dimensional position in the set
+          pos = pos + 1
+          remain = pos
+N         Convert one dim. pos. to a n dim. vector
+          FOR i = nax, 2, -1
+            NN = 1
+N           Number of pixels in a i-1 dim. sub structure
+            FOR j = 1, i - 1
+              NN = NN * axcount(j)
+            CFOR
+N           Num of underlying complete sub structures
+            num = (remain - 1) / NN
+            IF (i .LE. numpars)
+            THEN
+N             Store this value
+              ind = m + (i-1) * bufpixels
+              x(ind) = FLOAT( FgridLO(i) + num )
+            CIF
+N           number of pixels left in the current substr.
+            remain = remain - num * NN
+          CFOR
+N         The first axis in the set
+          x(m) = FLOAT( FgridLO(1) + (remain - 1) )
+        CFOR
+N       Parse this array to FIEDO
+        result = FIEDO( x, bufpixels, y, fid )
+        IF ( result .LT. 0 )
+        THEN
+          CALL ERROR( 4, 'CREATE: No code created' )
+        CIF
+        pixelsleft = pixelsleft - bufpixels
+        CALL GDSI_WRITE( set, cwlo, cwhi, y, bufpixels, pixelsdone,
+     #                   tid )
+        CALL MINMAX3( y, bufpixels, minval, maxval, nblanks, mcount )
+        CALL STABAR( 0.0, 1.0, FLOAT(pos)/FLOAT(totpixels) )
+      UNTIL (pos .EQ. totpixels)
+N     Update min, max for SET
+      CALL WMINMAX( set, wholeset, minval,maxval, nblanks, 1, remove )
+
+      CALL FINIS
+      STOP
+      END

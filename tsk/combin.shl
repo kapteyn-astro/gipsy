@@ -1,0 +1,942 @@
+C
+C                           COPYRIGHT (c) 1990
+C                    Kapteyn Astronomical Institute
+C      University of Groningen  -  9700 AV Groningen,  The Netherlands
+C
+C#>             combin.dc1
+C
+CProgram:       COMBIN
+C
+CPurpose:       Combine sets to create new sets using mathematical
+C               expressions.
+C
+CCategory:      ANALYSIS, COMBINATION, MANIPULATION, CALCULATION
+C
+CFile:          combin.shl
+C
+CAuthor:        M. Vogelaar
+C
+CKeywords:
+C
+C    RESULT01=  Combination code for first output set.
+C               The code must contain at least one parameter ($n).
+C               If you want a set with for example only noise, try
+C               something like:  ($1 - $1) + expression for noise.
+C
+C    RESULT02=  Combination code for the second output set.
+C               If carriage return is given, COMBIN assumes that
+C               no other output combinations are wanted.
+C
+C    RESULT03=  etc.
+C
+C    SET01=     Input set (and subsets) for first combination. 
+C               Maximum number of subsets is 2048. The output
+C               set(s) will get the same sizes as this first
+C               input set.
+C     
+C    BOX01=     Frame for first input parameter.       [entire subset]
+C
+C    SET02=     Input set (and subsets) for second parameter. 
+C               Input is accepted if the number of subsets is 
+C               equal to the previous number of subsets.
+C               If you want to use COMBIN outside a given box
+C               (see OPTION= keyword), all the input sets need 
+C               to have the same axis sizes.               
+C
+C    BOX02=     Frame for second parameter.             [previous box]
+C               The axis lengths of this box have to be equal to the 
+C               axis lengths of the previous box. If using COMBIN 
+C               outside a box, the relative position of this box
+C               has to be the same as the position of the first box.
+C
+C    SET03=     etc.
+C
+C    BOX03=     etc.
+C               
+C    SETOUT01=  Give set and subset(s) where the first combination is
+C               to be stored.
+C
+C    SETOUT02=  Give set and subset(s) where the second combination is 
+C               to be stored.
+C    
+C    SETOUT03=  etc.
+C
+C*** OPTION=                                                       [0]
+C               0. COMBIN operates inside given box and blanks values
+C                         outside this box                       
+C               1. COMBIN operates inside given box and transfers
+C                        'outside' values of SET01
+C               2. COMBIN operates outside given box and blanks values
+C                         inside this box
+C               3. COMBIN operates outside given box and transfers
+C                        'inside' values of SET01
+C                  
+C
+CDescription:   This program allows the user to create sets which are 
+C               a (complicated) combination of other sets. The
+C               combination description language is best illustrated 
+C               by the following example: suppose that one
+C               has two sets which are the result of a Fourier
+C               transform, one containing the real part and the other
+C               the imaginary part of the result.  The code needed to
+C               convert these two sets to amplitude and phase is the
+C               following: 
+C
+C               RESULT01= SQRT( $1*$1 + $2*$2 )            (amplitude)
+C               RESULT02= DEG( ATAN2 ( $2, $1 ) )   (phase in degrees)
+C 
+C               Here $1 and $2 denote the first and second input sets.
+C               In this example two input sets result in two output 
+C               sets. But just as easy we could produce a third output 
+C               set which contains the scaled real part. Then the code
+C               would be:
+C
+C               RESULT03= 2 * $1 + 1                (scaled real part)
+C
+C               So with COMBIN we can combine M input sets into N 
+C               output sets.
+C               The example above can be achieved with the following
+C               keywords:
+C
+C               COMBIN,RESULT01=sqrt($1*$1+$2*$2)
+C               COMBIN,RESULT02=deg(atan2($2,$1))
+C               COMBIN,RESULT03=<carriage return>
+C
+C               Note: Two different types of output sets will be
+C                     produced
+C                
+C               Input sets:
+C
+C               COMBIN,SET01=AURORA_RE  FREQ 1:10
+C               COMBIN,SET02=AURORA_IM  FREQ 1:10
+C
+C               Output sets:
+C
+C               COMBIN,SETOUT01=AURORA_AM  FREQ 1:10
+C               COMBIN,SETOUT02=AURORA_PH  FREQ 1:10
+C
+C               Note: We used (the default) option 0
+C
+C               Available mathematics:
+C
+C              1) functions; syntax ff(..); where ff is one of the
+C                 following available functions:
+C                 abs(x)         absolute value of x
+C                 sqrt(x)        square root of x
+C                 sin(x)         sine of x
+C                 asin(x)        inverse sine of x
+C                 cos(x)         cosine of x
+C                 acos(x)        inverse cosine of x
+C                 tan(x)         tangent of x
+C                 atan(x)        inverse tan of x
+C                 atan2(x,y)     inverse tan (mod 2pi) x = sin, y = cos
+C                 exp(x)         exponential of x
+C                 ln(x)          natural log of x
+C                 log(x)         log (base 10) of x
+C                 sinh(x)        hyperbolic sine of x
+C                 cosh(x)        hyperbolic cosine of x
+C                 tanh(x)        hyperbolic tangent of x
+C                 rad(x)         convert x to radians
+C                 deg(x)         convert x to degrees
+C                 erf(x)         error function of x
+C                 erfc(x)        1-error function
+C                 max(x,y)       maximum of x and y
+C                 min(x,y)       minimum of x and y
+C                 sinc(x)        sin(x)/x (sinc function)
+C                 sign(x)        sign of x (-1,0,1)
+C                 mod(x,y)       gives remainder of x/y
+C                 int(x)         truncates to integer
+C                 nint(x)        nearest integer
+C                 ranu(x,y)      generates uniform noise between x and y
+C                 rang(x,y)      generates gaussian noise with mean x
+C                                and dispersion y
+C                 ranp(x)        generates poisson noise with mean x
+C                 ifeq(x,y,a,b)  returns a if x == y, else b
+C                 ifne(x,y,a,b)  returns a if x != y, else b
+C                 ifgt(x,y,a,b)  returns a if x > y, else b
+C                 ifge(x,y,a,b)  returns a if x >= y, else b
+C                 iflt(x,y,a,b)  returns a if x < y, else b
+C                 ifle(x,y,a,b)  returns a if x <= y, else b
+C                 ifblank(x,a,b) returns a if x == BLANK, else b
+C
+C                 Some (statistical) functions have a variable number
+C                 of arguments:
+C                
+C                 sum(x1,..,xn)     sum of elements x1 .. xn
+C                 mean(x1,..,xn)    mean
+C                 var(x1,..,xn)     variance
+C                 sdev(x1,..,xn)    standard deviation
+C                 adev(x1,..,xn)    absolute deviation
+C                 skew(x1,..,xn)    skewness
+C                 kurt(x1,..,xn)    kurtosis
+C                 median(x1,..,xn)  median
+C                 nblanks(x1,..,xn) number of blanks
+C                
+C                 max(x1,..,xn)     maximum of elements x1 .. xn
+C                 min(x1,..,xn)     minimum
+C                 
+C                 Note that n <= 128
+C
+C              2) constants; syntax cc; where cc is one of the following
+C                 available constants:
+C                 PI             3.14159....
+C                 C              speed of light (SI)
+C                 H              Planck (SI)
+C                 K              Boltzmann (SI)
+C                 G              gravitation (SI)
+C                 S              Stefan-Boltzman (SI)
+C                 M              mass of sun (SI)
+C                 P              parsec (SI)
+C                 BLANK          Universal undefined value
+C                 Note: the Hubble constant is not included.
+C              3) operators; syntax op; where op is one of the following
+C                 available operators:
+C                 +              addition
+C                 -              subtraction
+C                 *              multiplication
+C                 /              division
+C                 **             power
+C              4) parameters; syntax $n; where 1 <= n <= 128. 
+C
+CRemarks:      A) The calculations are all done in double precision.
+C
+C              B) BLANK values are recognized. Any operation on a
+C                 BLANK causes the result to be set to BLANK (except the
+C                 function IFBLANK). Also all illegal operations, like
+C                 dividing by zero or the logarithm of a negative value,
+C                 will cause the result to be set to BLANK.
+C
+C              C) If you cannot find your favorite constant or function 
+C                 in the list, please contact Kor Begeman.  He might be
+C                 persuaded to put it in. 
+C
+CExamples:     1) Add three maps
+C                 RESULT01=$1+$2+$3
+C                 RESULT02=<carriage return>
+C                 SET01= set and subset(s) of first parameter
+C                 SET02= set and subset(s) of second parameter
+C                 SET03= set and subset(s) of third parameter
+C                 SETOUT01= set and subset(s) of sum
+C
+C              2) Add gaussian noise to a map with zero mean and a 
+C                 rms of 2
+C                 RESULT01=$1+rang(0,2)
+C                 RESULT02=<carriage return>
+C                 SET01= input set and subset(s)
+C                 SETOUT01= output set and subset(s) with noise added
+C
+C              3) Clip values in a set between -4 and 5 and replace with 
+C                'BLANK'
+C                 RESULT01=ifgt($1,5,BLANK,iflt($1,-4,BLANK,$1))
+C                 RESULT02=<carriage return>
+C                 SET01= input set and subset(s)
+C                 SETOUT01= clipped output set and subset(s) with values 
+C                           between -4 and 5
+C
+C              4) Conditional transfer: if value in second set is 
+C                 greater than 2 then result is value from first set, 
+C                 else set this value to BLANK
+C                 RESULT01=ifgt($2,2,$1,BLANK)
+C                 RESULT02=<carriage return>
+C                 SET01= input set and subset(s)
+C                 SET02= test set and subset(s)
+C                 SETOUT01= conditional transfered output set and 
+C                           subset(s)
+C
+C              5) Calculate median of three sets and put result in output
+C                 set MEDIAN
+C                 RESULT01=median($1,$2,$3)
+C                 RESULT02=<carriage return>
+C                 SET01=OPTC1
+C                 SET01=OPTC2
+C                 SET01=OPTC3
+C                 SETOUT01=MEDIAN
+C 
+CNotes:
+C#<
+C
+E     ***** Program COMBIN *****
+      PROGRAM COMBIN
+
+C     Declaration of parameters:
+
+      CHARACTER*(*)  ident
+      PARAMETER    ( ident = '  Version 1.0  Mar 14, 1990 ' )
+      INTEGER        maxsubs
+      PARAMETER    ( maxsubs = 2048 )
+      INTEGER        maxaxes
+      PARAMETER    ( maxaxes = 10 )
+N     Default options for use in USERxxx() routines      
+      INTEGER        none, request, hidden
+      PARAMETER    ( none    = 0 )
+      PARAMETER    ( request = 1 )
+      PARAMETER    ( hidden  = 2 )
+N     Buffer size for I/O      
+      INTEGER        maxIObuf
+      PARAMETER    ( maxIObuf = 4096 )
+N     Remove with 'WMINMAX' old minmax descriptors
+      INTEGER        remove 
+      PARAMETER    ( remove = 1 )
+N     Max. number of characters in 1 comb. description
+      INTEGER        maxchars      
+      PARAMETER    ( maxchars = 256 )
+N    'FIE' has 16 different buffers for results
+      INTEGER        maxrslt
+      PARAMETER    ( maxrslt = 16 )
+N     Syntax parameters: $n with 1 <= n <= 32      
+      INTEGER        maxpars
+      PARAMETER    ( maxpars = 32 )
+N     Coordinate word for whole set
+      INTEGER        wholeset
+      PARAMETER    ( wholeset = 0 )      
+      
+C     Declarations for GDSINP:
+
+      INTEGER        GDSINP
+      CHARACTER*80   setname( maxpars )      
+N     Array containing subset coordinate words      
+      INTEGER        subsets( maxsubs, maxpars )
+N     Axis permutation array      
+      INTEGER        axperm(  maxaxes, maxpars )
+      INTEGER        axcount( maxaxes, maxpars )      
+N     Number of subsets 
+      INTEGER        nsubs
+N     Determined at first input of sets
+      INTEGER        nsubsmax
+      INTEGER        dfault
+N     Number of output device [0..16]      
+      INTEGER        devicenum      
+N     Keywords for numerous inputs      
+      CHARACTER*10   keyword
+      CHARACTER*10   setkwrd
+      CHARACTER*10   boxkwrd
+      CHARACTER*40   message
+N     Algorithm with repeat axes ==> class = 1      
+      INTEGER        class
+N     Dimension of the subsets      
+      INTEGER        subdim
+      
+C     Declarations for GDSBOX:
+
+N     Grid vectors of sub frames of input sets
+      INTEGER        BgridLO(  maxaxes, maxpars )
+      INTEGER        BgridHI(  maxaxes, maxpars )
+N     Grid vectors of entire frames of inp. sets 
+      INTEGER        FgridLO(  maxaxes, maxpars )
+      INTEGER        FgridHI(  maxaxes, maxpars )
+N     Same for output sets
+      INTEGER        FgridLOO( maxaxes, maxrslt )
+      INTEGER        FgridHIO( maxaxes, maxrslt )
+N     What's the default in GDSBOX?
+      INTEGER        boxopt
+
+C     Declarations for GDSOUT:
+
+      INTEGER        GDSOUT
+N     Number of output sets      
+      INTEGER        nsubsO
+      INTEGER        subsetsO( maxsubs, maxrslt )
+      INTEGER        axpermO(  maxaxes, maxrslt )
+      INTEGER        axcountO( maxaxes, maxrslt )
+      CHARACTER*80   setnameO( maxrslt )
+      
+C     Functions:
+
+N     Extracts grid coordinate from coord. word      
+      INTEGER        GDSC_GRID
+N     Returns coordinate word
+      INTEGER        GDSC_FILL
+N     Returns .TRUE. if inside defined sub frame      
+      LOGICAL        OUTSIDEPTR
+N     Returns .TRUE. if outside defined sub frame            
+      LOGICAL        INSIDEPTR
+N     Determine length of string
+      INTEGER        NELC  
+N     Obtain the name under which a GIPSY task runs
+      CHARACTER*9    MYNAME
+N     Get length of input string
+      INTEGER        USERTEXT      
+N     Decode a string with math expression for FIEDO
+      INTEGER        FIEINI
+N     Evaluate the code generated by FIEINI            
+      INTEGER        FIEDO
+N     User integer input      
+      INTEGER        USERINT
+
+C     Variables for the algorithms:
+
+N     Various counters
+      INTEGER        m, i, q
+N     There are totpixels in one subset      
+      INTEGER        totpixels
+N     Array version of transfer id's
+      INTEGER        tids(   maxpars )
+N     For output data 
+      INTEGER        tidsO(  maxrslt )
+N     Special tid for outside operations
+      INTEGER        tidT
+N     Counter for subroutine MINMAX3            
+      INTEGER        mcount( maxrslt )
+N     Number of pointers in INITPTR buffer       
+      INTEGER        ptrcount 
+      INTEGER        stilltowrite 
+N     Coordinate words for total & sub frame      
+      INTEGER        Fcwlo(  maxpars )
+      INTEGER        Fcwhi(  maxpars )
+N     Array version of Bcwlo, Bcwhi
+      INTEGER        Bcwlo(  maxpars ) 
+      INTEGER        Bcwhi(  maxpars )
+N     Array version of FcwloO, FcwhiO
+      INTEGER        FcwloO( maxrslt )
+      INTEGER        FcwhiO( maxrslt )
+N     For use in INSIDEPTR/OUTSIDEPTR      
+      INTEGER        bufptr
+N     Dynamical I/O buffer length
+      INTEGER        numinreadbuf
+N     Number of elements inside/outside sub frame
+      INTEGER        numpixin
+      INTEGER        numpixout
+N     Number of pixels actually in read buffer      
+      INTEGER        numpixread
+N     How far we proceeded, used in STABAR
+      REAL           curval
+N     Help variable in STABAR
+      REAL           ratio 
+N     Offset for 1 dimensional dataI array
+      INTEGER        offset                 
+N     For updating number of blanks      
+      INTEGER        nblanks( maxsubs,   maxrslt )      
+N     For updating minimum and maximum of subset      
+      REAL           minval(  maxsubs,   maxrslt )
+      REAL           maxval(  maxsubs,   maxrslt )
+N     Arrays holding the data      
+      REAL           dataO(   maxIObuf,  maxrslt )
+      REAL           dataI(   maxIObuf * maxpars )
+N     Data array only for transfer option
+      REAL           dataT(   maxIObuf )
+N     Status of function FIEDO      
+      INTEGER        fieresult
+               
+C     Miscellaneous:
+
+N     Error codes for Range and Grid routines      
+      INTEGER        Rerror, Gerror
+N     Coordinate words to determine total range      
+      INTEGER        cwlo, cwhi
+N     Option 0..3, for different operations
+      INTEGER        option
+N     Choose COMBIN operating in- or outside box
+      LOGICAL        workinside
+N     Choose between transfer or blanking      
+      LOGICAL        transfer
+N     True when grids of input edges are equal
+      LOGICAL        equalgrids
+N     Loop guard for valid set input      
+      LOGICAL        agreed
+N     Loop guard for valid box input            
+      LOGICAL        equalbox
+N     Loop guard for 'work outside' option
+      LOGICAL        equalframe      
+N     Another guard for 'work outside' option
+      LOGICAL        equalpos      
+N     First input of a valid set
+      LOGICAL        first
+N     Length of result string
+      INTEGER        len
+N     Number of results (=output sets)
+      INTEGER        numouts
+N     Counter for 'numouts'
+      INTEGER        out
+N     Total number of output sets
+      INTEGER        totouts      
+N     Number of parameters = num. of input sets
+      INTEGER        numpars   
+N     Maximum number of counted parameters
+      INTEGER        totpars      
+N     Id. for each result string
+      INTEGER        fid( maxrslt )
+N     Position of error in result string      
+      INTEGER        errpos
+N     Current parameter
+      INTEGER        par      
+N     Length of axes of first box
+      INTEGER        Blen1( maxpars )
+N     Length of one axis of other boxes
+      INTEGER        Blen2            
+N     Display name of this program
+      CHARACTER*9    task      
+N     Storage for 'maxrslt' descriptions       
+      CHARACTER*( maxchars )   resultstr( maxrslt )
+      
+
+E     ***** COMBIN: Main *****
+
+N     Enter HERMES
+      CALL INIT
+N     Get task name
+      task = MYNAME()
+N     Show task and version number      
+      CALL ANYOUT( 8, ( task(:NELC(task) ) // ident) )
+
+C     Options for work area, asked before(!) GDSBOX:
+
+      keyword ='OPTION='
+      message ='Give option:   [0]'
+      dfault  = hidden
+      
+C     Choose one of the four available options:
+    
+      REPEAT
+        IF ( USERINT( option, 1, dfault, keyword, message ) .EQ. 0 )
+        THEN
+          option = 0
+        CIF
+        agreed = ( (option .GE. 0) .AND. (option .LE. 3) )
+        IF (.NOT. agreed)
+        THEN
+          dfault  = request
+          message = 'COMBIN: Illegal opt. try again: [0]'
+          CALL CANCEL( keyword )
+        CIF
+      UNTIL agreed 
+      
+C     Translate options into logicals to work with:
+    
+      IF (option .EQ. 0)
+      THEN
+        workinside = .TRUE.
+        transfer   = .FALSE.
+        CALL ANYOUT( 3, 'Option: operate inside box, blank outside' )         
+      CIF
+      IF (option .EQ. 1)
+      THEN
+        workinside = .TRUE.
+        transfer   = .TRUE.
+        CALL ANYOUT( 3, 'Option: operate inside box, transfer outside' )
+      CIF
+      IF (option .EQ. 2)
+      THEN
+        workinside = .FALSE.
+        transfer   = .FALSE.      
+        CALL ANYOUT(3, 'Option: operate outside box, blank inside' )
+        CALL ANYOUT(3, 'Note: axis sizes of frames need to be equal!')
+      CIF
+      IF (option .EQ. 3)
+      THEN
+        workinside  = .FALSE.
+        transfer = .TRUE.      
+        CALL ANYOUT(3, 'Option: operate outside box, transfer inside' )
+        CALL ANYOUT(3, 'Note: axis sizes of frames need to be equal!')
+      CIF
+            
+C     Input of combination descriptions:
+     
+      numouts = 1
+      totpars = 0
+      keyword = 'RESULT01='
+      message = 'Give expression: '
+      dfault  = none
+      REPEAT        
+        fid(numouts) = 0
+        resultstr(numouts) = ' '
+        len = USERTEXT( resultstr(numouts), dfault, keyword, message )
+N       Check string & prepare for next input        
+        IF (len .NE. 0)
+        THEN
+N         Check whether input string is ok
+          numpars = FIEINI( resultstr(numouts), fid(numouts),
+     #                      errpos )
+N         Store the maximum value of numpars in totpars     
+          totpars = MAX( numpars, totpars ) 
+          IF (numpars .GT. 0)
+          THEN
+            numouts = numouts + 1
+            dfault = request                      
+          ELSE
+            CALL CANCEL( keyword )             
+            IF (numpars .EQ. 0)
+            THEN
+              CALL ANYOUT( 3, 'COMBIN: No parameters specified' )
+            CIF
+            IF (numpars .LT. 0)
+            THEN
+              WRITE( message,
+     #           '(''COMBIN: Error in string at position '', I3 )' )
+     #           errpos
+              CALL ANYOUT( 3, message )
+            CIF
+          CIF
+          WRITE( keyword, '(''RESULT'', I2.2, ''='')' ) numouts
+          WRITE( message, '(''Give expression: '', I2, '' [stop]'' )' )
+     #           numouts
+        CIF
+      UNTIL ( ( (numouts-1) .EQ. maxrslt) .OR. (len .EQ. 0) )
+N     Compensate for previous loop
+      totouts = numouts - 1
+      
+C     Get sets corresponding to the parameters:
+ 
+N     Prepare GDSINP for first SET
+      dfault = none      
+N     Application repeats operation for each subset            
+      class  = 1      
+N     First time free choice, later not!
+      subdim = 0
+      devicenum = 11
+N     Do it for all input parameters            
+      FOR par = 1, totpars
+        first = (par .EQ. 1)
+        WRITE( setkwrd, '(''SET'', I2.2, ''='' )' ) par
+        WRITE( message, '(''Set (and subsets) of parameter '', I2 )' )
+     #         par
+N       Until nsubs eq. to first time number of subs.             
+        REPEAT
+          nsubs = GDSINP( setname(par), subsets(1, par), maxsubs, 
+     #                    dfault, setkwrd, message, devicenum, 
+     #                    axperm(1, par), axcount(1, par),      
+     #                    maxaxes, class, subdim )
+          IF first
+N         Determine axis lengths & first # of subsets          
+          THEN
+            nsubsmax  = nsubs
+            totpixels = 1
+            FOR m = 1, subdim
+              totpixels = totpixels * axcount(m, 1)
+            CFOR
+          CIF
+          agreed = (nsubs .EQ. nsubsmax) 
+          IF (.NOT. agreed)
+          THEN
+            CALL ANYOUT( 3, 'COMBIN: Wrong number of subsets' ) 
+            CALL CANCEL( setkwrd )
+N           Else if agreed get grids           
+          ELSE       
+            Rerror = 0
+            Gerror = 0
+            CALL GDSC_RANGE( setname(par), 0, cwlo, cwhi, Rerror )
+            FOR m = 1, subdim
+              FgridLO(m, par) = GDSC_GRID( setname(par), 
+     #                            axperm(m, par), cwlo, Gerror )
+              FgridHI(m, par) = GDSC_GRID( setname(par), 
+     #                            axperm(m, par), cwhi, Gerror )
+            CFOR                    
+            equalgrids = .TRUE.
+            IF (.NOT. first)
+            THEN          
+N             Are frst and scnd sets comparable on sset level?
+              FOR q = 1, subdim
+                equalgrids = ( equalgrids .AND.
+     #                       ( FgridLO(q, par-1) .EQ. 
+     #                         FgridLO(q, par)
+     #                       ) .AND.
+     #                       ( FgridHI(q, par-1) .EQ.
+     #                         FgridHI(q, par)
+     #                       ) )
+
+              CFOR
+N             For outside operations eq. Fsizes are needed          
+              IF ( (.NOT. workinside) .AND. (.NOT. equalgrids) )
+              THEN
+N               Compare sizes of frames            
+                equalframe = .TRUE.
+                FOR q = 1, subdim
+                  equalframe = (equalframe .AND. 
+     #                         ( axcount(q, par) .EQ. axcount(q, 1) ) )
+                CFOR                
+                IF (.NOT. equalframe)
+                THEN
+                  agreed = .FALSE.
+                  CALL ANYOUT( 3, 'COMBIN: For this option you need' //
+     #                            ' same axis lengths as ' )
+                  CALL ANYOUT( 3, '        previous set frame!' )
+                  CALL CANCEL( setkwrd )
+                CIF                                
+N             End if work outside option
+              CIF
+N           End of not first              
+            CIF            
+N         End of agreed / not agreed
+          CIF                        
+        UNTIL agreed
+                    
+C       Input of sub frames with GDSBOX:
+
+N       Prepare for a frame for first set     
+        dfault    = request
+        WRITE( boxkwrd, '(''BOX'', I2.2, ''='' )' ) par
+        message   = ' '
+N       Default is entire subset      
+        IF first
+        THEN
+          boxopt = 0
+        CIF
+        devicenum = 11
+        REPEAT        
+N         Set default sizes for GDSBOX       
+          IF (.NOT. first)
+          THEN
+N           Fill arrays with GRIDS for GDSBOX            
+            FOR q = 1, subdim
+              BgridHI(q, par) = BgridHI(q, par - 1) 
+              BgridLO(q, par) = BgridLO(q, par - 1)  
+            CFOR
+N           Default in B..LO & B..HI            
+            boxopt = 6 
+            IF (.NOT. equalgrids)
+N             Fill arrays with SIZES for GDSBOX      
+              THEN
+              FOR q = 1, subdim
+                BgridHI(q,par) = BgridHI(q,par-1)-BgridLO(q,par-1) + 1
+              CFOR             
+N             Box restricted to size in B..HI
+              boxopt = ( 8 + 4 )
+N           End of not equalgrids             
+            CIF                       
+N         End if not first
+          CIF            
+          CALL GDSBOX( BgridLO(1, par), BgridHI(1, par), 
+     #                 setname(par), subsets(1, par),
+     #                 dfault, boxkwrd, message, devicenum, boxopt )
+          equalpos = .TRUE.     
+          IF first 
+N         Determine length of box axes of first box          
+          THEN
+            equalbox = .TRUE.
+            FOR q = 1, subdim
+              Blen1(q) = BgridHI(q, 1) - BgridLO(q, 1) + 1
+            CFOR
+          ELSE
+N           Not the first ==> compare box sizes        
+            equalbox = .TRUE.
+            FOR q = 1, subdim
+              Blen2 = BgridHI(q, par) - BgridLO(q, par) + 1          
+              equalbox = ( equalbox .AND. (Blen1(q) .EQ. Blen2) )
+            CFOR
+N           For outside operations, box must have same
+            equalpos = .TRUE.
+N           relative position as previous box
+            IF (equalbox .AND. (.NOT. workinside) )
+            THEN
+              FOR q = 1, subdim
+                equalpos = ( equalpos .AND. (
+     #                       (BgridLO(q, par) - FgridLO(q, par)) .EQ.
+     #                       (BgridLO(q, 1 ) - FgridLO(q, 1 )) ) )
+              CFOR
+              IF (.NOT. equalpos)
+              THEN
+                CALL ANYOUT( 3, 'COMBIN: Wrong position of box' )
+                CALL CANCEL( boxkwrd )
+              CIF
+            CIF
+N         End first or other set                          
+          CIF 
+          IF (.NOT. equalbox)
+          THEN
+            CALL ANYOUT( 3, 'COMBIN: Wrong size of box!' )
+            CALL CANCEL( boxkwrd )
+          CIF
+          equalbox = (equalbox .AND. equalpos)
+N       Now its ok with the boxes also           
+        UNTIL equalbox
+N     Close after 'totpars'
+      CFOR
+
+C     Create output sets:
+
+      FOR out = 1, totouts
+        WRITE( keyword, '(''SETOUT'', I2.2, ''='' )' ) out
+N       Assign GDSINP buffer of SET01 to GDSOUT
+        CALL GDSASN( 'SET01=', keyword, class )
+        dfault    = none
+        message   ='Give output set (and subsets):'
+        devicenum = 11
+N       Until the correct number of SETOUT subsets         
+        REPEAT
+          nsubsO = GDSOUT( setnameO(out), subsetsO(1, out), 
+     #                     nsubsmax, dfault, keyword, message, 
+     #                     devicenum, axpermO(1, out), 
+     #                     axcountO(1, out), maxaxes )
+          agreed = (nsubsO .EQ. nsubsmax)
+          IF (.NOT. agreed) 
+          THEN
+            CALL ANYOUT( 3, 'COMBIN: Wrong number of subsets' )
+            CALL CANCEL( keyword )
+          CIF
+        UNTIL agreed 
+        Rerror = 0
+        Gerror = 0
+        CALL GDSC_RANGE( setnameO(out), wholeset, cwlo, cwhi, Rerror )
+        FOR q = 1, subdim
+          FgridLOO(q, out) = GDSC_GRID( setnameO, axpermO(q, out), 
+     #                                    cwlo, Gerror )
+          FgridHIO(q, out) = GDSC_GRID( setnameO, axpermO(q, out), 
+     #                                    cwhi, Gerror )
+        CFOR
+N     End for, for all setouts       
+      CFOR  
+
+C     Fill buffers and calculate:
+
+N     cw=coordinate word, lo=lower, hi=upper      
+N     F=Frame, B=Box          
+      FOR m = 1, nsubsmax        
+N       Determine coordinate words for input sets
+        FOR par = 1, totpars
+          Fcwlo(par) = GDSC_FILL( setname(par), subsets(m, par), 
+     #                            FgridLO(1, par) )
+          Fcwhi(par) = GDSC_FILL( setname(par), subsets(m, par),
+     #                            FgridHI(1, par) ) 
+          Bcwlo(par) = GDSC_FILL( setname(par), subsets(m, par), 
+     #                            BgridLO(1, par) )
+          Bcwhi(par) = GDSC_FILL( setname(par), subsets(m, par), 
+     #                            BgridHI(1, par) )
+          tids(par) = 0
+        CFOR
+N       Determine coordinate words for output sets        
+        FOR out = 1, totouts
+          FcwloO(out) = GDSC_FILL( setnameO(out), subsetsO(m, out), 
+     #                             FgridLOO(1, out) )
+          FcwhiO(out) = GDSC_FILL( setnameO(out), subsetsO(m, out), 
+     #                             FgridHIO(1, out) ) 
+N         Reset transfer id for output data     
+          tidsO(out)  = 0
+N         Reset counter for subroutine MINMAX3          
+          mcount(out) = 0          
+        CFOR 
+        ptrcount   = 0
+        numpixread = 0        
+        tidT       = 0        
+        stilltowrite = totpixels
+        REPEAT
+N         # per iteration cannot exceed maxIObuf
+          numinreadbuf = MIN( maxIObuf, stilltowrite )
+N         On exit ptrcount contains # ptrs in buf.
+          CALL INITPTR( FgridLO(1, 1), FgridHI(1, 1), 
+     #                  BgridLO(1, 1), BgridHI(1, 1),
+     #                  subdim, numinreadbuf, ptrcount )
+N         Read full buff., all first set data is needed
+          IF transfer 
+          THEN
+            CALL GDSI_READ( setname(1), Fcwlo(1), Fcwhi(1), 
+     #                      dataT, numinreadbuf, numpixread, tidT )
+          CIF
+          IF workinside
+          THEN          
+            WHILE ( OUTSIDEPTR( bufptr, numpixout) )
+N             Then set to blank          
+              IF (.NOT. transfer)            
+              THEN
+                FOR out = 1, totouts
+                  CALL SETNFBLANK( dataO(bufptr+1, out), numpixout )
+                CFOR
+N             Else if transfer is needed ...
+              ELSE
+                FOR out = 1, totouts     
+                  CALL MOVER( dataT(bufptr+1), dataO(bufptr+1, out), 
+     #                        numpixout )
+                CFOR
+              CIF
+            CWHILE            
+            numpixread = 0
+            WHILE ( INSIDEPTR( bufptr, numpixin ) )
+N             Read data of all parameters in a 1 dim. array            
+              offset = 1
+              FOR par = 1, totpars              
+                CALL GDSI_READ( setname(par), 
+     #                          Bcwlo(par), Bcwhi(par),
+     #                          dataI(offset), numpixin, numpixread, 
+     #                          tids(par) )
+                offset = offset + numpixread
+              CFOR
+              FOR out = 1, totouts
+N               Do the calculations              
+                fieresult = FIEDO( dataI, numpixin,
+     #                             dataO(bufptr+1, out), fid(out) )
+                IF ( fieresult .LT. 0 )
+                THEN
+                  CALL ERROR( 4, 'COMBIN: No evaluation possible' )
+                CIF
+              CFOR
+            CWHILE
+N         If NOT workinside ==> operate outside box
+          ELSE
+            offset = 1
+            FOR par = 1, totpars
+N             Combin on all(!) data, blank later
+              CALL GDSI_READ( setname(par), 
+     #                        Fcwlo(par), Fcwhi(par),
+     #                        dataI(offset), numinreadbuf, numpixread, 
+     #                        tids(par) ) 
+              offset = offset + numpixread
+            CFOR
+            FOR out = 1, totouts
+              fieresult = FIEDO( dataI, numpixread,
+     #                           dataO(1, out), fid(out) ) 
+            CFOR
+N           Blank the inside data            
+            WHILE ( INSIDEPTR( bufptr, numpixin ) )
+N             Then set to blank          
+              IF (.NOT. transfer)            
+              THEN
+                FOR out = 1, totouts
+                  CALL SETNFBLANK( dataO(bufptr+1, out), numpixin )
+                CFOR
+N             Else if transfer is needed ...
+              ELSE
+                FOR out = 1, totouts     
+                  CALL MOVER( dataT(bufptr+1), dataO(bufptr+1, out), 
+     #                        numpixin )
+                CFOR
+              CIF
+            CWHILE                                      
+          CIF
+          FOR out = 1, totouts
+N           Write output data                     
+            CALL GDSI_WRITE( setnameO(out), FcwloO(out), FcwhiO(out),
+     #                       dataO(1, out), numinreadbuf, numinreadbuf,
+     #                       tidsO(out) )
+N           Find running min, max etc for this output 
+            CALL MINMAX3( dataO(1, out), numinreadbuf, minval(m, out), 
+N           set and subset and store it in arrays            
+     #                    maxval(m, out), nblanks(m, out), mcount(out) )
+          CFOR     
+          stilltowrite = stilltowrite - numinreadbuf
+          ratio  =   FLOAT( totpixels-stilltowrite ) / FLOAT(totpixels) 
+          curval = ( FLOAT( m-1 ) + ratio ) / FLOAT( nsubsmax )
+          CALL STABAR( 0.0, 1.0, curval )
+        UNTIL (stilltowrite .EQ. 0)
+      CFOR
+N     min max probably changed ==> update min, max      
+      FOR out = 1, totouts
+        CALL WMINMAX( setnameO(out), subsetsO(1, out), 
+     #                minval(1, out), maxval(1, out), nblanks(1, out),
+     #                nsubsmax, remove )      
+      CFOR
+     
+N     Exit HERMES     
+      CALL FINIS
+      
+      STOP
+      END
+
+
+E     ***** COMBIN Technicalities *****
+
+C     Options in GDSBOX:
+C
+C     1 box may exceed subset size
+C     2 default is in B..LO
+C     4 default is in B..HI
+C     8 box restricted to size defined in B..HI
+C     These codes work additive. 
+
+C     The size of the input set will be copied to the output set.
+C     It is possible to work on a smaller area. Therefore we need
+C     the grid coordinates of the frame ('F') and 
+C     the coordinates of the user defined box ('B'). 
+
+C     All output sets will get same coordinate system as first input set
+
+C     The order of the indices of the two dim. arrays is important,
+C     that is, if they are used in a subroutine call. The most rapidly
+C     changing index is always the first.

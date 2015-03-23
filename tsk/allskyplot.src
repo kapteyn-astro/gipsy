@@ -1,0 +1,1618 @@
+allskyplot.src
+
+        Copyright (c) Kapteyn Laboratorium Groningen 2011
+        All Rights Reserved.
+
+Name:         allskyplot.src
+Creator:      vogelaar
+Host:         Zeearend
+Date:         Feb 17, 2011
+Contents:     allskyplot.make allskyplot.py allskyplot.dc1
+
+#>            allskyplot.make
+#----------------------------------------------------------------------
+# Makefile for ALLSKYPLOT
+# 
+# Pack sources into allskyplot.src with:   > make -f allskyplot.make pack
+# Unpack source files with:                > $gip_exe/xfile allskyplot.src
+# Install source file with:                > p -reserve allskyplot.src
+#                                          > p -install allskyplot.src
+#
+#----------------------------------------------------------------------
+   
+SHELL   = /bin/sh
+   
+default:: allskyplot
+   
+allskyplot : allskyplot.py
+	cp allskyplot.py allskyplot
+	chmod +x allskyplot
+   
+pack::
+	$$gip_sys/pack.csh allskyplot.src allskyplot.make allskyplot.py \
+	allskyplot.dc1
+
+#<
+
+#>            allskyplot.py
+#!/usr/bin/env python
+import gipsy
+import csv
+
+
+#-----------------------------------------------------------------------
+"""
+Changelog.
+09-09-2010:
+-ATTRIBn= changed by ATTRIB_Xn where X is one of
+the object abbreviations 'E', 'R' or 'N'.
+-GRAT2= replaced by GRATOVER, added examples in dc1 document
+-R_OPT= replaced by IOOPT=
+-Attributes are specified as key:value
+The order is not important.
+-Added keywords for border graticule (so that one always has a
+ decent border even if the projection was oblique
+-Added keywords for title and x/y labels
+-Changed ellipse etc. parameters in a file.
+The syntax now is:
+   string float float float
+String is a position. e.g. "ga 20 ga 30" or "{eq,fk4,B1960} 101.23 {} -20.23"
+or 20h10m23.6s -10d2m30s"
+"""
+#-----------------------------------------------------------------------
+
+# next packages/modules are not part of the GIPSY distribution
+# it is not sure that a user has all the necessary functionality available.
+try:
+   import numpy
+except:
+   raise Exception, "Cannot find package numpy!"
+try:
+   #from matplotlib import use
+   #use('Qt4Agg')
+   #use('GTKCairo')
+   from matplotlib.pyplot import figure, setp, savefig, show
+   from matplotlib.patches import Polygon
+except:
+   raise Exception, "Cannot find matplotlib!"
+try:
+   import pyfits
+except:
+   raise Exception, "Cannot find module pyfits for reading FITS files!"
+try:
+   from kapteyn import wcs, maputils, positions
+   from kapteyn.mplutil import TimeCallback, gipsy_connect
+   from kapteyn.tabarray import readColumns
+   from kapteyn  import tabarray
+   from kapteyn.positions import str2pos
+except:
+   raise Exception, "Cannot find the kapteyn package!"
+
+
+# Global constant for maximum number of positions 
+MAXPOS = 20000
+MAXATTS = 10
+
+epsilon = 0.0000000001
+almostdec0 = 90.0 - epsilon   # Avoid plotting at the wrong side
+
+linekwargs = ['alpha', 'antialiased', 'color', 'linestyle', 'ls',
+              'linewidth', 'lw', 'marker', 'markeredgecolor', 'mec',
+              'markeredgewidth', 'mew', 'markerfacecolor', 'mfc',
+              'markersize', 'ms', 'visible', 'zorder']
+polykwargs = ['alpha', 'antialiased', 'color', 'edgecolor', 'ec',
+              'facecolor', 'fc', 'fill', 'linestyle', 'ls',
+              'linewidth', 'lw', 'visible', 'zorder']
+textkwargs = ['alpha', 'backgroundcolor', 'color', 'family',
+              'horizontalalignment', 'ha', 'linespacing',
+              'rotation', 'size', 'fontsize', 'style',
+              'verticalalignment', 'va', 'visible', 'weight', 'zorder']
+titlekwargs = textkwargs[:]; titlekwargs.append('x'); titlekwargs.append('y');
+hardcopykwargs = ['papertype', 'orientation']
+papertypelist = ['letter', 'legal', 'executive', 'ledger',
+                 'a0', 'a1', 'a2','a3', 'a4', 'a5', 'a6', 'a7', 'a8', 'a9', 'a10',
+                 'b0', 'b1', 'b2','b3', 'b4', 'b5', 'b6', 'b7', 'b8', 'b9', 'b10']
+orientationlist = ['landscape', 'portrait']
+floatkwargs = ['linewidth', 'lw', 'ms', 'markersize', 'alpha',
+               'mew', 'markeredgewidth', 'rotation']
+boolkwargs = ['visible', 'fill']
+markersymbols = [ '+' , '*' , ',' , '.' , '1' , '2' , '3' , '4' ,
+                  '<' , '>' , 'D' , 'H' , '^' , '_' , 'd' , 'h' ,
+                  'o' , 'p' , 's' , 'v' , 'x' , ',' ]
+linestyles =   [ '-' , '--' , '-.' , ':' , 'None' ]
+colorlist = ['b', 'g', 'r', 'c', 'm', 'y',' k', 'w', '0', '1']
+halignlist = ['center', 'right', 'left']
+valignlist = ['center', 'top', 'bottom', 'baseline']
+
+
+def cylrange():
+   X = numpy.arange(0,400.0,30.0)
+   # Replace last two (dummy) values by two values around 180 degrees   
+   X[-1] = 180.0 - epsilon
+   X[-2] = 180.0 + epsilon
+   return X
+
+
+def szp_border(mu):  
+  xp = -mu * numpy.cos(theta*numpy.pi/180.0)* numpy.sin(phi*numpy.pi/180.0)
+  yp =  mu * numpy.cos(theta*numpy.pi/180.0)* numpy.cos(phi*numpy.pi/180.0)
+  zp =  mu * numpy.sin(theta*numpy.pi/180.0) + 1.0
+  a = numpy.linspace(0.0,360.0,500)
+  arad = a*numpy.pi/180.0
+  rho = zp - 1.0
+  sigma = xp*numpy.sin(arad) - yp*numpy.cos(arad)
+  sq = numpy.sqrt(rho*rho+sigma*sigma)
+  omega = numpy.arcsin(1/sq)
+  psi = numpy.arctan2(sigma,rho)
+  thetaxrad = psi - omega
+  thetax = thetaxrad * 180.0/numpy.pi + 5
+  return a, thetax
+  
+
+def sin_border(xi, eta):
+  a = numpy.linspace(0,360,500)
+  arad = a*numpy.pi/180.0
+  thetaxrad = -numpy.arctan(xi*numpy.sin(arad)-eta*numpy.cos(arad))
+  thetax = thetaxrad * 180.0/numpy.pi + 0.000001  # Little shift to avoid NaN's at border
+  return a, thetax
+  
+
+def cube_border(proj):
+   # Calculate perimeter of QUAD projection
+   #dx = proj.crval[0]; dy = proj.crval[1]
+   xlo, y = proj.topixel((-45.0-epsilon, 0.0))
+   xhi, y = proj.topixel((315+epsilon, 0.0))
+   x, ylo = proj.topixel((180, -45))
+   x, yhi = proj.topixel((180, 45))
+   x1, y = proj.topixel((45-epsilon, 0.0))
+   x, ylolo = proj.topixel((0, -135+epsilon))
+   x, yhihi = proj.topixel((0, 135-epsilon))
+   perimeter = [(xlo,ylo), (x1,ylo), (x1,ylolo), (xhi,ylolo), (xhi,yhihi),
+                (x1,yhihi), (x1,yhi), (xlo,yhi), (xlo,ylo)]
+   return perimeter
+
+
+def updatekwargs(key, mes, defval, obj, kwargs):
+#-----------------------------------------------------------------
+   """
+   This function performs a check on the validity of keywords
+   for Matplotlib.
+   If 
+   """
+#-----------------------------------------------------------------
+   ok = False
+   while not ok:
+      message = 'Try again'
+      try:
+         atts = gipsy.userchar(key, mes, default=1, defval=defval, nmax=MAXATTS)
+         newkwargs = processkwargs(obj, atts, kwargs)
+         ok = not newkwargs is None
+      except AttributeError, (code, message):
+         ok is False
+      except ValueError, (code, message):
+         ok is False
+      if not ok:
+         gipsy.reject(key, message)
+   return newkwargs
+
+
+def processkwargs(obj, atts, kwargs):
+#-----------------------------------------------------------------
+   """
+   This function performs a check on the validity of keywords
+   for Matplotlib.
+   If 
+   """
+#-----------------------------------------------------------------
+   for att in atts:
+      ok = False
+      if att == '?':
+         key = '?'
+      else:
+         try:
+            key, val = att.split(':',1)  # i.e. at most two elements
+         except:
+            raise ValueError(22, "Need key:value")
+         
+      if obj == 'line':
+         if key == '?':
+            gipsy.anyout("\nHELP --> Attributes for lines and markers:")
+            gipsy.anyout(str(linekwargs))
+         else:
+            ok = key in linekwargs
+      if obj == 'poly':
+         if key == '?':
+            gipsy.anyout("\nHELP --> Attributes for polygons:")
+            gipsy.anyout(str(polykwargs))
+         else:
+            ok = key in polykwargs
+      if obj == 'text':
+         if key == '?':
+            gipsy.anyout("\nHELP --> Attributes for text:")
+            gipsy.anyout(str(textkwargs))
+         else:
+            ok = key in textkwargs
+      if obj == 'hard':
+         if key == '?':
+            gipsy.anyout("\nHELP --> Attributes for hardcopy:")
+            gipsy.anyout(str(hardcopykwargs))
+         else:
+            ok = key in hardcopykwargs
+      if obj == 'title':
+         if key == '?':
+            gipsy.anyout("\nHELP --> Attributes for title:")
+            gipsy.anyout(str(titlekwargs))
+         else:
+            ok = key in titlekwargs
+            
+      if not ok:
+         if key != '?':
+            mes = "Key in %s unknown to object %s" % (att, obj)
+            raise AttributeError(23, mes)
+         else:
+            return None
+
+      ok = False
+      if key == 'alpha':
+         if val == '?':
+            gipsy.anyout("\nHELP --> Transparency:")
+            gipsy.anyout("alpha must be a float in range 0 and 1\n")
+         else:
+            try:
+               val = float(val)
+            except:
+               raise ValueError(25, "Argument [%s] must be float"%val)
+            ok = (0.0 <= val <= 1.0)
+            gipsy.anyout(str(ok))
+      elif key in ['color', 'markeredgecolor', 'mec', 'markerfacecolor', 'mfc',
+                 'edgecolor', 'ec', 'facecolor', 'fc', 'backgroundcolor']:
+         if val == '?':
+            gipsy.anyout("\nHELP --> Colors:")
+            gipsy.anyout("b(lue), g(reen), r(ed), c(yan), m(agenta), y(ellow), k(black), w(hite)")
+            gipsy.anyout("or a string with hex representation e.g. #AA0057")
+            gipsy.anyout("or a number between 0 and 1 to set a gray scale, e.g. 0.75\n")
+         else:
+            ok = val in colorlist or val.startswith('#') or val.startswith('0.')
+      elif key in ['ls', 'linestyle']:
+         if val == '?':
+            gipsy.anyout("\nHELP --> Line styles:")
+            gipsy.anyout(str(linestyles))
+            gipsy.anyout('')
+         else:
+            ok = val in linestyles
+      elif key == 'marker':
+         if val == '?':
+            gipsy.anyout("\nHELP --> Marker symbols:")
+            gipsy.anyout(str(markersymbols))
+            gipsy.anyout('')
+         else:
+            ok = val in markersymbols
+      elif key in ['horizontalalignment', 'ha']:
+         if val == '?':
+            gipsy.anyout("\nHELP --> Horizontal align:")
+            gipsy.anyout(str(halignlist))
+            gipsy.anyout('')
+         else:
+            ok = val in halignlist
+      elif key in ['verticalalignment', 'va']:
+         if val == '?':
+            gipsy.anyout("\nHELP --> Vertical align:")
+            gipsy.anyout(str(valignlist))
+            gipsy.anyout('')
+         else:
+            ok = val in valignlist
+      elif key == 'orientation':
+         if val == '?':
+            gipsy.anyout("\nHELP --> Paper orientation:")
+            gipsy.anyout(str(orientationlist))
+            gipsy.anyout('')
+         else:
+            ok = val in orientationlist
+      elif key == 'papertype':
+         if val == '?':
+            gipsy.anyout("\nHELP --> Paper type:")
+            gipsy.anyout(str(papertypelist))
+            gipsy.anyout('')
+         else:
+            ok = val in papertypelist
+      elif key in floatkwargs:
+         if val == '?':
+            gipsy.anyout("\nHELP --> Floating point parameters")
+            gipsy.anyout("These parameters are represented by a floating point number")
+            gipsy.anyout("e.g. lw:1.0 or lw:2.0 or lw:0.5\n")
+         else:
+            try:
+               val = float(val)
+            except:
+               raise ValueError(25, "Argument [%s] must be float"%val)
+            ok = True
+      elif key in boolkwargs:
+         if val == '?':
+            gipsy.anyout("\nHELP --> Boolean parameters")
+            gipsy.anyout("These parameters are represented by a boolean.")
+            gipsy.anyout("The values are either True or False\n")
+         else:
+            try:
+               val = {'true': True, 'false': False}.get(val.lower())
+            except:
+               raise ValueError(25, "Argument [%s] must be boolean"%val)
+            ok = True
+      else:    # All the others
+         if val == '?':
+            gipsy.anyout("No information available!")
+         ok = True   # With a risk of crashing the program for wrong values
+      if not ok or val == '?':
+         if val != '?':
+            mes = "Value [%s] in %s not allowed!" % (val, att)
+            raise AttributeError(24, mes)
+         else:
+            return None
+      
+      kwargs.update({key:val})
+   return kwargs
+
+
+def settattribs(patch, **kwargs):
+   if patch is None:
+      return
+   try:
+      setp(patch, **kwargs)
+   except AttributeError, message:
+      errmes = str(message)
+      gipsy.error(1, errmes)
+
+
+projlist = []   # A global list with projections
+class Projectioninfo(object):
+#---------------------------------------------------------------------------
+   """
+   Set defaults for a projection. Append projection to global list
+   'projlist'.
+   """
+#---------------------------------------------------------------------------
+   def __init__(self, code, ptype, descr='', **pv):
+      self.code = code
+      self.descr = descr
+      self.wylim = (-90, 90)
+      self.wxlim = (0,360)
+      self.startx = cylrange()
+      self.starty = numpy.arange(-90,100,30.0)
+      self.crval1 = 0.0
+      if ptype == 'zenithal':
+         self.crval2 = almostdec0
+         self.startx = numpy.arange(0,360,30)
+      else:
+         self.crval2 = 0.0
+      self.cdelt1 = -5.0
+      self.cdelt2 = 5.0
+      self.labels_lon = numpy.arange(0,360,30.0)
+      self.labels_lat = [-60,-30, 30, 60]
+      self.lon_constval = 0.0
+      self.lat_constval = 0.0
+      self.ptype = ptype
+      if ptype in ['cylindrical', 'pseudocylindrical']:
+         self.stretched = True
+      else:
+         self.stretched = False
+      self.pv = pv
+      projlist.append(self)
+      
+
+
+mu = 2.0; gamma = 20.0
+p = Projectioninfo('AZP', 'zenithal', '(azimuthal) perspective projection (AZP)', 
+                   PV2_1=mu, PV2_2=gamma)
+lowval = (180.0/numpy.pi)*numpy.arcsin(-1.0/mu) + 0.00001
+p.starty[0] = lowval
+
+mu = 2.0; phi = 180.0; theta = 60
+p = Projectioninfo('SZP', 'zenithal', 'Slant zenithal perspective (SZP)', PV2_1=mu, PV2_2=phi, PV2_3=theta)
+p.mu = mu
+
+p = Projectioninfo('TAN', 'zenithal', 'Gnomonic projection (TAN) diverges at theta=0');
+p.wylim = (20,90)   # TAN diverges at 0
+p.starty = numpy.arange(0,100,30.0); p.starty[0] = p.wylim[0]
+p.lat_constval = 19
+
+p = Projectioninfo('STG', 'zenithal', 'Stereographic projection (STG) diverges at theta=-90');
+p.wylim = (-60,90)
+
+xi =  -1/numpy.sqrt(6); eta = 1/numpy.sqrt(6)
+p = Projectioninfo('SIN', 'zenithal', 'Slant orthograpic projection (SIN) with xi and eta',
+                   PV2_1=xi, PV2_2=eta)
+p.xi = xi,
+p.eta = eta
+p.lat_constval = 50.0
+
+p = Projectioninfo('ARC', 'zenithal', 'Zenithal equidistant projection (ARC)');
+p.starty[0] = -90.0 + 10*epsilon
+
+p = Projectioninfo('ZPN', 'zenithal', 'Zenithal polynomial projection (ZPN) with PV2_n parameters',
+                  PV2_1=1.0);
+p.starty[0] = -90.0 + 10*epsilon
+
+p = Projectioninfo('ZEA', 'zenithal', 'Zenith equal area projection (ZEA)')
+p.starty[0] = -90.0 + 10*epsilon
+
+p = Projectioninfo('AIR', 'zenithal', 'Airy projection (AIR)', PV2_1=45.0)
+
+#p = Projectioninfo('CYP', 'cylindrical', r"""Gall's stereographic projection (CYP) with
+#$\mu = 1$ and $\theta_x = 45^\circ$ (i.e. $\lambda=\frac{1}{2}\sqrt(2)$)""",
+#                    PV2_1=1.0, PV2_2=numpy.sqrt(2.0)/2.0)
+p = Projectioninfo('CYP', 'cylindrical', r"""Gall's stereographic projection (CYP) with $\mu = 1$ and $\theta_x = 45^\circ$ i.e. $\lambda=\frac{1}{2}\sqrt{2}$""",
+                    PV2_1=1.0, PV2_2=numpy.sqrt(2.0)/2.0)
+
+p = Projectioninfo('CEA', 'cylindrical', r"""Lambert's equal area projection (CEA) with $\lambda = 1$""",
+                    PV2_1=1.0)
+
+p = Projectioninfo('CAR', 'cylindrical', 'Plate Caree (CAR)');
+p = Projectioninfo('MER', 'cylindrical', 'Mercator (MER)');
+p.wylim = [-85,85]  # Mercator diverges at +/- 90 deg
+p = Projectioninfo('SFL', 'cylindrical', 'Sanson-Flamsteed projection (SFL)')
+p = Projectioninfo('PAR', 'cylindrical', 'Parabolic projection (PAR)')
+p = Projectioninfo('MOL', 'cylindrical', 'Mollweide\'s projection (MOL).')
+p = Projectioninfo('AIT', 'cylindrical', 'Hammer Aitoff');
+
+theta_a = 45
+t1 = 20.0; t2 = 70.0
+eta = abs(t1-t2)/2.0
+p = Projectioninfo('COP', 'conic', r"""Conic perspective projection (COP) with:
+$\theta_a=45^\circ$, $\theta_1=20^\circ$ and $\theta_2=70^\circ$""",
+                   PV2_1=theta_a, PV2_2=eta)
+p.crval2 = theta_a
+p.starty = numpy.arange(-30,90,30)
+
+theta_a = -45
+t1 = -20.0; t2 = -70.0
+eta = abs(t1-t2)/2.0
+p = Projectioninfo('COE', 'conic', r"""Conic equal area projection (COE) with:
+$\theta_a=-45^\circ$, $\theta_1=-20^\circ$ and $\theta_2=-70^\circ$""",
+                   PV2_1=theta_a, PV2_2=eta)
+p.crval2 = theta_a
+p.starty[-1] = almostdec0
+
+theta_a = 45
+t1 = 20.0; t2 = 70.0
+eta = abs(t1-t2)/2.0
+p = Projectioninfo('COD', 'conic', r"""Conic equidistant projection (COD) with:
+$\theta_a=45^\circ$, $\theta_1=20^\circ$ and $\theta_2=70^\circ$""",
+                   PV2_1=theta_a, PV2_2=eta)
+p.crval2 = theta_a
+
+theta_a = 45
+t1 = 20.0; t2 = 70.0
+eta = abs(t1-t2)/2.0
+p = Projectioninfo('COO', 'conic', r"""Conic orthomorfic projection (COO) with:
+$\theta_a=45^\circ$, $\theta_1=20^\circ$ and $\theta_2=70^\circ$""",
+                   PV2_1=theta_a, PV2_2=eta)
+
+p.crval2 = theta_a
+p.wylim = (-30,90)  # Diverges at -90
+p.starty = numpy.arange(-30,90,30)
+p.startx = [0,30,60,90,120,150,180-epsilon,180+epsilon,210,240,270,300,330,360-epsilon]
+
+theta1 = 45
+p = Projectioninfo('BON', 'pseudoconic', r"""Bonne's equal area projection (BON) with $\theta_1=45^\circ$""",
+                   PV2_1=theta1)
+
+p = Projectioninfo('PCO', 'polyconic', 'Polyconic');
+p = Projectioninfo('TSC', 'cube', "Tangential spherical cube projection (TSC)")
+p = Projectioninfo('CSC', 'cube', "COBE quadrilateralized spherical cube projection (CSC)")
+p = Projectioninfo('QSC', 'cube', "Quadrilateralized spherical cube projection (QSC)")
+
+
+gipsy.init()                                     # Contact Hermes
+# ------- Ask for projection --------
+
+def ellipse_handler(cb):
+   if cb.key == 'ELLIPSE=':
+      annim.Epars = gipsy.userreal(cb.key, nmax=5)
+   else:
+      pars = annim.Epars
+      attrs = gipsy.userchar(cb.key, nmax=4)
+      gipsy.anyout(attrs[0])
+      
+      kwargs = {}
+      if len(attrs) > 0:
+         kwargs.update({'facecolor':attrs[0]})
+      if len(attrs) > 1:
+         kwargs.update({'edgecolor':attrs[1]})
+      if len(attrs) > 2:
+         kwargs.update({'linewidth':attrs[2]})
+      if len(attrs) > 3:
+         kwargs.update({'alpha':attrs[3]})
+      gipsy.anyout(str(kwargs))
+
+      skypol = cb.annim.Skypolygon(prescription="Ellipse", xc=pars[0], yc=pars[1],
+                     major=pars[2], minor=pars[3], pa=pars[4], **kwargs)
+
+      skypol.plot(cb.annim.frame)
+      cb.annim.frame.figure.canvas.draw()
+
+
+for i, p in enumerate(projlist):
+   s = "%d: %s (%s)" %(i, p.descr, p.ptype)
+   gipsy.anyout(s, dev=3)
+
+ok = False
+while not ok:
+   key = "PROJECTION="
+   mes = "Enter number [0,%d] of a valid projection ... [0]: " % (len(projlist)-1)
+   projnr = gipsy.userint(key, mes, defval=0, default=1, nmax=1)
+   ok = len(projlist) > projnr >= 0
+   if not ok:
+      gipsy.reject(key, 'You did not enter a number between 0 and %s'%(len(projlist)))
+     
+projuser = projlist[projnr]
+gipsy.anyout("You selected projection: %s"%(projuser.descr))
+
+#------- Ask for pixel size (CDELT) --------
+key = "CDELT_XY="
+cdeltx = projuser.cdelt1
+cdelty = projuser.cdelt2
+mes = "Enter pixel size in X and Y in deg. ... [%.2g,%.2g]: "%(cdeltx, cdelty)
+cdeltx, cdelty = gipsy.userdble(key, mes, defval=(cdeltx, cdelty), default=1, nmax=2)
+   
+naxis1 = abs(400.0/cdeltx)
+naxis2 = abs(200.0/cdelty)
+if not projuser.stretched:
+   naxis1 = max(naxis1,naxis2)
+   naxis2 = naxis1
+
+key = "NAXIS_XY="
+mes = "Enter length of axes in pixels ... [%d %d]: "%(naxis1, naxis2)
+naxis1, naxis2 = gipsy.userdble(key, mes, defval=(naxis1, naxis2), default=1, nmax=2)
+
+key = "CRPIX_XY="
+crpix1 = naxis1/2.0; crpix2 = naxis2/2.0;
+if projuser.ptype == 'cube':
+   crpix1 = naxis1*5.0/6.0
+mes = "Pixel coordinates for center ... [%d %d]: "%(crpix1, crpix2)
+crpix1, crpix2 = gipsy.userdble(key, mes, defval=(crpix1, crpix2), default=1, nmax=2)
+
+
+#------- Ask for pixel size (CRVAL) --------
+key = "CRVAL_XY="
+crvalx = projuser.crval1
+crvaly = projuser.crval2
+mes = "Enter Projection center in X and Y ... [%.2g,%.2g]: "%(crvalx, crvaly)
+crvalx, crvaly = gipsy.userdble(key, mes, defval=(crvalx, crvaly), default=1, nmax=2)
+
+#------- Ask for sky system --------
+key = "SKY="
+defval = 1
+mes = "Sky system 1=equat. 2=ecl 3=galactic 4=su.gal. ... [%s]: "%defval
+sky = gipsy.userint(key, mes, defval=defval, default=1, nmax=1)
+if sky < 1:
+   sky = 1
+if sky > 4:
+   sky = 4
+if sky == 1:
+   ctypex = 'RA---'
+   ctypey = 'DEC--'
+if sky == 2:
+   ctypex = 'ELON-'
+   ctypey = 'ELAT-'
+if sky == 3:
+   ctypex = 'GLON-'
+   ctypey = 'GLAT-'
+if sky == 4:
+   ctypex = 'SLON-'
+   ctypey = 'SLAT-'
+
+
+if crvalx != 0.0 and projuser.ptype == 'cylindrical':
+   projuser.startx += crvalx
+
+
+header = {'NAXIS'  : 2,
+          'NAXIS1' : naxis1,
+          'NAXIS2' : naxis2,
+          'CTYPE1' : '%s%s'%(ctypex,projuser.code),
+          'CRVAL1' : crvalx,
+          'CRPIX1' : crpix1,
+          'CUNIT1' : 'deg',
+          'CDELT1' : cdeltx,
+          'CTYPE2' : '%s%s'%(ctypey,projuser.code),
+          'CRVAL2' : crvaly,
+          'CRPIX2' : crpix2,
+          'CUNIT2' : 'deg', 'CDELT2' : cdelty,
+         }
+# Add PV elemens if there are any.
+if len(projuser.pv):
+   header.update(projuser.pv)
+
+# Figure size
+if projuser.stretched:
+   figsize = [12,6]
+else:
+   figsize = [12,9]
+key = "FIGSIZE="
+mes = "Figure width, height in inches ... [%g %g]: "% (figsize[0], figsize[1])
+figsize = gipsy.userreal(key, mes, default=1, defval=figsize, nmax=2)
+if len(figsize) == 1:
+   figsize.append(figsize[0])
+fig = figure(figsize=figsize)
+
+# Matplotlib Axes object, which we call a frame
+key = "FRAME="
+x0 = y0 = 0.05
+x1 = 0.95; y1 = 0.9
+mes = "Frame x0,y0,x1,y1 (norm. coords) ... [%g %g %g %g]: "% (x0,y0,x1,y1)
+framesize = gipsy.userreal(key, mes, default=1, defval=(x0,y0,x1,y1), nmax=4)
+w = x1 - x0
+h = y1 - y0
+frame = fig.add_axes((x0,y0,w,h))
+
+key = "MERIDIANS="
+defval = projuser.startx[:]
+mes = "Meridians at longitudes ... [calculated]: "
+startx = gipsy.userreal(key, mes, default=1, defval=defval, nmax=100)
+
+key = "PARALLELS="
+defval = projuser.starty[:]
+mes = "Parallels at latitudes ... [calculated]: "
+starty = gipsy.userreal(key, mes, default=1, defval=defval, nmax=100)
+
+f = maputils.FITSimage(externalheader=header)
+annim = f.Annotatedimage(frame)
+grat = annim.Graticule(wylim=projuser.wylim, wxlim=projuser.wxlim,
+                       startx=startx , starty=starty)
+key = "GR1_ATTS="
+mes = "Plot atts base grat ... [color:0.75 lw:1]: "
+defval = ''
+kwargs = {'color':'0.75', 'lw':1}
+kwargs = updatekwargs(key, mes, defval, 'line', kwargs)
+
+# Change default label along X-axis
+grat.setp_gratline(**kwargs)
+key = "XLABEL="
+mes = "Text to label X-axis ... [default]: "
+defval = ''
+lonlabel = gipsy.usertext(key, mes, default=1, defval=defval)
+
+# Ask and set properties for label 
+key = "LABX_ATTS="
+mes = "Plot atts X-axis label ... [defaults]: "
+defval = ''
+kwargs = {}
+lon_kwargs = updatekwargs(key, mes, defval, 'text',  kwargs)
+if lonlabel == '':
+   grat.setp_plotaxis("bottom", **lon_kwargs)
+else:
+   grat.setp_plotaxis("bottom", label=lonlabel, **lon_kwargs)
+
+# Same for Y label
+key = "YLABEL="
+mes = "Text to label Y-axis ... [default]: "
+defval = ''
+latlabel = gipsy.usertext(key, mes, default=1, defval=defval)
+
+key = "LABY_ATTS="
+mes = "Plot atts Y-axis label ... [defaults]: "
+defval = ''
+kwargs = {}
+lat_kwargs = updatekwargs(key, mes, defval, 'text',  kwargs)
+
+if latlabel == '':
+   grat.setp_plotaxis("left", **lat_kwargs)
+else:
+   grat.setp_plotaxis("left", label=latlabel, **lat_kwargs)
+
+key = "ILABLONS="
+mes = "Plot graticule labels at longitudes ... [calculated]: "
+defval = startx
+labels_lon = gipsy.userreal(key, mes, default=1, defval=defval, nmax=100)
+
+# Ask plot properties for labels inside the plot.
+key = "ILABLON_ATTS="
+mes = "Plot atts lon. labels ... [color:r  fontsize:10]: "
+defval = ''
+kwargs = {'color':'r', 'fontsize':10}
+lon_kwargs = updatekwargs(key, mes, defval, 'text',  kwargs)
+
+key = "ILABLATS="
+defval = []
+for y in starty:
+   if not y in [-90.0, 0.0, 90.0]:
+      defval.append(y)
+mes = "Plot graticule labels at latitudes ... [calculated]: "
+labels_lat = gipsy.userreal(key, mes, default=1, defval=defval, nmax=100)
+
+key = "ILABLAT_ATTS="
+mes = "Plot atts lat. labels ... [color:b  fontsize:10]: "
+defval = ''
+kwargs = {'color':'b', 'fontsize':10}
+atts = gipsy.userchar(key, mes, default=1, defval=defval, nmax=MAXATTS)
+lat_kwargs = updatekwargs(key, mes, defval, 'text',  kwargs)
+
+# Prevent plotting tick labels along the plot axes when the plot is
+# not completeley contained in the frame and therefore crosses the 
+# plotlines, which by default triggers plotting tick labels
+grat.setp_ticklabel(visible=False)
+
+# Format plot labels inside the plot
+key = "LABFORMAT="
+mes = "Enter format for longitude labels ... [Dms]: "
+defval = "Dms"
+fmt = gipsy.userchar(key, mes, default=1, defval=defval, nmax=1)
+il1 = grat.Insidelabels(wcsaxis=0,
+                  world=labels_lon, constval=projuser.lat_constval, fmt=fmt)
+il1.setp_label(**lon_kwargs)
+# The latitudes are plotted at the first longitude entered
+# in MERIDIANS= (i.e. in startx)
+il2 = grat.Insidelabels(wcsaxis=1, 
+                  world=labels_lat, constval=startx[0], fmt='Dms')
+il2.setp_label(**lat_kwargs)
+
+# Overlay more graticules
+grat2 = None
+key = "GRATOVER="
+mes = "Enter sky system for overlay 2nd graticule ... [skip]: "
+defval = ''
+sky2 = gipsy.userchar(key, mes, default=1, defval=defval)
+if sky2 != '':
+   # User wants a second graticule
+   grat2 = annim.Graticule(skyout=sky2, wylim=projuser.wylim, wxlim=projuser.wxlim,
+                           startx=projuser.startx , starty=projuser.starty)
+   grat2.setp_axislabel(plotaxis=("left","bottom"), visible=False)
+   key = "GR2_ATTS="
+   mes = "Plot atts 2nd grat ... [color:'#aa2222' lw:0.8 alpha:0.7]: "
+   defval = ''
+   kwargs = {'color':'#aa2222', 'lw':0.8, 'alpha':0.7}
+   kwargs = updatekwargs(key, mes, defval, 'line', kwargs)
+   grat2.setp_gratline(**kwargs)
+   
+   # Line at latitude 0, e.g. for galactic plane:
+   key = "LAT0_ATTS="
+   mes = "Plot atts for lat. 0  ... [color:r lw:1 alpha:1]: "
+   defval = ''
+   kwargs = {'color':'r', 'lw':1.0, 'alpha':1.0}
+   kwargs = updatekwargs(key, mes, defval, 'line', kwargs)
+   grat2.setp_gratline(wcsaxis=1, position=0.0, **kwargs)
+
+# We need a non oblique border at all times:
+header_border = header.copy()
+header_border['CRVAL1'] = 0.0
+
+gratborder = None
+lineborder = None
+cubeperimeter = None
+if projuser.ptype in ['cylindrical', 'polyconic', 'pseudoconic']:
+   header_border['CRVAL2'] = 0.0
+   gratborder = annim.Graticule(header=header_border, axnum=(1,2), wylim=projuser.wylim, wxlim=projuser.wxlim,
+                             startx=(180-epsilon, 180+epsilon), skipy=True)
+   gratborder.setp_axislabel(plotaxis=("left","bottom"), visible=False)
+   lineborder = None
+elif projuser.code == 'SZP':
+   phi, thetax = szp_border(projuser.mu)
+   lineborder = grat.addgratline(phi, thetax, pixels=False)
+elif projuser.code == 'SIN':
+   phi, thetax = sin_border(projuser.xi, projuser.eta)
+   lineborder = grat.addgratline(phi, thetax, pixels=False)
+elif projuser.ptype == 'cube':
+   header_border['CRVAL2'] = 0.0
+   projcube = wcs.Projection(header_border)
+   lineborder = cube_border(projcube)  # This is not a 'gratline' but vertices for a polygon
+
+  
+# Plot attributes for border graticule
+key = "BOR_ATTS="
+mes = "Plot atts. of base grat ... [color:k lw:1]: "
+defval = ''
+kwargs = {'color':'k', 'lw':1}
+kwargs = updatekwargs(key, mes, defval, 'line', kwargs)
+if not gratborder is None:
+   gratborder.setp_lineswcs0(**kwargs)
+   gratborder.setp_lineswcs1(**kwargs)
+   # Prevent plotting tick labels along the plot axes when the plot is
+   # not completeley contained in the frame and therefore crosses the 
+   # plotlines, which by default triggers plotting tick labels
+   gratborder.setp_ticklabel(visible=False)
+if not lineborder is None:
+   if projuser.ptype == 'cube':
+      Xp, Yp = zip(*lineborder)
+      frame.plot(Xp, Yp, **kwargs)
+   else:
+      grat.setp_linespecial(lineborder, **kwargs)
+
+
+
+
+# File name and parameters for hardcopy on disk.
+key = "HARDCOPY="
+mes = "Name of hardcopy of plot on disk ... [skip]: "
+defval = ''
+hardcopy = gipsy.userchar(key, mes, default=1, defval=defval, nmax=1)
+if hardcopy != '':
+   key = "HC_ATTS="
+   mes = "Atts hardcopy ... [papertype:a4 orientation:landscape]: "
+   defval = ''
+   kwargs = {'papertype':'a4', 'orientation':'landscape'}
+   hc_kwargs = updatekwargs(key, mes, defval, 'hard', kwargs)
+
+# Set title for Matplotlib
+key = "TITLE="
+defval = projuser.descr
+mes = "Title above plot ... [%s]: " % defval
+title  = gipsy.usertext(key, mes, default=1, defval=defval)
+#title = r"""%s"""%title
+key = "TITLE_ATTS="
+mes = "Atts title ... [color:g y:1.02]: "
+defval = ''
+kwargs = {'color':'g', 'y':1.02}
+kwargs = updatekwargs(key, mes, defval, 'title', kwargs)
+frame.set_title(title, **kwargs)
+
+# Start loop asking keywords to specify the required shapes and attributes
+basekey = "SHAPE"
+parkey  = "PARAMS"
+attrkey = "ATTRIBS"
+legname = "LEGEND"
+i = 0
+cont = True
+# Start loop asking keywords to specify the required shapes and attributes
+# for objects to be plotted onjto an all sky figure.
+legendpatches = []
+legendnames = []
+while cont:
+   i += 1
+   # Select object (shape, marker or image)
+   key = "SHAPE"+"%d="%i
+   mes = "E(ell),R(ect),N(-poly),M(arker),I(mage) ... [start plot]: "
+   defval = ''
+   ts = gipsy.usercharu(key, mes, default=1, defval=defval)
+   cont = ts != defval
+   if cont:
+      sp = None         # The last sky polygon
+      if ts in ['E','R', 'N', 'P']:
+         # Get the attributes
+         key = attrkey+"_%s%d=" % (ts, i)
+         mes = "Enter plot attributes ...... [fc:r ec:g lw:1 alpha:0.6]: "
+         defval = ''
+         kwargs = {'fc':'r', 'ec':'g', 'lw':1.0, 'alpha':0.6}
+         kwargs = updatekwargs(key, mes, defval, 'poly', kwargs)
+         # Ask origin of the shape parameters, file or manual input
+         key = "IOOPT"+"%d="%i
+         defval = 'M'
+         mes = "Parameters from F(ile) or M(anual) input ... [%s]: "%defval
+         org = gipsy.usercharu(key, mes, default=1, defval=defval, nmax=1)
+         if org == 'F':
+            key = "FILENAME"+"%d="%i
+            mes = "Enter name of file:"
+            fn = gipsy.userchar(key, mes, nmax=1)
+            fp = open(fn, "rb")
+            reader = csv.reader(fp, delimiter=' ')
+            for row in reader:
+               xcyc,major,minor,pa = row
+               major = float(major); minor= float(minor); pa = float(pa)
+               nangles = float(minor)
+               world, pixels, units, errmes = positions.str2pos(xcyc, annim.projection)
+               if errmes != '':
+                  gipsy.error(4, errmes)
+               xc = world.T[0]; yc = world.T[1]
+               sp = annim.Skypolygon(prescription=ts, xc=xc, yc=yc, major=major,
+                                     minor=minor, nangles=nangles, pa=pa, **kwargs)
+               settattribs(sp.p1, **kwargs)
+               settattribs(sp.p2, **kwargs)
+            fp.close()  # Close the parameters file
+         elif org == 'M':
+            # First manual set of parameters is the position of the origin
+            key = "CPOS"+"%d="%i
+            mes = "Central position xc, yc: "
+            badinput = True
+            while badinput:
+               pos = gipsy.usertext(key, mes)
+               world, pixels, units, errmes = positions.str2pos(pos, annim.projection)
+               if errmes != '':
+                  gipsy.reject(key, errmes)
+               else:
+                  badinput = False
+            xc = world.T[0]; yc = world.T[1]
+            # And ask the other parameters. Adjust message for each kind of shape
+            if ts == 'E':
+               mes = "Enter maj, min, pa: "
+            elif ts == 'R':
+               mes = "Enter height, width, pa: "
+            elif ts == 'N':
+               mes = "Enter radius, nangles, pa: "
+            key = parkey+"%d="%i
+            pars = gipsy.userreal(key, mes, default=4, nmax=3)
+            major, minor, pa = pars
+            nangles = minor
+            sp = annim.Skypolygon(prescription=ts, xc=xc, yc=yc, major=major,
+                                  minor=minor, nangles=nangles, pa=pa)
+            settattribs(sp.p1, **kwargs)
+            settattribs(sp.p2, **kwargs)
+
+      # Marker
+      if ts == 'M':
+         key = "M_ORG"+"%d="%i
+         defval = 'P'
+         mes = "Markers as L(ong,lat) or as P(ositions) ... [%s] "%defval
+         org = gipsy.usercharu(key, mes, default=1, defval=defval, nmax=1)
+         if org == 'L':
+            key = "LONS"+"%d="%i
+            mes = "Enter longitude(s) in deg.: "
+            lons = gipsy.userreal(key, mes, nmax=MAXPOS);
+            key = "LATS"+"%d="%i
+            mes = "Enter %d latitudes (deg.): " % len(lons)
+            lats = gipsy.userreal(key, mes, nmax=len(lons));
+         elif org == 'P':
+            key = "POSITIONS"+"%d="%i
+            mes = "Enter positions: "
+            badinput = True
+            while badinput:
+               pos = gipsy.usertext(key, mes, nmax=4096)
+               world, pixels, units, errmes = positions.str2pos(pos, annim.projection)
+               if errmes != '':
+                  gipsy.reject(key, errmes)
+               else:
+                  badinput = False
+            lons = world.T[0]; lats = world.T[1]
+         key = "M_OPT"+"%d="%i
+         defval = 'M'
+         mes = "Plot as M(arkers), I(rregular polygon) or B(oth) ... [%s]: "%defval
+         opt = gipsy.usercharu(key, mes, default=1, defval=defval, nmax=1)
+         if opt in ['M', 'B']:
+            key = attrkey+"_M%d="%i
+            mes = "Enter plot attributes ... [color:r marker:o ms:2 mew:1 alpha:0.6]: "
+            kwargs = {'color':'r', 'marker':'o', 'ms':1.0, 'mew':1.0, 'alpha':0.6}
+            defval = ''
+            kwargs = updatekwargs(key, mes, defval, 'line', kwargs)
+            sp = annim.Marker(x=lons, y=lats, mode='world', **kwargs)
+            #legendpatches.append(sp)
+            #legendnames.append("Bla bla")
+         if opt in ['I', 'B']:
+            key = attrkey+"_I%d="%i
+            mes = "Enter plot attributes ...... [fc:r ec:g lw:1 alpha:0.6]: "
+            defval = ''
+            kwargs = {'facecolor':'r', 'edgecolor':'g', 'linewidth':1.0, 'alpha':0.6}
+            kwargs = updatekwargs(key, mes, defval, 'poly', kwargs)
+            sp = annim.Skypolygon(prescription=None, lons=lons, lats=lats)
+            settattribs(sp.p1, **kwargs)
+            settattribs(sp.p2, **kwargs)
+      
+      if not sp is None:
+         key = legname+"%d="%i
+         mes = "Entry for legend ... [skip]: "
+         s = gipsy.usertext(key, mes, default=1, defval='')
+         if s != '':
+            legendpatches.append(sp)
+            legendnames.append(r'%s'%s)
+
+annim.plot()
+# Do text labels after plotting maputils objects. Then gratborder's frame
+# is known so that labels can be plotted on top of the grid lines.
+
+lastframe = grat.frame
+if not grat2 is None:
+  lastframe = grat.frame
+if not gratborder is None:
+  lastframe = gratborder.frame
+
+cont = True
+i = 0
+# Start loop asking keywords to specify the text labels
+while cont:
+   i += 1
+   # Select object (shape, marker or image)
+   key = "ANNTXT"+"%d="%i
+   mes = "Enter text to plot in figure ... [stop loop]: "
+   defval = ''
+   labtxt = gipsy.usertext(key, mes, default=1, defval=defval)
+   cont = labtxt != defval
+   if cont:
+      # First manual set of parameters is the position of the origin
+      key = "ANNPOS"+"%d="%i
+      mes = "Central position xc, yc: "
+      badinput = True
+      while badinput:
+         pos = gipsy.usertext(key, mes)
+         world, pixels, units, errmes = positions.str2pos(pos, annim.projection)
+         if errmes != '':
+            gipsy.reject(key, errmes)
+         else:
+            badinput = False
+      xc = pixels.T[0]; yc = pixels.T[1]
+      key = "ANNATTS"+"%d="%i
+      mes = "Enter annotation attributes ... [color:r fontsize:10]: "
+      kwargs = {'color':'r', 'fontsize':10}
+      defval = ''
+      kwargs = updatekwargs(key, mes, defval, 'text', kwargs)
+      lastframe.text(xc, yc, labtxt, **kwargs)
+      
+
+
+# Do legend after plotting maputils objects. Then the patches are known
+
+if len(legendpatches) > 0:
+   legendobjects = []
+   key = "LEGENDLOC="
+   mes = "Enter a legend location (number 0-10) ... [1]: "
+   defval = 1
+   loc = gipsy.userint(key, mes, default=1, defval=defval, nmax=1)
+   for l,n in zip(legendpatches, legendnames):
+      legendobjects.append(l.patch)
+      try:
+         print len(l.patch)
+      except:
+         pass
+   
+   leg = lastframe.legend(legendobjects, legendnames, shadow=True, loc=loc)
+   # matplotlib.text.Text instances
+   for t in leg.get_texts():
+      t.set_fontsize(8)    # the legend text fontsize
+
+# Plot alternative borders
+if cubeperimeter != None:
+   #p = Polygon(cubeperimeter, facecolor='#d6eaef', lw=2)
+   #frame.add_patch(p)
+   Xp, Yp = zip(*cubeperimeter)
+   frame.plot(Xp, Yp, color='r')
+
+
+if hardcopy != '':
+   savefig(hardcopy, **hc_kwargs)
+annim.interact_toolbarinfo()
+annim.interact_writepos(gipsy=True, wcsfmt="%f",zfmt=None, pixfmt=None, hmsdms=False)
+
+gipsy_connect()
+
+#gipsy.KeyCallback(ellipse_handler, 'E_ATTR=', annim=annim)
+#gipsy.KeyCallback(ellipse_handler, 'ELLIPSE=', annim=annim)
+#gipsy.xeq('!skyshapes.py', "DUMMY=")
+
+show()
+gipsy.finis()
+#<
+
+#>            allskyplot.dc1
+Program:      ALLSKYPLOT
+
+Purpose:      Plot an all sky graticule in a given sky system
+              and plot shapes, markers and or images on that system.
+
+Category:     ANALYSIS, COORDINATES, PLOTTING
+
+File:         allskyplot.src
+
+Author:       M.G.R. Vogelaar
+
+
+Keywords:
+              Below we document several keywords that set the
+              attributes of plot objects like lines, polygons, markers
+              and text. Note that the syntax for all these keywords
+              is:
+
+                       ATTXXXX= key:value key:value .....
+                       or:
+                       ATTXXXX= ?
+                       or:
+                       ATTXXXX= key:?
+
+              If you enter a question mark only, then you get
+              a list of allowed parameters for the current object in
+              the Hermes log file.
+              If you enter a question mark where a value is expected,
+              then a list with options for that key is printed in the
+              Hermes log file.
+
+
+ PROJECTION=  Enter number [0,n] of a valid projection ... [0]:
+
+              n is the maximum number of a list with projections.
+              An all sky graticule (system of lines representing
+              constant latitudes or constant longitudes) will be
+              created for this projection.
+
+ 
+ CDELT_XY=    Enter pixel size in X and Y in deg. ... [-5,5]:
+
+              The pixel size in degrees. The smaller this value
+              the more pixels there will be in your plot. This
+              value is important if you want to insert images.
+              These will be projected on the pixels of the all
+              sky plot.
+
+
+ NAXIS_XY=    Enter length of axes in pixels ... [80 40]:
+
+              With CDELT_XY= one sets the default number of pixels.
+              The smaller CDELT the more pixels. You can change this default
+              for instance to have more pixels in the y direction, so
+              that you can shift the plot a bit using non default
+              values of CRPIX_XY=
+
+
+ CRPIX_XY=    Pixel coordinates for center ... [naxis_x, naxis_y]:
+
+              Change the position of the center using pixel
+              coordinates (FITS style i.e. first pixel is 1).
+              Together with NAXIS_XY, this keyword is used to shift
+              the plot a bit to create room for a legend.
+
+
+ CRVAL_XY=    Enter Projection center in X and Y ... [0,0]:
+
+              This is the world coordinate in degrees of the
+              center of your plot. Latitudes other than 0 result in
+              oblique projections. Note that the input must be
+              two numbers in degrees and these values represent
+              a position in the sky system that you will
+              enter later.
+
+
+ SKY=         Sky system 1=equat. 2=ecl 3=galactic 4=su.gal. ... [1]:
+
+              Enter a number for a sky system.
+              (In a next version this will be replaced by the input of
+              a string that represents a sky definition, e.g.
+              "equatorial, FK4, B1985")
+
+              Note that the values at CRVAL_XY= represent a position
+              in this sky system.
+
+
+ FIGSIZE=     Figure width, height in inches ... [12 6]:
+
+              Enter figure size in inches. The default depends on
+              the projection type (cylindrical or zenithal)
+              If you enter one number, then this number is copied
+              to the figure height.
+
+
+ FRAME=       Frame x0,y0,x1,y1 (norm. coords) ... [0.05 0.05 0.95 0.9]:
+
+              Position of lower left and upper right corner of
+              a frame containing the plot. The coordinates are
+              normalized device coordinates running from 0 to 1.
+
+
+ MERIDIANS=   Meridians at longitudes ... [calculated]: 
+
+
+ PARALLELS=   Parallels at latitudes ... [calculated]: 
+
+
+ BOR_ATTS=    Plot atts base grat ... [color:k lw:1 ls:-]:
+
+              Plot attributes for the border of a non-oblique
+              graticule of which only the border is plotted.
+
+
+ GR1_ATTS=    Plot atts base grat ... [color:0.75 lw:1]: 
+
+              Plot attributes for the graticule of the base sky system.
+              Order is not important. Key is separated from its value
+              by a colon (:).
+              Examples of attributes: color, linewidth (or lw), alpha
+              Colors are Matplotlib colors as in:
+              color:b
+              color:#aabb22
+              color:0.75
+
+
+ XLABEL=      Text to label X-axis ... [default]:
+
+              Replace a default label for the X-axis by
+              another text.
+
+
+ LABX_ATTS=   Plot atts X-axis label ... [defaults]:
+
+              Attributes for Matplotlib text objects.
+              See also description at keyword TITLE_ATTS.
+
+
+ YLABEL=      Text to label Y-axis ... [default]:
+
+              Replace a default label for the Y-axis by
+              another text.
+
+
+ LABX_ATTS=   Plot atts Y-axis label ... [defaults]:
+
+              Attributes for Matplotlib text objects.
+              See also description at keyword TITLE_ATTS.
+
+
+ ILABLONS=    Plot graticule labels at longitudes ... [calculated]:
+
+              Enter longitudes at which a graticule must be labeled.
+              Usually these values are copied from the values at which
+              graticule lines are plotted.
+
+
+ ILABLON_ATTS=   Plot atts lon. labels ... [color:r  fontsize:10]:
+
+              Plot attributes for the longitude coordinate labels.
+
+
+ ILABLATS=    Plot graticule labels at latitudes ... [calculated]:
+
+              Enter latitudes at which a graticule must be labeled.
+              Usually these values are copied from the values at which
+              graticule lines are plotted. In this default, the values
+              -90, 0 and 90 are excluded. The longitude at which
+              the latitude labels are plotted, is the first longitude
+              in MERIDIANS=
+
+
+ ILABLAT_ATTS=   Plot atts lat. labels ... [color:b  fontsize:10]:
+
+              Plot attributes for the latitude coordinate labels.
+
+
+ LABFORMAT=   Enter format for longitude labels ... [Dms]:
+
+              A valid format for all labels along longitude is
+              degrees. If you want to change this, enter a new format
+              using characters from the set 'H', 'D', 'M', 'S'.
+              Use capitals to force to print a number and lower case
+              characters to allow for printing a number if necessary.
+              For an equatorial system one should enter Hms
+
+
+ GRATOVER=    Enter sky system for overlay 2nd graticule ... [skip]:
+
+              A second system of coordinate lines can be added to the
+              plot. Usually one combines equatorial systems with
+              galactic or supergalactic sky systems in one plot.
+              The input is what we call, a sky definition.
+              It is usually a case insensitive minimal matched string
+              as in:
+              GRATOVER= eq (or equator, gal, sup etc.)
+              But for equatorial systems with a reference system
+              and/or an equinox and/or and observation epoch, the
+              definition is given between curly brackets ({}), as in:
+              GRATOVER={eq, fk4, B1950,B1966}
+              GRATOVER={fk5}
+
+              By default, no overlay graticule is plotted.
+
+
+ HARDCOPY=    Name of hard-copy of plot on disk ... [skip]:
+
+              The file name extension sets the output format.
+              If you don't enter a file extension, you can select an
+              output format with attribute 'format' in HC_ATTS=
+
+
+ HC_ATTS=     Atts. hardcopy ... [papertype:a4 orientation:landscape]:
+
+              Attributes for hardcopy on disk.
+              From the Matplotlib documentation:
+              
+              dpi: [ None | scalar > 0 ]
+               The resolution in dots per inch. If None it will default
+               to the value savefig.dpi in the matplotlibrc file.
+              facecolor, edgecolor:
+               the colors of the figure rectangle
+              orientation: [ 'landscape' | 'portrait' ]
+               not supported on all backends; currently only on
+               postscript (and pdf?) output
+              papertype:
+               One of 'letter', 'legal', 'executive', 'ledger',
+               'a0' through 'a10', 'b0' through 'b10'.
+               Only supported for postscript output.
+              format:
+               One of the file extensions supported by the active
+               backend. Most backends support png, pdf, ps, eps and svg.
+              transparent:
+               If True, the axes patches will all be transparent;
+               the figure patch will also be transparent unless
+               facecolor and/or edgecolor are specified via kwargs.
+               This is useful, for example, for displaying a plot on
+               top of a colored background on a web page.
+               The transparency of these patches will be restored to
+               their original values upon exit of this function.
+
+
+ TITLE=       Title above plot ... [name of projection]: 
+
+              Enter a title to replace a default title. This default
+              title is the name of the selected projection e.g.
+              'Hammer Aitoff'. A title can contain TeX syntax.
+              TeX should start and end with a '$' character. 
+
+              Example:
+              TITLE= Hammer Aitoff with $(\alpha_p,\delta_p) = (60^\circ, 30^\circ)$
+
+
+ TITLE_ATTS=  Atts. title ... [color:g y:1.02]:
+
+              Plot attributes for the title.
+              Some useful properties are:
+              
+              backgroundcolor -	any matplotlib color
+              color - Color of the text
+              family or fontfamily or fontname or name -
+                [ FONTNAME | 'serif' | 'sans-serif' | 'cursive' |
+                 'fantasy' | 'monospace' ]
+              size or fontsize 	-
+                [ size in points | 'xx-small' | 'x-small' | 'small' |
+                 'medium' | 'large' | 'x-large' | 'xx-large' ]
+              style or fontstyle - [ 'normal' | 'italic' | 'oblique']
+              y - Position of text in y direction in normalized device
+                  coordinates.
+
+              Example:
+              TITLE_ATTS= color:b style:italic fontsize:20 y:1.02
+
+ 
+ SHAPE1=      E(ell),R(ect),N(-poly),M(arker),I(mage) ... [start plot]
+
+              Select your object or start plotting. This keyword is part
+              of a loop and the index of the keyword is increased, so
+              the next is SHAPE2= etc.
+
+              The objects are:
+              E: Ellipse with major and minor axis in degrees and a position
+              angle in degrees. The ellipse is centered at a position
+              entered with CPOS1=. The position angle is defined
+              as the angle between major axis and the North in the direction
+              of increasing longitude.
+              R: Rectangle with height and width an a position angle which
+              is an angle between the North. The rectangle is centered
+              at a position entered with CPOS1=
+              N: Regular polygon with a radius of the circle onto which the
+              angles are plotted. The number of angles is a second parameter
+              and also a position angle can be entered.
+              M: Given a position or a sequence of positions, plot a marker symbol
+              on those positions. The positions can either be plotted as
+              markers or as a irregular polygon or both. The positions
+              can be entered as two numbers representing longitude and latitude,
+              or as strings which allow for alternative sky systems.
+              I: Image. Not yet implemented.
+
+              The shapes ellipse, rectangle and regular polygon, have parameters
+              that describe a distance on a sphere as function of an
+              angle. The parameters are given in a projection-less flat
+              surface. Sample points on the shape are calculated. Each point
+              corresponds to an angle and a distance with respect to a central
+              position, let's say (xc,yc). Then the shape is recalculated
+              for a sphere and a projection in such a way that the
+              angles and the distances on the sphere are preserved whatever
+              the location (xc,yc) of the shape.
+ 
+
+ ATTRIBS_E1=  Facecol, edgecol, width, alpha ...... [r g 1 0.6]:
+ ATTRIBS_R1=
+ ATTRIBS_N1=
+ 
+              Depending on the value of SHAPE1=, this keyword asks for
+              attributes of the selected shape. The colors are
+              strings that set a Matplotlib color ('r', '#23aa44', 0.75).
+              The width is a floating point number (can be smaller than 1.0).
+              Finally, alpha sets the transparency. It is a number between
+              0 and 1. The more close to 1, the less transparent the face
+              color of the object.
+              Polygons will be filled with a color by default.
+              Use parameter fill:False to plot a shape that will not be
+              filled.
+
+
+ IOOPT1=      Parameters from F(ile) or M(anual) input ... [M]:
+
+              For ellipses, rectangles and regular polygons, the
+              parameters for these shapes can be set manually (M) or
+              they can be read from a file (F).
+
+
+ FILENAME1=   Enter name of file:
+
+              If one wants to read the ellipse etc. parameters from file,
+              then a file name is required. The format of its contents
+              is:
+
+                          string float float float
+
+              The string represents a position in pixel-, world- or
+              mixed coordinates.
+
+              Example content of a file with parameters for
+              an ellipse, rectangle or regular polygon:
+
+              "{} 0 {} 0" 40 20 0
+              "ga 10 ga 20" 50 20 90
+              "eq 20 eq 30" 30 10 0
+              "10h10m 5d10m" 40 10 40
+              "{} 4h10m10s {} 3d10m20s" 30 10 0
+
+              For a regular polygon, the second number should be a integer
+              which sets the number of angles in the polygon.
+              
+
+ CPOS1=       Central position xc, yc:
+
+              A string that sets the position of the center of the selected
+              shape.
+              Examples:
+              CPOS1=6h10m 30 deg
+              CPOS1=ga 10 ga 20
+
+
+ PARAMS1=     Enter maj, min, pa:
+
+              Message depends on the selected shape. For an ellipse one
+              enters the major axis, the minor axis (degrees) and the
+              position angle (degrees).
+
+
+ POSITIONS1=
+
+              Assume we have a file called 'lasfootprint' which stores two sets
+              of positions separated by an empty line. If we want to plot these
+              positions as polygons, we need to separate them. You need some
+              knowledge about the file.
+              If the data (comment lines included) of the first
+              polygon is in the lines 1 to 64 (64 included) and the second starts
+              at line 66 and runs to the end, then the positions could be entered
+              as:
+              POSITIONS1=
+              readcol(lasfootprint, 1,1,64) HMShour readcol(lasfootprint, 2,0,64) deg
+              POSITIONS2=
+              readcol(lasfootprint, 1,66,0) HMShour readcol(lasfootprint, 2,66,0) deg
+
+              The first column (column 1) is a longitude in hours so we used unit
+              'hmshour' to convert it.
+              The second column is a latitude (declination) in degrees.
+              The coordinate is followed by a unit (deg) so it is a world coordinate.
+              It was also possible to prepend the second coordinate with {} as in:
+
+              POSITIONS1=
+              readcol(lasfootprint, 1,1,64) HMShour {} readcol(Lasfootprint, 2,0,64)
+
+              If columns 3 and 4 are galactic longitudes and latitudes, but
+              our basemap is equatorial, then we could have read the positions
+              with an alternative sky system as in:
+
+              POSITIONS1=
+              {ga} readcol(lasfootprint, 3,1,64)  {} readcol(lasfootprint, 4,0,64)
+
+              The second sky definition is empty which implies a copy of the first
+              definition ({ga}).
+
+              One can also read three columns at once to calculate longitudes and
+              latitudes from coordinates given in hours/degrees, minutes and seconds.
+              Some examples:
+
+              POSITIONS1= {} readhms(hmsdms.txt,1,2,3) {} readdms(hmsdms.txt,4,5,6)
+              POSITIONS1= {} readhms(hmsdms.txt,1,2,3,1,64) {} readdms(hmsdms.txt,4,5,6,1,64)
+              POSITIONS1= ga readdms(hmsdms.txt,1,2,3) ga readdms(hmsdms.txt,4,5,6)
+              POSITIONS1=  readdms(hmsdms.txt,1,2,3) deg  readdms(hmsdms.txt,4,5,6) deg
+
+              Note that:
+                - {} means a world coordinate in the current sky system
+                - unit deg also sets the coordinate to a world coordinate
+                - one should use 'readdms()' twice for non equatorial coordinates
+                  (usually these columns are given not in hours but in degrees)
+
+              If you need keyword arguments for the READxxx functions,
+              then you must escape the string with back quotes to prevent
+              Hermes to interpret the string. For example
+
+              POSITIONS1= `{} readhms(hmsdms.txt,col3=1,col2=2,col1=3)
+                                           {} readdms(hmsdms.txt,4,5,6)`
+
+
+ LEGEND1=     Entry for legend ... [skip]:
+
+              Each polygon that you enter can have an entry in a legend.
+              What you enter here is a text label. The location of
+              legend is entered using keyword LEGENDLOC=
+              A recipe to create more space for your legend is given in the
+              'description' section.
+
+
+ LEGENDLOC=   Enter a legend location (number 0-10) ... [1]:
+
+              Location         number
+              =======================
+              best             0
+              upper right      1
+              upper left       2
+              lower left       3
+              lower right      4
+              right            5
+              center left      6
+              center right     7
+              lower center     8
+              upper center     9
+              center           10
+
+ 
+ ANNTXT1=     Enter text to plot in figure ... [stop loop]:
+
+              Text for an annotation somewhere in the plot.
+              The position is entered with ANNPOS1=.
+              Alignment attributes can be set in ANNATTS1=
+
+
+ ANNPOS1=     Central position xc, yc:
+
+              Position at which text for annotation is plotted.
+              These coordinates can be pixel-, world- or 
+              mixed coordinates. Alignment can be set with
+              attributes in ANNATTS1=
+
+
+ ANNATTS1=    Enter annotation attributes ... [color:r fontsize:10]:
+
+              Useful attributes can be the horizontal alignment
+              va:'center', 'top', 'bottom', 'baseline'
+              or horizontal alignment:
+              ha:'center' , 'right' , 'left'
+
+
+
+Description:  I. Tool to plot footprints onto all-sky projections.
+
+              Select a suitable projection from a list and plot
+              a graticule for the entire sky. Define objects that represent
+              a part of the sky. These objects are either polygons for
+              which you enter longitudes and latitudes, or the polygons follow
+              a prescription (ellipse, rectangle, regular polygon)
+              and are plotted in a way that angles and distances on a sphere
+              are preserved.
+
+
+              Recipes:
+
+              Legend:
+
+              If one needs more space for a legend then select suitable
+              values for the number of pixels and the coordinates of
+              the central pixel. A simple plot with a lot of room at the
+              right for a legend can be achieved in the following way:
+              (all other keywords with their defaults)
+
+              CDELT_XY= -1 1
+              CPOS1= {} 0 {} 0
+              CRPIX_XY= 200 100
+              LEGEND1= Test legend with a very long name
+              NAXIS_XY= 600 200
+              PARAMS1= 50 20 0
+              SHAPE1= e
+
+
+
+              II. Assume you need to inspect the distribution of pulsars in the sky.
+              You want to plot the pulsar positions as dots in a galactic sky
+              system. You downloaded (e.g. with Aladin) a 'tab separated values'
+              text file and saved it as 'pulsars.txt'. The positions are R.A.
+              and Dec. in decimal degrees.
+
+
+               !_RAJ2000       _DEJ2000        PSR     Simbad  logL 
+               !--------       --------        ----------      -----
+               003.5739        +47.7759        0011+47 Simbad  27.84
+               008.5370        -07.3648        0031-07 Simbad  27.96
+               015.6375        +65.6203        0059+65 Simbad  28.63
+               017.0917        +66.1422        0105+65 Simbad  27.22
+               024.8324        +58.2422        0136+57 Simbad  27.41
+               025.4165        +60.1590        0138+59 Simbad  28.47
+               027.8442        -06.5831        0148-06 Simbad  28.28
+
+              To plot the required overview in a Hammer Aitoff projection
+              use the following keywords (only):
+
+              ATTRIBS_M1= color:b ms:2
+              M_OPT1= m
+              M_ORG1= p
+              POSITIONS1= {eq} readcol("pulsars.txt", 1) {eq} readcol("pulsars.txt", 2)
+              PROJECTION= 16
+              SHAPE1= m
+              SKY= 3
+
+Notes:        -
+
+Updates:      Sep 07, 2010: VOG, Document created.
+              Oct 11, 2010: VOG, Removed utf8 characters from dc1 document
+              Feb 17, 2011: VOG, Removed bug in M_ORGn= keyword.
+                                 Added new example with positions from file
+                                 Changed documentation for column numbering
+
+#<

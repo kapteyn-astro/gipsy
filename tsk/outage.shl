@@ -1,0 +1,61 @@
+C	outage.shl
+C
+C	Copyright (c)	Kapteyn Laboratorium Groningen 1992
+C	All Rights Reserved
+C
+C#>             outage.dc1
+C
+C Program:	OUTAGE
+C
+C Purpose:	remove possibly corrupt data around outage from irds
+C
+C Category:	IRAS
+C
+C Author:	Do Kester	do@guspace.rug.nl
+C
+C File: 	outage.shl
+C
+C Keywords:
+C      IRSET=	the set to be searched for corrupt data and if found
+C		put to the GIPSY blank value.
+C
+C  *** CORRUPT= name of the file containing the times and detectors
+C		which are corrupt [standard]
+C
+C  *** CHECK=  	perform only a check on corrupt data and 
+C		do NOT put them to blank. [no]
+C
+C Description:
+C	OUTAGE checks an irds for possibly corrupt data which occurs
+C  sometimes around data outages. The data were corrupted due to an
+C  error in the quick-look software at the ground station where SRON-
+C  Groningen got its data from. For the time being the error can not 
+C  be repaired. This program puts the possibly corrupt data to blank.
+C
+C  	A message is issued if some corrupt data is found; if no message
+C  appears, all data was OK.
+C
+C Update:	18 Feb 1992 DK
+C#<
+
+	program outage
+
+	character*80	irds
+	integer		status, nitem, USERCHAR
+
+	call init
+
+C write identification
+	call ANYOUT( 0, 'OUTAGE  Version 1.0  (Feb 18 1992)' )
+
+	nitem = USERCHAR( irds, 1, 0, 'IRSET = ',
+     #			'Give set to be checked for corrupt data' )
+
+	status = 0
+	call irpl_untab( irds, status )
+
+	call finis
+
+	stop
+	end
+

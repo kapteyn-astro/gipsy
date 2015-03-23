@@ -1,0 +1,66 @@
+c#>ircc_dn2splines.dc2
+c Subroutine:	IRCC_DN2SPLINES
+c
+c Purpose:	Converts 16 bit splineI-format FITS integers to reals.
+c
+c Category:	IRAS.
+c
+c File:		ircc_dn2splines.shl.
+c
+c Author:	Wim van Oosterom
+c
+c Use: 	IRCC_dn2splines(
+c		        REALS		i/o		REAL(N)
+c		        N )		input		INTEGER
+c	REALS	datanumbers to be converted to splines
+c	N	Number of conversions.
+c
+c Description:
+c	This subroutine is the inverse of srrr16.
+c	Description of IMPUT format:
+c		Low range :  [0,  32767]; stepsize: 1/32,
+c		High range:[32896, 65536]; stepsize: 4.
+c	The high range has an offset of -32767.
+c	The range between [32768, 32895] is not use
+c
+c	Description of OUTPUT format:
+c		Low range : [0, 1023.984375]; stepsize: 1/32,
+c		High range: [1024, 131072]; stepsize: 4.
+c		
+c Externals:
+c	-
+c References:    
+c	Former routine name: SRR16R.
+c
+c Updates:
+c	90 Oct  5 Sjag Steensma; Adapt for GIPSY,
+c       84 Oct 09  Wim van Oosterom; original code.
+c#<
+c@ subroutine	IRCC_DN2SPLINES( real, integer )
+
+       subroutine ircc_dn2splines( reals, n )
+
+c Input parameters:
+       integer     n
+       real        reals( n )
+
+c Parameters:
+       real 	   lofact, hifact, offset
+       parameter   (lofact= 1.0 / 32.0)
+       parameter   (hifact= 4.0 )
+       parameter   (offset= 32768.0 )
+       integer     i
+
+       for i= 1, n
+           if reals(i) .lt. offset
+           then
+c Low range
+                reals(i) = reals(i) * lofact
+           else
+c High range
+                reals(i)= ( reals(i) - offset )  * hifact
+           cif
+       cfor
+
+       return
+       end

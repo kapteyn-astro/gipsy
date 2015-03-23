@@ -1,0 +1,500 @@
+E     PROGRAM VELSMO (copyright notice)
+C velsmo.shl
+C                           COPYRIGHT (c) 1990
+C         Kapteyn Astronomical Institute - University of Groningen
+C            P.O. box 800,  9700 AV Groningen, The Netherlands
+C
+E     PROGRAM VELSMO (velsmo.dc1)
+C#>            velsmo.dc1
+C
+CProgram:      VELSMO
+C
+CPurpose:      Program does a one dimensional smoothing of subsets.
+C
+CCategory:     MANIPULATION
+C
+CFile:         velsmo.shl
+C
+CAuthor:       K.G. Begeman
+C
+CKeywords:
+C
+C   INSET=     Set and subsets to smooth. Maximum number of input and
+C              output subsets is 2048.
+C
+C   BOX=       Frame of output subsets [input subsets]. This will be
+C              the size of the output subsets.
+C
+C   WEIGHTS=   Give weights for neighbouring subsets [0.5].
+C              The first weight is for the closest neighbour subsets,
+C              the second weight for the second closest neighbour subsets
+C              etc. The weights will be normalized automatically, unless
+C              NORMALIZE=N is given. The maximum number of weights is
+C              the minimum of 100 and (number of subsets-1)/2.
+C
+C** NORMALIZE= Normalize the convolution function [Y]?
+C
+C   OUTSET=    Set and subsets where result is stored. Note that the
+C              number of output subsets is equal to the number of
+C              input subsets minus twice the number of weights entered.
+C
+CExample:      <USER  >VELSMO
+C              VELSMO  Version 1.0  Feb 25, 1990
+C              <USER  >VELSMO   ,INSET=AURORA FREQ
+C              Set AURORA has 3 axes
+C              RA-NCP             from    -7 to     8
+C              DEC-NCP            from    -7 to     8
+C              FREQ-OHEL          from     1 to    59
+C              <USER  >VELSMO   ,BOX=PC D 8 8
+C              BOX range for set AURORA :
+C              RA-NCP             from    -3 to     4
+C              DEC-NCP            from    -3 to     4
+C              <USER  >VELSMO   ,WEIGHTS=
+C              Convolution function: 0.25 0.50 0.25
+C              <USER  >VELSMO   ,OUTSET=HANNING
+C              Set HANNING has 3 axes
+C              RA-NCP             from    -3 to     4
+C              DEC-NCP            from    -3 to     4
+C              FREQ-OHEL          from     2 to    58
+C              <STATUS>  VELSMO  +++ FINISHED +++
+C
+CUpdates:      Feb 25, 1990: KGB, Document created.
+C              Dec 15, 1993: KGB, Keyword NOARMALIZE added.
+C              Jul 23, 1999: VOG, maxfie increased from 5 to 10
+C              Jul 14, 2000: VOG, maxfie increased from 10 to 256
+C
+C#<
+E     PROGRAM VELSMO (code)
+      program velsmo
+C
+C     Declaration of parameters:
+C
+      character*(*) ident
+N     Change version number on this line
+      parameter (ident = ' VELSMO  Version 1.0  Feb 25, 1990 ')
+      integer maxaxes
+N     Maximum number of axes in a set
+      parameter (maxaxes = 10)
+      integer maxsubs
+N     Maximum number of subsets
+      parameter (maxsubs = 2048)
+      integer maxbuf
+N     Size of input/output data array
+      parameter (maxbuf = 4096)
+      integer maxfie
+N     Size of convolution function
+      parameter (maxfie = 256)
+C
+C     Declarations for input set
+C
+N     Name of input set
+      character*80 set1
+N     Permutation of axes for input set
+      integer      axperm1(maxaxes)
+N     Ax size array
+      integer      axsize1(maxaxes)
+N     Coordinate words for gdsi_read
+      integer      cwlo1(maxsubs), cwup1(maxsubs)
+N     Frame of input subsets
+      integer      blo(maxaxes), bup(maxaxes)
+N     Number of input subsets
+      integer      nsub1
+N     Dimension of input set
+      integer      setdim1
+N     Coordinate words of input subsets
+      integer      subset1(maxsubs)
+N     Transfer id input set
+      integer      tid1(maxsubs)
+N     Arrays for input data
+      real         data1(maxbuf,-maxfie:maxfie)
+C
+C     Declarations for output set
+C
+N     Name of output set
+      character*80 set2
+N     Permutation of axes for output set
+      integer      axperm2(maxaxes)
+N     Ax size array
+      integer      axsize2(maxaxes)
+N     Coordinate words for gdsi_write
+      integer      cwlo2(maxsubs), cwup2(maxsubs)
+N     Number of output subsets
+      integer      nsub2
+N     Coordinate words of output subsets
+      integer      subset2(maxsubs)
+N     Transfer id output set
+      integer      tid2(maxsubs)
+N     Arrays for output data
+      real         data2(maxbuf)
+C
+C     Declaration of other variables:
+C
+N     For formatted text output
+      character*512 text
+N     Circular addressing buffer
+      integer       cirbuf(-maxfie:maxfie)
+N     Error return from various GDS routines
+      integer       gerror
+N     Loop counter
+      integer       m
+N     Counter for minmax3
+      integer       mcount(maxsubs)
+N     Counter
+      integer       n
+N     Number of blanks in output subset
+      integer       nblank(maxsubs)
+N     Total number of pixels done of subset
+      integer       ndone
+N     Length of convolution function
+      integer       nfie
+N     Number of pixels read in
+      integer       nread
+N     Counter for circular buffer
+      integer       nrot
+N     Subset counters
+      integer       ns1, ns2
+N     Total number of pixels in output subset
+      integer       ntotal
+N     Dimension of subsets
+      integer       subdim
+N     Normalization of convolution function
+      logical       norm
+N     BLANK
+      real          blank
+N     Convolution function
+      real          confie(-maxfie:maxfie)
+N     Minimum and maximum in output subset
+      real          datamin(maxsubs), datamax(maxsubs)
+N     Temps
+      real          d1, d2
+N     Temp for convolution factor
+      real          f
+C
+C     Declaration of functions:
+C
+N     Returns coordinate word
+      integer      gdsc_fill
+N     Returns number of dimensions
+      integer      gdsc_ndims
+N     Returns number of input subsets
+      integer      gdsinp
+N     Returns number of output subsets
+      integer      gdsout
+N     Returns number of logicals entered by user
+      integer      userlog
+N     Returns number of reals entered by user
+      integer      userreal
+C
+C     Data statements:
+C
+N     Error return from gds routines
+      data gerror / 0 /
+N     Set counters for minmax3
+      data mcount / maxsubs * 0.0 /
+N     Number of pixels done sofar
+      data ndone  / 0 /
+N     Do normalize the convolution function
+      data norm   / .TRUE. /
+N     Number of pixels in subset
+      data ntotal / 1 /
+N     Set transfer identifiers input data
+      data tid1   / maxsubs * 0 /
+N     Set transfer identifiers output data
+      data tid2   / maxsubs * 0 /
+C
+C     Executable code:
+C
+N     Get in touch with HERMES
+      call init
+C     ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+C     Here we show the non-experienced user the version number and date
+C     of this program. Version 1.0 means that it has been migrated to
+C     portable GIPSY.
+C     ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+N     Tell user who we are
+      call anyout( 11, ident )
+C     ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+C     Here we prompt the user for the name of the set (and subsets).
+C     The default message is used. VELSMO is a class 2 application so it
+C     will return the number of axis outside the subset.
+C     GDSINP will store the coordinate system of the chosen input set
+C     internally, so that GDSOUT can use it to create the output set.
+C     ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+N     Get number of input subsets
+      nsub1 = gdsinp( set1,
+     #                subset1,
+     #                maxsubs,
+     #                0,
+     #                'INSET=',
+     #                ' ',
+     #                11,
+     #                axperm1,
+     #                axsize1,
+     #                maxaxes,
+     #                2,
+     #                1 )
+N     Get dimension of input set
+      setdim1 = gdsc_ndims( set1, 0 )
+N     Get dimension of input subsets
+      subdim = gdsc_ndims( set1, subset1 )
+C     ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+C     Get here the frame of the new subsets. Note that the size of
+C     the output subsets may be different.
+C     ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+N     Get subset frame
+      call gdsbox( blo,
+     #             bup,
+     #             set1,
+     #             subset1,
+     #             1,
+     #             'BOX=',
+     #             'Frame of output subsets [input subset size]',
+     #             11,
+     #             0 )
+N     Find number of points in output subset
+      for n = 1, subdim
+        ntotal = ntotal * ( bup(n) - blo(n) + 1 )
+      cfor
+C     ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+C     Now we calculate the maximum length of the convolution function.
+C     If only two input subsets were given, the programme will just
+C     transfer the subsets. The default convolution function is the
+C     HANNING taper (0.25, 0.50, 0.25 normalized).
+C     ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+N     Maximum length of convolution function
+      nfie = min( maxfie, ( nsub1 - 1 ) / 2 )
+N     Width of convolution function > one?
+      if (nfie .gt. 0)
+      then
+N        user request
+         nfie = userreal( confie(1),
+     #                    nfie,
+     #                    1, 
+     #                    'WEIGHTS=',
+     #                    'Give relative weights of neighbours [0.5]' )
+N        Default used?
+         if (nfie .eq. 0)
+         then
+N           Default weights = HANNING
+            confie(1) = 0.5
+N           Size of convolution function
+            nfie = 1
+         cif
+      cif
+N     Central weight
+      confie(0) = 1.0
+N     Number of output subsets
+      nsub2 = nsub1 - 2 * nfie
+N     Normalize?
+      n = userlog( norm,
+     #             1,
+     #             2,
+     #             'NORMALIZE=',
+     #             'Normalize convolution function [Y]?' )
+      if ( norm )
+      then
+N        Integrate the convolution function
+         for n = 1, nfie
+            confie(0) = confie(0) + 2.0 * confie(n)
+         cfor
+N        Normalize the convolution function
+         for n = 1, nfie
+            confie(n) = confie(n) / confie(0)
+            confie(-n) = confie(n)
+         cfor
+N        Normalize central weight
+         confie(0) = 1.0 / confie(0)
+      else
+         for n = 1, nfie
+            confie(-n) = confie(n)
+         cfor
+      cif
+N     Display convolution function
+      if (nfie .lt. 6)
+      then
+         write( text, '(''Convolution function:'',1000(f6.2:))')
+     #        ( confie(n), n = -nfie, nfie )
+N        Send it out
+         call anyout( 11, text )
+      else
+         write( text, '(''Convolution function: ...'',
+     #          1000(f6.2:),''....'')')
+     #        ( confie(n), n = -5, 5 )
+N        Send it out
+         call anyout( 11, text )
+      cif      
+C     ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+C     Here the internal buffer created by GDSINP is copied to a buffer
+C     which will be used by GDSOUT to create the output set (with
+C     exactly the same coordinate system as the input set, if the user
+C     wants to).
+C     ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+N     Assign GDSINP buffer to GDSOUT
+      call gdsasn( 'INSET=', 'OUTSET=', 1 )
+C     ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+C     Now the subset size of the internal buffer for GDSOUT is changed
+C     according to what the user entered at the boxinp prompt. Note that
+C     only NAXIS% and CRPIX% need to be changed. The coordinate system
+C     is left completely unchanged.
+C     ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+N     Define size of output subsets
+      call gdscss( 'OUTSET=', blo, bup )
+C     ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+C     Now we change the axis selection for the output set.
+C     ------------------------------------------------------------------
+N     Only last axis will be changed
+      axsize1(setdim1) = nsub2
+N     Change axis selection for output set
+      call gdscas( 'OUTSET=', subset1(nfie+1), axsize1 )
+C     ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+C     GDSOUT will create the output set if it does not exist, else it
+C     will only check if the subset size is exactly equal to the size
+C     specified with GDSCSS. In principal the user only has to give a
+C     set name, the rest is taken from the contents in the internal
+C     buffer of GDSOUT. If the user specifies also the subsets, GDSOUT
+C     will check whether they are present in the existing set or in the
+C     internal buffer if the subset does not exist.
+C     GDSOUT also copies the 'relevant' header information from the
+C     input set to the output set.
+C     ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+N     get output set
+      nsub2 = gdsout( set2,
+     #                subset2,
+     #                nsub2,
+     #                0,
+     #                'OUTSET=',
+     #                ' ',
+     #                11,
+     #                axperm2,
+     #                axsize2,
+     #                maxaxes )
+N     Loop which sets the input coordinate words
+      for ns1 = 1, nsub1
+N        Lower coordinate word of frame
+         cwlo1(ns1) = gdsc_fill( set1, subset1(ns1), blo )
+N        Upper coordinate word of frame
+         cwup1(ns1) = gdsc_fill( set1, subset1(ns1), bup )
+      cfor
+N     Loop which sets the output coordinate words
+      for ns2 = 1, nsub2
+N        Lower coordinate word of frame
+         cwlo2(ns2) = gdsc_fill( set2, subset2(ns2), blo )
+N        Upper coordinate word of frame
+         cwup2(ns2) = gdsc_fill( set2, subset2(ns2), bup )
+      cfor
+N     Import system defined BLANK
+      call setfblank( blank )
+N     Progress Bar
+      call stabar( 0.0, float(ntotal), float(ndone) )
+C     ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+C     Here we repeat the operation for each subset
+C     ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+N     loop
+      repeat
+N        reset input subset counter
+         ns1 = 1
+N        Read in enough data to produce one output subset
+         for n = -nfie, nfie
+N           Read data
+            call gdsi_read( set1,
+     #                      cwlo1(ns1),
+     #                      cwup1(ns1),
+     #                      data1(1,n),
+     #                      maxbuf,
+     #                      nread,
+     #                      tid1(ns1) )
+N           initialize circular buffer
+            cirbuf(n) = n
+N           Next input subset
+            ns1 = ns1 + 1
+         cfor
+N        Loop over output subsets
+         for ns2 = 1, nsub2
+N           Show Progress
+            call stabar( 0.0, float(ntotal),
+     #         float(ndone) + float(nread*ns2) / float(nsub2) )
+N           Clear output buffer
+            call presetr( 0.0, data2, nread )
+N           Convolving loop
+            for n = -nfie, nfie
+N              Current factor
+               f = confie(n)
+N              Address of data array
+               l = cirbuf(n)
+N              Data loop
+               for m = 1, nread
+N                 Temporary storage
+                  d1 = data1(m,l)
+                  d2 = data2(m)
+N                 Already blank ?
+                  if (d2 .ne. blank)
+                  then
+N                    Can we use it ?
+                     if (d1 .ne. blank)
+                     then
+N                       Partial convolution
+                        data2(m) = d2 + f * d1
+                     else
+N                       Blank forever
+                        data2(m) = blank
+                     cif
+                  cif
+               cfor
+            cfor
+N           Determine minimum and maximum
+            call minmax3( data2,
+     #                    nread,
+     #                    datamin(ns2),
+     #                    datamax(ns2),
+     #                    nblank(ns2),
+     #                    mcount(ns2) )
+N           Write convolved data to disk
+            call gdsi_write( set2,
+     #                       cwlo2(ns2),
+     #                       cwup2(ns2),
+     #                       data2,
+     #                       nread,
+     #                       nread,
+     #                       tid2(ns2) )
+N           Rotate circular buffer
+            for n = -nfie, nfie
+               nrot = cirbuf(n) + 1
+               if (nrot .gt. nfie)
+               then
+                  nrot = -nfie
+               cif
+               cirbuf(n) = nrot
+            cfor
+N           Read in data from next input subset
+            if (ns1 .le. nsub1)
+            then
+N              Read
+               call gdsi_read( set1,
+     #                         cwlo1(ns1),
+     #                         cwup1(ns1),
+     #                         data1(1,cirbuf(nfie)),
+     #                         maxbuf,
+     #                         nread,
+     #                         tid1(ns1) )
+N              Next subset
+               ns1 = ns1 + 1
+            cif
+         cfor
+N        New number of pixels done
+         ndone = ndone + nread
+      until (ndone .eq. ntotal)
+N     Update minimum, maximum and number of blank
+      call wminmax( set2,
+     #              subset2,
+     #              datamin,
+     #              datamax,
+     #              nblank,
+     #              nsub2,
+     #              1 )
+N     Tell HERMES we're done
+      call finis
+C
+C     End of program
+C
+      stop
+      end

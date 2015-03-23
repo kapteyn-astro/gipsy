@@ -1,0 +1,17 @@
+
+Document:     depend
+
+Purpose:      The file depend, which resides in the gip_lib directory,
+              contains a dependency list of all GIPSY applications.
+
+Category:     MANAGEMENT
+
+File:         depend.doc
+
+Author:       K.G. Begeman
+
+Description:  Each line contains a GIPSY source and an application name,
+              separated by a colon. The file is updated by compile.
+
+Updates:      Nov 20, 1991: Document created
+

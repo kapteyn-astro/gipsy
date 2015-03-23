@@ -1,0 +1,16 @@
+
+Document:     manual
+
+Purpose:      GIPSY User Guide
+
+Category:     DOCUMENTATION
+
+File:         manual.tex
+
+Author:       M. Vogelaar
+
+Description:  manual.tex is a GIPSY user guide in LaTeX format.
+              Run latex $gip_doc/manual to get the dvi file.
+
+Updates:      JUN 30, 1992: MGV, document created.
+

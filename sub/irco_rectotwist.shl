@@ -1,0 +1,82 @@
+
+c@ subroutine irco_rectotwist( double precision, double precision,
+c@	double precision, double precision, double precision, integer )
+c
+c#>             irco_rectotwist.dc2
+c
+c Subroutine:	IRCO_RECTOTWIST.
+c
+c Purpose:	Transform from rectangular to spherical coordinates.
+c
+c Category	WORLD COORDINATES, IRAS
+c
+c File:		irco.shl
+c
+c Author:	900921	Do Kester
+c
+c Use:
+c	call IRCO_RECTOTWIST (
+c		xyz	  I	doubleprecision(3,n),
+c		twv	  I	doubleprecision(3,n),
+c		lon	  O	doubleprecision(n),
+c		lat  	  O	doubleprecision(n),
+c		twist	  O	doubleprecision(n),
+c		n	  I	integer.
+c		)
+c	xyz	rectangular coordinates of the direction
+c	twv	rectangular coordinates of the twist angle
+c	lon	(in radians:) longitudes 
+c	lat  	(in radians:) latitudes,
+c	twist	(in radians:) twist angles counterclock from north
+c	n 	  number of vectors to be transformed.
+c Description:
+c	This module does the opposite of IRCO_TWISTORECT. 
+c	A vector of length zero will give a latitude and a longitude of 0.0.
+c	If x and y are zero then it is a pole and the longitude will be 0.0.
+c Updates:
+c	90 Apr 24 Sjag Steensma; documentation only.
+c#<
+
+	subroutine IRCO_RECTOTWIST( xyz, twv, lon, lat, twist, n )
+
+        doubleprecision xyz(3,n), twv(3,n), lon(n), lat(n), twist(n)
+	integer		n
+
+	doubleprecision	x, y, z, r, cost, sint
+        integer 	i
+
+        for i = 1, n
+	  x = xyz(1,i)
+	  y = xyz(2,i)
+	  z = xyz(3,i)
+	  r = dsqrt( x ** 2 + y ** 2 )
+
+          if z .eq. 0.0
+          then
+            lat(i) = 0.0
+          else
+            lat(i) = datan2( z, r )
+          cif
+
+	  if r .eq. 0.0
+	  then
+n brrr, this is a pole
+            lon(i) = 0.0
+	    twist(i) = 0.0
+	  else
+            lon(i) = datan2( y, x )
+	    cost = twv(3,i) / r
+
+            if x .ne. 0.0
+            then
+	      sint = ( cost * z * y - twv(2,i) * r ) / x
+            else
+	      sint = ( twv(1,i) * r - cost * z * x ) / x
+            cif
+	    twist(i) = datan2( sint, cost )
+	  cif
+        cfor
+
+        return
+        end
+

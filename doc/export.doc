@@ -1,0 +1,35 @@
+
+Script:       export
+
+Purpose:      Creates an compressed exportable tar file of the GIPSY
+              sources and/or GIPSY binaries for all architectures for
+              export.
+
+Category:     MANAGEMENT
+
+File:         export.csh
+
+Author:       K.G. Begeman
+
+Use:          export.csh [-b] [-s] [-t tapedevice] [archs]
+
+              -b                export binaries.
+              -s                export sources.
+              -t tapedevice     export to tapedevice. Default export
+                                to GIPSY export directory.
+              archs             architectures to export. Default all
+                                available architectures will be
+                                exported
+
+Description:  The sources are stored in $gip_root/export/src/gipsy-src.???
+              in files of 0.5 Megabyte each. The binaries are stored in
+              $gip_root/export/"arch"/gipsy-bin.???, also in files
+              of 0.5 Megabyte each. The $gip_root/export directory should
+              be a link to the gipsy directory of the anonymous ftp
+              directory. The gipsy account must have write priviledge to
+              the gipsy directory of the anonymous ftp account.
+
+Updates:      Oct 29, 1991: Document created.
+              Aug 10, 1999: JPT, also create gzip'ed tar file for sources.
+              May  4, 2007: JPT, compress utility replaced by gzip.
+

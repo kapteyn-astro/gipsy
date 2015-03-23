@@ -1,0 +1,44 @@
+
+Document:     sheltran
+
+Purpose:      Compiles SHELTRAN source code into FORTRAN 77.
+
+Category:     SYSTEM
+
+Author:       K.G. Begeman
+
+Use:          On unix systems:
+
+              sheltran source [-I<dir>] [-f] [-l[<lo>] [-ln<lpp>]]
+
+              source         source file containing SHELTRAN code
+                             (must have extension .shl).
+              -I<dir>        directory where to look for include files
+                             (default is current directory).
+              -f             do not produce a fortran source.
+              -l<lo>         create SHELTRAN listing according to the
+                             listing option <lo> (can be 0, 1, 2, or 3,
+                             1 is default).
+              -ln<lpp>       lines per page for listing (default is 57).
+
+              On VMS systems:
+
+              SHELTRAN SOURCE[/INCLUDE=<dir>][/NOFOR]
+                       [/LIST[/LO=<lo>][/LPP=<lpp>]]
+
+              SOURCE         source file containing SHELTRAN code
+                             (must have extension .shl).
+              /INCLUDE=<dir> directory where to look for include files
+                             (default is current directory).
+              /NOFOR         do not produce a fortran source.
+              /LIST          produce SHELTRAN listing
+              /LO=<lo>       create SHELTRAN listing according to the
+                             listing option <lo> (can be 0, 1, 2, or 3,
+                             1 is default).
+              /LPP=<lpp>     lines per page for listing (default is 57).
+
+Related Docs: sheltran.tex for ans explanation of the language.
+
+Updates:      Jun 17, 1991: KGB Document created.
+              Sep 14, 2007: JPT Colon edit descriptor fix for gfortran.
+

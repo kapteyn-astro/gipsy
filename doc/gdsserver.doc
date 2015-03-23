@@ -1,0 +1,72 @@
+Program:      gdsserver
+
+Purpose:      Handles GDS requests from GIPSY tasks.
+
+Category:     SYSTEM
+
+File:         gdsserver.src
+
+Author:       J.P. Terlouw
+ 
+Use:          $gip_exe/gdsserver
+
+Description:  The server is normally started by the first task which needs it.
+              This is done transparantly when any GDS routine is called.
+              After startup it can also process requests from other tasks.
+              For every user who runs one or more GIPSY sessions there is
+              a server for every directory in which sets are being accessed.
+
+              Tasks can communicate with the server in one of two ways:
+              via a Unix socket or via an Internet socket. Using the Unix
+              socket is the most efficient. This method is chosen when the
+              server is started and will be used by all subsequent clients
+              which run on the same host. Clients on other hosts will use
+              the Internet socket.
+
+              When the server does not have any clients anymore, it will
+              exit after 5 minutes, except if the server has only had remote 
+              clients during the last 5 minutes. In this case it will exit
+              immediately so that clients have the opportunity to start
+              a local server with which communication is more efficient.
+
+              To connect to the server, a task uses the following files in the
+              user's home directory, which are created by the server:
+
+                 .gds_sockets<directory_id>
+                 .gds_read
+                 .gds_write
+                
+              .gds_sockets* contain information about the Internet address of
+              the host on which the server runs, the Internet port number and
+              the path of the Unix socket. This file is only present when the
+              server is active.
+               
+              .gds_read contains a 'password' which the client software needs
+              to read from a GDS set using the server. The protection of this
+              file determines who can access the server to read from any sets
+              it serves. The default protection of this file is 644, but this
+              can be changed by the user with the chmod command.
+               
+              .gds_write contains a 'password' which the client software needs
+              to write to a GDS set using the server. The default protection 
+              of this file is 600, but this can also be changed.
+
+              In every directory which is being or has been served, there is
+              a file with the name .gds_ident .
+
+              This version only serves descriptor files. Image I/O is done
+              by a routine in the client part of GDS.
+              
+Updates:      Apr  9, 1994: JPT original document created.
+              Mar 17, 1995: JPT fixed byte-swap bug in DescrFind (descr.c);
+                                added server id command line argument.
+              Mar 28, 1995: JPT do not change existing .gds_read and .gds_write
+              May  3, 1995: JPT improved consistency checks (descr.c).
+              Aug 24, 1995: JPT inter-architecture bug fixed (clientmgr.c).
+              Mar 26, 1996: JPT null pointer bug fixed (linkedlist.c).
+              Sep  2, 1996: JPT Small code change by KGB.
+              Jun 26, 1998: JPT Fixed bug in low-high-endian inter-operability. 
+              Sep 19, 2000: JPT Exit on sockets file write error.
+              Feb  8, 2002: JPT Fixed byte-swap bug in DescrDelall (descr.c).
+              May  4, 2007: JPT Included conditional code for Apple Mac.
+              Feb 19, 2009: JPT Implemented temporary (FITS pseudo-) sets.

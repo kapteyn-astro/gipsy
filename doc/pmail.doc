@@ -1,0 +1,17 @@
+
+Script:       pmail
+
+Purpose:      pmails sends a mail message (file) to all GIPSY programmers.
+
+Category:     MANAGEMENT
+
+File:         pmail.csh
+
+Author:       K.G. Begeman
+
+Use:          $gip_sys/pmail.csh message-file
+
+Warning:      This script runs only on (some) UNIX systems.
+
+Updates:      Apr 29, 1992: KGB, original document.
+

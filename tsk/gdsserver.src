@@ -1,0 +1,4478 @@
+gdsserver.src
+
+        Copyright (c) Kapteyn Laboratorium Groningen 2009
+        All Rights Reserved.
+
+Name:         gdsserver.src
+Creator:      hans
+Host:         plato
+Date:         Feb 19, 2009
+Contents:     Makefile.uti gdsserver.doc gdsserver.make acceptor.h alloc.h
+              clientmgr.h descr.h file.h gdsdescr.h inetsocket.h
+              linkedlist.h mainloop.h object.h primes.h request.h
+              server.h setmgr.h unixsocket.h acceptor.c alloc.c
+              clientmgr.c descr.c file.c inetsocket.c linkedlist.c
+              mainloop.c primes.c request.c server.c setmgr.c
+              unixsocket.c
+
+#>            Makefile.uti
+SHELL  = /bin/sh
+
+pack::
+	$$gip_sys/pack.csh gdsserver.src Makefile.uti \
+        gdsserver.doc gdsserver.make \
+        acceptor.h alloc.h clientmgr.h descr.h file.h gdsdescr.h \
+        inetsocket.h linkedlist.h mainloop.h \
+        object.h primes.h request.h server.h setmgr.h unixsocket.h \
+        acceptor.c alloc.c clientmgr.c descr.c file.c inetsocket.c \
+        linkedlist.c mainloop.c primes.c request.c server.c setmgr.c \
+        unixsocket.c
+
+clean::
+	rm -f gdsserver *.o
+
+#<
+
+#>            gdsserver.doc
+Program:      gdsserver
+
+Purpose:      Handles GDS requests from GIPSY tasks.
+
+Category:     SYSTEM
+
+File:         gdsserver.src
+
+Author:       J.P. Terlouw
+ 
+Use:          $gip_exe/gdsserver
+
+Description:  The server is normally started by the first task which needs it.
+              This is done transparantly when any GDS routine is called.
+              After startup it can also process requests from other tasks.
+              For every user who runs one or more GIPSY sessions there is
+              a server for every directory in which sets are being accessed.
+
+              Tasks can communicate with the server in one of two ways:
+              via a Unix socket or via an Internet socket. Using the Unix
+              socket is the most efficient. This method is chosen when the
+              server is started and will be used by all subsequent clients
+              which run on the same host. Clients on other hosts will use
+              the Internet socket.
+
+              When the server does not have any clients anymore, it will
+              exit after 5 minutes, except if the server has only had remote 
+              clients during the last 5 minutes. In this case it will exit
+              immediately so that clients have the opportunity to start
+              a local server with which communication is more efficient.
+
+              To connect to the server, a task uses the following files in the
+              user's home directory, which are created by the server:
+
+                 .gds_sockets<directory_id>
+                 .gds_read
+                 .gds_write
+                
+              .gds_sockets* contain information about the Internet address of
+              the host on which the server runs, the Internet port number and
+              the path of the Unix socket. This file is only present when the
+              server is active.
+               
+              .gds_read contains a 'password' which the client software needs
+              to read from a GDS set using the server. The protection of this
+              file determines who can access the server to read from any sets
+              it serves. The default protection of this file is 644, but this
+              can be changed by the user with the chmod command.
+               
+              .gds_write contains a 'password' which the client software needs
+              to write to a GDS set using the server. The default protection 
+              of this file is 600, but this can also be changed.
+
+              In every directory which is being or has been served, there is
+              a file with the name .gds_ident .
+
+              This version only serves descriptor files. Image I/O is done
+              by a routine in the client part of GDS.
+              
+Updates:      Apr  9, 1994: JPT original document created.
+              Mar 17, 1995: JPT fixed byte-swap bug in DescrFind (descr.c);
+                                added server id command line argument.
+              Mar 28, 1995: JPT do not change existing .gds_read and .gds_write
+              May  3, 1995: JPT improved consistency checks (descr.c).
+              Aug 24, 1995: JPT inter-architecture bug fixed (clientmgr.c).
+              Mar 26, 1996: JPT null pointer bug fixed (linkedlist.c).
+              Sep  2, 1996: JPT Small code change by KGB.
+              Jun 26, 1998: JPT Fixed bug in low-high-endian inter-operability. 
+              Sep 19, 2000: JPT Exit on sockets file write error.
+              Feb  8, 2002: JPT Fixed byte-swap bug in DescrDelall (descr.c).
+              May  4, 2007: JPT Included conditional code for Apple Mac.
+              Feb 19, 2009: JPT Implemented temporary (FITS pseudo-) sets.
+#<
+
+#>            gdsserver.make
+SHELL   = /bin/sh
+#C_OPTS  = -g -I. -I$(gip_inc) -I- -Aa
+C_OPTS  = $(CC_OPTS)
+OBJECTS = acceptor.o alloc.o clientmgr.o file.o inetsocket.o \
+          linkedlist.o mainloop.o primes.o request.o server.o setmgr.o \
+          unixsocket.o descr.o
+
+.c.o :
+	$(CC_COMP) -c $(C_OPTS) $<
+
+gdsserver: $(OBJECTS)
+	$(CC_COMP) -o gdsserver $(C_OPTS) $(OBJECTS)  $(CC_LIBS)
+
+
+#<
+
+#>            acceptor.h
+#if !defined(_acceptor_h_)
+#define _acceptor_h_
+#include "mainloop.h"
+extern void Acceptor(ident id, int socket, void *arg);
+#endif /* _acceptor_h_ */
+#<
+
+#>            alloc.h
+#if !defined(_alloc_h_)
+#define _alloc_h_
+extern void       *Malloc    (int size);
+extern void       *Realloc   (void *orig, int newsize);
+extern void       *Calloc    (int nelem, int elsize);
+extern void        Free      (void* ptr);
+extern char       *StrDup    (char *orig);
+#define New(type) ((type *)Calloc(1,sizeof(type)))
+#define NNew(n,type) ((type *)Calloc(n,sizeof(type)))
+#define Delete(x)  {Free(x); x=NULL;}
+#endif
+#<
+
+#>            clientmgr.h
+#if !defined (_clientmgr_h_)
+#define _clientmgr_h_
+#include "object.h"
+#include "gdscom.h"
+typedef enum {LOCAL,REMOTE} contype;
+extern void NewClient(int fd, contype conn);
+extern void DeleteClient(object client);
+extern int PutBuffer(object client, void *data, int nbytes);
+extern int PutFint(object currid, fint srctype, fint *data, int nelems);
+extern int PutFloat(object currid, fint srctype, float *data, int nelems);
+extern int PutDouble(object currid, fint srctype, double *data, int nelems);
+extern int GetBuffer(object currid, void *data, int nbytes);
+extern int GetFint(object currid, fint dsttype, fint *data, int nelems);
+extern int GetFloat(object currid, fint dsttype, float *data, int nelems);
+extern int GetDouble(object currid, fint dsttype, double *data, int nelems);
+extern int ClientBuffer(object client, int size);
+extern int ClientPerm(object client, int perm);
+extern fint ClientFint(object currid, fint cf);
+extern gdsRequest ClientRequest(object client);
+extern void ReadData(object client);
+extern void WriteData(object client);
+extern int WriteReply(object client, int code, int length);
+extern void ScheduleIodone(object client, void(*proc)());
+extern void AddSet(object client, object set);
+extern void RemoveSet(object client, object set);
+extern void InitClient(void);
+#endif /* _clientmgr_h_ */
+#<
+
+#>            descr.h
+#if !defined(_descr_h_)
+#define _descr_h_
+#include "gipsyc.h"
+#include "object.h"
+#include "file.h"
+
+extern object NewDescr(char *name, int initsize, int extendsize, int prime);
+extern void DeleteDescr(object);
+extern void UpdateDescr(object, int);
+extern void LockDescr(object dscobj, int lock);
+extern int DescrReadonly(object);
+extern fint DescrFtype(object dscobj);
+extern fint DescrItype(object dscobj);
+extern fint DescrPrime(object dscobj);
+extern fint DescrNitems(object dscobj);
+extern int DescrRhead(object client, object dscobj);
+extern int DescrWhead(object client, object dscobj);
+extern int DescrRead(object client, object dscobj);
+extern int DescrDelete(object client, object dscobj);
+extern int DescrLength(object client, object dscobj);
+extern int DescrRewind(object client, object dscobj);
+extern int DescrWrite(object client, object dscobj);
+extern int DescrWritex(object client, object dscobj);
+extern int DescrFind(object client, object dscobj);
+extern int DescrDelall(object client, object dscobj);
+extern int DescrOptimize(object dscobj);
+extern fint RecoverDescr(char *name);
+#endif /* _descr_h_ */
+#<
+
+#>            file.h
+#if !defined(_file_h_)
+#define _file_h_
+#define UPD_READ  0
+#define UPD_WRITE 1
+extern int OpenFile(char *name, char *ext, int *readonly);
+extern int CreateFile(char *setname, char* ext, int size);
+extern int CloseFile(int *fd);
+extern int FileSize(int fd);
+extern int ExtendFile(int fd, int increment);
+extern int ReadFile(int fd, void *contents);
+extern int WriteFile(int fd, void *contents);
+extern int UpdateFile(int fd, int mode, 
+                      void *contents, void *bitmap, int blocksize);
+#endif /* _file_h_ */
+#<
+
+#>            gdsdescr.h
+#if !defined(_gdsdescr_h_)
+#define _gdsdescr_h_
+#include "gdscom.h"
+
+
+/* ====================  GDS internal structures  ========================== */
+/* ------------------------------------------------------------------------- */
+/* To satisfy alignment requirements on RISC processors like Sparc and Mips, 
+   the layout of the record and file structures must maintain the following 
+   order of component types: double, fint, char.
+*/
+
+#define REC_SIZ  200                   /* internal record size (bytes)       */
+
+typedef struct {
+   fint	key_ind;        /* key record indicator */
+   fint	length;	        /* length of descriptor item in bytes */
+   fint	readpos;        /* number of last byte read (start at 1) */
+   fint	level;          /* coordinate level */
+   fint	next_key;       /* index of next key record */
+   fint	next_ext;       /* index of next extension record */
+   fint	last_ext;       /* index of last extension record */
+   fint	curr_ext;       /* index of last extension record read */
+   char	type;           /* type of data (C, I, L, F, D or \0) */
+   char	name[KEY_LEN];  /* name of descriptor item */
+} _keyhead, *keyhead; /* ------------------------- header part of key record */
+
+typedef struct {
+   fint	key_ind;        /* key record indicator */
+   fint	next_ext;       /* index of next extension record  */
+} _exthead, *exthead; /* ------------------- header part of extension record */
+
+#define SKH    (sizeof(_keyhead))
+#define SEH    (sizeof(_exthead))
+#define SL     (sizeof(fint))
+#define KEY_AL (SL+(SL*SKH-SKH)%SL)     /* alignment in key records         */
+#define EXT_AL (SL+(SL*SEH-SEH)%SL)     /* alignment in extension records   */
+#define KEY_DL (REC_SIZ-SKH-KEY_AL )    /* data length of key record        */
+#define EXT_DL (REC_SIZ-SEH-EXT_AL )    /* data length of extension record  */
+
+typedef struct {
+   _keyhead h;
+   char     alignment[KEY_AL];
+   char     data[KEY_DL];
+} _keyrec, *keyrec; /*------------------------------------------- key record */
+
+typedef struct {
+   _exthead h;
+   char     alignment[EXT_AL];
+   char     data[EXT_DL];
+} _extrec, *extrec; /*------------------------------------- extension record */
+
+typedef union {
+   _keyrec key;
+   _extrec ext;
+} _record, *record; /*--------------------------------------- generic record */
+
+typedef struct {
+   fint   version;        /* different versions are incompatible */
+   fint   subversion;     /* sub-versions of a version are compatible */
+                          /* they are defined in ???.h and set in ...? */
+   fint   one;            /* the number 1  to determine byte order */
+   fint   osdep;          /* os dependent info */
+/* --- this point in the structure must align to a multiple of 8 bytes --- */
+   double ax_origin[MAXDIM];   /* axis origins */
+   fint   ax_size  [MAXDIM];   /* axis sizes */
+   fint   ax_factor[MAXDIM+1]; /* factors */
+   fint   naxis;          /* number of axes */
+   fint   nitems;         /* number of descriptor items (from version 2.2) */
+   fint   reserved2;      /* not currently used */
+   fint   reserved3;      /* not currently used */
+   fint   rec_start;      /* first data record */
+   fint   n_alloc;        /* number of records allocated */
+   fint   maxrec;         /* current maximum number of records in file */
+   fint   n_buck;         /* size of hash table */
+   fint   spare_fint[8];  /* spare elements */
+   fint   free;           /* free list pointer */
+   fint   hash_tab[1];    /* hash table (only first element declared) */
+} _header, *header; /* ----------------------------------------- file header */
+
+typedef union{
+   _header  h;
+   _record  r[1];
+} _dscfile, *dscfile; /* ----------------------------------- descriptor file */
+#endif /* _gdsdescr_h_ */
+#<
+
+#>            inetsocket.h
+#if !defined(_inetsocket_h_)
+#define _inetsocket_h_
+#include "mainloop.h"
+ident InetSocket(char *devname);
+#endif /* _inetsocket_h_ */
+#<
+
+#>            linkedlist.h
+#if !defined(_linkedlist_h_)
+#define _linkedlist_h_
+typedef void **listid;
+typedef void  *iterid;
+
+extern listid NewList(void);
+extern void   DeleteList(listid);
+extern void   InsertHead(listid, void *);
+extern void  *HeadValue(listid);
+extern void  *RemoveHead(listid);
+extern void  *RemoveTail(listid);
+extern void   RemoveValue(listid, void *);
+extern int    ValuePresent(listid, void *);
+extern iterid NewIter(listid);
+extern void  *CurrentValue(iterid);
+extern void  *NextValue(iterid);
+extern void  *RemoveCurrent(iterid);
+extern void   DeleteIter(iterid);
+#endif /* _linkedlist_h_ */
+#<
+
+#>            mainloop.h
+#if !defined(_mainloop_h_)
+#define _mainloop_h_
+
+#define MS        *1
+#define SECONDS   *1000 MS
+#define MINUTES   *60 SECONDS
+#define HOURS     *60 MINUTES
+#define DAYS      *24 HOURS
+#define WEEKS     *7  DAYS  
+#define SECOND SECONDS
+#define MINUTE MINUTES
+#define HOUR   HOURS
+#define DAY    DAYS
+#define WEEK   WEEKS
+
+typedef void *ident;
+extern void  MainLoop(void);
+extern ident ScheduleRead(void(*)(),int,void*);
+extern ident ScheduleWrite(void(*)(),int,void*);
+extern ident ScheduleTimer(void(*)(),int,void*);
+extern void  Deschedule(ident*);
+extern void  DescheduleAll(void);
+#endif
+#<
+
+#>            object.h
+/*  The type "object" is used to 'anonymise' pointers to structures
+ *  which are managed exclusively by the owning module.
+ */
+#if !defined(_object_h_)
+#define _object_h_
+typedef void *object;
+#endif /* _object_h_ */
+#<
+
+#>            primes.h
+#if !defined(_primes_h_)
+#define _primes_h_
+extern int NextPrime(int x);
+#endif /* _primes_h_ */
+#<
+
+#>            request.h
+#if !defined(_request_h_)
+#define _request_h_
+#include "object.h"
+extern void HandleRequest(object);
+#endif /* _request_h_ */
+#<
+
+#>            server.h
+/*  server.h
+ */
+#if !defined(_server_h_)
+#define _server_h_
+#include "object.h"
+#include "linkedlist.h"
+#include "mainloop.h"
+#include "gipsyc.h"
+
+#define PERM_R   1
+#define PERM_W   2
+
+#define PRIME         311             /* default hash table size (entries)   */
+#define INITSIZE     4096             /* descriptor file initial size (bytes)*/
+#define EXTENDSIZE   4096             /* decriptor file extend size (bytes)  */
+
+/* Global server status.
+ */
+typedef struct _srvstat {
+   ident      ux;              /* UNIX request acceptor */
+   ident      in;              /* Internet request acceptor */
+   int        initsize;        /* default descriptor file initial size */
+   int        extendsize;      /* default descriptor file extend size */
+   int        prime;           /* default hash table size */
+   fint       pwdw;            /* write password */
+   fint       pwdr;            /* read password */
+   object     locked;          /* client which locked the set */
+   int        nlocks;          /* number of locks */
+   listid     lockwait;        /* list of clients waiting to obtain a lock */
+   int        error;           /* global error indicator */
+} _srvstat, *srvstat;
+
+#endif /* _server_h_ */
+#<
+
+#>            setmgr.h
+#if !defined(_setmgr_h_)
+#define _setmgr_h_
+#include "object.h" 
+extern object SetByName(char *name, int extendsize);
+extern object SetByHandle(fint id);
+extern char *SetName(object);
+extern fint SetHandle(object);
+extern void *SetDescr(object);
+extern void AddClient(object set, object client);
+extern void RemoveClient(object set, object client);
+extern int CheckLock(object set, object client);
+extern int LockSet(object set, object client);
+extern int UnlockSet(object set, object client);
+extern int DestroySet(char *name);
+extern int RenameSet(char *oldname, char* newname);
+#endif /* _setmgr_h_ */
+#<
+
+#>            unixsocket.h
+#if !defined(_unixsocket_h_)
+#define _unixsocket_h_
+#include "mainloop.h"
+ident UnixSocket(char *devname);
+#endif /* _unixsocket_h_ */
+#<
+
+#>            acceptor.c
+/*  acceptor.c
+                              COPYRIGHT (c) 1994
+                        Kapteyn Astronomical Institute
+         University of Groningen  -  9700 AV Groningen, The Netherlands
+
+Author: J.P. Terlouw
+*/
+
+#include "stddef.h"
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <fcntl.h>
+#include "clientmgr.h"
+#include "mainloop.h"
+#include "acceptor.h"
+
+/* ========================================================================== */
+/*                                 Acceptor                                   */
+/* -------------------------------------------------------------------------- */
+/*  MainLoop scheduled function to accept connections on a socket.
+ *  The accepted socket is transferred to the client manager in order
+ *  to handle the new client.
+ */
+extern void Acceptor(ident id, int s, void *arg)
+{
+   int addr, size;
+   int cs;
+    
+   size = sizeof(addr);
+   cs = accept(s, (struct sockaddr*)&addr, &size);
+   (void)fcntl(cs, F_SETFL, O_NONBLOCK);
+   if (cs>0) NewClient(cs,(int)arg==AF_UNIX?LOCAL:REMOTE);
+}
+#<
+
+#>            alloc.c
+/*  alloc.c
+                              COPYRIGHT (c) 1994
+                        Kapteyn Astronomical Institute
+         University of Groningen  -  9700 AV Groningen, The Netherlands
+
+  Checking substitute for malloc, realloc and calloc.
+  Its sole purpose is to eliminate numerous checks in different places
+  where graceful correction of the problem of allocation failure is
+  not possible.
+  The function StrDup returns a pointer to a duplicate of the argument.
+  It just stops the program in case of allocation failure.
+   
+  In the associated header file alloc.h the macro's New, NNew and Delete
+  are defined. New creates an 'object' of any type; NNew creates a specified
+  number of objects, and Delete frees an object and clears the object pointer.
+  
+  Author: J.P. Terlouw
+
+*/
+#include "alloc.h"
+#include "stdio.h"
+#include "stdlib.h"
+#include "string.h"
+
+static void Fail(void);
+
+#define RCHECK if (ptr) return ptr; else Fail();
+
+static void *ptr;
+
+extern void *Malloc(int size)
+{
+   ptr = malloc(size);
+   RCHECK
+}
+
+extern void *Realloc(void *orig, int newsize)
+{
+   ptr = realloc((char*)orig, newsize);
+   RCHECK
+}
+
+extern void *Calloc(int nelem, int elsize)
+{
+   ptr = calloc(nelem, elsize);
+   RCHECK
+}
+
+extern void Free(void *ptr)
+{
+   if (ptr)
+      free(ptr);
+   else {
+       printf("\nDynamic memory de-allocation failure\n");
+       exit(1); /* When this happens, it is due to a programming error */
+   }
+}
+
+extern char *StrDup (char *orig)
+{
+   char *result=NNew(strlen(orig)+1,char);
+   strcpy(result,orig);
+   return result;
+}
+
+
+static void Fail(void)
+{
+   printf("\nDynamic memory allocation failure\n");
+   exit(1); /* Hope this does not happen. Don't know what to do otherwise... */
+}
+#<
+
+#>            clientmgr.c
+/*  clientmgr.c
+                              COPYRIGHT (c) 1994
+                        Kapteyn Astronomical Institute
+         University of Groningen  -  9700 AV Groningen, The Netherlands
+
+Author: J.P. Terlouw
+*/
+#include "stddef.h"
+#include "stdlib.h"
+#include "errno.h"
+#include "string.h"
+#include "swapfint.h"
+#include "gdscom.h"
+#include "server.h"
+#include "mainloop.h"
+#include "alloc.h"
+#include "request.h"
+#include "linkedlist.h"
+#include "setmgr.h"
+#include "clientmgr.h"
+#include "spfpfl.h"
+#include "spfplf.h"
+#include "dpfpfl.h"
+#include "dpfplf.h"
+
+#define SIOBLEN 4096              /* initial size of communication buffer */
+#define TIMEOUT (5 MINUTES)       /* time to wait when no clients anymore */
+
+/* Client status block.
+ * Describes the context of a task. 
+ */
+typedef struct _client {
+   ident      id;                 /* mainloop identification */
+   int        fd;                 /* fd of commication socket */
+   contype    conn;               /* connection type */
+   int        perm;               /* permission mask derived from password */
+   fint       itype;              /* client's integer type */
+   fint       ftype;              /* client's floating type */
+   listid     sets;               /* list of open sets */
+   int        reqlen;             /* (remaining) request length (bytes) */
+   int        reqin;              /* number of bytes read in request */
+   _uRequest  request;            /* current request */
+   int        bufsize;            /* buffer size */
+   int        datalen;            /* (remaining) data length (bytes) */
+   int        datadone;           /* number of bytes transferred */
+   char       *buffer;            /* buffer for socket I/O */
+   void       (*iodone)();        /* I/O completion callback */
+} _client, *client;
+
+extern srvstat server;
+
+static listid clients=NULL;       /* list of client status blocks */
+static int    locals=0;           /* number of clients with LOCAL connection */
+static int    remote=0;           /* flag indicating only remote connections */
+static ident  closing=NULL;       /* shutdown schedule id */
+
+static void WaitRequest(ident id, int fd, void *arg);
+static void DoRead(ident id, int fd, void *arg);
+static void DoWrite(ident id, int fd, void *arg);
+static void shutdown(ident id, void *arg);
+
+/* ========================================================================== */
+/*                                 NewClient                                  */
+/* -------------------------------------------------------------------------- */
+/*  NewClient creates a new client object and schedules it to read
+ *  a request from the client process.
+ */
+extern void NewClient(int fd, contype conn)
+{
+   client current=New(_client);
+
+   if (!clients) clients=NewList();                 /* initialize client list */
+   InsertHead(clients,current);
+   current->id   = ScheduleRead(WaitRequest, fd, current);
+   current->fd   = fd;
+   current->conn = conn;
+   current->sets = NewList();
+   current->bufsize = SIOBLEN;
+   current->buffer  = Malloc(SIOBLEN);
+   if (conn==LOCAL) {
+      locals++;
+      remote = 0;
+      if (closing) Deschedule(&closing);
+   }
+}
+
+
+/* ========================================================================== */
+/*                                 DeleteClient                               */
+/* -------------------------------------------------------------------------- */
+/*  DeleteClient deletes the specified client object after having
+ *  descheduled all pending actions.
+ */
+extern void DeleteClient(object currid)
+{
+   client current=(client)currid;
+   object  set;
+   
+   close(current->fd);
+   if (current->conn==LOCAL) locals--;
+   Deschedule(&current->id);
+   Delete(current->buffer);
+   while (set=RemoveHead(current->sets)) 
+      RemoveClient(set,current);             /* close any open sets */
+   DeleteList(current->sets);
+
+   RemoveValue(clients, current);            /* Remove from the clients list  */
+   RemoveValue(server->lockwait, current);   /* --   server's lock wait queue */
+   
+   Delete(current);
+   if (!HeadValue(clients) && remote) {
+      shutdown(NULL, NULL);
+   } else if (!locals && !closing) {
+      closing = ScheduleTimer(shutdown, TIMEOUT, NULL);
+   }
+}
+
+/* ========================================================================== */
+/*                                 ClientBuffer                               */
+/* -------------------------------------------------------------------------- */
+/*  ClientBuffer ensures that the buffer has at least the specified size.
+ *  It returns a GDS result code.
+ */
+extern int ClientBuffer(object currid, int size)
+{
+   client current=(client)currid;
+   char   *newbuffer;
+    
+   size = ((size-1) / SIOBLEN + 1 ) * SIOBLEN; /* allocate in SIOBLEN incr. */
+   if (current->bufsize < size) {
+      newbuffer  = realloc(current->buffer,size);
+      if (newbuffer) {
+         current->buffer = newbuffer;
+         current->bufsize = size;
+      } else return GDS_NOMEM;
+   }
+   return GDS_SUCCESS;
+}
+
+
+/* ========================================================================== */
+/*                                 PutBuffer                                  */
+/* -------------------------------------------------------------------------- */
+/*  PutBuffer appends 'nbytes' of 'data' to the client buffer and adjusts
+ *  the client's 'datalen'.
+ */
+extern int PutBuffer(object currid, void *data, int nbytes)
+{
+   client current=(client)currid;
+   int minsize=current->datalen+nbytes;
+   
+   if (minsize > current->bufsize) (void)ClientBuffer(currid, minsize);
+   memcpy(current->buffer+current->datalen, data, nbytes);
+   current->datalen = minsize;
+   return 0;
+}
+
+/* ========================================================================== */
+/*                                 PutFint                                    */
+/* -------------------------------------------------------------------------- */
+/*  PutFint appends 'nelems' of 'data' to the client buffer and adjusts
+ *  the client's 'datalen'.
+ */
+extern int PutFint(object currid, fint srctype, fint *data, int nelems)
+{
+   client current=(client)currid;
+   int nbytes=nelems*sizeof(fint);
+   int minsize=current->datalen+nbytes;
+   
+   if (minsize > current->bufsize) (void)ClientBuffer(currid, minsize);
+   memcpy(current->buffer+current->datalen, data, nbytes);
+   if (((client)currid)->itype != srctype) {
+      int i;
+      fint *idata=(fint*)(current->buffer+current->datalen);
+      for (i=0; i<nelems; i++) idata[i] = swapfint(idata[i]);
+   }
+   current->datalen = minsize;
+   return 0;
+}
+
+/* ========================================================================== */
+/*                                 PutFloat                                   */
+/* -------------------------------------------------------------------------- */
+/*  PutFloat appends 'nelems' of 'data' to the client buffer and adjusts
+ *  the client's 'datalen'.
+ */
+extern int PutFloat(object currid, fint srctype, float *data, int nelems)
+{
+   client current=(client)currid;
+   int nbytes=nelems*sizeof(float);
+   int minsize=current->datalen+nbytes;
+   
+   if (minsize > current->bufsize) (void)ClientBuffer(currid, minsize);
+   memcpy(current->buffer+current->datalen, data, nbytes);
+   if (((client)currid)->ftype != srctype) {
+      float *fdata=(float*)(current->buffer+current->datalen);
+      if (srctype != OS_FLOATING_TYPE) {
+         (void)spfpfl_c(&srctype, fdata, fdata, (fint*)&nelems);
+      }
+      if (OS_FLOATING_TYPE != ((client)currid)->ftype) {
+         (void)spfplf_c(&((client)currid)->ftype, fdata, fdata, (fint*)&nelems);
+      }
+   }
+   current->datalen = minsize;
+   return 0;
+}
+
+/* ========================================================================== */
+/*                                 PutDouble                                  */
+/* -------------------------------------------------------------------------- */
+/*  PutDouble appends 'nelems' of 'data' to the client buffer and adjusts
+ *  the client's 'datalen'.
+ */
+extern int PutDouble(object currid, fint srctype, double *data, int nelems)
+{
+   client current=(client)currid;
+   int nbytes=nelems*sizeof(double);
+   int minsize=current->datalen+nbytes;
+   
+   if (minsize > current->bufsize) (void)ClientBuffer(currid, minsize);
+   memcpy(current->buffer+current->datalen, data, nbytes);
+   if (((client)currid)->ftype != srctype) {
+      double *fdata=(double*)(current->buffer+current->datalen);
+      if (srctype != OS_FLOATING_TYPE) {
+         (void)dpfpfl_c(&srctype, fdata, fdata, (fint*)&nelems);
+      }
+      if (OS_FLOATING_TYPE != ((client)currid)->ftype) {
+         (void)dpfplf_c(&((client)currid)->ftype, fdata, fdata, (fint*)&nelems);
+      }
+   }
+   current->datalen = minsize;
+   return 0;
+}
+
+/* ========================================================================== */
+/*                                 GetBuffer                                  */
+/* -------------------------------------------------------------------------- */
+/*  GetBuffer obtains 'nbytes' of 'data' from the client buffer and adjusts
+ *  the client's 'datadone' and 'datalen'.
+ */
+extern int GetBuffer(object currid, void *data, int nbytes)
+{
+   client current=(client)currid;
+   int maxsize=current->datadone;
+   
+   if (nbytes>maxsize) nbytes = maxsize;
+   memcpy(data, current->buffer+current->datalen, nbytes);
+   current->datadone -= nbytes;
+   current->datalen += nbytes;
+   return nbytes;
+}
+
+/* ========================================================================== */
+/*                                 GetFint                                    */
+/* -------------------------------------------------------------------------- */
+/*  GetFint obtains 'nelems' of 'data' from the client buffer and adjusts
+ *  the client's 'datadone' and 'datalen'.
+ */
+extern int GetFint(object currid, fint dsttype, fint *data, int nelems)
+{
+   client current=(client)currid;
+   int nbytes = nelems*sizeof(fint);
+   int maxsize=current->datadone;
+   
+   if (nbytes>maxsize) nbytes = maxsize;
+   nelems = nbytes/sizeof(fint);
+   memcpy(data, current->buffer+current->datalen, nbytes);
+   current->datadone -= nbytes;
+   current->datalen += nbytes;
+   if (((client)currid)->itype != dsttype) {
+      int i;
+      for (i=0; i<nelems; i++) data[i] = swapfint(data[i]);
+   }
+   return nelems;
+}
+
+/* ========================================================================== */
+/*                                 GetFloat                                   */
+/* -------------------------------------------------------------------------- */
+/*  GetFloat obtains 'nelems' of 'data' from the client buffer and adjusts
+ *  the client's 'datadone' and 'datalen'.
+ */
+extern int GetFloat(object currid, fint dsttype, float *data, int nelems)
+{
+   client current=(client)currid;
+   int nbytes = nelems*sizeof(float);
+   int maxsize=current->datadone;
+   
+   if (nbytes>maxsize) nbytes = maxsize;
+   nelems = nbytes/sizeof(float);
+   memcpy(data, current->buffer+current->datalen, nbytes);
+   current->datadone -= nbytes;
+   current->datalen += nbytes;
+   if (dsttype != ((client)currid)->ftype) {
+      if (((client)currid)->ftype != OS_FLOATING_TYPE) {
+         (void)spfpfl_c(&((client)currid)->ftype, data, data, (fint*)&nelems);
+      }
+      if (OS_FLOATING_TYPE != dsttype) {
+         (void)spfplf_c(&dsttype, data, data, (fint*)&nelems);
+      }
+   }
+   return nelems;
+}
+
+/* ========================================================================== */
+/*                                 GetDouble                                  */
+/* -------------------------------------------------------------------------- */
+/*  GetDouble obtains 'nelems' of 'data' from the client buffer and adjusts
+ *  the client's 'datadone' and 'datalen'.
+ */
+extern int GetDouble(object currid, fint dsttype, double *data, int nelems)
+{
+   client current=(client)currid;
+   int nbytes = nelems*sizeof(double);
+   int maxsize=current->datadone;
+   
+   if (nbytes>maxsize) nbytes = maxsize;
+   nelems = nbytes/sizeof(double);
+   memcpy(data, current->buffer+current->datalen, nbytes);
+   current->datadone -= nbytes;
+   current->datalen += nbytes;
+   if (dsttype != ((client)currid)->ftype) {
+      if (((client)currid)->ftype != OS_FLOATING_TYPE) {
+         (void)dpfpfl_c(&((client)currid)->ftype, data, data, (fint*)&nelems);
+      }
+      if (OS_FLOATING_TYPE != dsttype) {
+         (void)dpfplf_c(&dsttype, data, data, (fint*)&nelems);
+      }
+   }
+   return nelems;
+}
+
+/* ========================================================================== */
+/*                                ClientPerm                                  */
+/* -------------------------------------------------------------------------- */
+/*  ClientPerm sets and/or returns the permission code for a client.
+ */
+extern int ClientPerm(object currid, int perm)
+{
+   client current=(client)currid;
+   
+   if (perm) {
+      current->perm |= perm;
+   }
+   return current->perm;
+}
+
+/* ========================================================================== */
+/*                                 ClientFint                                 */
+/* -------------------------------------------------------------------------- */
+/*  ClientFint converts a fint obtained from or to be sent to
+ *  the specified client.
+ */
+extern fint ClientFint(object currid, fint cf)
+{
+   if (((client)currid)->itype == OS_INTEGER_TYPE) return cf;
+   else return swapfint(cf);
+}
+   
+/* ========================================================================== */
+/*                                 ClientRequest                              */
+/* -------------------------------------------------------------------------- */
+/*  ClientRequest returns a pointer to the request associated with the 
+ *  specified client.
+ */
+extern gdsRequest ClientRequest(object currid)
+{
+   client current=(client)currid;
+    
+   return (gdsRequest)&current->request;
+}
+
+/* ========================================================================== */
+/*                                 ReadData                                   */
+/* -------------------------------------------------------------------------- */
+/*  ReadData starts the read operation to obtain the data part of a client
+ *  request.
+ */
+extern void ReadData(object currid)
+{
+   client current=(client)currid;
+   
+   DoRead(NULL, current->fd, current);
+}
+
+/* ========================================================================== */
+/*                                WriteData                                   */
+/* -------------------------------------------------------------------------- */
+/*  WriteData starts the write operation to send the data requested by
+ *  a client.
+ */
+extern void WriteData(object currid)
+{
+   client current=(client)currid;
+   
+   DoWrite(NULL, current->fd, current);
+}
+
+/* ========================================================================== */
+/*                                 WriteReply                                 */
+/* -------------------------------------------------------------------------- */
+/*  WriteReply sends a reply to a requesting client. A reply consists of
+ *  a result code and the number of data bytes that will be transferred.
+ *  If the number of data bytes is specified as zero, the current value
+ *  of datalen is used instead.
+ */
+extern int WriteReply(object currid, int code, int length)
+{
+   client current=(client)currid;
+   _gdsReply reply;
+   int result;
+   int size=sizeof(_gdsReply);
+    
+   if (length==0) length = current->datalen;
+   (void)ClientBuffer(currid, length);
+   reply.result = ClientFint(currid,code);
+   reply.length = ClientFint(currid,length);
+   current->datalen  = length;
+   current->datadone = 0;
+   result = write(current->fd, &reply, size) != size;
+   if (result) DeleteClient(current);
+   return result;
+}
+
+/* ========================================================================== */
+/*                              ScheduleIodone                                */
+/* -------------------------------------------------------------------------- */
+/*  ScheduleIodone registers a function to be called when a data transfer
+ *  operation completes.
+ */
+extern void ScheduleIodone(object currid, void(*proc)())
+{
+   client current=(client)currid;
+    
+   current->iodone = proc;
+}
+
+/* ========================================================================== */
+/*                                 AddSet                                     */
+/* -------------------------------------------------------------------------- */
+/*  AddSet records a set in the client's open set list.
+ */
+extern void AddSet(object currid, object set)
+{
+   client current=(client)currid;
+   
+   InsertHead(current->sets,set);
+}
+
+/* ========================================================================== */
+/*                                 RemoveSet                                  */
+/* -------------------------------------------------------------------------- */
+/*  RemoveSet removes a set registration from the client's open set list.
+ */
+extern void RemoveSet(object currid, object set)
+{
+   client current=(client)currid;
+   
+   RemoveValue(current->sets, set);
+}
+         
+/* ========================================================================== */
+/*                                 InitClient                                 */
+/* -------------------------------------------------------------------------- */
+/*  InitClient() initializes the client manager module. Its only function
+ *  is to schedule the shutdown timer.
+ */
+extern void InitClient(void)
+{
+   closing = ScheduleTimer(shutdown, TIMEOUT, NULL);
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 WaitRequest                                */
+/* -------------------------------------------------------------------------- */
+/*  WaitRequest is a MainLoop callback function to obtain the next request
+ *  from the client process. It performs some consistency checks on the
+ *  request. In the case of a connect request, the client's integer- and
+ *  floating types are stored in the client object.
+ *  Finally the request function code and the request id are converted to
+ *  the server's local format.
+ */
+static void WaitRequest(ident id, int fd, void *arg)
+{
+   client current=(client)arg;
+   fint reqlen;
+   bool fail=FALSE;
+    
+   if (current->reqlen) {
+      int done;
+      char *start=((char *)&current->request)+current->reqin;
+      done = read(fd,start,current->reqlen);
+      if (done>0) {
+         current->reqlen -= done;
+         current->reqin  += done;
+      } else fail = TRUE;
+   } else {
+      if (read(fd,&reqlen,sizeof(reqlen)) == sizeof(reqlen)) {
+         if (reqlen<0 || reqlen>sizeof(current->request)) 
+            reqlen = swapfint(reqlen);
+         if (reqlen<0 || reqlen>sizeof(current->request)) fail = TRUE;
+         current->reqlen = reqlen;
+         current->reqin = 0;
+      } else fail = TRUE;
+   }
+   if (fail) {
+      DeleteClient(current);
+   } else if (!current->reqlen) {
+      gdsReqHead reqhed=(gdsReqHead)&current->request;
+      if (reqhed->code==GDS_CONNECT) {
+         union {
+            fint l;
+            char b[sizeof(fint)];
+         } u;
+         u.l = reqhed->id;
+         current->itype = u.b[0];
+         current->ftype = u.b[1];
+      }
+      reqhed->code = ClientFint(current,reqhed->code);
+      reqhed->id   = ClientFint(current,reqhed->id);
+      current->datalen =  0;
+      current->datadone = 0;
+      HandleRequest(current);
+   }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 DoRead                                     */
+/* -------------------------------------------------------------------------- */
+/*  DoRead attempts to read the data part of a client request. If it is
+ *  not possible to read all data in one call, it deschedules WaitRequest
+ *  and schedules itself to read the rest of the data.
+ *  When all data has been read, it deschedules itself and schedules
+ *  WaitRequest again.
+ */
+static void DoRead(ident id, int fd, void *arg)
+{
+   client current=(client)arg;
+   
+   int done;
+   char *start=(current->buffer)+current->datadone;
+   done = read(fd,start,current->datalen);
+   if (done<0 && (errno==EWOULDBLOCK || errno==EAGAIN)) done = 0;
+   if (done>0 || (!id && done==0)) {
+      current->datalen  -= done;
+      current->datadone += done;
+      if (current->datalen) {
+         if (!id) {
+            Deschedule(&current->id);
+            current->id = ScheduleRead(DoRead, fd, current);
+         }
+      } else {
+         if (id) {
+            Deschedule(&id);
+            current->id = ScheduleRead(WaitRequest, fd, current);
+         }
+         if (current->iodone) {
+            (*current->iodone)(current);
+            current->iodone = NULL;
+         }
+      }
+   } else DeleteClient(current);
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 DoWrite                                    */
+/* -------------------------------------------------------------------------- */
+/*  DoWrite attempts to write data requested by a client.   If it is
+ *  not possible to write all data in one call, it deschedules WaitRequest
+ *  and schedules itself to write the rest of the data.
+ *  When all data has been written, it deschedules itself and schedules
+ *  WaitRequest again.
+ */
+static void DoWrite(ident id, int fd, void *arg)
+{
+   client current=(client)arg;
+   
+   int done;
+   char *start=(current->buffer)+current->datadone;
+   done = write(fd,start,current->datalen);
+   if (done>0 || (!id && done==0)) {
+      current->datalen  -= done;
+      current->datadone += done;
+      if (current->datalen) {
+         if (!id) {
+            Deschedule(&current->id);
+            current->id = ScheduleWrite(DoWrite, fd, current);
+         }
+      } else {
+         if (id) {
+            Deschedule(&id);
+            current->id = ScheduleRead(WaitRequest, fd, current);
+         }
+         if (current->iodone) {
+            (*current->iodone)(current);
+            current->iodone = NULL;
+         }
+      }
+   } else DeleteClient(current);
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 shutdown                                   */
+/* -------------------------------------------------------------------------- */
+/*  Timer function.
+ *  If the clients list is empty, it shuts down the server.
+ *  Otherwise there are only remote clients. In this case it sets the
+ *  remote flag and deschedules itself.
+ */
+static void shutdown(ident id, void *arg)
+{
+   if (clients && HeadValue(clients)) {
+      remote = 1;
+      Deschedule(&id);
+      closing = NULL;
+   } else DescheduleAll();
+}
+#<
+
+#>            descr.c
+/* descr.c
+                           COPYRIGHT (c) 1994, 2009
+                        Kapteyn Astronomical Institute
+         University of Groningen  -  9700 AV Groningen, The Netherlands
+
+Author: J.P. Terlouw
+*/
+
+#include "stddef.h"
+#include "stdlib.h"
+#include "gipsyc.h"
+#include "string.h"
+#include "nbits.h"
+#include "swapfint.h"
+#include "server.h"
+#include "alloc.h"
+#include "gdsdescr.h"
+#include "mainloop.h"
+#include "file.h"
+#include "clientmgr.h"
+#include "primes.h"
+#include "descr.h"
+
+int unlink(const char *);
+int ftruncate(int fd, int length);
+
+#define PERIOD (5 MINUTES)  /* delay after which changes are written to file */
+
+#define BMSIZE(s) (((s)-1)/(sizeof(int)*REC_SIZ*8)+1)
+
+typedef struct {
+   int        recno;
+   fint       level;
+   char       name[KEY_LEN];
+} _keylev, *keylev;
+ 
+typedef struct {
+   ident      changed;      /* file update timer */
+   int        *bitmap;      /* bitmap indicating modified blocks */
+   int        fd;           /* fd of descriptor file (or zero if not open) */
+   int        lock;         /* lock indicator */
+   dscfile    file;         /* memory-resident descriptor file */
+   int        size;         /* descriptor file size (bytes) */
+   int        extendsize;   /* file size increment (bytes) */
+   int        readonly;     /* indicates that set may not be written */
+   int        temporary;    /* indicates that set is temporary */
+   fint       itype;        /* integer type of set */
+   fint       ftype;        /* floating point type of set */
+   keylev     keytab;       /* table of keyword-level pairs */
+   int        nkeys;        /* size of keytab */
+   int        safe;         /* consistency has been checked */
+} _descr, *descr;
+
+
+                                         /* Maximum and minimum of two items */
+#define MAX(a,b)  ((a)>(b)?(a):(b))
+#define MIN(a,b)  ((a)<(b)?(a):(b))
+
+                                                    /* Nint and abs function */
+#define NINT(a) ( (a)<0 ? (fint)((a)-.5) : (fint)((a)+.5) )
+#define ABS(a)  ( (a)<0 ? (-(a)) : (a) )
+
+#define SWAP(arg,one) (one==1 ? arg : swapfint(arg))
+
+/* The following macro's are to be used for accessing and modifying GDS
+ * internal records. They require that a variable 'one' is present.
+ * This variable must be a copy of the descriptor header's 'one'
+ */
+#define NextExt(rec) SWAP(((exthead)&(rec))->key_ind ? \
+                    ((keyhead)&(rec))->next_ext : ((exthead)&(rec))->next_ext, \
+                      one )
+
+#define NextKey(rec) SWAP(((keyhead)&(rec))->next_key, one)
+
+#define RecFint(rec,part) SWAP(rec->part,one)
+
+#define KeyFint(rec,part) RecFint(((keyhead)&(rec)),part)
+
+#define ExtFint(rec,part) RecFint(((exthead)&(rec)),part)
+
+#define PutRecFint(rec,part,value) (rec)->part = SWAP(value,one)
+
+#define PutKeyFint(rec,part,value) PutRecFint(((keyhead)&(rec)),part,value)
+
+#define PutExtFint(rec,part,value) PutRecFint(((exthead)&(rec)),part,value)
+
+#define RelRec(i) (((i)+(EXT_DL)-(KEY_DL)-1)/(EXT_DL))
+
+#define CHANGED(d) if (!(d)->changed && !(d)->readonly) \
+                      (d)->changed = ScheduleTimer(updater,PERIOD,d);
+
+extern srvstat server;
+
+static int  CheckDescr(descr);
+static void InitDescr (descr, fint);
+static void updater(ident, descr);
+
+static int  Allocate(descr set);
+static void Deallocate(descr,int,int,int);
+static void InsertKeyRec(descr set, int buck, int recno, int prev);
+static void InsertExtRec(descr set, int recno, int prev);
+static int  Hash(char *name, fint coord, int prime);
+static void FindItem(dscfile file, char *name, fint level, int *buckno,
+                     int *current, int *previous);
+static fint Higher(dscfile set, fint level, fint *ctrl);
+static int  LevCmp(dscfile set, fint lev1, fint lev2);
+static int  ExtendDescr(descr current);
+                     
+/* ========================================================================== */
+/*                                 NewDescr                                   */
+/* -------------------------------------------------------------------------- */
+/*  NewDescr() creates a new descriptor object for a set with the specified
+ *  name. Argument 'initsize' determines whether an existing set is opened
+ *  or a new set is created: If initsize>0 a new set is created with the
+ *  specified size.
+ */
+extern object NewDescr(char *name, int initsize, int extendsize, int prime)
+{
+   descr result=New(_descr);
+    
+   result->extendsize = extendsize?extendsize:server->extendsize;
+   if (!initsize) {
+      result->fd   = OpenFile(name,".descr",&result->readonly);
+      if (!result->fd) {
+         server->error = GDS_OPENFAIL;
+         DeleteDescr(result);
+         return NULL;
+      }
+      result->size = FileSize(result->fd);
+      if (result->size < sizeof(_header)) {
+         server->error = GDS_BADHEADER;
+         DeleteDescr(result);
+         return NULL;
+      }
+      result->file = (dscfile)malloc(result->size);
+      if (!result->file) {
+         server->error = GDS_NOMEM;
+         DeleteDescr(result);
+         return NULL;
+      }
+      if (ReadFile(result->fd, result->file)) {
+         server->error = GDS_OPENFAIL;
+         DeleteDescr(result);
+         return NULL;
+      }
+      if (strstr(name, "_tmp_")==name) {
+         char *dscname = malloc(strlen(name)+strlen(".descr")+1);
+         (void)strcpy(dscname, name);
+         (void)unlink(strcat(dscname, ".descr"));
+         free(dscname);
+         result->temporary = 1;
+         CloseFile(&result->fd);
+      }
+      if (!result->readonly) {
+         result->bitmap = 
+          (int*)calloc(BMSIZE(result->size),sizeof(int));
+         if (!result->bitmap) {
+            server->error = GDS_NOMEM;
+            DeleteDescr(result);
+            return NULL;
+         }
+      } else {
+         CloseFile(&result->fd);
+      }
+      if (server->error = CheckDescr(result)) {
+         DeleteDescr(result);
+         return NULL;
+      }
+      if (!result->readonly && !result->temporary) {
+         header head   =(header)result->file;
+         fint   one    =head->one;
+         fint   nitems =RecFint(head,nitems);
+         fint   n_buck =RecFint(head,n_buck);
+         fint   n_alloc=RecFint(head,n_alloc);
+         fint   maxrec =RecFint(head,maxrec);
+          
+         if (nitems>(2*n_buck) || (maxrec-n_alloc)*REC_SIZ>result->extendsize)
+            (void)DescrOptimize(result);
+      }
+   } else {
+      prime    = NextPrime(prime?prime:server->prime);
+      initsize = MAX((prime*sizeof(fint)+sizeof(_header)+10*REC_SIZ),initsize);
+      result->size = initsize;
+      result->file = (dscfile)malloc(result->size);
+      if (!result->file) {
+         server->error = GDS_NOMEM;
+         DeleteDescr(result);
+         return NULL;
+      }
+      result->bitmap = 
+       (int*)calloc(BMSIZE(result->size),sizeof(int));
+      if (!result->bitmap) {
+         server->error = GDS_NOMEM;
+         DeleteDescr(result);
+         return NULL;
+      }
+      InitDescr(result,prime);
+      result->fd = CreateFile(name,".descr",result->size);
+      if (!result->fd) {
+         server->error = GDS_CREFAIL;
+         DeleteDescr(result);
+         return NULL;
+      }
+      UpdateDescr(result, UPD_WRITE);
+   }
+   return result;
+}
+
+/* ========================================================================== */
+/*                                 DeleteDescr                                */
+/* -------------------------------------------------------------------------- */
+/*  DeleteDescr() deletes a descriptor object and frees all resources 
+ *  associated with it.
+ */
+extern void DeleteDescr(object dscobj)
+{
+   descr current=(descr)dscobj;
+    
+   Deschedule(&current->changed);
+   if (current->bitmap) Delete(current->bitmap);
+   if (current->fd) CloseFile(&current->fd);
+   if (current->file) Delete(current->file);
+   if (current->keytab) Delete(current->keytab);
+   Delete(current);
+}
+
+
+/* ========================================================================== */
+/*                                 LockDescr                                  */
+/* -------------------------------------------------------------------------- */
+/*  LockDescr() sets the descriptor lock status. The lock status is used to
+ *  determine whether changes should be written to the descriptor file.
+ *  If it is non-zero, writing out changes is disabled.
+ */
+extern void LockDescr(object dscobj, int lock)
+{
+   descr current=(descr)dscobj;
+    
+   current->lock = lock;
+}
+
+/* ========================================================================== */
+/*                                 DescrFtype                                 */
+/* -------------------------------------------------------------------------- */
+/*  DescrFtype() returns the floating point type of the specified set.
+ */
+extern fint DescrFtype(object dscobj)
+{
+   return ((descr)dscobj)->ftype;
+} 
+   
+/* ========================================================================== */
+/*                                 DescrItype                                 */
+/* -------------------------------------------------------------------------- */
+/*  DescrItype() returns the integer type of the specified set.
+ */
+extern fint DescrItype(object dscobj)
+{
+   return ((descr)dscobj)->itype;
+} 
+
+/* ========================================================================== */
+/*                                 DescrPrime                                 */
+/* -------------------------------------------------------------------------- */
+/*  DescrPrime() returns the size of the set's hash table.
+ */
+extern fint DescrPrime(object dscobj)
+{
+   header head=(header)((descr)dscobj)->file;
+   fint   one=head->one;
+   return RecFint(head,n_buck);
+}
+
+/* ========================================================================== */
+/*                                 DescrNitems                                */
+/* -------------------------------------------------------------------------- */
+/*  DescrNitems() returns the number of descriptor items in the set.
+ */
+extern fint DescrNitems(object dscobj)
+{
+   header head=(header)((descr)dscobj)->file;
+   fint   one=head->one;
+   return RecFint(head,nitems);
+}
+
+/* ========================================================================== */
+/*                                 DescrReadonly                              */
+/* -------------------------------------------------------------------------- */
+/*  DescrReadonly() returns the read-only status of the set.
+ */
+extern int DescrReadonly(object dscobj)
+{
+   return ((descr)dscobj)->readonly;
+}
+
+/* ========================================================================== */
+/*                                 UpdateDescr                                */
+/* -------------------------------------------------------------------------- */
+/*  UpdateDescr() reads or writes the modified descriptor image.
+ */
+extern void UpdateDescr(object dscobj, int mode)
+{
+   descr current=(descr)dscobj;
+    
+   if (!current->readonly && current->changed) {
+      if (!current->temporary) {
+         (void)UpdateFile(current->fd, mode, 
+                          current->file, current->bitmap, REC_SIZ);
+      }
+      Deschedule(&current->changed);
+   }
+}
+
+/* ========================================================================== */
+/*                                 DescrRhead                                 */
+/* -------------------------------------------------------------------------- */
+/*  DescrRhead() fills the buffer to be transferred to a client in response
+ *  of a set_rhed request.
+ */
+extern int DescrRhead(object client, object dscobj)
+{
+   descr current=(descr)dscobj;
+   header head=(header)current->file;
+   
+   PutDouble(client, current->ftype, head->ax_origin, MAXDIM);
+   PutFint(client, current->itype, head->ax_size, MAXDIM);
+   PutFint(client, current->itype, head->ax_factor, MAXDIM+1);
+   PutFint(client, current->itype, &head->naxis, 1);
+   return 0;
+}
+
+/* ========================================================================== */
+/*                                 DescrWhead                                 */
+/* -------------------------------------------------------------------------- */
+/*  DescrWhead() transfers the client buffer contents which was filled by
+ *  a set_whed request to the descriptor file image.
+ */
+extern int DescrWhead(object client, object dscobj)
+{
+   descr current=(descr)dscobj;
+   header head=(header)current->file;
+   
+   GetDouble(client, current->ftype, head->ax_origin, MAXDIM);
+   GetFint(client, current->itype, head->ax_size, MAXDIM);
+   GetFint(client, current->itype, head->ax_factor, MAXDIM+1);
+   GetFint(client, current->itype, &head->naxis, 1);
+   /* bitmap should be updated here */
+   CHANGED(current)
+   return 0;
+}
+
+/* ========================================================================== */
+/*                                 DescrDelete                                */
+/* -------------------------------------------------------------------------- */
+/*  DescrDelete() deletes a descriptor item.
+ */
+extern int DescrDelete(object client, object dscobj)
+{
+   descr current=(descr)dscobj;
+   dscDelete request=(dscDelete)ClientRequest(client);
+   fint level=request->level;
+   int   buck, curr, prev;
+    
+   FindItem(current->file, request->name, level, &buck, &curr, &prev);
+   if (curr>0) {
+      Deallocate(current, buck, curr, prev);
+      CHANGED(current)
+      return GDS_SUCCESS;
+   } else return GDS_NOTFOUND;
+}
+
+/* ========================================================================== */
+/*                                 DescrLength                                */
+/* -------------------------------------------------------------------------- */
+/*  DescrLength() obtains the length of a descriptor item.
+ */
+extern int DescrLength(object client, object dscobj)
+{
+   descr current=(descr)dscobj;
+   record rec=(record)current->file;
+   dscLength request=(dscLength)ClientRequest(client);
+   fint level=request->level;
+   int   buck, curr, prev;
+    
+   FindItem(current->file, request->name, level, &buck, &curr, &prev);
+   if (curr>0) {
+      PutFint(client, current->itype, &rec[curr].key.h.length,1);
+      return GDS_SUCCESS;
+   } else return GDS_NOTFOUND_2;
+}
+
+/* ========================================================================== */
+/*                                 DescrRewind                                */
+/* -------------------------------------------------------------------------- */
+/*  DescrRewind() resets the reading position in a descriptor item to its
+ *  beginning.
+ */
+extern int DescrRewind(object client, object dscobj)
+{
+   descr current=(descr)dscobj;
+   header head=(header)current->file;
+   fint one=head->one;
+   record rec=(record)current->file;
+   dscRewind request=(dscRewind)ClientRequest(client);
+   fint level=request->level;
+   int   buck, curr, prev;
+    
+   FindItem(current->file, request->name, level, &buck, &curr, &prev);
+   if (curr>0) {
+      PutKeyFint(rec[curr],readpos,0);
+      PutKeyFint(rec[curr],curr_ext,curr);
+      return GDS_SUCCESS;
+   } else return GDS_NOTFOUND_3;
+}
+
+/* ========================================================================== */
+/*                                 DescrRead                                  */
+/* -------------------------------------------------------------------------- */
+/*  DescrRead() fills the client buffer in response of a dsc_read request.
+ */
+extern int DescrRead(object client, object dscobj)
+{
+   descr current=(descr)dscobj;
+   header head=(header)current->file;
+   fint one=head->one;
+   record rec=(record)head;
+   dscRead request=(dscRead)ClientRequest(client);
+   int buck, curr, prev;
+   fint rlevel=request->level;
+   fint level=rlevel, ctrl=-1, pos, length, nelems;
+   fint akrec, rkrec, rtrec, arec, rrec, first, prrec, newpos;
+   int  ntrans, result;
+    
+   if (request->abslev) {
+      FindItem(current->file, request->name, level, &buck, &curr, &prev);
+   } else {
+      level = rlevel;
+      while (1) {
+         FindItem(current->file, request->name, level, &buck, &curr, &prev);
+         if ((level==0)||(curr!=0)) break;
+         level = Higher(current->file, rlevel, &ctrl);
+      }
+   }
+   if (!curr) return GDS_NOTFOUND;
+   pos = request->position ? request->position : KeyFint(rec[curr],readpos)+1;
+   length = KeyFint(rec[curr],length);
+   if (pos>length) return GDS_INCOMPLETE;
+   nelems = request->nelems>0 ? request->nelems : length-pos+1;
+   if (pos+nelems-1 > length ) nelems = length-pos+1;
+   result = ClientBuffer(client, nelems);    /* allocate client buffer space */
+   if (result) return result;
+   newpos = pos+nelems-1;
+   PutFint(client, OS_INTEGER_TYPE, &level, 1);
+   /* find record where read starts; if possible use last reading position */
+   akrec = KeyFint(rec[curr],curr_ext);          /* absolute 'known' record  */
+   rkrec = RelRec(KeyFint(rec[curr],readpos));   /* relative 'known' record  */
+   rtrec = RelRec(pos);                          /* relative 'target' record */
+   if (rtrec >= rkrec) {
+      rrec = rkrec;
+      arec = akrec;
+   } else {
+      rrec = 0;
+      arec = curr;
+   }
+   for (; rrec<rtrec; rrec++) arec = NextExt(rec[arec]);    /* locate target */
+   if (rrec==0) first = pos-1; else first = (pos-KEY_DL-1)%(EXT_DL);
+   if (rrec==0) {
+      ntrans = MIN(nelems,KEY_DL-first);
+      PutBuffer(client,rec[arec].key.data+first,ntrans);
+      nelems -= ntrans;
+      prrec = arec;
+      arec = NextExt(rec[arec]);
+      first = 0;
+   }
+   while (nelems) {
+      ntrans = MIN(nelems,EXT_DL-first);
+      PutBuffer(client,rec[arec].ext.data+first,ntrans);
+      nelems -= ntrans;
+      prrec = arec;
+      arec = NextExt(rec[arec]);
+      first = 0;
+   }
+   PutKeyFint(rec[curr],curr_ext,prrec);
+   PutKeyFint(rec[curr],readpos,newpos);
+   return GDS_SUCCESS;
+}
+            
+/* ========================================================================== */
+/*                                 DescrWrite                                 */
+/* -------------------------------------------------------------------------- */
+/*  DescrWrite() prepares the set for performing the actual write request.
+ *  If necessary, it allocates sufficient space for the request.
+ *  The request is modified in such a way that it can be used by
+ *  DescrWritex, which does the actual transfer.
+ *  The number of bytes to be transferred is set in the 'nelems' component
+ *  of the request. It returns a GDS result code.
+ */
+extern int DescrWrite(object client, object dscobj)
+{
+   descr current=(descr)dscobj;
+   header head=(header)current->file;
+   fint one=head->one;
+   record rec=(record)head;
+   dscWrite request=(dscWrite)ClientRequest(client);
+   fint level=request->level;
+   int buck, curr, next, prev, recno;
+   fint length, av_len, tg_len;
+   int result;
+    
+   result = ClientBuffer(client,request->nelems);
+   if (result) return result;
+   FindItem(current->file, request->name, level, &buck, &curr, &prev);
+   if (curr==0) {
+      curr = Allocate(current);
+      if (curr<=0) {
+         fint result=ExtendDescr(current);
+         if (result) return result;
+         head = (header)current->file;
+         rec  = (record)head;
+         curr = Allocate(current);
+      }
+      if (curr<=0) return server->error;
+      PutKeyFint(rec[curr],key_ind,1);
+      PutKeyFint(rec[curr],next_ext,0);
+      PutKeyFint(rec[curr],curr_ext,curr);
+      PutKeyFint(rec[curr],last_ext,curr);
+      PutKeyFint(rec[curr],length,0);
+      PutKeyFint(rec[curr],readpos,0);
+      strcpy(rec[curr].key.h.name,request->name);
+      PutKeyFint(rec[curr],level,level);
+      PutKeyFint(rec[curr],type,0);
+      InsertKeyRec(current, buck, curr, prev);
+      PutRecFint(head,nitems,(RecFint(head,nitems)+1));
+   }
+   length = KeyFint(rec[curr],length);
+   av_len = KEY_DL + (RelRec(length))*(EXT_DL);
+   if (request->position==0) request->position = length+1;
+   if (request->position > length+1) return GDS_BADWPOS;
+   if (request->nelems<=0) 
+      request->nelems = MAX(1, length-request->position+1);
+   recno = KeyFint(rec[curr],last_ext);
+   request->akrec = recno;                                 /* for DescrWritex */
+   request->rkrec = RelRec(KeyFint(rec[curr],length));     /* for DescrWritex */
+   tg_len = request->position + request->nelems - 1;
+   while (av_len < tg_len) {
+      next = Allocate(current);
+      if (next<=0) {
+         server->error = ExtendDescr(current);
+         if (!server->error) {
+            head = (header)current->file;
+            rec  = (record)head;
+            next = Allocate(current);
+         }
+      }
+      if (next<=0) {
+         PutKeyFint(rec[curr], length, av_len);
+         PutKeyFint(rec[curr], last_ext, recno);
+         return server->error;
+      }
+      InsertExtRec(current, next, recno);
+      recno = next;
+      av_len += (EXT_DL);
+   }
+   length = MAX(length,tg_len);
+   PutKeyFint(rec[curr], length, length);
+   PutKeyFint(rec[curr], last_ext, recno);
+   request->curr   = curr;                                /* for DescrWritex */
+   request->length = length;                              /* for DescrWritex */
+   /* bitmap should be updated here */
+   CHANGED(current)
+   return GDS_SUCCESS;
+}
+   
+/* ========================================================================== */
+/*                                 DescrWritex                                */
+/* -------------------------------------------------------------------------- */
+extern int DescrWritex(object client, object dscobj)
+{
+   descr current=(descr)dscobj;
+   header head=(header)current->file;
+   fint one=head->one;
+   record rec=(record)current->file;
+   dscWrite request=(dscWrite)ClientRequest(client);
+   int curr=request->curr;
+   fint pos=request->position;
+   fint nelems=request->nelems;
+   fint akrec, rkrec, rtrec, arec, rrec, first, prrec;
+   int  ntrans;
+    
+   if (strcmp(rec[request->curr].key.h.name,request->name)) return -1;
+   if (SWAP(rec[request->curr].key.h.length,one) < request->length)  return -1;
+   akrec = request->akrec;                        /* absolute 'known' record  */
+   rkrec = request->rkrec;                        /* relative 'known' record  */
+   rtrec = RelRec(pos);                           /* relative 'target' record */
+   if (rtrec >= rkrec) {
+      rrec = rkrec;
+      arec = akrec;
+   } else {
+      rrec = 0;
+      arec = curr;
+   }
+   for (; rrec<rtrec; rrec++) arec = NextExt(rec[arec]);     /* locate target */
+   if (rrec==0) first = pos-1; else first = (pos-KEY_DL-1)%(EXT_DL);
+   if (rrec==0) {
+      ntrans = MIN(nelems,KEY_DL-first);
+      GetBuffer(client,rec[arec].key.data+first,ntrans);
+      nelems -= ntrans;
+      prrec = arec;
+      arec = NextExt(rec[arec]);
+      first = 0;
+   }
+   while (nelems) {
+      ntrans = MIN(nelems,EXT_DL-first);
+      GetBuffer(client,rec[arec].ext.data+first,ntrans);
+      nelems -= ntrans;
+      prrec = arec;
+      arec = NextExt(rec[arec]);
+      first = 0;
+   }
+   /* bitmap should be updated here */
+   CHANGED(current)
+   return 0;
+}
+   
+/* ========================================================================== */
+/*                                 DescrFind                                  */
+/* -------------------------------------------------------------------------- */
+/*  DescrFind() finds the next descriptor item in response of a dsc_find 
+ *  request.
+ */
+extern int DescrFind(object client, object dscobj)
+{
+   descr current=(descr)dscobj;
+   header head=(header)current->file;
+   fint one=head->one;
+   record rec=(record)head;
+   fint   *htab=head->hash_tab;
+   fint   nbuk=RecFint(head,n_buck);
+   dscFind request=(dscFind)ClientRequest(client);
+   fint   index=request->index;
+   fint   level, rlevel=request->level;
+   int ibuk, nitems;
+
+   if (index<0) index = 0;
+   if (!index) {
+      if (current->keytab) Delete(current->keytab);
+      nitems = RecFint(head,nitems);
+      if (!nitems) return GDS_NOTFOUND;
+      current->keytab = NNew(nitems,_keylev);
+      if (!current->keytab) return GDS_NOMEM;
+      nitems = 0;
+      for (ibuk=0; ibuk<nbuk; ibuk++) {
+         int k=SWAP(htab[ibuk],one);
+         while (k) {
+            level = KeyFint(rec[k],level);
+            if (rlevel==0x7FFFFFFF||LevCmp((dscfile)head, level, rlevel)>=0) {
+               current->keytab[nitems].recno = k;
+               current->keytab[nitems].level = KeyFint(rec[k],level);
+               strcpy(current->keytab[nitems].name,rec[k].key.h.name);
+               nitems++;
+            }
+            k = NextKey(rec[k]);
+         }
+      }
+      current->nkeys = nitems;
+   }
+   if (!current->keytab) return GDS_NOTFOUND;
+   while (index < current->nkeys) {
+      int recno=current->keytab[index].recno;
+      if (KeyFint(rec[recno],level)==current->keytab[index].level &&
+          !strcmp(rec[recno].key.h.name,current->keytab[index].name)) {
+         PutFint(client,OS_INTEGER_TYPE,&current->keytab[index].level,1);
+         index++;
+         PutFint(client,OS_INTEGER_TYPE,&index,1);
+         PutBuffer(client,current->keytab[index-1].name,KEY_LEN);
+         return GDS_SUCCESS;
+      }
+      index++;
+   }
+   return GDS_NOTFOUND;
+}
+
+/* ========================================================================== */
+/*                                 DescrDelall                                */
+/* -------------------------------------------------------------------------- */
+/*  DescrDelall() deletes descriptor items with the specified name on all
+ *  levels.
+ */
+extern int DescrDelall(object client, object dscobj)
+{
+   descr current=(descr)dscobj;
+   header head=(header)current->file;
+   fint one=head->one;
+   record rec=(record)head;
+   fint   *htab=head->hash_tab;
+   fint   nbuk=RecFint(head,n_buck);
+   dscDelall request=(dscDelall)ClientRequest(client);
+   fint level=request->level;
+   int ibuk;
+   int result=GDS_NOTFOUND;
+    
+   for (ibuk=0; ibuk<nbuk; ibuk++) {
+      int k=SWAP(htab[ibuk],one);
+      int prev=0;
+      while (k) {
+         if (!strcmp(rec[k].key.h.name,request->name)) {
+            fint flevel=KeyFint(rec[k],level);
+            if (flevel <= level) {
+               int drec=k;
+               k = NextKey(rec[k]); 
+               Deallocate(current, ibuk, drec, prev);
+               result = GDS_SUCCESS;
+               continue;
+            }
+         }
+         prev = k;
+         k = NextKey(rec[k]);
+      }
+   }
+   if (result==GDS_SUCCESS) CHANGED(current)
+   return result;
+}
+ 
+/* ========================================================================== */
+/*                                 DescrOptimize                              */
+/* -------------------------------------------------------------------------- */
+/*  DescrOptimize() adjusts the hash table size to a size equal to or larger
+ *  than the current number of descriptor items and it eliminates unused
+ *  space.
+ */
+extern int DescrOptimize(object dscobj)
+{
+   int newprime;
+   int newsize;
+   descr current=(descr)dscobj;
+   dscfile curfile=current->file, newfile;
+   int *newbitmap;
+   int i, n_alloc, nitems, n_buck;
+   int one=curfile->h.one;
+
+                                               /* Initialization and checks. */
+   if (current->readonly) return GDS_NOPRIV;
+   if (current->lock)     return GDS_LOCKED;
+   UpdateDescr(dscobj, UPD_WRITE);
+   newprime = NextPrime(MAX(server->prime,SWAP(curfile->h.nitems,one)));
+   n_buck = SWAP(curfile->h.n_buck,one);
+   newsize = MAX(current->size,
+                 current->size+(newprime-n_buck)*sizeof(fint));
+   newsize += current->extendsize; /* ... avoid problem; FIX later! */
+   newbitmap = (int*)calloc(BMSIZE(newsize),sizeof(int));
+   if (!newbitmap) return GDS_NOMEM;
+   newfile = (dscfile)malloc(newsize);
+   if (!newfile) {
+      free(newbitmap);
+      return GDS_NOMEM;
+   }
+   if (newsize > current->size) {
+      if (!current->temporary) {
+         if (ExtendFile(current->fd, newsize - current->size)) {
+            free(newbitmap);
+            free(newfile);
+            return GDS_EXTENDFAIL;
+         }
+      }
+      current->size = newsize;
+   }
+                                                /* Copy old structure to new. */
+   memcpy(newfile,curfile,sizeof(_header));
+   newfile->h.free = 0;
+   newfile->h.rec_start = SWAP(
+                               ( sizeof(_dscfile)
+                                +sizeof(fint)*(newprime-1)
+                                +sizeof(_record)-1 )
+                                                    /sizeof(_record),
+                                one);
+   nitems  = 0;
+   n_alloc = SWAP(newfile->h.rec_start,one);
+   newfile->h.n_buck  = SWAP(newprime,one);
+   for (i=0; i<newprime; i++) newfile->h.hash_tab[i] = 0;
+    
+   for (i=0; i<n_buck; i++) {
+      int k=SWAP(curfile->h.hash_tab[i],one);
+      while (k) {
+         keyrec oldkey=(keyrec)&curfile->r[k];
+         keyrec newkey=(keyrec)&newfile->r[++n_alloc];
+         int    newbuk=Hash(oldkey->h.name,SWAP(oldkey->h.level,one),newprime);
+         int    ext   =SWAP(oldkey->h.next_ext,one);
+         int    last  =n_alloc;
+
+         nitems++;
+         memcpy(newkey,oldkey,REC_SIZ);
+         newkey->h.next_key = newfile->h.hash_tab[newbuk];
+         newfile->h.hash_tab[newbuk] = SWAP(n_alloc,one);
+         newkey->h.readpos  = 0;
+         newkey->h.curr_ext = SWAP(n_alloc,one);
+         if (ext) newkey->h.next_ext = SWAP(n_alloc+1,one);
+         while (ext) {
+            extrec oldext=(extrec)&curfile->r[ext];
+            extrec newext=(extrec)&newfile->r[++n_alloc];
+             
+            last = n_alloc;
+            memcpy(newext,oldext,REC_SIZ);
+            ext = SWAP(oldext->h.next_ext,one);
+            if (ext) newext->h.next_ext = SWAP(n_alloc+1,one);
+         }
+         newkey->h.last_ext = SWAP(last,one);
+         k = SWAP(oldkey->h.next_key,one);
+      }
+   }
+   newfile->h.nitems  = SWAP(nitems,one);
+   newfile->h.n_alloc = SWAP(n_alloc,one);
+                                                            /* Link to set. */
+   free(current->bitmap);
+   current->bitmap = newbitmap;
+   free(current->file);
+   current->file = newfile;
+   current->size = MIN((n_alloc+1+10)*REC_SIZ, current->size);
+   newfile->h.maxrec = SWAP(current->size/REC_SIZ-1, one);
+   if (!current->temporary) {
+      (void)ftruncate(current->fd, current->size);
+      (void)WriteFile(current->fd, current->file);
+   }
+   return GDS_SUCCESS;
+}
+
+/* ========================================================================== */
+/*                                 RecoverDescr                               */
+/* -------------------------------------------------------------------------- */
+/*  RecoverDescr() attemps to recover as much as possible from a corrupt
+ *  descriptor file.
+ */
+extern fint RecoverDescr(char *name)
+{
+   header  file;
+   int     errors=0;
+   int     fd, readonly, size, ibuk;
+   fint    one, *htab, nbuk, rec_start, recno, prevrec, maxrec;
+   record  rec;
+    
+   fd = OpenFile(name,".descr",&readonly);
+   if (!fd) return GDS_OPENFAIL;
+   if (readonly) {
+      CloseFile(&fd);
+      return GDS_NOPRIV;
+   }
+    
+   size = FileSize(fd);
+   if (size<sizeof(_header)) {
+      CloseFile(&fd);
+      return GDS_BADHEADER;
+   }
+   
+   file = (header)malloc(size);
+   if (!file) {
+      CloseFile(&fd);
+      return GDS_NOMEM;
+   }
+    
+   if (ReadFile(fd, file)) {
+      CloseFile(&fd);
+      return GDS_OPENFAIL;     
+   }
+    
+   if ((file->version!=VERSION) && (file->version!=swapfint(VERSION))) {
+      CloseFile(&fd);
+      return GDS_BADVERSION;
+   }
+    
+   one = (file->version==2)?1:swapfint(1);
+
+   maxrec = size/REC_SIZ-1;
+   if (maxrec<SWAP(file->maxrec,one)) {
+      errors++;                                            /* truncated file */
+   }
+   file->maxrec = SWAP(maxrec,one);
+
+   htab      = file->hash_tab;
+   nbuk      = RecFint(file,n_buck);
+   rec_start = RecFint(file,rec_start);
+   rec       = (record)file;
+
+   recno = SWAP(file->free,one);
+   if (recno && (recno<rec_start || recno>maxrec) ) {
+      errors++;                                    /* invalid free list head */
+      file->free = 0;
+   }
+   for (recno=SWAP(file->free,one); recno; recno=NextExt(rec[recno])) {
+      if (recno<rec_start || recno>maxrec) {
+         errors++;                                 /* invalid free list link */
+         PutExtFint(rec[prevrec],next_ext,0);
+         break;
+      }
+      prevrec = recno;
+   }
+         
+   for (ibuk=0; ibuk<nbuk; ibuk++) {
+      int k=SWAP(htab[ibuk],one);
+      if (k && ( k<rec_start || k>maxrec ) ) {
+         errors++;                               /* invalid hash table entry */
+         htab[ibuk] = 0;
+         k = 0;
+      }
+      while (k) {
+         fint length=KEY_DL-EXT_DL;
+         int  nextk;
+         for (recno=k; recno; recno=NextExt(rec[recno])) {
+            if (recno<rec_start || recno>maxrec) {
+               errors++;                         /* invalid extension link */
+               if (prevrec==k) {
+                  PutKeyFint(rec[prevrec], next_ext, 0);
+               } else {
+                  PutExtFint(rec[prevrec], next_ext, 0);
+               }
+               if (KeyFint(rec[k],length)>length) {
+                  PutKeyFint(rec[k],length,length);
+               }
+               break;
+            }
+            length += EXT_DL;
+         }
+         nextk = NextKey(rec[k]);
+         if (nextk && (nextk<rec_start || nextk>maxrec) ) {
+            errors++;                         /* invalid key record link */
+            PutKeyFint(rec[k],next_key,0);
+            k = 0;
+         } else k = nextk;
+      }
+   }
+   if (errors) (void)WriteFile(fd, file);
+   CloseFile(&fd);
+   return GDS_SUCCESS;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 ExtendDescr                                */
+/* -------------------------------------------------------------------------- */
+/*  ExtendDescr() attemps to increase the size of a set descriptor.
+ */
+static int ExtendDescr(descr current)
+{
+   dscfile newfile;
+   int     *newbitmap;
+   int     newsize=current->size+current->extendsize;
+
+   newbitmap = (int*)calloc(BMSIZE(newsize),sizeof(int));
+   if (!newbitmap) return GDS_NOMEM;
+   newfile = (dscfile)realloc(current->file,newsize);
+   if (!newfile) {
+      free(newbitmap);
+      return GDS_NOMEM;
+   }
+   if (!current->temporary) {
+      if (ExtendFile(current->fd, current->extendsize)) return GDS_EXTENDFAIL;
+   }
+   memcpy(newbitmap, current->bitmap, BMSIZE(current->size));
+   free(current->bitmap);
+   current->bitmap = newbitmap;
+   current->file = newfile;
+   current->size = newsize;
+   return CheckDescr(current);
+}
+   
+/* -------------------------------------------------------------------------- */
+/*                                 CheckDescr                                 */
+/* -------------------------------------------------------------------------- */
+/*  CheckDescr() checks whether the version of the descriptor file is
+ *  compatible with the version of the server. If necessary it updates
+ *  the maximum number of records in the file (depending on the file
+ *  size. It stores the integer- and floating point type in the descriptor
+ *  status block.
+ */
+static int CheckDescr(descr current)
+{
+   header file=(header)current->file;
+   fint one;
+   fint maxrec;
+      
+   /* ---- check version compatibility
+   */
+   if ((file->version!=VERSION) && (file->version!=swapfint(VERSION)))
+      return GDS_BADVERSION;
+
+   /* ---- version 2.0: convert to 2.1+ 
+    *      (set the floating point type to either IEEE High Endian 
+    *       or IEEE Little Endian.)
+    */
+   if (file->subversion == 0) {
+      union {
+         fint        l;
+         char        b[sizeof(fint)];
+      } u, v;
+       
+      file->one = (file->version==2)?1:swapfint(1); /* V2.0 did not define it */
+      v.l = file->one;
+      u.l = 0;
+      if (v.b[0]) {          /* Little Endian */
+         u.b[0] = 1;
+      } else {               /* High Endian */
+         u.b[0] = 0;
+      }
+      file->osdep = u.l;
+      one = file->one;
+      PutRecFint(file,subversion,1);
+      /* bitmap should be updated here */
+      CHANGED(current)
+   }
+   
+   one = file->one;  /* used in macro's */
+
+   /* ---- consistency check for truncated file
+    */
+   maxrec = current->size/REC_SIZ-1;
+   if (maxrec < SWAP(file->maxrec, file->one)) {
+      return GDS_TRUNCATED;
+   }
+   
+   /* ---- consistency checks; possible conversion from 2.1 to 2.2
+    */
+   if (!current->safe) {
+      int nitems, ibuk;
+      fint *htab=file->hash_tab;
+      fint nbuk =RecFint(file,n_buck);
+      fint rec_start=RecFint(file,rec_start);
+      fint maxrec=RecFint(file,maxrec);
+      record rec=(record)file;
+      fint recno;
+                                                                /* free list */
+      for (recno=SWAP(file->free,file->one); recno; recno=NextExt(rec[recno]))
+         if (recno<rec_start || recno>maxrec) return GDS_BADLINK;
+                                                         /* descriptor items */
+      nitems = 0;
+      for (ibuk=0; ibuk<nbuk; ibuk++) {
+         int k=SWAP(htab[ibuk],one);
+         while (k) {
+            for (recno=k; recno; recno=NextExt(rec[recno]))
+               if (recno<rec_start || recno>maxrec) return GDS_BADLINK;
+            nitems++;
+            k = NextKey(rec[k]); 
+         }
+      }
+      if ( (SWAP(file->subversion,file->one)<2) ||
+           (SWAP(file->nitems, file->one)!=nitems) ) {
+         PutRecFint(file,nitems,nitems);                     /* V2.1 -> V2.2 */
+         PutRecFint(file,subversion,2);
+         /* bitmap should be updated here */
+         CHANGED(current)
+      }
+      current->safe++;
+   }
+
+   /* ---- adjust maximum number of records to space in file
+    */
+   if (maxrec > SWAP(file->maxrec,file->one)) {
+      file->maxrec = SWAP(maxrec, file->one);
+      /* bitmap should be updated here */
+      CHANGED(current)
+   }
+
+   /* ---- determine set's floating point type
+    */
+   {
+      union {
+         fint i;
+         char b[sizeof(fint)];
+      } u;
+      u.i = file->osdep;
+      current->ftype = u.b[0];
+   }
+
+   /* ---- determine set's integer type
+    */
+   current->itype = OS_INTEGER_TYPE;
+   if (file->one != 1) current->itype = !current->itype;
+   return GDS_SUCCESS;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 InitDescr                                  */
+/* -------------------------------------------------------------------------- */
+/*  InitDescr() initializes the contents of a new descriptor file.
+ */
+static void InitDescr(descr current, fint prime)
+{
+   dscfile file=(dscfile)current->file;
+   
+   file->h.free      = 0;                    /* free list initially empty */
+   file->h.rec_start =                       /* first data record         */
+                      ( sizeof(_dscfile)
+                      +sizeof(fint)*(prime-1)
+                      +sizeof(_record)-1 )
+                                          /sizeof(_record);
+   file->h.nitems    = 0;                    /* no descriptor items yet   */
+   file->h.maxrec    = 0;                    /* CheckDescr will adjust it */
+   file->h.n_alloc   = file->h.rec_start;    /* records allocated so far  */
+   file->h.n_buck    = prime;                /* hash table size           */
+   for ( ;   0<prime--;   file->h.hash_tab[prime] = 0 );
+                                                /* clear hash table          */
+   file->h.version       = VERSION;
+   file->h.subversion    = SUBVERSION;
+   {
+      union {
+       fint   l;
+       char   b[sizeof(fint)];
+      } u;
+                                
+      file->h.one           = 1;
+      u.l = 0;
+      u.b[0] = OS_FLOATING_TYPE;
+      file->h.osdep = u.l;
+   }
+   file->h.naxis         = 0;
+   file->h.ax_factor[0]  = 1;
+   (void)CheckDescr(current);
+   /* bitmap should be updated here */
+   CHANGED(current)
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 updater                                    */
+/* -------------------------------------------------------------------------- */
+/*  updater() is a MainLoop-scheduled timer function which updates the 
+ *  specified descriptor.
+ */
+static void updater(ident id, descr current)
+{
+   if (!current->lock) UpdateDescr(current, UPD_WRITE);
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 Allocate                                   */
+/* -------------------------------------------------------------------------- */
+/*  Allocate() allocates a record.
+ *  It first tries to obtain a record from the free list. If this fails
+ *  it tries to allocate a record at the end of the file.
+ *  Records in the free list are always in the extension record lay-out
+ */
+static int Allocate(descr set)
+{
+   header head=(header)set->file;
+   record recs=(record)set->file;
+   int one=head->one;  
+   int alloc;
+   int result=0;
+     
+   if (head->free) {
+      result = RecFint(head,free);
+      PutRecFint(head, free, NextExt(recs[result]));
+   } else {
+      alloc = RecFint(head,n_alloc);
+      if (alloc < RecFint(head,maxrec)) {
+         result = ++alloc;
+         PutRecFint(head, n_alloc, alloc);
+      }
+   }
+   /* bitmap should be updated here */
+   return result;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 Deallocate                                 */
+/* -------------------------------------------------------------------------- */
+/*  Deallocate() deallocates a record.
+ *  Only key records may be de-allocated.
+ *  The key record and any extension records belonging to it
+ *  are linked into the free list.
+ *  Records in the free list are always in the extension record lay-out
+ *
+ *  Arguments:
+ *               set    =   structure containing the descriptor status   [i]
+ *               buck   =   hash table entry to which the record belongs [i]
+ *               rec    =   number of record to be de-allocated          [i]  
+ *               prev   =   number of record preceding rec               [i]
+ */
+static void Deallocate(descr set, int buck, int rec, int prev)
+{
+   header head=(header)set->file;
+   record recs=(record)set->file;
+   int one=head->one;
+   int last;
+
+   if (prev==0) {
+      head->hash_tab[buck] = recs[rec].key.h.next_key;
+   } else {
+      recs[prev].key.h.next_key = recs[rec].key.h.next_key;
+   }
+   
+   last = KeyFint(recs[rec], last_ext);
+   recs[rec].ext.h.next_ext = recs[rec].key.h.next_ext;
+   recs[last].ext.h.next_ext = head->free;
+   PutRecFint(head, free, rec);
+   PutRecFint(head,nitems,(RecFint(head,nitems)-1));
+   recs[rec].ext.h.key_ind = 0;
+   /* bitmap should be updated here */
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 InsertKeyRec                               */
+/* -------------------------------------------------------------------------- */
+/*  InsertKeyRec() inserts a key record;
+ *
+ *  Arguments:
+ *           set   =  structure containing the descriptor status    [i]
+ *           buck  =  bucket number in hash table                   [i]
+ *           recno =  number of record to be inserted               [i]
+ *           prev  =  number of record after which to insert        [i]
+ */
+static void InsertKeyRec(descr set, int buck, int recno, int prev)
+{
+   dscfile file=(dscfile)set->file;
+
+   if (prev) {
+     file->r[recno].key.h.next_key = file->r[prev].key.h.next_key;
+     file->r[prev].key.h.next_key = SWAP( recno, file->h.one );
+   } else {
+     file->r[recno].key.h.next_key = file->h.hash_tab[buck];
+     file->h.hash_tab[buck]   = SWAP( recno, file->h.one );
+   }
+   /* bitmap should be updated here */
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 InsertExtRec                               */
+/* -------------------------------------------------------------------------- */
+/*  InsertExtRec() inserts an extension record.
+ *
+ *  Arguments:
+ *           set   =  structure containing the descriptor status    [i]
+ *           recno =  number of record to be inserted               [i]
+ *           prev  =  number of record after which to insert        [i]
+ */
+static void InsertExtRec(descr set, int recno, int prev)
+{
+   dscfile file=(dscfile)set->file;
+   
+   file->r[recno].ext.h.next_ext = 0;
+   file->r[recno].ext.h.key_ind  = 0;
+   if (file->r[prev].key.h.key_ind) {
+      file->r[prev].key.h.next_ext = SWAP( recno, file->h.one );
+   } else {
+      file->r[prev].ext.h.next_ext = SWAP( recno, file->h.one );
+   }
+   /* bitmap should be updated here */
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 Hash                                       */
+/* -------------------------------------------------------------------------- */
+/*  Hash() calculates a hash function to index into table of descriptor 
+ *  key records.
+ *
+ *  Arguments:
+ *             name    key record name. Only the first 15 characters are used.
+ *             coord   coordinate word.
+ *             prime   size of table. Should be a prime number.
+ *
+ *  The function returns values in the range 0 ... prime-1.
+ */
+static int Hash(char name[],fint coord,int prime)
+{
+   const maxlen=15;
+   fint  h;
+   int   i;
+   
+   h = name[0];
+   for( i=1 ; i<maxlen && name[i]!=0; i++) h = 2*h + name[i];
+   return ((h % prime)+coord) % prime;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 FindItem                                   */
+/* -------------------------------------------------------------------------- */
+/*  FindItem() finds a descriptor item.
+ *
+ *  Arguments:
+ *
+ *          file     =  structure containing the file data.            [i]
+ *          name     =  the name of the item.                          [i]
+ *          level    =  the coordinate level of the item.              [i]
+ *          buckno   =  entry number of the hash table                 [o]
+ *          current  =  record number of the key record                [o]
+ *                      of the descriptor item. Zero if not found      
+ *          previous =  number of the record preceding                 [o]
+ *                      the key record which has been found or the
+ *                      last record in the chain. Zero if chain
+ *                      contains no records.                       
+ */
+static void FindItem(dscfile file, char *name, fint level, int *buckno,
+                     int *current, int *previous)
+{
+   header head=(header)file;
+   record recs=(record)file;
+   int one=head->one;
+
+   *previous = 0;
+   *buckno   = Hash(name,level,RecFint(head, n_buck));
+   *current  = SWAP( head->hash_tab[*buckno], one );
+   while (*current != 0) {
+      if (level==KeyFint(recs[*current], level)
+          && !strcmp(name,recs[*current].key.h.name)) break;
+      *previous = *current;
+      *current = NextKey(recs[*current]);
+   }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 Higher                                     */
+/* -------------------------------------------------------------------------- */
+/*  Higher() generates coordinate words higher in the hierarchy.
+ *
+ *  Arguments:
+ *  
+ *        set   =  pointer to structure containing the descriptor file.
+ *        level =  coordinate word used as starting point
+ *        ctrl  =  control word. Should be set to -1 in the first call of
+ *                 a sequence and left unmodified in the other calls.
+ */
+static fint Higher(dscfile set, fint level, fint *ctrl)
+{
+   header head=(header)set;
+   static fint coord[MAXDIM];
+   static int  axnum[MAXDIM];        
+   static int  naxdef, ndtry;
+   int         mask;
+   int         one=head->one;
+   fint        i, lev_out;
+   
+/*
+ *  initialization section: extract defined coordinates from level      
+ */
+   if (*ctrl<0) {
+      fint	naxis;
+      int j, curax;
+      naxdef = 0;
+      naxis = RecFint(head, naxis);
+      for ( j=0; j < naxis; j++ ) {
+         curax = (level % SWAP(set->h.ax_factor[j+1], one)) /
+            SWAP(set->h.ax_factor[j],one);
+         if (curax) {
+            axnum[naxdef]   = j;           /* axis number              */
+            coord[naxdef++] = curax;       /* corresponding coordinate */
+         }
+      }
+      if (naxdef<2) return (fint)0;                    /* trivial case */
+      ndtry = naxdef;
+      *ctrl = 0;
+   }
+/*
+ * enumerate all values between ctrl (i.e. the point where the last call
+ * returned) and 2^(number of dimensions currently being tried). If a value
+ * has the right number of bits set, state is saved in ctrl and the 
+ * enumeration stops.
+ */
+   do {
+      if (*ctrl==0) {
+         ndtry--;        /* new pass: decrement # of dimensions */
+      }
+      mask = 0;
+      for (i=*ctrl; i< (1<<naxdef); i++) {
+         if (nbits_c(&i)==ndtry) {
+            mask = i;           /* mask indicating coordinates to be used */
+           *ctrl = (i+1)%(1<<naxdef);   /* starting point for next pass   */
+            break;
+         }
+      }
+      if (mask) break;
+      *ctrl = 0;                 /* enumeration completed; start new pass  */
+   } while (ndtry>0);
+   
+/*
+ * construct coordinate word using the coordinates indicated by mask      
+ */
+  lev_out = 0;
+  for (i=0; i<naxdef; i++) {
+     if (mask&1) lev_out += coord[i] * SWAP(set->h.ax_factor[axnum[i]], one);
+     mask = mask>>1;
+  }
+  return lev_out;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 LevCmp                                     */
+/* -------------------------------------------------------------------------- */
+/*  LevCmp() compares two coordinate words and returns 0 if level1 is equal
+ *  to level2 +1 if level1 is higher in the hierarchy than level2, and
+ *  -1 otherwise.
+ */
+static int  LevCmp(dscfile set, fint level1, fint level2)
+{
+   fint ctrl=-1; 
+     
+   if (level1==level2) return 0;
+
+   while (level2) {
+      level2 = Higher(set, level2, &ctrl);
+      if (level1 == level2) return +1;
+   }
+
+   return -1;
+}
+   
+#<
+
+#>            file.c
+/* file.c
+                              COPYRIGHT (c) 1994
+                        Kapteyn Astronomical Institute
+         University of Groningen  -  9700 AV Groningen, The Netherlands
+
+*/
+
+#define IBUFSIZ 4096
+#include "stddef.h"
+#include "string.h"
+#include "stdio.h"
+#include <sys/file.h>
+#if defined(__APPLE__)
+#include <unistd.h>
+#endif
+#ifndef O_CREAT
+#include <fcntl.h>
+#endif
+#ifdef  __sysv__
+#include <unistd.h>
+#endif
+#ifndef L_XTND
+#define L_XTND  SEEK_END
+#endif
+#include "gdscom.h"
+#include "file.h"
+
+/* ========================================================================== */
+/*                                 OpenFile                                   */
+/* -------------------------------------------------------------------------- */
+/*  OpenFile() attempts to open a file read-write, or if this fails read only.
+ *  the argument 'readonly' is set to 0 if read-write succeeds; otherwise 
+ *  to 1 if read-only succeeds. Upon succes, the obtained file descriptor
+ *  is returned, upon failure zero.
+ */
+extern int OpenFile(char *setname, char* ext, int *readonly)
+{
+   int fd;
+    
+   char filename[NAMLEN+6];
+    
+   strcpy(filename,setname);
+   strcat(filename,ext);
+   *readonly = 0;
+   fd = open(filename,O_RDWR,NULL);
+   if (fd<0) {
+      fd = open(filename,O_RDONLY,NULL);
+      *readonly = 1;
+   }
+   if (fd<0) fd = 0;
+   return fd;
+}
+
+/* ========================================================================== */
+/*                                 CreateFile                                 */
+/* -------------------------------------------------------------------------- */
+/*  CreateFile() attempts to create a new file of the specified name and size.
+ */
+extern int CreateFile(char *setname, char* ext, int size)
+{
+   int fd;
+   char filename[NAMLEN+6];
+   
+   strcpy(filename,setname);
+   strcat(filename,ext);
+   if (!access(filename,F_OK)) return 0;             /* file should not exist */
+   fd = open(filename, O_CREAT|O_RDWR, 0666);
+   if (fd<0) return 0;
+   if (ExtendFile(fd,size)) {
+      close(fd);
+      remove(filename);
+      return 0;
+   }
+   return fd;
+}
+   
+/* ========================================================================== */
+/*                                 CloseFile                                  */
+/* -------------------------------------------------------------------------- */
+/*  CloseFile() closes a file; the argument is set to zero.
+ */
+extern int CloseFile(int *fd)
+{
+   int tmp=*fd;
+    
+   *fd = 0;
+   return close(tmp);
+}
+
+/* ========================================================================== */
+/*                                 FileSize                                   */
+/* -------------------------------------------------------------------------- */
+/*  FileSize() returns the size of a file (bytes).
+ */
+extern int FileSize(int fd)
+{
+   return lseek(fd,0,L_XTND);
+}
+
+/* ========================================================================== */
+/*                                 ReadFile                                   */
+/* -------------------------------------------------------------------------- */
+/*  ReadFile() reads the contents of a file into the buffer contents.
+ */
+extern int ReadFile(int fd, void *vcontents)
+{
+   int size=FileSize(fd);
+   int nread, ndone=0;
+   char *contents=(char*)vcontents;
+    
+   (void)lseek(fd,0,L_SET);      /* go back to beginning of file */
+   while (ndone<size) {
+      nread = read(fd,contents+ndone,size-ndone);
+      if (nread<0) return nread;
+      ndone += nread;
+   }
+   return 0;
+}
+
+/* ========================================================================== */
+/*                                 WriteFile                                  */
+/* -------------------------------------------------------------------------- */
+/*  WriteFile() writes the buffer contents to a file.
+ */
+extern int WriteFile(int fd, void *vcontents)
+{
+   int size=FileSize(fd);
+   int nwritten, ndone=0;
+   char *contents=(char*)vcontents;
+    
+   (void)lseek(fd,0,L_SET);      /* go back to beginning of file */
+   while (ndone<size) {
+      nwritten = write(fd,contents+ndone,size-ndone);
+      if (nwritten<0) return nwritten;
+      ndone += nwritten;
+   }
+   return 0;
+}
+
+/* ========================================================================== */
+/*                                 ExtendFile                                 */
+/* -------------------------------------------------------------------------- */
+/*  ExtendFile() increases the size of a file by 'increment' bytes.
+ */
+extern int ExtendFile(int fd, int increment)
+{
+   char buffer[IBUFSIZ];
+   int written;
+   
+   (void)lseek(fd,0,L_XTND);
+   while (increment) {
+      written = write(fd,buffer,IBUFSIZ<increment?IBUFSIZ:increment);
+      if (written<0) return written;
+      increment -= written;
+   }
+   return 0;
+}
+
+/* ========================================================================== */
+/*                                 UpdateFile                                 */
+/* -------------------------------------------------------------------------- */
+/*  UpdateFile() either updates the file from the memory buffer or the other
+ *  way around (depending on 'mode'). 
+ *  The affected parts of the file are indicated by the argument 'bitmap'
+ *  in which every bit set indicates that the corresponding block of size
+ *  'blocksize' must be updated.
+ *
+ *  For the time being a simple approach is chosen, which reads and writes 
+ *  complete files - this seems to be at least as efficient as multiple
+ *  writes of a smaller size. The hooks for using the bitmap are present,
+ *  so if need comes, this can be implemented rather easily.
+ */
+extern int UpdateFile(int fd, int mode, 
+                      void *vcontents, void *bitmap, int blocksize)
+{
+   switch (mode) {
+      case UPD_READ  :  return ReadFile(fd, vcontents);
+      case UPD_WRITE :  return WriteFile(fd, vcontents);
+   }
+}
+#<
+
+#>            inetsocket.c
+/* inetsocket.c
+                              COPYRIGHT (c) 1994
+                        Kapteyn Astronomical Institute
+         University of Groningen  -  9700 AV Groningen, The Netherlands
+
+Author: J.P. Terlouw
+*/
+
+#include "stddef.h"
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include "mainloop.h"
+#include "acceptor.h"
+#include "inetsocket.h"
+
+/* ========================================================================== */
+/*                                 InetSocket                                 */
+/* -------------------------------------------------------------------------- */
+/*  InetSocket creates an Internet domain socket and schedules it to accept
+ *  connect requests from clients.
+ *  On success it returns the mainloop ident; on failure NULL;
+ *  Via the argument the ASCII-coded port number is returned.
+ */
+ident InetSocket(char *devname)
+{
+   struct sockaddr_in name;
+   int                s, length;
+   ident              result;
+
+   if ((s = socket(AF_INET, SOCK_STREAM, 0))<0)     return NULL;
+   name.sin_family = AF_INET;
+   name.sin_addr.s_addr = INADDR_ANY;
+   name.sin_port = 0;
+   length = sizeof(name);
+   if (bind(s,(struct sockaddr *)&name,length)) return NULL;
+   if (getsockname(s, (struct sockaddr*)&name, &length) <0 ) return NULL;
+   sprintf(devname,"%d",(int)ntohs(name.sin_port));
+   result = ScheduleRead(Acceptor,s,(void*)AF_INET);
+   if (listen(s,5)) {
+      Deschedule(&result);
+   }
+   return result;
+}
+#<
+
+#>            linkedlist.c
+/* linkedlist.c
+                              COPYRIGHT (c) 1994
+                        Kapteyn Astronomical Institute
+         University of Groningen  -  9700 AV Groningen, The Netherlands
+
+Package for linked list manipulation. This module is part of the GDS server.
+
+Author: J.P. Terlouw
+*/
+
+#include "stddef.h"
+#include "alloc.h"
+#include "linkedlist.h"
+
+typedef struct _listelem {
+   struct _listelem *next;        /* pointer to next entry                    */
+   void             *value;       /* pointer to value                         */
+} _listelem, *listelem;
+
+typedef listelem listhead;        /* list head type                           */
+
+typedef struct {
+   listhead  *head;               /* pointer to head of associated list       */
+   listelem  current;             /* pointer to current element               */
+   int       noadv;               /* NextValue should not advance             */
+} _iterator, *iterator;
+
+
+/* ========================================================================== */
+/*                                 NewList                                    */
+/* -------------------------------------------------------------------------- */
+/*  NewList() creates a new linked list. It returns a list identifier which
+ *  can be used as an argument to other list functions. If a list is not
+ *  needed anymore, it must be deleted by calling DeleteList().
+ */
+extern listid NewList(void)
+{
+   return (listid)New(listhead);
+}
+
+/* ========================================================================== */
+/*                               InsertHead                                   */
+/* -------------------------------------------------------------------------- */
+/*  InsertHead () inserts the value specified in the second argument at the
+ *  head of the specified linked list.
+ */
+extern void InsertHead (listid this, void *value)
+{
+   listhead *self=(listhead *)this;
+   listelem elem=New(_listelem);
+
+   if (value) {
+      elem->value = value;
+      elem->next  = *self;
+      *self       = elem;
+   } /* refuse to insert NULL pointers */
+}
+
+/* ========================================================================== */
+/*                                 HeadValue                                  */
+/* -------------------------------------------------------------------------- */
+/*  HeadValue() returns the value of the head element of the specified linked
+ *  list. If the list is empty, NULL is returned.
+ */
+extern void *HeadValue(listid this)
+{
+   listhead *self=(listhead *)this;
+   if (*self) return (*self)->value;
+   else       return NULL;
+}
+
+/* ========================================================================== */
+/*                                 RemoveHead                                 */
+/* -------------------------------------------------------------------------- */
+/*  RemoveHead() removes the head element from the specified linked list.
+ *  It returns the value of that element. If the list is empty, NULL 
+ *  is returned.
+ */
+extern void *RemoveHead(listid this)
+{
+   listhead *self=(listhead *)this;
+   listelem elem;
+   void     *result;
+    
+   elem  = *self;
+   if (elem) {
+      result = elem->value;
+      *self = elem->next;
+      Delete(elem);
+   } else result = NULL;
+   return result;
+}
+
+/* ========================================================================== */
+/*                                 RemoveTail                                 */
+/* -------------------------------------------------------------------------- */
+/*  RemoveTail() removes the last element from the specified linked list.
+ *  It returns the value of that element. If the list is empty, NULL
+ *  is returned.
+ */
+extern void *RemoveTail(listid this)
+{
+   listhead *self=(listhead *)this;
+   listelem *i, tmp;
+   void     *result=NULL;
+    
+   for (i=self; *i; i = &(*i)->next) {
+      if (!(*i)->next) {
+         result = (*i)->value;
+         tmp = *i;
+         *i = NULL;
+         Free(tmp);
+         break;
+      }
+   }
+   return result;
+}
+   
+/* ========================================================================== */
+/*                                 DeleteList                                 */
+/* -------------------------------------------------------------------------- */
+/*  DeleteList() deletes the specified linked list.
+ */
+extern void DeleteList(listid this)
+{
+   while (RemoveHead(this)) {}
+   Free(this);
+}
+
+/* ========================================================================== */
+/*                               RemoveValue                                  */
+/* -------------------------------------------------------------------------- */
+/*  RemoveValue removes the first element matching to the second argument from
+ *  the linked list specified by the first argument.
+ */
+extern void RemoveValue(listid this, void *value)
+{
+   iterid it=NewIter(this);
+   void   *curval;
+    
+   while (curval=NextValue(it)) {
+      if (curval==value) {
+         (void)RemoveCurrent(it);
+         break;
+      }
+   }
+   DeleteIter(it);
+}
+
+/* ========================================================================== */
+/*                                  ValuePresent                              */
+/* -------------------------------------------------------------------------- */
+/*  ValuePresent() checks whether there is an element with the speciefied
+ *  value in a linked list.
+ */
+extern int ValuePresent(listid this, void *value)
+{
+   listelem current;
+    
+   for (current=(listelem)*this; current; current=current->next) 
+      if (current->value==value) return 1;
+   return 0;
+}
+
+/* ========================================================================== */
+/*                                 NewIter                                    */
+/* -------------------------------------------------------------------------- */
+/*  NewIter() creates an iterator over the specified linked list.
+ *  It returns an identifier which can be used as an argument to other
+ *  iterator functions.
+ *  If an iterator is not needed anymore, it must be deleted by calling 
+ *  DeleteIter().
+ */
+extern iterid NewIter(listid this)
+{
+   listhead *self=(listhead *)this;
+   iterator result=New(_iterator);
+
+   result->head = self;
+   result->current = *self;
+   result->noadv = 1;
+   return result;
+}
+
+/* ========================================================================== */
+/*                              CurrentValue                                  */
+/* -------------------------------------------------------------------------- */
+/*  CurrentValue() returns the value in the linked list associated with the
+ *  specified iterator at its current position. If the iterator is at the
+ *  end of the list, NULL is returned.
+ */
+extern void *CurrentValue(iterid this)
+{
+   iterator self=(iterator)this;
+    
+   self->noadv = 0;
+   if (self->current) return self->current->value;
+   return NULL;
+}
+      
+/* ========================================================================== */
+/*                               NextValue                                    */
+/* -------------------------------------------------------------------------- */
+/*  NextValue() moves the specified iterator one element further towards
+ *  the end of the associated linked list. (Except immediately after 
+ *  the creation of the iterator or if the last operation was RemoveCurrent.) 
+ *  It returns the value of the element or NULL if it is at the end of
+ *  the list.
+ */
+extern void *NextValue(iterid this)
+{
+   iterator self=(iterator)this;
+    
+   if (self->noadv) {
+      self->noadv = 0;
+      return CurrentValue(this);
+   }
+   if (self->current) {
+      self->current = self->current->next;
+      if (self->current) return self->current->value;
+      else return NULL;
+   } else return NULL;
+}
+
+/* ========================================================================== */
+/*                              RemoveCurrent                                 */
+/* -------------------------------------------------------------------------- */
+/*  RemoveCurrent() removes the element from the linked list associated with
+ *  the specified iterator at the current position. It returns the value
+ *  of that element. The iterator is moved one position towards the end of
+ *  the list.
+ */
+extern void *RemoveCurrent(iterid this)
+{
+   iterator self=(iterator)this;
+   listelem *i;
+   void *result=NULL;
+   
+   for (i=self->head; *i; i = &(*i)->next) {
+      if (*i==self->current) {
+         result = self->current->value;
+         *i = self->current->next;
+         Free(self->current);
+         self->current = *i;
+         self->noadv = 1;
+         break;
+      }
+   }
+   return result;
+}
+
+/* ========================================================================== */
+/*                               DeleteIter                                   */
+/* -------------------------------------------------------------------------- */
+/*  DeleteIter() deletes the specified iterator.
+ */
+extern void DeleteIter(iterid this)
+{
+   Free(this);
+}
+
+/* Functions which may be useful, but have not been implemented (yet):
+    
+    InsertTail(listid,value);    // insert at and of list
+    
+    ChangeCurrent(iterid,value); // assign new value to current element
+    ResetIter(iterid);           // move iterator to list head
+    PreviousValue(iterid);       // back up in list
+    InsertAfter(iterid,value);   // insert after current element
+    InsertBefore(iterid,value);  // insert before current current
+*/
+#<
+
+#>            mainloop.c
+/* mainloop.c
+                              COPYRIGHT (c) 1994
+                        Kapteyn Astronomical Institute
+         University of Groningen  -  9700 AV Groningen, The Netherlands
+
+Author: J.P. Terlouw.
+*/
+#include "stddef.h"
+
+#include <sys/types.h>
+#if     defined(__aix__)
+#include <sys/select.h>
+#endif
+#include <sys/time.h>
+
+#include "mainloop.h"
+#include "alloc.h"
+
+#define PERIOD (1 WEEK)                                    /* default delay */
+#define Milliseconds(x) (x.tv_sec*1000+x.tv_usec/1000)
+
+#define INVALID 0
+#define READ    1
+#define WRITE   2
+#define TIMER   3
+
+typedef struct _Callback {
+   int       type;                    /* service type */
+   int       fd;                      /* file descriptor */
+   int       interval;                /* interval for periodic tasks (ms) */
+   int       calltime;                /* 'absolute' time for next call (ms) */
+   void     (*proc)();                /* procedure pointer */
+   void      *arg;                    /* argument to procedure */
+   struct _Callback *next;            /* link to next entry */
+} *Callback, _Callback;
+
+
+static Callback cb_active=NULL;
+static fd_set readfds, writefds;
+static int maxfds=0;
+static int n_active=0;
+static int delay=PERIOD;
+static int secstart=0;
+
+static ident Schedule(int type, void(*proc)(), int fd, int interval, void *arg);
+
+/* ========================================================================== */
+/*                             MainLoop                                       */
+/* -------------------------------------------------------------------------- */
+/*
+ *  MainLoop serves as the nucleus of event-driven programs.
+ *  Whenever necessary it calls the functions which have been registered
+ *  before by ScheduleRead(), ScheduleWrite() or ScheduleTimer().
+ */
+extern void MainLoop(void)
+{
+   Callback cb, *cbp, *next;
+   struct timeval timeout, now;
+   int    msnow;
+
+   while (n_active) {
+      timeout.tv_sec  = delay/1000;
+      timeout.tv_usec = delay%1000*1000;
+      while (select(maxfds+1,(void*)&readfds,
+                             (void*)&writefds,NULL,&timeout)==-1) {;}
+      delay = PERIOD;                          /* set next timeout to maximum */
+      for (cbp=&cb_active; *cbp; cbp=next) {
+         cb = *cbp;
+         next = &cb->next;
+
+         if (cb->type==INVALID) {
+            next = cbp;                        /* invalidated block; delete */
+            *cbp = cb->next;
+            Delete(cb);
+
+         } else if (cb->type==READ) {
+            if (FD_ISSET(cb->fd,&readfds)) {
+               (*cb->proc)(cb,cb->fd,cb->arg);    /* file descriptor callback */
+            }
+            if (cb->type!=INVALID) 
+               FD_SET(cb->fd,&readfds);           /* re-set if still valid */
+
+         } else if (cb->type==WRITE) {
+            if (FD_ISSET(cb->fd,&writefds)) {
+               (*cb->proc)(cb,cb->fd,cb->arg);    /* file descriptor callback */
+            }
+            if (cb->type!=INVALID) 
+               FD_SET(cb->fd,&writefds);          /* re-set if still valid */
+
+         } else {
+            gettimeofday(&now,NULL);
+            now.tv_sec -= secstart;            /* avoid overflow in ms int's  */
+            msnow = Milliseconds(now);
+            if (msnow >= cb->calltime) {
+               (*cb->proc)(cb,cb->arg);                     /* timer callback */
+               if (cb->type!=INVALID) {
+                  cb->calltime = msnow + cb->interval;
+                  if (delay > cb->interval) delay = cb->interval;    /* trim */
+               }
+            } else if (delay > (cb->calltime-msnow)) {
+               delay = cb->calltime - msnow;                         /* trim */
+            }
+         }
+      }
+   }
+}
+
+/* ========================================================================== */
+/*                            ScheduleRead                                    */
+/* -------------------------------------------------------------------------- */
+/*
+ *  ScheduleRead registers a function to be called by MainLoop whenever
+ *  data can be read from file descriptor 'fd'. In this call, 'arg' will be
+ *  passed to 'proc'. The return value is a unique identification code
+ *  corresponding with the registration, which will also be passed as an
+ *  argument to 'proc'.
+ *
+ *  The prototype of 'proc' is:
+ *      void proc(ident id, int fd, void *arg);
+ */
+extern ident ScheduleRead(void(*proc)(), int fd, void *arg)
+{
+   return Schedule(READ,proc,fd,0,arg);
+}
+
+/* ========================================================================== */
+/*                            ScheduleWrite                                   */
+/* -------------------------------------------------------------------------- */
+/*
+ *  ScheduleWrite registers a function to be called by MainLoop whenever
+ *  data can be written to file descriptor 'fd'. In this call, 'arg' will be
+ *  passed to 'proc'. The return value is a unique identification code
+ *  corresponding with the registration, which will also be passed as an
+ *  argument to 'proc'.
+ *
+ *  The prototype of 'proc' is:
+ *      void proc(ident id, int fd, void *arg);
+ */
+extern ident ScheduleWrite(void(*proc)(), int fd, void *arg)
+{
+   return Schedule(WRITE,proc,fd,0,arg);
+}
+
+/* ========================================================================== */
+/*                            ScheduleTimer                                   */
+/* -------------------------------------------------------------------------- */
+/*  ScheduleTimer registers a function to be called by MainLoop whenever
+ *  a specified interval in milliseconds has expired. Until it is descheduled,
+ *  'proc' will be called every 'interval' milliseconds. In the call 'arg' is
+ *  passed as an argument. The return value is a unique identification code
+ *  corresponding with the registration, which will also be passed as an
+ *  argument to 'proc'.
+ *
+ *  The prototype of 'proc' is:
+ *      void proc(ident id, void *arg);
+ *
+ *  WARNING: this software resembles the old Patriot missile control software:
+ *  24 days, 20 hours, 31 minutes and 23.647 seconds after starting MainLoop,
+ *  the internal timer will overflow.
+ */
+extern ident ScheduleTimer(void(*proc)(), int interval, void *arg)
+{
+   return Schedule(TIMER,proc,0,interval,arg);
+}
+
+/* ========================================================================== */
+/*                            Deschedule                                      */
+/* -------------------------------------------------------------------------- */
+/*  Deschedule removes the registration of a function which has been
+ *  registered by one of the routines ScheduleRead(), ScheduleWrite() or
+ *  ScheduleTimer(). The ident to which the argument points is set to NULL.
+ */
+extern void Deschedule(ident *id)
+{
+   Callback cb=(Callback)*id;                /* convert id to callback pointer*/
+
+   if (!*id) return;                         /* not scheduled: no-op          */
+   *id = NULL;
+   if (cb->type==READ) {
+      FD_CLR(cb->fd,&readfds);               /* clear fd flag                 */
+   }else if (cb->type==WRITE) {
+      FD_CLR(cb->fd,&writefds);              /* clear fd flag                 */
+   }
+   cb->type = INVALID;                       /* invalidate for MainLoop       */
+   n_active--;
+}
+
+/* ========================================================================== */
+/*                           DescheduleAll                                    */
+/* -------------------------------------------------------------------------- */
+/*  DescheduleAll removes all registrations of a functions which has been
+ *  registered by one of the routines ScheduleRead(), ScheduleWrite() or
+ *  ScheduleTimer(). This causes MainLoop to return.
+ */
+extern void DescheduleAll(void)
+{
+   Callback cb;
+
+   for (cb=cb_active; cb; cb=cb->next) {
+      if (cb->type != INVALID) {
+         if (cb->type==READ) {
+            FD_CLR(cb->fd,&readfds);
+         }else if (cb->type==WRITE) {
+            FD_CLR(cb->fd,&writefds);
+         }
+         cb->type = INVALID;
+         n_active--;
+      }
+   }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 Schedule                                   */
+/* -------------------------------------------------------------------------- */
+/*  Schedule() registers any kind of function. Its first argument is the   
+ *  kind of registration that is wanted.
+ */
+static ident Schedule(int type, void(*proc)(), int fd, int interval, void *arg)
+{
+   Callback cb;
+
+   cb = New(_Callback);          /* allocate a new entry */
+
+   cb->next= cb_active;
+   cb_active = cb;
+   cb->type  = type;
+   cb->fd    = fd;               /* store parameters */
+   cb->interval = interval;
+   cb->proc = proc;
+   cb->arg = arg;
+   if (fd>maxfds) maxfds=fd;     /* update maximum file descriptor value */
+   if (type==READ) {
+      FD_SET(fd,&readfds);       /* set flag in select() structure */
+   } else if (type==WRITE) {
+      FD_SET(fd,&writefds);
+   } else {
+      struct timeval  now;
+      gettimeofday(&now,NULL);
+      if (!secstart) {
+         secstart = now.tv_sec;
+      }
+      now.tv_sec -= secstart;
+      cb->calltime = Milliseconds(now) + interval;
+      if (delay>interval) delay = interval;
+   }
+   n_active++;
+   return (ident)cb;             /* use pointer to callback entry as ID */
+}
+#<
+
+#>            primes.c
+/* primes.c
+                              COPYRIGHT (c) 1994
+                        Kapteyn Astronomical Institute
+         University of Groningen  -  9700 AV Groningen, The Netherlands
+         
+Author: J.P. Terlouw
+*/
+
+#include "math.h"
+
+static int modpow(int x, int e, int m);
+static int isprime(int x);
+static int probe[]={7,13,17,31,89,107,127};
+
+/* ========================================================================== */
+/*                                 NextPrime                                  */
+/* -------------------------------------------------------------------------- */
+/*  NextPrime() returns the next prime number equal to or larger than the
+ *  argument. It finds the number using a series of probabilistic tests.
+ *  Prime numbers larger than 90000991 cannot be generated by this function.
+ */
+extern int NextPrime(int x)
+{
+   if (x>90000991) return 90000991;              /* protect against overflow */
+   x |= 1;
+   if (x<3) x=3;                                 /* cannot handle values <3  */
+   while (!isprime(x)) x += 2;
+   return x;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 isprime                                    */
+/* -------------------------------------------------------------------------- */
+/*  isprime() determines whether the argument is (probably) a prime number.
+ */
+static int isprime(int x)
+{
+   int nprobes=sizeof(probe)/sizeof(int);
+   int i; 
+   
+   for (i=0; i<nprobes; i++) if (modpow(probe[i]%(x-1),x-1,x) != 1) return 0;
+   return 1;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 modpow                                     */
+/* -------------------------------------------------------------------------- */
+/*  modpow() computes x**e mod m. In order to have an as big as possible
+ *  domain for x, calculations are done in double.
+ */
+static int modpow(int x, int e, int m)
+{
+   double result=1.0;
+   double f=(double)x;
+    
+   while (e) {
+      if (e&1) {
+         result *= f;
+         result = fmod(result,(double)m);
+      }
+      e = e>>1;
+      f *= f;
+      f = fmod(f,(double)m);
+   }
+   return (int)result;
+}
+#<
+
+#>            request.c
+/*  request.c
+                              COPYRIGHT (c) 1994
+                        Kapteyn Astronomical Institute
+         University of Groningen  -  9700 AV Groningen, The Netherlands
+
+Author: J.P. Terlouw
+ */
+#include "string.h"
+#include "gdscom.h"
+#include "server.h"
+#include "linkedlist.h"
+#include "clientmgr.h"
+#include "setmgr.h"
+#include "descr.h"
+#include "request.h"
+
+#define NOTIMPL     { gds_notimpl(current); return;}
+
+#define CHECKLOCK   if (CheckLock(set, current)) { \
+                       if (request->head.imm) \
+                          (void)WriteReply(current,GDS_LOCKED,0); \
+                       return; }
+
+#define CHECKSET    set = SetByHandle(request->head.id); \
+                    if (!set) { (void)WriteReply(current,GDS_BADHANDLE,0); \
+                       return;}
+
+#define CHECKRDSET  CHECKSET \
+                    CHECKLOCK
+
+#define CHECKWRITE  if (!(ClientPerm(current,0) & PERM_W)) { \
+                       (void)WriteReply(current,GDS_NOPRIV,0); \
+                       return; }\
+
+#define CHECKWRSET  CHECKSET \
+                    CHECKWRITE \
+                    if (DescrReadonly(SetDescr(set))) { \
+                       (void)WriteReply(current,GDS_NOPRIV,0); return; } \
+                    CHECKLOCK
+
+
+extern srvstat server;
+
+static void gds_connect (object);
+
+static void set_open    (object);
+static void set_close   (object);
+static void set_create  (object);
+static void set_delete  (object);
+static void set_exist   (object);
+static void set_lock    (object);
+static void set_unlock  (object);
+static void set_sync    (object);
+static void set_rhed    (object);
+static void set_whed    (object);
+static void set_whedx   (object);
+static void set_ftype   (object);
+static void set_itype   (object);
+static void set_rename  (object);
+static void set_optimize(object);
+static void set_prime   (object);
+static void set_nitems  (object);
+static void set_recover (object);
+
+static void dsc_delall  (object);
+static void dsc_delete  (object);
+static void dsc_find    (object);
+static void dsc_length  (object);
+static void dsc_read    (object);
+static void dsc_rewind  (object);
+static void dsc_type    (object);
+static void dsc_write   (object);
+static void dsc_writex  (object);
+
+static void gds_notimpl(object);
+
+extern void HandleRequest(object current)
+{
+   switch (ClientRequest(current)->head.code) {
+      case GDS_CONNECT  :  gds_connect (current); break;
+      
+      case SET_OPEN     :  set_open    (current); break;
+      case SET_CLOSE    :  set_close   (current); break;
+      case SET_CREATE   :  set_create  (current); break;
+      case SET_DELETE   :  set_delete  (current); break;
+      case SET_EXIST    :  set_exist   (current); break;
+      case SET_LOCK     :  set_lock    (current); break;
+      case SET_UNLOCK   :  set_unlock  (current); break;
+      case SET_SYNC     :  set_sync    (current); break;
+      case SET_RHED     :  set_rhed    (current); break;
+      case SET_WHED     :  set_whed    (current); break;
+      case SET_FTYPE    :  set_ftype   (current); break;
+      case SET_ITYPE    :  set_itype   (current); break;
+      case SET_RENAME   :  set_rename  (current); break;
+      case SET_OPTIMIZE :  set_optimize(current); break;
+      case SET_PRIME    :  set_prime   (current); break;
+      case SET_NITEMS   :  set_nitems  (current); break;
+      case SET_RECOVER  :  set_recover (current); break;
+
+      case DSC_DELALL   :  dsc_delall  (current); break;
+      case DSC_DELETE   :  dsc_delete  (current); break;
+      case DSC_FIND     :  dsc_find    (current); break;
+      case DSC_LENGTH   :  dsc_length  (current); break;
+      case DSC_READ     :  dsc_read    (current); break;
+      case DSC_REWIND   :  dsc_rewind  (current); break;
+      case DSC_TYPE     :  dsc_type    (current); break;
+      case DSC_WRITE    :  dsc_write   (current); break;
+
+      default           :  gds_notimpl (current); break;
+   }
+}
+
+static void gds_connect(object current)
+{
+   gdsConnect request=(gdsConnect)ClientRequest(current);
+   int perm;
+
+   if (ClientFint(current,request->version) != VERSION) {
+      if (!WriteReply(current,GDS_BADVERSION,0)) DeleteClient(current);
+      return;
+   }
+   if (ClientFint(current,request->pwd) == server->pwdw) perm = PERM_R|PERM_W;
+   else if (ClientFint(current,request->pwd) == server->pwdr) perm = PERM_R;
+   else  perm = 0;
+   if (perm) {
+      (void)ClientPerm(current,perm);
+      (void)WriteReply(current,GDS_SUCCESS,0);
+   } else {
+      if (!WriteReply(current,GDS_NOPRIV,0)) DeleteClient(current);
+   }
+}
+
+static void set_open   (object current)
+{
+   setOpen request=(setOpen)ClientRequest(current);
+   object  set;
+   fint    handle;
+
+   /* Here (and only here) a test for read permission is necessary */    
+   if (!(ClientPerm(current,0) & PERM_R)) {
+      (void)WriteReply(current,GDS_NOPRIV,0);
+      return;
+   }
+   set = SetByName(request->name,ClientFint(current,request->incr));
+   if (!set) {
+      (void)WriteReply(current,server->error,0);
+      return;
+   }
+   AddClient(set,current);
+   handle = SetHandle(set);
+   (void)PutFint(current,OS_INTEGER_TYPE,&handle,1);
+   if (!WriteReply(current,GDS_SUCCESS,0)) WriteData(current);
+}
+
+static void set_close  (object current)
+{
+   setClose request=(setClose)ClientRequest(current);
+   object  set;
+   
+   CHECKSET
+   RemoveClient(set, current);
+   (void)WriteReply(current,GDS_SUCCESS,0);
+}
+
+static void set_create (object current)
+{
+   setCreate request=(setCreate)ClientRequest(current);
+   fint rsize=ClientFint(current,request->size);
+   fint rincr=ClientFint(current,request->incr);
+   fint rprim=ClientFint(current,request->prime);
+   object descr;
+   int    size;
+    
+   CHECKWRITE
+   size  = rsize?rsize:server->initsize;
+   descr = NewDescr(request->name,size,rincr,rprim);
+   if (descr) {
+      DeleteDescr(descr);
+      (void)WriteReply(current,GDS_SUCCESS,0);
+   } else (void)WriteReply(current,server->error,0);
+}
+
+static void set_delete (object current)
+{
+   setDelete request=(setDelete)ClientRequest(current);
+   
+   CHECKWRITE
+   (void)WriteReply(current,DestroySet(request->name),0);
+}
+
+static void set_exist  (object current)
+{
+   setExist request=(setExist)ClientRequest(current);
+   object set;
+   
+   set = SetByName(request->name,server->extendsize);
+   if (set) {
+      RemoveClient(set,NULL);  /* activate set ageing */
+      (void)WriteReply(current,GDS_SUCCESS,0);
+   } else {
+      (void)WriteReply(current,server->error,0);
+   }
+}
+
+static void set_lock   (object current)
+{
+   setLock request=(setLock)ClientRequest(current);
+   object set;
+    
+   CHECKSET
+   CHECKWRITE
+   if (DescrReadonly(SetDescr(set))) {
+      (void)WriteReply(current,GDS_NOPRIV,0);
+      return;
+   }
+   if (LockSet(set, current)) {
+      if (request->head.imm) {
+         (void)WriteReply(current,GDS_LOCKED,0);
+      }
+   } else {
+      (void)WriteReply(current,GDS_SUCCESS,0);
+   }
+}
+
+static void set_unlock (object current)
+{
+   setUnlock request=(setUnlock)ClientRequest(current);
+   object set;
+      
+   CHECKSET
+   if (UnlockSet(set, current)) {
+      (void)WriteReply(current,GDS_NOTLOCKED,0);
+   } else {
+      (void)WriteReply(current,GDS_SUCCESS,0);
+   }
+}
+
+static void set_sync   (object current)
+{
+   setSync request=(setSync)ClientRequest(current);
+   object set;
+    
+   CHECKWRSET
+   UpdateDescr(SetDescr(set),UPD_WRITE);
+   (void)WriteReply(current,GDS_SUCCESS,0);
+}
+
+static void set_rhed   (object current)
+{
+   setRhed request=(setRhed)ClientRequest(current);
+   object set;
+    
+   CHECKRDSET
+   (void)DescrRhead(current,SetDescr(set));
+   (void)PutBuffer(current, SetName(set), NAMLEN);
+   if (!WriteReply(current, GDS_SUCCESS, 0)) WriteData(current);
+}
+
+static void set_whed   (object current)
+{
+   setWhed request=(setWhed)ClientRequest(current);
+   object set;
+
+   CHECKWRSET
+   if (!WriteReply(current, GDS_SUCCESS, sizeof(gds_coord))) {
+      ScheduleIodone(current, set_whedx);
+      ReadData(current);
+   }
+}
+
+static void set_whedx  (object current)
+{
+   setWhed request=(setWhed)ClientRequest(current);
+   object set;
+    
+   set = SetByHandle(request->head.id);
+   (void)DescrWhead(current, SetDescr(set));
+}
+
+static void set_ftype (object current)
+{
+   setFtype request=(setFtype)ClientRequest(current);
+   object set;
+   fint   type;
+    
+   CHECKSET
+   type = DescrFtype(SetDescr(set));
+   (void)PutFint(current,OS_INTEGER_TYPE,&type,1);
+   if (!WriteReply(current,GDS_SUCCESS,0)) WriteData(current);
+}
+
+static void set_itype (object current)
+{
+   setItype request=(setItype)ClientRequest(current);
+   object set;
+   fint   type;
+    
+   CHECKSET
+   type = DescrItype(SetDescr(set));
+   (void)PutFint(current,OS_INTEGER_TYPE,&type,1);
+   if (!WriteReply(current,GDS_SUCCESS,0)) WriteData(current);
+}
+
+static void set_rename (object current)
+{
+   setRename request=(setRename)ClientRequest(current);
+   
+   CHECKWRITE
+   (void)WriteReply(current,RenameSet(request->oldname,request->newname),0);
+}
+
+static void set_optimize (object current)
+{
+   setOptimize request=(setOptimize)ClientRequest(current);
+   object set;
+    
+   CHECKWRSET
+   (void)WriteReply(current,DescrOptimize(SetDescr(set)),0);
+}
+
+static void set_prime  (object current)
+{
+   setPrime request=(setPrime)ClientRequest(current);
+   object set;
+   fint   prime;
+    
+   CHECKSET
+   prime = DescrPrime(SetDescr(set));
+   (void)PutFint(current,OS_INTEGER_TYPE,&prime,1);
+   if (!WriteReply(current,GDS_SUCCESS,0)) WriteData(current);
+}
+
+static void set_nitems (object current)
+{
+   setNitems request=(setNitems)ClientRequest(current);
+   object set;
+   fint   nitems;
+    
+   CHECKSET
+   nitems = DescrNitems(SetDescr(set));
+   (void)PutFint(current,OS_INTEGER_TYPE,&nitems,1);
+   if (!WriteReply(current,GDS_SUCCESS,0)) WriteData(current);
+}
+
+static void set_recover (object current)
+{
+   setRecover request=(setRecover)ClientRequest(current);
+   CHECKWRITE
+   (void)WriteReply(current,RecoverDescr(request->name),0);
+}
+
+static void dsc_delall (object current)
+{
+   dscDelall request=(dscDelall)ClientRequest(current);
+   object set;
+    
+   CHECKWRSET
+   request->level = ClientFint(current,request->level);
+   (void)WriteReply(current,DescrDelall(current,SetDescr(set)),0);
+}
+
+static void dsc_delete (object current)
+{
+   dscDelete request=(dscDelete)ClientRequest(current);
+   object set;
+    
+   CHECKWRSET
+   request->level = ClientFint(current,request->level);
+   (void)WriteReply(current,DescrDelete(current,SetDescr(set)),0);
+}
+
+static void dsc_find   (object current)
+{
+   dscFind request=(dscFind)ClientRequest(current);
+   object set;
+   fint   result;
+    
+   CHECKRDSET
+   request->level = ClientFint(current,request->level);
+   request->index = ClientFint(current,request->index);
+   result = DescrFind(current,SetDescr(set));
+   if (result) {
+      WriteReply(current, result, 0);
+   } else {
+      if (!WriteReply(current, result, 0)) WriteData(current);
+   }
+}
+
+static void dsc_length (object current)
+{
+   dscLength request=(dscLength)ClientRequest(current);
+   object set;
+   fint   result;
+    
+   CHECKRDSET
+   request->level = ClientFint(current,request->level);
+   result = DescrLength(current,SetDescr(set));
+   if (result) {
+      WriteReply(current,result,0);
+   } else {
+      if (!WriteReply(current,result,0)) WriteData(current);
+   }
+}
+
+static void dsc_read   (object current)
+{
+   dscRead request=(dscRead)ClientRequest(current);
+   object set;
+   fint   result;
+   
+   CHECKRDSET
+   request->level    = ClientFint(current,request->level);
+   request->nelems   = ClientFint(current,request->nelems);
+   request->position = ClientFint(current,request->position);
+   result = DescrRead(current,SetDescr(set));
+   if (result) {
+      WriteReply(current,result,0);
+   } else {
+      if (!WriteReply(current,result,0))   WriteData(current);
+   }
+}
+
+static void dsc_rewind (object current)
+{
+   dscRewind request=(dscRewind)ClientRequest(current);
+   object set;
+    
+   CHECKRDSET
+   request->level = ClientFint(current,request->level);
+   (void)WriteReply(current,DescrRewind(current,SetDescr(set)),0);
+}
+
+static void dsc_type   (object current)
+{
+   NOTIMPL /* Not yet implemented ... */
+}
+
+static void dsc_write  (object current)
+{
+   dscWrite request=(dscWrite)ClientRequest(current);
+   object set;
+   fint   result, nelems;
+   
+   CHECKWRSET
+   request->level    = ClientFint(current,request->level);
+   request->nelems   = ClientFint(current,request->nelems);
+   request->position = ClientFint(current,request->position);
+   result = DescrWrite(current,SetDescr(set));
+   if (result) {
+      (void)WriteReply(current,result,0);
+   } else {
+      nelems = request->nelems;
+      if (!WriteReply(current,result,nelems)) {
+         ScheduleIodone(current, dsc_writex);
+         ReadData(current);
+      }
+   }
+}
+
+static void dsc_writex (object current)
+{
+   dscWrite request=(dscWrite)ClientRequest(current);
+   object set;
+    
+   set = SetByHandle(request->head.id);
+   (void)DescrWritex(current, SetDescr(set));
+}
+
+static void gds_notimpl(object current)
+{
+   (void)WriteReply(current,GDS_BADFUNCTION,0);
+}
+#<
+
+#>            server.c
+/*  server.c
+                              COPYRIGHT (c) 1994
+                        Kapteyn Astronomical Institute
+         University of Groningen  -  9700 AV Groningen, The Netherlands
+*/
+
+
+#include "stdlib.h"
+#include "stdio.h"
+#include <sys/time.h>
+#include "signal.h"
+#include "netaddr.h"
+#include "unixsocket.h"
+#include "inetsocket.h"
+#include "mainloop.h"
+#include "netaddr.h"
+#include "gdscom.h"
+#include "clientmgr.h"
+#include "linkedlist.h"
+#include "server.h"
+
+static _srvstat _server;
+static char unixname[SNLEN];
+static char inetname[SNLEN];
+
+srvstat server=&_server;           /* make server info globally known */
+
+void main(int argc, char *argv[])
+{
+   FILE *f;
+   char sockfile[SNLEN], pwdfile[SNLEN];
+   char *dir_id;
+   struct timeval(now);
+   int i;
+    
+   if (argc<2) dir_id = ""; else dir_id = argv[1];
+   for (i=0; i<64; i++) (void)close(i);  /* close first 64 (=all) fd's */
+   server->initsize   = INITSIZE;
+   server->extendsize = EXTENDSIZE; 
+   server->prime      = PRIME;
+   server->lockwait   = NewList();
+
+
+/*
+ *  Password stuff
+ */
+   sprintf(pwdfile,"%s/.gds_write",getenv("HOME"));        /* WRITE password */
+   f = fopen(pwdfile,"r");
+   if (f) {
+                                           /* file exists: use file contents */
+      fscanf(f,"%d\n",&server->pwdw);
+   } else {
+           /* file does not exist: determine random password and create file */
+      gettimeofday(&now,NULL);
+      srand(now.tv_usec);
+      server->pwdw = rand();
+      close(creat(pwdfile,0600));
+      f = fopen(pwdfile,"w");
+      fprintf(f,"%d\n",server->pwdw);
+   }
+   fclose(f);
+   
+   sprintf(pwdfile,"%s/.gds_read",getenv("HOME"));          /* READ password */
+   f = fopen(pwdfile,"r");
+   if (f) {
+      fscanf(f,"%d\n",&server->pwdr);
+   } else {
+      sleep(1);
+      gettimeofday(&now,NULL);    
+      srand(now.tv_usec);
+      server->pwdr = rand();
+      close(creat(pwdfile,0600));
+      f = fopen(pwdfile,"w");
+      fprintf(f,"%d\n",server->pwdr);
+   }
+   fclose(f);      
+   
+/*
+ *  Socket stuff
+ */
+   server->ux = UnixSocket(unixname);
+   server->in = InetSocket(inetname);
+   sprintf(sockfile,"%s/.gds_sockets%s",getenv("HOME"),dir_id);
+   f = fopen(sockfile,"w");
+   fprintf(f,"%s:%s:%s\n",netaddr(),unixname,inetname);
+   if (fclose(f)) {
+      exit(-1); /* failure to write sockets info */
+   }
+/*
+ *  Detach from parent and start action
+ */
+   if (fork()) exit(0);
+   InitClient();
+   signal(SIGPIPE,SIG_IGN);
+   MainLoop();
+   remove(sockfile);
+   remove(unixname);
+}
+#<
+
+#>            setmgr.c
+/*  setmgr.c
+                              COPYRIGHT (c) 1994
+                        Kapteyn Astronomical Institute
+         University of Groningen  -  9700 AV Groningen, The Netherlands
+
+Author: J.P. Terlouw
+*/
+#include "stddef.h"
+#include "stdio.h"
+#include "string.h"
+#include "alloc.h"
+#include "mainloop.h"
+#include "linkedlist.h"
+#include "server.h"
+#include "clientmgr.h"
+#include "descr.h"
+#include "request.h"
+#include "file.h"
+#include "setmgr.h"
+
+/* Set status block.
+ * This struct describes the context of a set currently being served.
+ */
+typedef struct _setsta {
+   fint       id;           /* set id */
+   char       name[NAMLEN]; /* name of the set */
+   listid     clients;      /* list of clients of this set */
+   listid     lockwait;     /* clients waiting for lock */
+   object     locked;       /* client which locked the set (or zero) */
+   object     descr;        /* descriptor object */
+   ident      closing;      /* shutdown timer */
+   int        closecount;   /* count incremented by close monitor */
+} _setsta, *setsta;
+
+
+#define CLOSETIME  (1 MINUTE)   /* call frequency of close monitor */
+#define SETLIMIT   10           /* number above which to remove closed sets */
+
+extern srvstat server;
+
+static void   *listhead=NULL;
+static listid  sets=&listhead;  /* set status blocks list head */
+static int    nsets=0;          /* number of open sets */
+
+static setsta NewSet();
+static void   DeleteSet(setsta);
+static int    Release(void);
+static void   closemtr(ident, setsta);
+static void   delayed(ident, object);
+
+/* ========================================================================== */
+/*                                 SetByName                                  */
+/* -------------------------------------------------------------------------- */
+/*  SetByName tries to find a set, given its name.
+ */
+extern object SetByName(char *name, int extendsize)
+{
+   setsta set;
+   iterid it;
+   
+   it = NewIter(sets);
+   while (set=NextValue(it)) if (!strcmp(set->name,name)) break;
+   DeleteIter(it);
+   if (!set) {
+      set = NewSet();
+      if (!extendsize) extendsize = server->extendsize;
+      set->descr = NewDescr(name, 0, extendsize, 0);
+      while (!set->descr && server->error==GDS_NOMEM) {
+         if (Release()) break;
+         set->descr = NewDescr(name, 0, extendsize, 0);
+      }
+      if (set->descr) {
+         set->lockwait = NewList();
+         set->clients  = NewList();
+         strcpy(set->name,name);
+         InsertHead(sets,set);
+         nsets++;
+      } else {
+         Delete(set);
+      }
+   }
+   return set;
+}
+
+/* ========================================================================== */
+/*                                 SetByHandle                                */
+/* -------------------------------------------------------------------------- */
+/*  SetByHandle tries to find a set, given its handle.
+ */
+extern object SetByHandle(fint id)
+{
+   setsta set;
+   iterid it=NewIter(sets);
+   
+   while (set=NextValue(it)) if (set->id==id) break;
+   DeleteIter(it);
+   return set;
+}
+
+/* ========================================================================== */
+/*                                 SetName                                    */
+/* -------------------------------------------------------------------------- */
+/*  SetName returns a pointer to the name of a set.
+ */
+extern char *SetName(object setobj)
+{
+   return ((setsta)setobj)->name;
+}
+
+/* ========================================================================== */
+/*                                 AddClient                                  */
+/* -------------------------------------------------------------------------- */
+/*  AddClient registers a client with a set
+ */
+extern void AddClient(object setobj, object current)
+{
+   setsta set=(setsta)setobj;
+   
+   if (!ValuePresent(set->clients,current)) {
+      AddSet(current, set);
+      InsertHead(set->clients,current);
+      if (set->closing) {
+         Deschedule(&set->closing);
+         set->closecount = 0;
+      }
+   }
+}
+
+/* ========================================================================== */
+/*                                 RemoveClient                               */
+/* -------------------------------------------------------------------------- */
+/*  RemoveClient unregisters a client with a set. If The set has not any
+ *  clients anymore, is will activate an ageing counter.
+ */
+extern void RemoveClient(object setobj, object current)
+{
+   setsta set=(setsta)setobj;
+   
+   if (current && ValuePresent(set->clients,current)) {
+      if (set->locked==current) {
+#if 0
+/* section disabled -- if needed, maintaining integrity should become
+ * new function, e.g. 'protect' instead of 'lock'
+ */
+         UpdateDescr(set->descr, UPD_READ); /* restore situation before lock */
+#endif
+         UnlockSet(set, current);
+      }
+      RemoveValue(set->clients,current);    /* remove from set's client list */
+      RemoveSet(current, set);                /* remove set from client */
+      if (set->locked) {
+         RemoveValue(set->lockwait,current); /* remove from set lock queue */
+      }
+   }
+   if (!HeadValue(set->clients)) {
+      UpdateDescr(set->descr, UPD_WRITE);  /* save changes to set */
+      if (!set->closing) set->closing = ScheduleTimer(closemtr, CLOSETIME, set);
+   }
+}
+
+/* ========================================================================== */
+/*                                 CheckLock                                  */
+/* -------------------------------------------------------------------------- */
+/*  CheckLock tests whether the specified client may access the set.
+ *  If the set is not locked by an other client, zero is returned.
+ *  If the set is locked by an other client, the client is put in the
+ *  set's lock wait queue (except if immediate response has been specified)
+ *  and 1 is returned.
+ */
+extern int CheckLock(object setobj, object current)
+{
+   setsta set=(setsta)setobj;
+   
+   if (!set->locked) return 0;
+   if (set->locked==current) return 0;
+   if (!ClientRequest(current)->head.imm)
+      InsertHead(set->lockwait,current);         /* link client in wait queue */
+   return 1;
+}
+
+/* ========================================================================== */
+/*                                 LockSet                                    */
+/* -------------------------------------------------------------------------- */
+/*  LockSet attempts to lock a set for a client. Zero is returned upon success.
+ *  If there is already a lock in the server, the client is put in the 
+ *  server's lock wait queue (except if immediate response has been specified by
+ *  the client) and 1 is returned.
+ */
+extern int LockSet(object setobj, object current)
+{
+   setsta set=(setsta)setobj; 
+  
+   if (!server->locked || (server->locked==current)) {
+      server->locked = current;
+      server->nlocks++;
+      set->locked = current;
+#if 0
+/* section disabled -- if needed, maintaining integrity should become
+ * new function, e.g. 'protect' instead of 'lock'
+ */
+      UpdateDescr(set->descr,UPD_WRITE);
+      LockDescr(set->descr,1);
+#endif
+      return 0;
+   }
+   if (!ClientRequest(current)->head.imm) {
+      InsertHead(server->lockwait, current);   /* link in server's wait queue */
+   }
+   return 1;
+}
+
+/* ========================================================================== */
+/*                                 UnlockSet                                  */
+/* -------------------------------------------------------------------------- */
+/*  UnlockSet removes a client's lock from a set. It re-schedules any delayed
+ *  requests to access the set and at most one request for a lock.
+ */
+extern int UnlockSet(object setobj, object current)
+{
+   setsta set=(setsta)setobj;
+   
+   if (set->locked==current) {
+      object waiter;
+      server->nlocks--;
+      if (server->nlocks == 0) server->locked = NULL;
+      set->locked = NULL;
+#if 0
+/* section disabled -- if needed, maintaining integrity should become
+ * new function, e.g. 'protect' instead of 'lock'
+ */
+      LockDescr(set->descr,0);
+#endif
+       
+      if (!server->locked) {
+         if (waiter=RemoveTail(server->lockwait)) {
+            ScheduleTimer(delayed,0,waiter);       /* one (1) waiting client */
+         }
+      }
+      while (waiter=RemoveHead(set->lockwait)) {
+         ScheduleTimer(delayed,0,waiter);      /* handle any waiting clients */
+      }
+      return 0;
+   } else return 1;
+}
+
+/* ========================================================================== */
+/*                                 SetHandle                                  */
+/* -------------------------------------------------------------------------- */
+/*  SetHandle() returns the set handle of a set.
+ */
+extern fint SetHandle(object current)
+{
+   return ((setsta)current)->id;
+}
+
+/* ========================================================================== */
+/*                                 SetDescr                                   */
+/* -------------------------------------------------------------------------- */
+/*  SetDescr() returns the descriptor object.
+ */
+extern object SetDescr(object current)
+{
+   return ((setsta)current)->descr;
+}
+      
+/* ========================================================================== */
+/*                                 DestroySet                                 */
+/* -------------------------------------------------------------------------- */
+/*  DestroySet() removes the specified set from the server, making the set
+ *  handle invalid, and then removes the descriptor and image file.
+ */
+extern int DestroySet(char *name)
+{
+   setsta set;
+   iterid it;
+   object client;
+   int    fd, ro;
+   char   filename[NAMLEN+6];
+    
+   it = NewIter(sets);
+   while (set=NextValue(it)) if (!strcmp(set->name,name)) break;
+   DeleteIter(it);
+   if (set) {
+      if (DescrReadonly(set->descr)) return GDS_NOPRIV;
+      it = NewIter(set->clients);
+      while (client=NextValue(it)) {
+         if (set->locked==client) UnlockSet(set, client);
+         RemoveValue(set->clients,client);
+         RemoveSet(client, set);
+         if (set->locked) RemoveValue(set->lockwait,client);
+      }
+      DeleteIter(it);
+      DeleteSet(set);
+   }
+   fd = OpenFile(name,".descr",&ro);
+   if (!fd) return GDS_OPENFAIL;
+   (void)CloseFile(&fd);
+   if (ro) return GDS_NOPRIV;
+   strcpy(filename,name); strcat(filename,".descr");
+   remove(filename);
+   strcpy(filename,name); strcat(filename,".image");
+   remove(filename);
+   return GDS_SUCCESS;
+}
+            
+/* ========================================================================== */
+/*                                 RenameSet                                  */
+/* -------------------------------------------------------------------------- */
+/*  RenameSet() renames a set. The set handle remains valid, so tasks which
+ *  opened the set under the old name can still access it.
+ */
+extern int RenameSet(char *oldname, char* newname)
+{
+   setsta set;
+   iterid it;
+   int    fd, ro;
+   char   oldfilename[NAMLEN+6], newfilename[NAMLEN+6];
+    
+   it = NewIter(sets);
+   while (set=NextValue(it)) if (!strcmp(set->name,oldname)) break;
+   DeleteIter(it);
+   if (set) {
+      if (DescrReadonly(set->descr)) return GDS_NOPRIV;
+      strncpy(set->name,newname,NAMLEN);
+   }
+   if (!set) {
+      fd = OpenFile(oldname,".descr",&ro);
+      if (!fd) return GDS_OPENFAIL;
+      (void)CloseFile(&fd);
+      if (ro) return GDS_NOPRIV;
+   }
+   strcpy(oldfilename,oldname); strcat(oldfilename,".descr");
+   strcpy(newfilename,newname); strcat(newfilename,".descr");
+   if (rename(oldfilename,newfilename)) return GDS_RENAMEFAIL;
+   strcpy(oldfilename,oldname); strcat(oldfilename,".image");
+   strcpy(newfilename,newname); strcat(newfilename,".image");
+   if (rename(oldfilename,newfilename)) return GDS_RENAMEFAIL;
+   return GDS_SUCCESS;
+}
+   
+/* -------------------------------------------------------------------------- */
+/*                                 NewSet                                     */
+/* -------------------------------------------------------------------------- */
+/*  NewSet() returns a fresh set status block. If necessary, it removes
+ *  any blocks which currently have no clients.
+ */
+static setsta NewSet()
+{
+   static int currid=0;
+   setsta     newset;
+   
+   if (!sets) sets=NewList();
+   while (nsets>SETLIMIT) {
+      iterid it = NewIter(sets);
+      setsta set, oldset=NULL;
+      int oldest=0;
+      while (set=NextValue(it)) {
+         if (set->closing && (set->closecount >= oldest)) {
+            oldest = set->closecount;
+            oldset = set;
+         }
+      }
+      DeleteIter(it);
+      if (oldset) DeleteSet(oldset); else break;
+   }
+   newset = New(_setsta);
+   newset->id = ++currid;
+   return newset;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 DeleteSet                                  */
+/* -------------------------------------------------------------------------- */
+/*  DeleteSet removes a set status block from the server. It should not
+ *  have any clients anymore.
+ */
+static void DeleteSet(setsta set)
+{
+   DeleteList(set->clients);                       /* is already empty */
+   DeleteDescr(set->descr);
+   DeleteList(set->lockwait);
+   Deschedule(&set->closing);
+   RemoveValue(sets,set);
+   Delete(set);
+   nsets--;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 Release                                    */
+/* -------------------------------------------------------------------------- */
+/*  Release removes one set status block in order to free memory.
+ *  If a set has been removed, 0 is returned; if there are no more closed
+ *  sets, 1 is returned.
+ */
+static int Release(void)
+{
+   int result=1;
+   iterid it = NewIter(sets);
+   setsta set;
+
+   while (set=NextValue(it)) {
+      if (set->closing) {
+         DeleteSet(set);
+         result = 0;
+         break;
+      }
+   }
+   DeleteIter(it);
+   return result;
+   /*  If necessary, more radical measures can be taken. E.g. the
+    *  data block from an active set can be snatched. In this case
+    *  it may be necessary to read this back later. Code for this
+    *  should then be placed in SetDescr(). This will however lead
+    *  to complications if we decide to reset the reading positions 
+    *  of the descriptor items in the file.
+    */
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 closemtr                                   */
+/* -------------------------------------------------------------------------- */
+/* closemtr monitors any sets which do not currently have a client.
+ */
+static void closemtr(ident id, setsta current)
+{
+   current->closecount++;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 delayed                                    */
+/* -------------------------------------------------------------------------- */
+/* delayed re-issues any delayed request.
+ */
+static void delayed(ident id, object current)
+{
+   HandleRequest(current);
+   Deschedule(&id);
+}
+#<
+
+#>            unixsocket.c
+/* unixsocket.c
+                              COPYRIGHT (c) 1994
+                        Kapteyn Astronomical Institute
+         University of Groningen  -  9700 AV Groningen, The Netherlands
+
+Author: J.P. Terlouw
+*/
+
+#include "stddef.h"
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include "string.h"
+#include "stdio.h"
+#include "mainloop.h"
+#include "acceptor.h"
+#include "unixsocket.h"
+
+/* ========================================================================== */
+/*                                 UnixSocket                                 */
+/* -------------------------------------------------------------------------- */
+/*  UnixSocket creates a UNIX domain socket and schedules it to accept
+ *  connect requests from clients.
+ *  On success it returns the mainloop ident; on failure NULL;
+ */
+ident UnixSocket(char *devname)
+{
+   struct sockaddr_un name;
+   int                s;
+   ident              result;
+
+   if ((s = socket(AF_UNIX, SOCK_STREAM, 0))<0)     return NULL;
+   name.sun_family = AF_UNIX;
+   sprintf(name.sun_path,"/tmp/gds%d",getpid());
+   strcpy(devname,name.sun_path);
+   if (bind(s,(struct sockaddr *)&name,sizeof(name))) return NULL;
+   result = ScheduleRead(Acceptor,s,(void*)AF_UNIX);
+   if (listen(s,5)) {
+      Deschedule(&result);
+   }
+   return result;
+}
+#<

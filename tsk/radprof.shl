@@ -1,0 +1,1135 @@
+Cradprof.shl
+C
+C                          COPYRIGHT (c) 1999
+C                    Kapteyn Astronomical Institute
+C               University of Groningen, The Netherlands
+C                           All Rights Reserved.
+C
+C#>            radprof.dc1
+C
+CProgram:      RADPROF
+C
+CPurpose:      Solves the radial surface density distribution from a strip
+C              integral of the brightness distribution. USE PROGRAM
+C              RADIAL AS FRONT END FOR RADPROF.
+C
+C
+CCategory:     ANALYSIS, FITTING, PROFILES, RADIO
+C
+CFile:         radprof.shl
+C
+CAuthor:       M.G.R. Vogelaar
+C              (Initial code: Myung-Hyun Rhee, Rob Swaters)
+C
+CKeywords:     See radial.dc1
+C
+C   PA=        Position angle (deg) of galaxy:
+C
+C   INCL=      Inclination (deg) of galaxy:
+C              Inclination of 90.0 degrees not allowed.
+C
+C   GUESS=     Enter initial estimate:                            [L]
+C
+C              Enter one of: L = Linear Regression
+C                            E = Exponential Decreasing
+C                            G = Gaussian Distribution
+C                            F = Flat Distribution
+C
+C **IDENT=     Give integer to identify output:                   [0]
+C
+C   SCF=       Give scale factor for density:                     [1]
+C
+C
+C   SIGMA=     Give noise in your data points:                    [1]
+C
+C   ITMAX=     Maximum number of iterations:                     [10]
+C
+C   BEAM=      Half power beam width (arcsec):                  [0.0]
+C
+C   POS=       Positions of data points (arcsec):
+C              First position must be zero and positions must be
+C              equally spaced.
+C
+C   EAST=      Values at east side:
+C
+C   WEST=      Values at west side:
+C
+C   TABLEFILE= Enter output filename for densities:      [RADIAL.DAT]
+C              This file contains the observed and fitted 
+C              integrated flux for east, west and the average profile,
+C              and the fitted surface densities.
+C              
+C
+C
+CDescription:  RADPROF solves the radial surface density distribution from
+C              a strip integral of the brightness distribution of a galaxy.
+C              The method is simular to the one decribed by Lucy,
+C              (The Astronomical Journal, Vol. 79, Number 6, June 1974).
+C              The geometry of the problem is determined by the inclination
+C              and the position angle of the galaxy together with the position
+C              angle of the resolution axis of the strip integral.
+C              The method of Lucy takes care of the existence of noise
+C              in the data and used an iterative scheme to take that into
+C              account.
+C
+CAlgorithm:    1. read in the observational data of observation 1
+C                 from the data file for both the east and west side
+C              2. convert the positions on the resolution (=position)
+C                 axis to radial distances in the plane of the galaxy
+C              3. make an inital guess of the radial distribution
+C              4. start lucy iterative scheme to compute the true
+C                 radial distribution
+C              5. print and plot the results of the observation
+C
+C              Array's
+C              R (input)  distance to centre along the resolution axis
+C              R (out) distance in the plane of the galaxy
+C              V (out) radial distr. east and west (solar masses/pc**2)
+C              S (out) radial distr. east and west (cumulative perc.)
+C              T (out) average radial distr. (solar masses/pc**2)
+C              U (out) average radial distr. (cum. perc.)
+C
+C
+C              This program is usually started by program RADIAL which
+C              serves as a front-end to RADPROF.
+C              For a further description of the method see:
+C              Warmels, R.H., 1988b, A&AS 72, 427
+C
+CUpdates:      Jul 30, 1999: VOG, Document created.
+C
+C#<
+
+
+
+
+
+E     PROGRAM RADPROF   - MAIN MODULE -
+
+      PROGRAM RADPROF
+
+C-DECLARATIONS-----------------------------------------------------------------
+
+      INTEGER      IAL,NIAL,LIAL,OUT
+      PARAMETER      (IAL=256,NIAL=2*IAL+1,LIAL=1500,OUT=3)
+      COMMON /ROMMEL/DUMA(-1*IAL:IAL),DUMB(-1*IAL:IAL),DUMC(-1*IAL:IAL),
+     #               DUMD(-1*IAL:IAL),DUME(-1*IAL:IAL)
+      COMMON /RADII/ NP,R(0:IAL)
+      REAL        V(-1*IAL:IAL),S(-1*IAL:IAL),
+     #            T(-1*IAL:IAL),U(-1*IAL:IAL)
+      REAL        X1(0:IAL)
+      REAL        ST1O(-1*IAL:IAL),ST2O(-1*IAL:IAL),ST3O(-1*IAL:IAL)
+      REAL        STF(-1*IAL:IAL),STA(-1*IAL:IAL),STFA(-1*IAL:IAL)
+      REAL        FXSTO(2),FXSTF(2),FXSTOA(2),FXSTFA(2),FXSR(2),FXSRA
+      REAL        ANG(2),BEAM1,PAOBS1
+      REAL        DELX,DELX1,SCF,SIGMA,SQKIMAX
+      REAL        EAST(0:IAL)
+      LOGICAL     OKAY
+      INTEGER     NGC,IDENT,NR
+      INTEGER     I,NRET1,NP1,NP,ITMAX
+      INTEGER     RR, USERREAL
+      CHARACTER       INI*1
+      CHARACTER*50    DAT
+      CHARACTER*256   TEXT
+C     CHARACTER*256   TEXT2
+
+C-DATA STATEMENTS--------------------------------------------------------------
+C
+C     DATA            CONVF                 /10.1119/
+C     Change this constant to one so that the output of radprof will be
+C     in map units.
+      DATA            CONVF                 /1/
+C-----------------------------------------------------------------------------
+
+C-FORMAT STATEMENTS-----------------------------------------------------------
+
+    1 FORMAT('OBS 1: position angle of observation [',F4.1,']',A1)
+    2 FORMAT('OBS 2: position angle of observation [',F4.1,']',A1)
+  500 FORMAT(7X,'POS',6X,'EAST',6X,'WEST',A1)
+  501 FORMAT(3F10.2,A1)
+C-----------------------------------------------------------------------------
+
+
+N     start communication with HERMES
+      CALL INIT
+      CALL ANYOUT( 1, ' ' )
+      CALL ANYOUT( 1, '-------------------------------------------' )
+      CALL ANYOUT( 1, '   RADPROF VERSION 2.0 (oct 20, 1997)' )
+      CALL ANYOUT( 1, '   Solves the radial surface density' )
+      CALL ANYOUT( 1, '   distribution from a strip integral' )
+      CALL ANYOUT( 1, '   of the brightness distribution.' )
+      CALL ANYOUT( 1, '   Based on the Lucy method (The Astronomical')
+      CALL ANYOUT( 1, '   Journal, Vol. 79, Number 6, June 1974' )
+      CALL ANYOUT( 1, '   ' )
+      CALL ANYOUT( 1, '   USE PROGRAM RADIAL TO START RADPROF' )
+      CALL ANYOUT( 1, '-------------------------------------------' )
+      CALL ANYOUT( 1, ' ' )
+N     preset arrays
+      PERFORM PRESET
+N     open output file
+      CALL OPENF( OUT )
+N     get input from the user
+      PERFORM GALAXY
+N     start with reading data of observation 1
+      PERFORM READ1
+N     number of points
+      NP = NP1
+N     show input on screen
+N      WRITE(TEXT,500) 0
+N      CALL ANYOUT( 1, TEXT )
+N      FOR I=0,NP-1
+N         WRITE(TEXT,501) X1(I),ST3O(-1*I),ST3O(I),0
+N         CALL ANYOUT( 1, TEXT )
+N      CFOR
+N     calculate radial distribution for observ. 1
+      PERFORM RAD1
+N     output to user on terminal
+      PERFORM OUTPUT
+      CALL PLOT( R,FACT,ST3O,STF,V,SCF,NP1 )
+      CLOSE(UNIT=OUT)
+N     break all communications
+      CALL FINIS
+N     we are done
+      STOP
+
+
+E     PROGRAM RADPROF   - PROCEDURE PRESET -
+      PROC PRESET
+C------------------------------------------------------------------------------
+C     THIS PROCEDURE PRESETS THE ARRAYS NEEDED FOR THE CALCULATIONS.
+C------------------------------------------------------------------------------
+
+N     loop trough data points
+      FOR I = -1*IAL,IAL
+N     preset data first observation
+      ST1O(I) = 0.0
+N     preset data second observation
+      ST2O(I) = 0.0
+N     preset data points average of 1 and 2
+      ST3O(I) = 0.0
+      CFOR
+N     end procedure
+      CPROC
+
+E     PROGRAM RADPROF   - PROCEDURE GALAXY -
+      PROC GALAXY
+C------------------------------------------------------------------------------
+C     PROCEDURE TO GET TERMINAL INPUT FROM THE USER.
+C     IT ASKS FOR: GALAXY NUMBER (NGC OR IC)
+C                  POSITION ANGLE AND INCLINATION (INCLINATION .NE. 90.0)
+C------------------------------------------------------------------------------
+
+N     get galaxy number
+C      CALL USERINT(NGC,1,4,'GALAXY=',
+C     #            'NGC or IC number of the galaxy wanted')
+N     infinite loop to obtain correct p.a. and incl.
+      WHILE .TRUE.
+N     get p.a. and incl.
+      RR = USERREAL(ANG(1), 1, 4, 'PA=',
+     #              'Position angle (deg) of galaxy' )
+      RR = USERREAL(ANG(2), 1, 4, 'INCL=',
+     #              'Inclination (deg) of galaxy' )
+N     inclination unequal 90.0
+      IF ANG(2).NE.90.0
+      THEN
+N        yes; exit loop
+         XWHILE
+N        no
+      ELSE
+N        give warning
+         CALL ERROR(1,'inclination of 90.0 degrees not allowed')
+N        cancel keyword
+         CALL CANCEL('PA=')
+         CALL CANCEL('INCL=')
+      CIF
+N     end infinite loop
+      CWHILE
+
+N     infinite loop of initial estimate of model
+      WHILE .TRUE.
+N     give user info about initial estimates
+      CALL ANYOUT(1,' ')
+      CALL ANYOUT(1,'    Possibilities for the initial estimate:')
+      CALL ANYOUT(1,'        L = Linear Regression           ')
+      CALL ANYOUT(1,'        E = Exponential Decreasing      ')
+      CALL ANYOUT(1,'        G = Gaussian Distribution       ')
+      CALL ANYOUT(1,'        F = Flat Distribution           ')
+      CALL ANYOUT(1,' ')
+N     what kind of initial estimate
+      INI = 'L'
+      CALL USERCHARU(INI,1,1,'GUESS=','Enter initial estimate [L]')
+N     check if estimate is legal
+      IF (INI.EQ.'L').OR.(INI.EQ.'E').OR.
+     #   (INI.EQ.'G').OR.(INI.EQ.'F')
+N     option is present and working
+      THEN
+N     exit infinite loop
+      XWHILE
+N     input was not legal
+      ELSE
+N     give user warning and try once more
+      CALL ERROR(1,'Initial estimate unknown; try once more')
+N     cancel keyword
+      CALL CANCEL('GUESS=')
+      CIF
+N     end of infinite loop
+      CWHILE
+
+N     get identifier from user
+      IDENT=0
+      CALL USERINT(IDENT,1,2,'IDENT=',
+     1            'Give integer to identify output:    [0]')
+N     get scalefactor from user to give reasonable output values
+      SCF=1
+N     for densities
+      RR = USERREAL(SCF,1,1,'SCF=',
+     1             'Give scalefactor for density:   [1]')
+N     get sigma per point
+      SIGMA=1.0
+      RR = USERREAL(SIGMA,1,1,'SIGMA=',
+     1             'Give noise in your datapoints:   [1]')
+N     get maximum chi squared
+      SQKIMAX=1
+      ITMAX=10
+      CALL USERINT(ITMAX,1,1,'ITMAX=',
+     1           'Maximum number of iterations:   [10]')
+
+N     end procedure
+      CPROC
+
+E     PROGRAM RADPROF   - PROCEDURE READ1 -
+      PROC READ1
+C-----------------------------------------------------------------------------
+C     This procedure reads the data of the strip integral of the
+C     first observation and puts them in array st30
+C     The distances to the center along the strip axis are put into
+C     array X.
+C------------------------------------------------------------------------------
+ 1011 FORMAT('*** skipping NGC/IC ',I4,' - ',F5.1)
+ 1012 FORMAT('*** cannot find data for NGC/IC ',I4,' sorry ***')
+C------------------------------------------------------------------------------
+
+N     initialize beam to zero
+      BEAM1=0.0
+N     get hpbw of in direction of datapoints
+      RR = USERREAL(BEAM1,1,4,'BEAM=',
+     1            'Half power beam width (arcsec):   [0.0]')
+N     initialize position angle of observation
+      PAOBS1=ANG(1)
+N     prepare message
+C      WRITE(TEXT,1) PAOBS1,0
+N     get pa from user
+C      RR = USERREAL(PAOBS1,1,1,'PAOBS1=',TEXT)
+N     start reading of loop
+      REPEAT
+         NR=IAL
+         OKAY=.TRUE.
+         NP1 = USERREAL(X1(0), NR, 1,'POS=',
+     1              'Positions of data points (arcsec):  ')
+N     first radius zero?
+      IF (X1(0).NE.0.0)
+N     no
+      THEN
+N     not okay
+      OKAY=.FALSE.
+N     inform user
+      CALL ERROR(1,'first position must be zero')
+N     cancel keyword
+      CALL CANCEL('POS=')
+N     check equal spacing
+      ELSE
+N     initialize counter
+      I=2
+N     expected separation between data points
+      DELX1  = X1(1)
+N     loop to check on equally spaced data points
+      REPEAT
+N     separation with previous data point
+      DELX   = X1(I) - X1(I-1)
+N     input okay if difference is small
+      OKAY= (ABS(DELX1-DELX).LT.0.1)
+N     increase counter
+      I=I+1
+N     end loop if i > nr of points or something is wrong
+      UNTIL (I.GT.NP1-1).OR.(.NOT.OKAY)
+N     unequal spacing?
+      IF .NOT.OKAY
+N     yes
+      THEN
+N     error message to user
+      CALL ERROR(1,'positions are not equally spaced, try again')
+N     cancel keyword
+      CALL CANCEL('POS=')
+      CIF
+N     end checks
+      CIF
+N     end of pos loop
+      UNTIL OKAY
+
+
+      NR    = NP1
+      NRET1 = 0
+      NRET1 = USERREAL( EAST(0), NP1, 1, 'EAST=',
+     1            'Values at east side:')
+N     convert east to right order in st30
+      FOR I=0,NRET1
+         ST3O(-1*I)=EAST(I)
+      CFOR
+N     get data west side
+      NR    = NRET1
+      NRET1 = USERREAL( ST3O(0), NR, 1, 'WEST=',
+     1                 'Values at west side:')
+N     end of proc read1
+      CPROC
+
+
+
+E     PROGRAM RADPROF - procedure RAD1
+      PROC RAD1
+C------------------------------------------------------------------------------
+C     This procedure calculates the radial distribution from the strip
+C     distribution which has been read by the procedure read1.
+C     First it applies the geometrical correction to the data; thereafter
+C     it calls the subroutine lucy to obtain the radial distribution in
+C     an iterative fashion.
+C------------------------------------------------------------------------------
+
+N     angle between integration direction and major axis
+      DELPHI = ANG(1) - (PAOBS1-90.0)
+C     Note that if RADPROF is started with RADIAL, the position angle
+C     and inclination (PA=, INCL=) are both zero and there is no
+C     the correction factor is equal to 1.
+N     geometrical correction factor (note:deg->radians)
+      FACT   = 1.0/SQRT(1.-((COS(DELPHI*0.0174533)*
+     #                       SIN(ANG(2)*0.0174533))**2))
+N     correct strip integral to face-on situation
+      FOR I = 0,IAL
+N     radius in plane galaxy
+      R(I)       = X1(I)*FACT
+      ST1O(-1*I) = ST3O(-1*I)/FACT
+      ST1O(I)    = ST3O(I)/FACT
+      STA(I)     = (ST1O(-1*I)+ST1O(I))/2.0
+      STA(-1*I)  = STA(I)
+      CFOR
+N     separating between rings
+      DELR1 = R(1)
+N     half power beam width
+      BEAM = BEAM1*FACT
+
+N     transfer dat for subroutine lucy
+      FOR I = -1*IAL,IAL
+      DUMC(I) = ST1O(I)
+      CFOR
+N     start lucy to calculate radial distribution
+      CALL LUCY(BEAM,INI,NITO,CHIO,SIGMA,ITMAX)
+N     flux content in observed strip integral
+      CALL STFLUX(R,ST1O,FXSTO)
+N     flux content in strip integral fits
+      CALL STFLUX(R,DUMD,FXSTF)
+N     flux content in radial distribution
+      CALL SRFLUX(R,DUMA,S,FXSR)
+N     transfer solutions to output array (ncl. conversion)
+      FOR I = -1*IAL,IAL
+      V(I)   = DUMA(I)*CONVF
+N     fit of the strip distribution
+      STF(I) = DUMD(I)*FACT
+      CFOR
+
+N     loop for average
+      FOR I = -1*IAL,IAL
+      DUMC(I) = STA(I)
+      CFOR
+N     calculate average radial profile
+      CALL LUCY(BEAM,INI,NITA,CHIA,SIGMA,ITMAX)
+N     flux content in average observed strip integral
+      CALL STFLUX(R,STA,FXSTOA)
+N     flux content in average fitted strip integral
+      CALL STFLUX(R,DUMD,FXSTFA)
+N     flux content in radial distribution
+      CALL SRFLUX(R,DUMA,U,FXSRA)
+N     transfer solution to output arrays
+      FOR I = -1*IAL,IAL
+N     radial distribution
+      T(I)    = DUMA(I)*CONVF
+N     the fitted observed strip integral
+      STFA(I) = DUMD(I)*FACT
+      CFOR
+N     end of procedure
+      CPROC
+
+
+E     PROGRAM RADPROF   - PROCEDURE OUTPUT
+      PROC OUTPUT
+C------------------------------------------------------------------------------
+C     This procedure produces screen output to inform the user about the fit
+C     which has been made for the observation(s). In addition it makes a plot
+C     of the radial distribution calculated.
+C------------------------------------------------------------------------------
+ 1000 FORMAT('! Initial guess: ',A,'   scalefactor:',F4.1,
+     1       '  Identifier : ',I3)
+ 1001 FORMAT('! ', A, A1)
+ 1002 FORMAT('! Galaxy : NGC ',I4,' PA  =',F5.1,' INCL  =',F5.1,
+     2       ' PA Observation =',F5.1,
+     3       '  FACT  =',1X,F8.5,A1)
+ 1004 FORMAT (1X,F6.2,4X,3(F6.2,2X,F4.2,4X))
+ 1005 FORMAT ('! ',14X,'! S T R I P   D I S T R I B U T I O N S',23X,
+     2           'S U R F A C E   D E N S I T I E S')
+ 1006 FORMAT ('! ',25X,'! mJy.km/s/arcsec',40X,'solar masses/pc**2')
+ 1007 FORMAT ('!    POS',11X,'EAST',17X,'WEST',17X,'AVE',16X,
+     2             'RADIUS',7X,'EAST',11X,'WEST',11X,'AVE')
+ 1008 FORMAT ('!  (arcsec)',3X,'OBS',7X,'FIT',8X,'OBS',7X,'FIT',8X,
+     2        'OBS',7X,'FIT',8X,'(arcsec)',1X,3(' DENS',3X,'FLUX',4X))
+ 1009 FORMAT (1X,F8.2,3X,3(F8.2,2X,F8.2,3X),2X,F8.2,3(2X,F7.3,1X,F5.3))
+ 1010 FORMAT (1X,'! TOTAL FLUX CONTENT (Jy km/s):',
+     2        1X,9X,3(F8.2,2X,F8.2,3X),13X,3(F7.3,8X))
+ 1014 FORMAT ('! ',25X,'! mapunits',50X,'mapunits')
+ 1015 FORMAT ('! ',10X,3(F8.2,2X,F8.2,3X),12X,3(F7.3,8X))
+ 1016 FORMAT (A)
+ 1017 FORMAT('! # Iterations EAST/WEST:',2X,I3,' CHI**2=',1X,E14.8)
+ 1018 FORMAT('! # Iterations AVERAGE  :',2X,I3,' CHI**2=',1X,E14.8) 
+ 1020 FORMAT (F7.3,1X,F7.3)
+ 1021 FORMAT (F20.10,' ',F20.10)
+ 1022 FORMAT('! # Iterations EAST/WEST:',2X,I3)
+ 1023 FORMAT('! # Iterations AVERAGE  :',2X,I3)
+ 1024 FORMAT('! Standard deviation EAST   :', 1X,E14.8)
+ 1025 FORMAT('! Standard deviation WEST   :', 1X,E14.8)
+ 1026 FORMAT('! Standard deviation AVERAGE:', 1X,E14.8)
+C------------------------------------------------------------------------------
+
+N     date and time
+      CALL GETDATE(DAT)
+
+      STDOE = 0.0
+      STDOW = 0.0
+      STDAV = 0.0
+      FOR I = 0,NP-1,1 
+         STDOE = STDOE + (ST3O(-1*I)-STF(-1*I))**2.0 
+         STDOW = STDOW + (ST3O(I)-STF(I))**2.0
+         STDAV = STDAV+ (STA(-1*I)*FACT-STFA(-1*I))**2.0
+      CFOR
+      STDOE = SQRT(STDOE/(REAL(NP)-1.0))
+      STDOW = SQRT(STDOW/(REAL(NP)-1.0))
+      STDAV = SQRT(STDAV/(REAL(NP)-1.0))
+
+N     Write information to screen
+N     ---------------------------
+      CALL ANYOUT( 3, '! RESULTS OF LUCY"S ITERATIVE SOLUTION SCHEME '//
+     #                'FOR THE RADIAL HI DISTRIBUTION' )
+      CALL ANYOUT( 3, '! WRITTEN TO FILE ON DISK AT:') 
+      WRITE (TEXT,1001) DAT,0
+      CALL ANYOUT( 3, TEXT )
+N     galaxy, pa and incl, pa observ. and factor
+C      WRITE (TEXT,1002) NGC,ANG(1),ANG(2),PAOBS1,FACT,0
+C      CALL ANYOUT( 3, TEXT2 )
+N     number of iterations
+      WRITE (TEXT,1022) NITO
+      CALL ANYOUT( 3, TEXT )      
+      WRITE (TEXT,1023) NITA
+N     standard deviations
+      CALL ANYOUT( 3, TEXT )
+      WRITE (TEXT,1024) STDOE
+      CALL ANYOUT( 3, TEXT ) 
+      WRITE (TEXT,1025) STDOW
+      CALL ANYOUT( 3, TEXT ) 
+      WRITE (TEXT,1026) STDAV
+      CALL ANYOUT( 3, TEXT )             
+N     radii, surf, dens. east, west and average
+C      FOR I = 0,NP-1,1
+C         WRITE (TEXT,1004) R(I),V(-1*I)*SCF,
+C     #                     S(-1*I),V(I)*SCF,S(I),T(I)*SCF,U(I)
+C         CALL ANYOUT( 3, TEXT )
+C      CFOR
+
+
+
+N     write information in output file
+N     --------------------------------
+      WRITE (OUT,1001) DAT,0
+N     galaxy, pa and incl, pa observ., factor
+      WRITE (OUT,1002) NGC,ANG(1),ANG(2),PAOBS1,FACT,0
+N     number of iterations, chi**2
+      WRITE (OUT,1022) NITO 
+      WRITE (OUT,1023) NITA 
+      WRITE (OUT,1024) STDOE
+      WRITE (OUT,1025) STDOW 
+      WRITE (OUT,1026) STDAV 
+      WRITE (OUT,1000) INI,SCF,IDENT
+N     headers of columns
+      WRITE (OUT,1005)
+      WRITE (OUT,1014)
+      WRITE (OUT,1007)
+      WRITE (OUT,1008)
+N     loop through all points
+      FOR I = 0,NP-1,1
+      WRITE (OUT,1009) R(I)/FACT,ST3O(-1*I),STF(-1*I),ST3O(I),
+     2                 STF(I),STA(-1*I)*FACT,STFA(-1*I),
+     3                 R(I),V(-1*I)*SCF,S(-1*I),V(I)*SCF,
+     4                 S(I),T(I)*SCF,U(I)
+      CFOR
+      WRITE (OUT,1016) '! TOTAL FLUX CONTENT:'
+      WRITE (OUT,1015) FXSTO(1),FXSTF(1),FXSTO(2),FXSTF(2),
+     2                 FXSTOA(1),FXSTFA(1),FXSR(1),FXSR(2),2.0*FXSRA
+
+N     end procedure
+      CPROC
+      END
+
+
+
+E     PROGRAM RADPROF   - SUBROUTINE LUCY - MAIN BODY -
+      SUBROUTINE LUCY(HPBW,MODEL,IT,SQKI,SIGMA,ITMAX)
+C------------------------------------------------------------------------------
+C     This subroutine solves the radial surface density distribution from an
+C     observed integration of the brightness distribution upon an axis.
+C     It uses the method described by Lucy.
+C
+C     procedure: 1.       initial estimate for the radial distribution
+C                2.       iterative part to find the n-th solution for
+C                         the radial distribution
+C                3.       routine to monitor the convergence of the solution
+C------------------------------------------------------------------------------
+
+      PARAMETER (IAL=256,NIAL=2*IAL+1,NBEAM=7)
+      COMMON /ROMMEL/DUMA(-1*IAL:IAL),DUMB(-1*IAL:IAL),DUMC(-1*IAL:IAL),
+     2               DUMD(-1*IAL:IAL),DUME(-1*IAL:IAL)
+      COMMON /RADII/ NP,R(0:IAL)
+      REAL           B(-1*NBEAM:NBEAM),HPBW
+      INTEGER        NP
+      CHARACTER      MODEL
+      CHARACTER*40   TEKST
+      DATA           PI/3.141592654/
+C------------------------------------------------------------------------------
+
+  100 FORMAT ('busy with iteration ',I2,A1)
+N     preset arrays needed for ther calculations
+      PERFORM PRESET
+N     initial guess: triangular model
+      PERFORM QUESS
+N     calculate beam shape on grid points
+      PERFORM BEAM
+
+N     number of iterations
+      IT = 0
+      WHILE .TRUE.
+N     inform user about iterations
+      WRITE(TEKST,100) IT,0
+      CALL STATUS(TEKST)
+N     calculate new strip distr. for radial distr.
+      PERFORM STRIP
+N     preset chi-squared
+      SQKI = 0.0
+      FOR I = -1*NP,NP
+      IF (DUMC(I).NE.0.0)
+      THEN
+N     there is something wrong with this definition sqki
+N     SQKI = SQKI+(DUMD(I)-DUMC(I))**2./DUMC(I)
+N     is this better ?
+      SQKI = SQKI+(DUMD(I)-DUMC(I))**2.0/(SIGMA**2.0)
+      CIF
+      CFOR
+N     chi-squares within limit?
+      IF (IT.GE.ITMAX)
+N     yes
+      THEN
+N     exit loop
+      XWHILE
+N     no
+      ELSE
+N     increase number of iterations
+      IT = IT+1
+      CIF
+N     calculate radial distr. from strip distr.
+      PERFORM RAD
+N     end iterative loop
+      CWHILE
+
+N     back to original values
+      FOR I = -1*IAL,IAL
+      DUMA(I) = DUMA(I)*FLUX
+      DUMC(I) = DUMC(I)*FLUX
+      DUMD(I) = DUMD(I)*FLUX
+      CFOR
+
+N     return to radial
+      RETURN
+
+E     SUBROUTINE LUCY    - PROCEDURE PRESET -
+      PROC PRESET
+C------------------------------------------------------------------------------
+C     This procedure presets the arrays needed for the calculations.
+C------------------------------------------------------------------------------
+
+N     loop through arrays
+      FOR I = -1*IAL,IAL
+      DUMA(I) = 0.0
+      DUMB(I) = 0.0
+      DUMD(I) = 0.0
+      DUME(I) = 0.0
+      CFOR
+N     end procedure
+      CPROC
+
+E     SUBROUTINE LUCY   - PROCEDURE QUESS -
+      PROC QUESS
+C------------------------------------------------------------------------------
+C     This procedure produces the initial guess of the radial
+C     distribution. The user can choose between four different
+C     forms of the initial estimate:
+C         1. linear regression to the last measured point ('l')
+C         2. exponential decreasing with scale size 1/rmax ('e')
+C         3. gaussian distribution ('g')
+C         4. complete flat distribution out to rmax ('f')
+C------------------------------------------------------------------------------
+
+N     radial separation between grid points
+      DELR = R(1)
+N     preset total flux
+      FLUX = 0.0
+N     calculate total flux
+      FOR I = -1*NP,NP
+      FLUX = FLUX+DUMC(I)*DELR
+      CFOR
+N     normalize flux content of strip distribution to 1.0
+      FOR I = -1*IAL,IAL
+      DUMC(I) = DUMC(I)/FLUX
+      CFOR
+
+N     user wants linear regression
+N     -----------------------------
+      IF MODEL.EQ.'L'
+      THEN
+N     sloop of the linear function
+      CST1 = -3.0/(PI*(NP*DELR)**3.0)
+N     zero point
+      CST2 = +3.0/(PI*(NP*DELR)**2.0)
+      FOR I = 0,NP
+N     west side
+      DUMA(I)    = CST1*I*DELR + CST2
+N     is equal to east side
+      DUMA(-1*I) = DUMA(I)
+      CFOR
+      CIF
+N     user wants exponential decreasing function
+N     ------------------------------------------
+      IF MODEL.EQ.'E'
+      THEN
+N     scale factor for normalization
+      CST1 = 1.0/(2.*PI*(NP*DELR)**2.)
+N     scale length
+      CST2 = 1.0/(NP*DELR)
+N     loop through array points
+      FOR I = 0,IAL
+N     west side
+      DUMA(I) = CST1*EXP(-1.0*CST2*(I*DELR))
+N     east side
+      DUMA(-1*I) = DUMA(I)
+      CFOR
+      CIF
+N     user wants gaussian model
+N     -------------------------
+      IF MODEL.EQ.'G'
+      THEN
+N     scale factor of the gaussian distribution
+      CST1 = LOG(2.)/(PI*(NP*DELR)**2.)
+N     constant in the exponent
+      CST2 = LOG(2.)/((NP*DELR)**2.)
+N     loop trough array points
+      FOR I = 0,IAL
+N     west side
+      DUMA(I) = CST1*EXP(-1.0*CST2*(I*DELR)**2)
+N     east side
+      DUMA(-1*I) = DUMA(I)
+      CFOR
+      CIF
+N     user wants a flat model
+N     -----------------------
+      IF MODEL.EQ.'F'
+      THEN
+N     constant value over the whole range
+      CST1 = 1.0/(2.0*NP*DELR)
+N     loop through array points
+      FOR I = 0,NP
+N     west side
+      DUMA(I)    = CST1
+N     east side
+      DUMA(-1*I) = DUMA(I)
+      CFOR
+      CIF
+N     end procedure
+      CPROC
+
+E     SUBROUTINE LUCY   - PROCEDURE BEAM -
+      PROC BEAM
+C------------------------------------------------------------------------------
+C
+C     This procedure calculates the shape on a one-dimensional grid
+C     The number of grid points is given in the parameter statement
+C     The hpbw is given to the subroutine in the arguments
+C------------------------------------------------------------------------------
+C
+
+N     separation between the grid points
+      DELR = R(1)
+N     hpbw is greater than zero
+      IF HPBW.GT.0.0
+      THEN
+N     constant needed for normalization
+      CST1 = (2./HPBW)*SQRT(LOG(2.)/PI)
+N     constant in the exponent
+      CST2 = -4.*LOG(2.)/(HPBW**2.)
+N     loop trough grid points
+      FOR I = 0,NBEAM
+N     west side
+      B(I)    = CST1*EXP(CST2*(I*DELR)**2.)
+N     is equal to east side
+      B(-1*I) = B(I)
+      CFOR
+N     hpbw less or equal to zero
+      ELSE
+      FOR I = 1,NBEAM
+      B(I)   = 0.0
+      B(-1*I) = 0.0
+      CFOR
+N     central value of beam
+      B(0) = 1.0/DELR
+      CIF
+      CPROC
+
+E     SUBROUTINE LUCY   - PROCEDURE STRIP -
+      PROC STRIP
+C------------------------------------------------------------------------------
+C     This procedure calculates the n-th fit of the observed strip
+C     distribution from the n-th solution for the radial distribution.
+C------------------------------------------------------------------------------
+
+N     centre strip value strip integral
+      DUMB(0)= 0.0
+      FOR J = 0,IAL-1
+      TERM1E  = DUMA(-1*J-1)+DUMA(-1*J)
+      TERM1W  = DUMA(J+1)+DUMA(J)
+      TERM1   = TERM1E + TERM1W
+      TERM2   = SQRT(FLOAT(J+1)**2) - SQRT(FLOAT(J**2))
+      DUMB(0) = DUMB(0) + (DELR*TERM1*TERM2)/2.
+      CFOR
+
+N     eastern side
+      FOR K = -1,-1*IAL,-1
+      DUMB(K) = 0.0
+      FOR J = 0,IAL+K
+      IF (K-J-1).LT.-1*IAL
+      THEN
+      TERM1   = DUMA(K-J)
+      ELSE
+      TERM1   = DUMA(K-J-1)+DUMA(K-J)
+      CIF
+      TERM2   = SQRT(FLOAT((K-J-1)**2-K**2))-SQRT(FLOAT((K-J)**2-K**2))
+      DUMB(K) = DUMB(K)+DELR*TERM1*TERM2
+      CFOR
+      CFOR
+
+N     western side
+      FOR K = 1,IAL
+      DUMB(K) = 0.0
+      FOR J = 0,IAL-K
+      IF (K+J+1).GT.IAL
+      THEN
+      TERM1   = DUMA(K+J)
+      ELSE
+      TERM1   = DUMA(K+J+1)+DUMA(K+J)
+      CIF
+      TERM2   = SQRT(FLOAT((K+J+1)**2-K**2))-SQRT(FLOAT((K+J)**2-K**2))
+      DUMB(K) = DUMB(K)+DELR*TERM1*TERM2
+      CFOR
+      CFOR
+
+N     smooth the strip distribution with the beam
+      FOR K = -1*IAL+NBEAM,IAL-NBEAM
+N     preset output array element
+      DUMD(K) = 0.0
+      FOR J = -1*NBEAM,NBEAM
+      DUMD(K) = DUMD(K)+DUMB(K+J)*B(J)*DELR
+      CFOR
+      CFOR
+
+N     calculate corrections for radial distribution
+      FOR K = -1*IAL,IAL
+      IF (DUMD(K).EQ.0.0)
+      THEN
+      DUME(K) = 0.0
+      ELSE
+      DUME(K) = DUMC(K)/DUMD(K)
+      CIF
+      CFOR
+N     end procedure
+      CPROC
+
+E     SUBROUTINE LUCY   - PROCEDURE RAD -
+      PROC RAD
+C------------------------------------------------------------------------------
+C     This procedure calculated the n+1-th radial distribution form the
+C     n-th fit of the observed strip distribution.
+C------------------------------------------------------------------------------
+
+N     central value of radial distribution
+      DUMB(0) = DUME(0)
+
+N     loop through radii east side
+      FOR K = -1,-1*IAL,-1
+N     preset dumb(k)
+      DUMB(K) = 0.0
+      FOR J = 0,K+1,-1
+      TERM1   = DUME(J-1)+DUME(J)
+      TERM2   = ASIN(FLOAT(J-1)/FLOAT(K))- ASIN(FLOAT(J)/FLOAT(K))
+      DUMB(K) = DUMB(K)+TERM1*TERM2
+      CFOR
+      DUMB(K) = DUMB(K)/PI
+      CFOR
+
+N     loop through radii west side
+      FOR K = 1,IAL
+N     preset dumb(k)
+      DUMB(K) = 0.0
+      FOR J = 0,K-1
+      TERM1   = DUME(J+1)+DUME(J)
+      TERM2   = ASIN(FLOAT(J+1)/FLOAT(K))- ASIN(FLOAT(J)/FLOAT(K))
+      DUMB(K) = DUMB(K)+TERM1*TERM2
+      CFOR
+      DUMB(K) = DUMB(K)/PI
+      CFOR
+
+N     calculate n-th estimate of radial distr.
+      FOR K = -1*IAL,IAL
+      DUMA(K) = DUMB(K)*DUMA(K)
+      CFOR
+N     end procedure
+      CPROC
+
+N     end subroutine lucy
+      END
+
+E     PROGRAM RADPROF   - SUBROUTINE FLUX -
+      SUBROUTINE SRFLUX(X,Y,Z,FLX)
+C------------------------------------------------------------------------------
+C     entry srflux:
+C     Subroutine to calculate flux from a radial distribution.
+C     input:
+C            x(i)  : radii in the plane of the galaxy
+C            y(i)  : surface density in the rings
+C     output:
+C            z(i)  : cumulative percentage of flux
+C            flx(1): total flux content in the distribution east side
+C            flx(2): total flux content in the distribution west side
+C
+C     entry stflux:
+C     Subroutine to calculate the flux content in a strip distribution.
+C     input:
+C            x(i)  : positional coordinate along the strip axis
+C            y(i)  : intensity of the strip integral
+C     output:
+C
+C            flx(1): total flux content in the strip distribution east side
+C            flx(2): total flux content in the strip distribution west side
+C------------------------------------------------------------------------------
+      PARAMETER      (IAL=256)
+      REAL           X(0:IAL),Y(-1*IAL:IAL),Z(-1*IAL:IAL)
+      REAL           FLX(2)
+      DATA           PI/3.141592654/
+C------------------------------------------------------------------------------
+
+N     routine to estimate flux for radial distribution
+N     distrance between rings
+      DELR = X(1)
+N     central flux content
+      Z(0) = PI*DELR**2.0*Y(0)/2.0
+N     loop through rings
+      FOR I = 1,IAL
+N     flux contribution of ring; east side
+      Z(-1*I) = Z(-1*I+1)+PI*X(I)*DELR*Y(-1*I)
+N     flux contribution of ring; west side
+      Z(I)    = Z(I-1) + PI*X(I)*DELR*Y(I)
+      CFOR
+N     total flux east
+      FLX(1) = Z(-1*IAL)
+N     total flux west
+      FLX(2) = Z(IAL)
+N     total flux content galaxy
+      FLXT   = FLX(1) + FLX(2)
+N     normalize flux
+      FOR I  = 0,IAL
+N     east side
+      Z(-1*I) = Z(-1*I)/FLX(1)
+N     west side
+      Z(I)    = Z(I)/FLX(2)
+      CFOR
+N     flux in jy km/s; east sdie
+      FLX(1) = FLX(1)/1000.0
+N     flux in jy km/s; west side
+      FLX(2) = FLX(2)/1000.0
+      RETURN
+C
+N     entry to estimate the flux content strip distr.
+      ENTRY STFLUX(X,Y,FLX)
+N     grid separation
+      DELX = X(1)
+      FLX(1) = Y(0)*DELX/2.0
+      FLX(2) = FLX(1)
+N     loop trough grid points
+      FOR I = 1,IAL
+N     flux contribution east
+      FLX(1) = FLX(1)+Y(-1*I)*DELX
+N     flux contribution west
+      FLX(2) = FLX(2) + Y(I)*DELX
+      CFOR
+N     unit in jy km/s; east side
+      FLX(1) = FLX(1)/1000.0
+N     unit in jy km/s; west side
+      FLX(2) = FLX(2)/1000.0
+      RETURN
+      END
+
+
+E     PROGRAM RADPROF   - FUNCTION WGHTMT -
+      FUNCTION WGHTMT(I,K)
+C------------------------------------------------------------------------------
+C     Wghtmt(i,k) is the weight matrix used to obtain the radial hi distri-
+C     bution from the observed strip integration and v.v
+C------------------------------------------------------------------------------
+      PARAMETER(IAL=256)
+      COMMON   /RADII/  NP,R(0:IAL)
+C------------------------------------------------------------------------------
+      A1    =ABS(R(K+1)*R(K+1)-R(I)*R(I))
+      A2    =ABS(R(K)*R(K)    -R(I)*R(I))
+      WGHTMT=2.0*(SQRT(A1)-SQRT(A2))
+      RETURN
+      END
+
+
+
+E     PROGRAM RADPROF   - SUBROUTINE PLOT - MAIN BODY -
+      SUBROUTINE PLOT(R, FACT, ST3O, STF, V, SCF, NP )
+C------------------------------------------------------------------------------
+C     Make a plot of the observed and fitted strip distributions
+C
+C------------------------------------------------------------------------------
+
+  501 FORMAT(3F10.2,A1)
+
+      INTEGER        IAL
+      PARAMETER (IAL=256)
+
+      INTEGER        RED, GREEN, BLUE, CYAN, MAGENTA, YELLOW
+      PARAMETER      (RED=2,GREEN=3,BLUE=4,CYAN=5,MAGENTA=6,YELLOW=7)
+      PARAMETER      (ORANGE=8)
+      REAL           R(0:IAL)
+      REAL           ST3O(-1*IAL:IAL)
+      REAL           STF(-1*IAL:IAL)
+      REAL           V(-1*IAL:IAL)
+      REAL           FACT, SCF
+      INTEGER        NP
+      INTEGER        I
+      INTEGER        NXSUB, NYSUB
+      CHARACTER*80   DEVSPEC
+      REAL           XTICK, YTICK
+      REAL           MINX, MAXX
+      REAL           MINY, MAXY
+      REAL           DELTA
+      INTEGER        PLUS, CIRCLE
+      PARAMETER      (PLUS=2,CIRCLE=4)
+
+      UNIT = 0
+      DEVSPEC = '?'
+      CALL PGBEG( UNIT, DEVSPEC, 1, 2 )
+      CALL PGASK( .TRUE. )
+      CALL PGPAGE()
+      CALL PGSVP( 0.15, 0.9, 0.15, 0.85 )
+      CALL PGSCH( 1.6 )
+      CALL MINMAX1( R, NP, MINX, MAXX )
+      DELTA = (MAXX - MINX) / 10.0
+      MAXX = MAXX + DELTA
+      MINX = MINX - DELTA
+      CALL MINMAX1( ST3O(-1*NP), 2*NP+1, MINY, MAXY )
+      DELTA = (MAXY - MINY) / 10.0
+      MAXY = MAXY + DELTA
+      MINY = MINY - DELTA
+      CALL PGSWIN( -MAXX, MAXX, MINY, MAXY )
+      XTICK = 0.0
+      YTICK = 0.0
+      NXSUB = 0
+      NYSUB = 0
+      CALL PGSCI( GREEN )
+      CALL PGBOX( 'BCNST',  XTICK, NXSUB,
+     1       'BCNSTV', YTICK, NYSUB )
+      CALL PGLAB( 'Radius (arcsec)', 'Integrated flux (mapunits)',
+     1            'OBSERVED (yellow) & FITTED STRIP DISTRIBUTIONS ' )
+
+      CALL PGSCI( YELLOW )
+      FOR I=0,NP-1
+N         WRITE(TEXT,501) R(I)/FACT,ST3O(-1*I),ST3O(I),0
+N         CALL ANYOUT( 1, TEXT )
+         CALL PGPT( 1,  R(I)/FACT, ST3O(I),    PLUS )
+         CALL PGPT( 1, -R(I)/FACT, ST3O(-1*I), PLUS )
+      CFOR
+
+      CALL PGSCI( CYAN )
+      FOR I=0,NP-1
+         CALL PGPT( 1, -R(I)/FACT, STF(-1*I),  CIRCLE )
+      CFOR
+
+      CALL PGSCI( MAGENTA )
+      FOR I=0,NP-1
+         CALL PGPT( 1,  R(I)/FACT, STF(I),     CIRCLE )
+      CFOR
+
+      CALL PGPAGE()
+      CALL MINMAX1( V(-1*NP), 2*NP+1, MINY, MAXY )
+      CALL PGSCI( GREEN )
+      DELTA = (MAXY - MINY) / 10.0
+      MAXY = MAXY + DELTA
+      MINY = MINY - DELTA
+      CALL PGSWIN( -DELTA/2.0, MAXX, MINY, MAXY )
+      CALL PGBOX( 'BCNST',  XTICK, NXSUB,
+     1       'BCNSTV', YTICK, NYSUB )
+      CALL PGLAB( 'Radius (arcsec)', 'Surface density (mapunits)',
+     #            'RADIAL PROFILE' )
+      CALL PGSCI( CYAN )
+      FOR I=0,NP-1
+         CALL PGPT( 1, R(I)/FACT, V(-1*I), CIRCLE )
+      CFOR
+      CALL PGSCI( MAGENTA )
+      FOR I=0,NP-1
+         CALL PGPT( 1,  R(I)/FACT, V(I), CIRCLE )
+      CFOR
+
+
+      RETURN
+      END
+
+
+
+E     PROGRAM RADPROF   - SUBROUTINE OPENF - MAIN BODY -
+      SUBROUTINE OPENF( OUT )
+C------------------------------------------------------------------------------
+C
+C
+C
+C
+C------------------------------------------------------------------------------
+
+      INTEGER          OUT
+      CHARACTER*80     FNAME
+      CHARACTER*80     TEXT
+
+
+      FNAME='RADIAL.DAT'
+      CALL USERTEXT( FNAME,1,'TABLEFILE=',
+     1     'Enter output filename for densities:   [RADIAL.DAT]' )
+
+      OPEN( UNIT=OUT,FILE=FNAME,STATUS='UNKNOWN' )
+
+      WRITE( TEXT,
+     1 '(''RADPROF: File on disk with densities is called: '',
+     2  A20, A1 )' ) FNAME, 0
+      CALL ANYOUT( 1, TEXT )
+
+
+      RETURN
+      END

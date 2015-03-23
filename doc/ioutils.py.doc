@@ -1,0 +1,18 @@
+Document:     ioutils.py
+
+Purpose:      Python module providing functions for user I/O.
+
+Category:     USER IO, PHYSICAL COORDINATES
+
+File:         ioutils.py.src
+
+Author:       M.G.R. Vogelaar
+
+Description:  Refer to documents wcsinp.dc2,  wcsbox.dc2 and wcspos.dc2.
+
+Updates:      Apr 23, 2009: JPT, Document created.
+              Jul 06, 2010: VOG, Changed name from setinp to wcsinp
+              Nov 11, 2010: VOG, Bugs removed, more documentation
+              Feb 03, 2011: VOG, Documentation updated for new 
+                                 positions module in Kapteyn Package.
+              Sep 28, 2012, VOG, New major version. Many bugs removed

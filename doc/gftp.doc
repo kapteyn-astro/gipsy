@@ -1,0 +1,26 @@
+
+Program:      gftp
+
+Purpose:      Retrieves GIPSY sources from the GIPSY source server.
+
+Category:     MANAGEMENT
+
+File:         gftp.c
+
+Author:       K.G. Begeman
+
+Use:          gftp contacts the GIPSY source server and obtains GIPSY
+              sources for remote updates. The programme is usually
+              started from compile.
+              The file $gip_loc/server is read to get the name of
+              the GIPSY source server. If $gip_loc/server is not
+              present, $gip_sys/server.mgr is tried.
+              
+              When compiled with -DSRC_SERVER, the resulting executable
+              will be the GIPSY source server.
+
+Updates:      Mar 16, 1993: KGB, document created.
+              Nov 30, 2000: JPT, changed for server's new source path.
+              Dec 13, 2011: JPT, retry gethostbyname() with "localhost"
+                                 if it fails with "normal" hostname.
+              

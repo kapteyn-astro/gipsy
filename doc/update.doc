@@ -1,0 +1,25 @@
+
+Script:       update
+
+Purpose:      Updates the GIPSY libraries and applications.
+
+Category:     MANAGEMENT
+
+File:         update.csh
+
+Author:       K.G. Begeman
+
+Use:          This shell script is executed by the atqueue or by crontab
+              script. When this script has completed the update, a message
+              is send to the GIPSY manager (see $gip_loc/manager), or if
+              there is no GIPSY manager found for this machine, to the
+              initiating user (usually gipsy).
+              The complete logfile is stored in $gip_loc/update.`hostname`.
+              Old executables older than 1 week are removed from $gip_exe.
+
+Updates:      Jul 23, 1991: KGB, Document created.
+              Mar 15, 1993: KGB, Logfile store in $gip_loc.
+              Jul 29, 1993: KGB, Check for existing log files.
+              Nov 10, 1998: JPT, Version number upgraded to 101.
+              May 28, 2008: JPT, For MacOS: changed "Compile" into "uCompile".
+

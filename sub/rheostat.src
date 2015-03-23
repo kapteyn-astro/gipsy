@@ -1,0 +1,1756 @@
+rheostat.src
+
+        Copyright (c) Kapteyn Laboratorium Groningen 1999
+        All Rights Reserved.
+
+Name:         rheostat.src
+Creator:      terlouw
+Host:         magellan
+Date:         Jan 7, 1999
+Contents:     Makefile.uti Rheostat.c Rheostat.h RheostatP.H rheostat.dc3
+              rheostat.uue
+
+#>            Makefile.uti
+SHELL  = /bin/sh
+
+pack::
+	$$gip_sys/pack.csh rheostat.src Makefile.uti \
+	Rheostat.c Rheostat.h RheostatP.H rheostat.dc3 rheostat.uue
+#<
+
+#>            Rheostat.c
+/* -XT */
+
+#ifdef MOTIF
+#undef MOTIF
+#endif
+#ifndef M_PI
+#define M_PI            3.14159265358979323846
+#endif
+
+/*************************************************************
+ *
+ * Rheostat.c
+ * Rheostat widget implementation
+ *
+ * Author: Joe English, joe@trystero.art.com
+ *
+ * $Revision: 1.9 $
+ *
+ *************************************************************
+ *
+ * Future enhancements:
+ *
+ * Add set(value) action
+ * SetValues() and Initialize() probably need to do more range checking
+ * When number_intervals is is not a divisor of ValueRange, ticks
+ *    aren't drawn where the arrow actually goes.
+ */
+
+/* HISTORY
+ * 25-Jun-1993		James R. R. Service
+ *    In calculation_position() the minimum value wasn't being subtracted
+ *    from the current value.
+ * 15-Jul-1993		Joe English
+ *    In Set() action, peg the indicator to one side if the value
+ *    is out of range instead of just freezing.
+ * 13-Sep-1993		Gregory A. Janee
+ *    With tick gravity on, clicking near a tick corresponding to
+ *    a *negative* value caused the indicator to jump one tick to the
+ *    right of the correct tick.
+ * 26-Sep-1994		Daniel V. Klein (dvk@lonewolf.com)
+ *    Fixed lots of bugs, made some enhancements:
+ *	1) Allow inner_arrow_length and outer_arrow_length to be up to 150%
+ *	   of radius (which allows arrows to have their center of rotation
+ *         be inside the arrow body)
+ *	2) Fixed calculations so dials can have reversed ranges (i.e., with
+ *	   the largest value clockwise of the smallest)
+ *	3) [ *** Undid this change (anything with a zero thickness was
+ *               made invisible) --JE *** ]
+ *	4) Tick marks and arc are now CapButt, instead of CapRound (which
+ *	   gave problems with thick lines).
+ *	5) The arrow is now JoinRound (instead of JoinMiter, which gave
+ *	   problems with thick lines).
+ *	6) SetValues is a lot smarter (checks more things, doesn't redraw the
+ *	   whole widget if it doesn't need to).
+ *	7) Intervals work correctly when begin_angle == end_angle.
+ *	8) Added a meta-resource called "foreground", which sets all of
+ *	   arrow_color, tick_color, and dial_color (if they are not being
+ *	   set at the same time).
+ *	9) Added a QueryGeometry method
+ *
+ * 11-Oct-1994		Joe English
+ *	In Motif version, traverse to widget on Set action
+ *	as per suggestion by Daniel Klein.
+ *
+ *  6-Jan-1999          Hans Terlouw
+ *      Adapted for incorporation in GIPSY
+ */
+
+#include "stdlib.h"
+#include "math.h"
+
+#include <X11/Intrinsic.h>
+#include <X11/IntrinsicP.h>
+#include <X11/StringDefs.h>
+#ifdef MOTIF
+#       include <Xm/XmP.h>
+#       include <Xm/PrimitiveP.h>
+#endif
+
+#include "RheostatP.H"
+#include "Rheostat.h"
+
+/***********************************************************************
+ *
+ * Convenience macros, defaults, and declarations:
+ *
+ ***********************************************************************/
+
+#define RADIANS(d)  (M_PI * (d)/ 180.0)
+#define DEGREES(r)  ((r) * 180.0 / M_PI)
+#define DEG_TO_RAD (180.0 / M_PI)
+#define RAD_TO_DEG (M_PI / 180.0)
+#define MIN(x,y)	((x) < (y) ? (x) : (y))
+#define MAX(x,y)	((x) > (y) ? (x) : (y))
+
+/* Rheostat-specific: */
+#define MinAngle(w)     (w->rheostat.minimum_angle)
+#define MaxAngle(w)     (w->rheostat.maximum_angle)
+#define MinValue(w)     (w->rheostat.minimum_value)
+#define MaxValue(w)     (w->rheostat.maximum_value)
+#define AngleRange(w)   (w->rheostat.maximum_angle-w->rheostat.minimum_angle)
+#define ValueRange(w)   (w->rheostat.maximum_value-w->rheostat.minimum_value)
+#define ValueInc(w)   	((w->rheostat.maximum_value-w->rheostat.minimum_value) \
+			 / w->rheostat.number_intervals)
+#define CenterX(w)      ((int)w->core.width/2)
+#define CenterY(w)      ((int)w->core.height/2)
+
+/* MARGIN(w) = space from border to radius. */
+#define _MARGIN(w) \
+    ( w->rheostat.outer_margin \
+    + w->rheostat.tick_length \
+    + w->rheostat.dial_thickness \
+    + w->rheostat.inner_margin)
+#ifdef MOTIF
+#define MARGIN(w) (_MARGIN(w)  \
+    + w->primitive.highlight_thickness  \
+    + w->primitive.shadow_thickness)
+#else
+#define MARGIN(w) _MARGIN(w)
+#endif
+
+/* Cast operator to keep lint/gcc happy: */
+#define W (Widget)
+
+/*
+ * Default values for various resources:
+ */
+#define MIN_RADIUS	2
+#define DFLT_RADIUS	30
+#define DFLT_OUTER	25
+#define DFLT_INNER	20
+#define DFLT_WIDTH	20
+#define DFLT_ARROWTHICKNESS	0
+/* Another good set of defaults: RADIUS=INNER=30, OUTER=15, WIDTH=10 */
+
+#define DFLT_TICKLEN	5
+#define DFLT_TICKTHICKNESS	0
+#define DFLT_DIALTHICKNESS	3
+#define DFLT_MINVALUE	0
+#define DFLT_MAXVALUE	100
+#define DFLT_MINANGLE	45
+#define DFLT_MAXANGLE	315
+
+#define DFLT_NUMTICKS	10
+#define DFLT_MARGIN	2
+
+/*
+ *    GIPSY static function instead of extern
+ */
+static void XfwfDrawArrow(
+#if NeedFunctionPrototypes
+    Display *,
+    Drawable d,
+    GC gc,
+    Position endx,
+    Position endy,                      /* position of arrow tip */
+    int dx,
+    int dy,                             /* slope of arrow */
+    Dimension outer_length,             /* distance tip->base */
+    Dimension inner_length,             /* distance tip->inner */
+    Dimension width,                    /* distance base->outer points */
+    Boolean fill                        /* True=>fill arrow,False=>outline */
+#endif
+);
+
+/*
+ * Method functions:
+ */
+static void     Initialize();
+static void     Redisplay();
+static void     Resize();
+static void     Destroy();
+static Boolean  SetValues();
+static XtGeometryResult QueryGeometry();
+
+/*
+ * Action functions:
+ */
+static void     Set();
+static void     Notify();
+static void     Increment();
+
+/*
+ * Private functions:
+ */
+static void     draw_arrow	(/* XfwfRheostatWidget, GC */);
+static void     draw_ticks      (/* XfwfRheostatWidget, GC */);
+static void     draw_dial      	(/* XfwfRheostatWidget, GC */);
+static void     calculate_position	(/* XfwfRheostatWidget */);
+static void     get_GCs     	(/* XfwfRheostatWidget */);
+static void     free_GCs     	(/* XfwfRheostatWidget */);
+static void	call_callbacks	(/* XfwfRheostatWidget *, String, XEvent * */);
+
+
+/***********************************************************************
+ *
+ * Translation, action, and resource tables:
+ *
+ ***********************************************************************/
+
+#ifdef MOTIF		/* use osfXXX instead of XXX */
+static char     default_translations[] =
+    "<Btn1Down>:        set() \n\
+     <Btn1Motion>:      set() \n\
+     <Btn1Up>:      	notify() \n\
+     <Key>minus:	increment(-1) notify() \n\
+     <Key>plus:		increment(+1) notify() \n\
+     <Key>osfPageUp:   	increment(+1i) notify() \n\
+     <Key>osfPageDown:  increment(-1i) notify() \n\
+     <Key>Return:	notify() \n\
+    ";
+#else			/* no "virtual keysym" braindamage */
+static char     default_translations[] =
+    "<Btn1Down>:        set() \n\
+     <Btn1Motion>:      set() \n\
+     <Btn1Up>:      	notify() \n\
+     <Key>minus:	increment(-1) notify() \n\
+     <Key>plus:		increment(+1) notify() \n\
+     <Key>Prior:   	increment(-1i) notify() \n\
+     <Key>Next:  	increment(+1i) notify() \n\
+     <Key>Home:		increment(min) notify() \n\
+     <Key>End:		increment(max) notify() \n\
+     <Key>Return:	notify() \n\
+    ";
+#endif
+
+static XtActionsRec actions[] = {
+    { "set",    (XtActionProc) Set },
+    { "notify", (XtActionProc) Notify },
+    { "increment", (XtActionProc) Increment }
+};
+
+static XtResource resources[] = {
+#   define OFFSET(x) (XtOffset(XfwfRheostatWidget, rheostat.x))
+    {XtNvalue, XtCValue, XtRInt, sizeof(int),
+        OFFSET(value), XtRImmediate, (caddr_t)0},
+    {XtNminimumValue, XtCMinimum, XtRInt, sizeof(int),
+        OFFSET(minimum_value), XtRImmediate, (caddr_t) DFLT_MINVALUE},
+    {XtNmaximumValue, XtCMaximum, XtRInt, sizeof(int),
+        OFFSET(maximum_value), XtRImmediate, (caddr_t) DFLT_MAXVALUE},
+    {XtNminimumAngle, XtCMinimum, XtRInt, sizeof(int),
+        OFFSET(minimum_angle), XtRImmediate, (caddr_t) DFLT_MINANGLE},
+    {XtNmaximumAngle, XtCMaximum, XtRInt, sizeof(int),
+        OFFSET(maximum_angle), XtRImmediate, (caddr_t) DFLT_MAXANGLE},
+    {XtNtickGravity, XtCGravity, XtRBoolean, sizeof(Boolean),
+        OFFSET(tick_gravity), XtRImmediate, (caddr_t)True},
+    {XtNnumberIntervals, XtCNumberIntervals, XtRInt, sizeof(int),
+        OFFSET(number_intervals), XtRImmediate, (caddr_t) DFLT_NUMTICKS},
+    {XtNresizeArrow, XtCBoolean, XtRBoolean, sizeof(Boolean),
+	OFFSET(resize_arrow), XtRString, "True"},
+    {XtNsetCallback, XtCCallback, XtRCallback, sizeof(XtPointer),
+        OFFSET(set), XtRCallback, NULL},
+    {XtNnotify, XtCCallback, XtRCallback, sizeof(XtPointer),
+        OFFSET(notify), XtRCallback, NULL},
+    {XtNouterMargin, XtCMargin, XtRDimension, sizeof(Dimension),
+	OFFSET(outer_margin), XtRImmediate, (caddr_t) DFLT_MARGIN},
+    {XtNtickLength, XtCMargin, XtRDimension, sizeof(Dimension),
+        OFFSET(tick_length), XtRImmediate, (caddr_t) DFLT_TICKLEN},
+    {XtNdialThickness, XtCThickness, XtRDimension, sizeof(Dimension),
+        OFFSET(dial_thickness), XtRImmediate, (caddr_t) DFLT_DIALTHICKNESS},
+    {XtNinnerMargin, XtCMargin, XtRDimension, sizeof(Dimension),
+	OFFSET(inner_margin), XtRImmediate, (caddr_t) DFLT_MARGIN},
+    {XtNradius, XtCLength, XtRDimension, sizeof(Dimension),
+        OFFSET(radius), XtRImmediate, (caddr_t) DFLT_RADIUS},
+    {XtNouterArrowLength, XtCLength, XtRDimension, sizeof(Dimension),
+	OFFSET(outer_arrow_length), XtRImmediate, (caddr_t) DFLT_OUTER},
+    {XtNinnerArrowLength, XtCLength, XtRDimension, sizeof(Dimension),
+	OFFSET(inner_arrow_length), XtRImmediate, (caddr_t) DFLT_INNER},
+    {XtNarrowWidth, XtCWidth, XtRDimension, sizeof(Dimension),
+	OFFSET(arrow_width), XtRImmediate, (caddr_t) DFLT_WIDTH},
+    {XtNfillArrow, XtCBoolean, XtRBoolean, sizeof(Boolean),
+	OFFSET(fill_arrow), XtRString, "False" },
+    {XtNarrowThickness, XtCThickness, XtRDimension, sizeof(Dimension),
+	OFFSET(arrow_thickness), XtRImmediate, (caddr_t) DFLT_ARROWTHICKNESS},
+    {XtNtickThickness, XtCThickness, XtRDimension, sizeof(Dimension),
+        OFFSET(tick_thickness), XtRImmediate, (caddr_t) DFLT_TICKTHICKNESS},
+#ifdef MOTIF
+    {XtNuseShadowColors, XtCBoolean, XtRBoolean, sizeof(Boolean),
+	OFFSET(use_shadow_colors), XtRString, "False"},
+#endif
+    {XtNarrowColor, XtCForeground, XtRPixel, sizeof(Pixel),
+        OFFSET(arrow_pixel), XtRString, XtDefaultForeground},
+    {XtNdialColor, XtCForeground, XtRPixel, sizeof(Pixel),
+        OFFSET(dial_pixel), XtRString, XtDefaultForeground},
+    {XtNtickColor, XtCForeground, XtRPixel, sizeof(Pixel),
+        OFFSET(tick_pixel), XtRString, XtDefaultForeground},
+#   undef OFFSET
+};
+
+XfwfRheostatClassRec    xfwfRheostatClassRec =
+{
+    /* CoreClassPart */
+    {
+#ifdef MOTIF
+	/* superclass            */	(WidgetClass) &xmPrimitiveClassRec,
+#else
+	/* superclass            */	(WidgetClass) &widgetClassRec,
+#endif
+	/* class_name            */	"XfwfRheostat",
+	/* widget_size           */	sizeof(XfwfRheostatRec),
+	/* class_initialize      */	NULL,
+	/* class_part_initialize */	NULL,
+	/* class_inited          */	FALSE,
+	/* initialize            */	Initialize,
+	/* initialize_hook       */	NULL,
+	/* realize               */	XtInheritRealize,
+	/* actions               */	actions,
+	/* num_actions           */	XtNumber(actions),
+	/* resources             */	resources,
+	/* num_resources         */	XtNumber(resources),
+	/* xrm_class             */	NULLQUARK,
+	/* compress_motion       */	TRUE,
+	/* compress_exposure     */	TRUE,
+	/* compress_enterleave   */	TRUE,
+	/* visible_interest      */	TRUE,
+	/* destroy               */	Destroy,
+	/* resize                */	Resize,
+	/* expose                */	Redisplay,
+	/* set_values            */	SetValues,
+	/* set_values_hook       */	NULL,
+	/* set_values_almost     */	XtInheritSetValuesAlmost,
+	/* get_values_hook       */	NULL,
+	/* accept_focus          */	NULL,
+	/* version               */	XtVersion,
+	/* callback private      */	NULL,
+	/* tm_table              */	default_translations,
+	/* query_geometry        */	QueryGeometry,
+	/* display_accelerator   */	XtInheritDisplayAccelerator,
+	/* extension             */	NULL
+    },
+#ifdef MOTIF
+    /* Primitive class fields */
+    {
+	/* border_highlight      */	(XtWidgetProc) _XtInherit,
+	/* border_unhighlight    */	(XtWidgetProc) _XtInherit,
+	/* translations          */	XtInheritTranslations,
+	/* arm_and_activate      */	Notify,
+	/* syn_resources         */	NULL,
+	/* num_syn_resources     */	0,
+	/* extension             */	NULL
+    },
+#endif
+    /* XfwfRheostat class fields */
+    {
+	/* ignore                */	0
+    }
+};
+
+WidgetClass     xfwfRheostatWidgetClass = (WidgetClass) &xfwfRheostatClassRec;
+
+/***********************************************************************
+ *
+ * Method functions:
+ *
+ **********************************************************************/
+
+/* fake_foreground_color -- added dvk */
+static void fake_foreground_color (new, args, num_args)
+    XfwfRheostatWidget  new;
+    ArgList		args;
+    Cardinal		*num_args;
+{
+    Boolean found_dial_pixel = FALSE;
+    Boolean found_tick_pixel = FALSE;
+    Boolean found_arrow_pixel = FALSE;
+    Boolean found_foreground = FALSE;
+    Pixel foreground;
+    Cardinal n;
+
+    /*
+     * Cheat a little - we don't have an attribute called "foreground", but
+     * if the user sets it, transfer those values to each of dial_pixel,
+     * tick_pixel, and arrow_pixel (be careful not to override any of those
+     * values if they are set at the same time).
+     */
+    for (n = 0; n < *num_args; n++) {
+	if (strcmp (args[n].name, XtNforeground) == 0) {
+	    found_foreground = TRUE;
+	    foreground = args[n].value;
+	    }
+	else if (strcmp (args[n].name, XtNdialColor) == 0)
+	    found_dial_pixel = TRUE;
+	else if (strcmp (args[n].name, XtNtickColor) == 0)
+	    found_tick_pixel = TRUE;
+	else if (strcmp (args[n].name, XtNarrowColor) == 0)
+	    found_arrow_pixel = TRUE;
+	}
+    if (found_foreground) {
+	if (!found_dial_pixel)
+	    new->rheostat.dial_pixel = foreground;
+	if (!found_tick_pixel)
+	    new->rheostat.tick_pixel = foreground;
+	if (!found_arrow_pixel)
+	    new->rheostat.arrow_pixel = foreground;
+	}
+}
+
+/*
+ * Initialize method:
+ */
+static void Initialize(request, new, args, num_args)
+    XfwfRheostatWidget  request, new;
+    ArgList		args;
+    Cardinal		*num_args;
+{
+    int margin = MARGIN(new);
+    int user_radius = new->rheostat.radius;	/* request from user */
+    int size_radius = 				/* calculated from size */
+	MIN(new->core.height,new->core.width)/2 - margin;
+    int min_radius = 			/* from arrow dimens */
+	(int)(MAX(	new->rheostat.inner_arrow_length,
+			new->rheostat.outer_arrow_length) * 0.75);
+    int min_dimen;
+
+    /*
+     * Check geometry:
+     * Set radius from  user value, else widget size, else default.
+     * Make sure radius is >= 150% of inner length & outer length
+     *  (this allows, e.g., r=10,i=10,o=12) .
+     * Make sure width and height are >= 2*(radius + margins)
+     */
+    if (user_radius != 0)
+	new->rheostat.radius = user_radius;
+    else if (new->core.width != 0 && new->core.height != 0)
+	new->rheostat.radius = size_radius;
+    else
+        new->rheostat.radius = DFLT_RADIUS;
+
+    /* Make sure radius is large enough: */
+    if (new->rheostat.radius < min_radius)
+	new->rheostat.radius = min_radius;
+
+    /* Make sure widget is large enough: */
+    min_dimen = 2*(new->rheostat.radius+margin);
+    if (new->core.width < min_dimen)
+	new->core.width = min_dimen;
+    if (new->core.height < min_dimen)
+	new->core.height = min_dimen;
+
+#ifdef MOTIF
+    if (new->rheostat.use_shadow_colors) {
+	new->rheostat.arrow_pixel = new->primitive.bottom_shadow_color;
+	new->rheostat.dial_pixel = new->primitive.top_shadow_color;
+	new->rheostat.tick_pixel = new->primitive.top_shadow_color;
+    }
+#endif
+    /* added, dvk */
+    fake_foreground_color (new, args, num_args);
+    get_GCs(new);
+    calculate_position(new);
+
+    new->rheostat.orig_radius = new->rheostat.radius;
+    new->rheostat.orig_outer_length = new->rheostat.outer_arrow_length;
+    new->rheostat.orig_inner_length = new->rheostat.inner_arrow_length;
+    new->rheostat.orig_width = new->rheostat.arrow_width;
+}
+
+/*
+ * Destroy method:
+ */
+static void Destroy(w)
+    XfwfRheostatWidget      w;
+{
+    free_GCs(w);
+}
+
+/*
+ * Resize method:
+ */
+static void Resize(w)
+    XfwfRheostatWidget      w;
+{
+    int newr;
+
+    newr =
+       (w->core.height < w->core.width
+      ? w->core.height : w->core.width) / 2 - MARGIN(w);
+
+    if (newr < 2)
+	newr = 2;
+
+    if (w->rheostat.resize_arrow) {
+	int oldr = w->rheostat.orig_radius;
+
+	w->rheostat.outer_arrow_length =
+		(w->rheostat.orig_outer_length * newr) / oldr;
+	w->rheostat.inner_arrow_length =
+		(w->rheostat.orig_inner_length * newr) / oldr;
+	w->rheostat.arrow_width = (w->rheostat.orig_width * newr) / oldr;
+    }
+    w->rheostat.radius = newr;
+
+    calculate_position(w);
+}
+
+/*
+ * Expose method:
+ */
+static void Redisplay(w, event, region)
+    XfwfRheostatWidget      w;
+    XEvent         *event;
+    Region          region;
+{
+#	ifdef MOTIF
+	int hlt;
+#	endif
+
+	if (!XtIsRealized ((W w)))
+	    return;
+
+#	ifdef MOTIF
+	hlt = w->primitive.highlight_thickness;
+	_XmDrawShadow(XtDisplay(w), XtWindow(w),
+		w->primitive.top_shadow_GC, w->primitive.bottom_shadow_GC,
+		w->primitive.shadow_thickness,
+		hlt, hlt, w->core.width - 2*hlt, w->core.height - 2*hlt);
+#	endif
+
+	draw_ticks(w, w->rheostat.tick_GC);
+	draw_dial(w, w->rheostat.dial_GC);
+        draw_arrow(w, w->rheostat.arrow_GC);
+}
+
+/*
+ * SetValues:
+ */
+static Boolean SetValues(current, request, new, args, num_args)
+    XfwfRheostatWidget	current, request, new;
+    ArgList		args;
+    Cardinal		*num_args;
+{
+    Boolean redraw = FALSE;		/* TRUE=>widget needs to be redrawn */
+    Boolean recalc = FALSE;		/* TRUE=>arrow position changed */
+#   define  CHECK(fld)  (new->fld != current->fld)
+
+    /* added, -dvk */
+    fake_foreground_color (new, args, num_args);
+
+    /*
+     * Check rheostat parameters:
+     */
+    if (   CHECK(rheostat.minimum_value) || CHECK(rheostat.maximum_value)
+        || CHECK(rheostat.maximum_angle) || CHECK(rheostat.minimum_angle)
+    )
+    {
+        recalc = TRUE;
+        redraw = TRUE;
+    }
+
+    /*
+     * Bounds check:
+     */
+    if (new->rheostat.value > new->rheostat.maximum_value)
+        new->rheostat.value = new->rheostat.maximum_value;
+    if (new->rheostat.value < new->rheostat.minimum_value)
+        new->rheostat.value = new->rheostat.minimum_value;
+
+    /*
+     * Margin, geometry parameters -- may affect radius;
+     */
+    if (    CHECK(rheostat.outer_margin)
+	 || CHECK(rheostat.dial_thickness)
+	 || CHECK(rheostat.inner_margin)
+#ifdef MOTIF
+	 || CHECK(primitive.shadow_thickness)
+	 || CHECK(primitive.highlight_thickness)
+#endif
+    )
+    {
+	int newr =
+	   (new->core.height < new->core.width
+	  ? new->core.height : new->core.width) / 2 - MARGIN(new);
+	if (newr < MIN_RADIUS)
+	    newr = MIN_RADIUS;
+	new->rheostat.radius = newr;
+	recalc = TRUE;
+    }
+
+    /*
+     * Radius and thicknesses:
+     */
+    if (   CHECK(rheostat.radius)
+	|| CHECK(rheostat.outer_arrow_length)
+	|| CHECK(rheostat.inner_arrow_length)
+	|| CHECK(rheostat.arrow_width)
+    )
+    {
+	new->rheostat.orig_radius = new->rheostat.radius;
+	new->rheostat.orig_outer_length = new->rheostat.outer_arrow_length;
+	new->rheostat.orig_inner_length = new->rheostat.inner_arrow_length;
+	new->rheostat.orig_width = new->rheostat.arrow_width;
+	recalc = TRUE;
+	redraw = TRUE;
+    }
+
+    if (   CHECK(rheostat.dial_thickness)
+	|| CHECK(rheostat.tick_thickness)
+    )
+    {
+	recalc = TRUE;
+	redraw = TRUE;
+    }
+    /*
+     * Check for color or line thickness change:
+     */
+    if (   CHECK(core.background_pixel)
+        || CHECK(rheostat.tick_pixel)
+        || CHECK(rheostat.dial_pixel)
+        || CHECK(rheostat.arrow_pixel)
+	|| CHECK(rheostat.arrow_thickness)
+	|| CHECK(rheostat.dial_thickness)
+	|| CHECK(rheostat.tick_thickness)
+    )
+    {
+        get_GCs(new);
+	free_GCs(current);
+        redraw = TRUE;
+    }
+
+    /*
+     * Other display resources:
+     */
+    if (   CHECK(rheostat.number_intervals)
+	|| CHECK(rheostat.fill_arrow)
+	|| CHECK(rheostat.tick_length)
+    )
+    {
+	redraw = TRUE;
+    }
+
+    /*
+     * Redraw arrow if that's all that's changed
+     */
+    if (   CHECK(rheostat.outer_arrow_length)
+	|| CHECK(rheostat.inner_arrow_length)
+	|| CHECK(rheostat.arrow_width)
+        || CHECK(rheostat.value)
+    )
+    {
+	if (redraw || !XtIsRealized ((W current))) {
+	    recalc = TRUE;
+	}
+	else {
+	    draw_arrow(current,current->rheostat.eraser_GC);
+	    calculate_position(new);
+	    draw_arrow(new,new->rheostat.arrow_GC);
+	    recalc = FALSE;		/* Don't do it twice */
+	}
+    }
+
+    /*
+     * Wrap up:
+     */
+#   undef CHECK
+    if (recalc)
+	calculate_position(new);
+    return redraw;
+}
+
+/*
+ * QueryGeometry:
+ */
+static XtGeometryResult QueryGeometry (w, request, answer)
+    XfwfRheostatWidget  w;
+    XtWidgetGeometry *request, *answer;
+{
+    answer->request_mode = CWHeight | CWWidth;
+    answer->height = 100;
+    answer->width = 100;
+
+    if (((request->request_mode & (CWHeight|CWWidth)) == (CWHeight|CWWidth)) &&
+	    request->height == answer->height &&
+	    request->width == answer->width)
+	return XtGeometryYes;
+    else if (answer->height == w->core.height && answer->width == w->core.width)
+	return XtGeometryNo;
+    else
+	return XtGeometryAlmost;
+}
+
+/***********************************************************************
+ *
+ * Action functions:
+ *
+ ***********************************************************************/
+
+    /*ARGSUSED*/
+static void Set(w, event, params, nparams)
+    XfwfRheostatWidget	w;
+    XEvent	*event;
+    String	*params;
+    Cardinal	*nparams;
+{
+
+#   ifdef MOTIF
+    if (event->type == ButtonPress)
+    {
+	(void)XmProcessTraversal((Widget)w, XmTRAVERSE_CURRENT);
+    }
+#   endif
+
+    if (event->type == ButtonPress || event->type == MotionNotify)
+    {
+        int x,y,v;
+        double theta,length,radius;
+
+        x = event->xbutton.x - CenterX(w);
+        y = event->xbutton.y - CenterY(w);
+
+        if (!x && !y)       /* click at center of widget -- no angle */
+            return;
+        /* else */
+
+        radius = sqrt((double)(x*x + y*y));
+
+        /*
+         * Calculate value in range 0 .. 360
+         */
+        theta = DEGREES(atan2((double)(-x), (double)(y)));
+	if (MinAngle(w) <= MaxAngle(w)) {
+	    theta -= MinAngle(w);
+	    if (theta < 0.0)
+		theta += 360.0;
+	    v = MinValue(w)
+	      + (int)(theta * (double)ValueRange(w)
+			    / (double)AngleRange(w));
+	} else {
+	    theta -= MaxAngle(w);
+	    if (theta < 0.0)
+		theta += 360.0;
+	    v = MaxValue(w)
+	      - (int)(theta * (double)ValueRange(w)
+			    / (double)abs(AngleRange(w)));
+	}
+
+	/*
+	 * If tick_gravity is on, and click is in tick region,
+	 * snap to nearest increment:
+	 */
+        length = (double)(w->rheostat.radius + w->rheostat.inner_margin);
+	if (   w->rheostat.tick_gravity
+	    && radius >= length
+	    && radius <= length
+		+ w->rheostat.dial_thickness + w->rheostat.tick_length)
+	{
+	    double inc = ValueInc(w);
+	    v = (v / inc + (v < 0 ? -0.5 : 0.5));
+	    v *= inc;
+	}
+
+	/*
+	 * Bounds-check:
+	 * Note: v should never be < minimum_value.
+	 */
+        if (v > w->rheostat.maximum_value || v < w->rheostat.minimum_value)
+	{
+	    /*
+	     * Value is out of range:
+	     * peg the indicator at the minimum or maximum value,
+	     * depending on the current value relative to the median value:
+	     */
+	    double median =
+		(w->rheostat.maximum_value + w->rheostat.minimum_value) / 2.0;
+	    if (w->rheostat.value <= median)
+		v = w->rheostat.minimum_value;
+	    else
+		v = w->rheostat.maximum_value;
+	}
+
+        draw_arrow(w,w->rheostat.eraser_GC);
+	w->rheostat.value = v;
+	calculate_position(w);
+        draw_arrow(w,w->rheostat.arrow_GC);
+    }
+
+    call_callbacks(w, XtNsetCallback, event);
+}
+
+
+static void Increment(w, event, params, nparams)
+    XfwfRheostatWidget      w;
+    XEvent         *event;
+    String 	   *params;
+    Cardinal	   *nparams;
+{
+    double inc = ValueInc(w);
+    Boolean snap = False;
+    double v;
+
+    /*
+     * Figure out increment from parameter:
+     */
+    v = w->rheostat.value;
+    if (*nparams != 1) {	/* default: step to nearest interval: */
+	v += inc;
+	snap = True;
+    } else {
+	if (!strcmp(params[0],"max")) v = w->rheostat.maximum_value;
+	else if (!strcmp(params[0],"min")) v = w->rheostat.minimum_value;
+	else if (!strcmp(params[0],"+1i")) { v += inc; snap = True; }
+	else if (!strcmp(params[0],"-1i")) { v -= inc; snap = True; }
+	else v += atof(params[0]);
+    }
+    if (snap)
+	v = (int)(v / inc + 0.5) * inc;
+
+    /*
+     * Bounds-check:
+     */
+    if (v > w->rheostat.maximum_value)
+	v = w->rheostat.maximum_value;
+    if (v < w->rheostat.minimum_value)
+	v = w->rheostat.minimum_value;
+
+    draw_arrow(w,w->rheostat.eraser_GC);
+    w->rheostat.value = v;
+    calculate_position(w);
+    draw_arrow(w,w->rheostat.arrow_GC);
+
+    call_callbacks(w,XtNsetCallback,event);
+}
+
+    /*ARGSUSED*/
+static void Notify(w, event, params, nparams)
+    XfwfRheostatWidget      w;
+    XEvent         *event;
+    String 	   *params;
+    Cardinal	   *nparams;
+{
+    call_callbacks(w, XtNnotify, event);
+}
+
+
+/***********************************************************************
+ *
+ * Utility routines:
+ *
+ ***********************************************************************/
+static void call_callbacks(w, callback_name, event)
+    XfwfRheostatWidget w;
+    char *callback_name;
+    XEvent *event;
+{
+    XfwfRheostatCallbackStruct cb;
+
+    cb.reason = 0;	/* Rheostat doesn't use this field */
+    cb.event = event;
+    cb.value = w->rheostat.value;
+
+    XtCallCallbacks(W w, callback_name, (XtPointer)&cb);
+}
+
+
+static void draw_arrow(w, gc)
+    XfwfRheostatWidget      w;
+    GC              gc;
+
+{
+    XfwfDrawArrow(XtDisplay(w), XtWindow(w), gc,
+	w->rheostat.tip_x, w->rheostat.tip_y,
+	w->rheostat.tip_x - CenterX(w), w->rheostat.tip_y - CenterY(w),
+	w->rheostat.outer_arrow_length,
+	w->rheostat.inner_arrow_length,
+	w->rheostat.arrow_width,
+	w->rheostat.fill_arrow);
+}
+
+static void draw_dial(w, gc)
+    XfwfRheostatWidget      w;
+    GC     	         gc;
+{
+    int radius  = w->rheostat.radius
+	+ w->rheostat.inner_margin
+	+(w->rheostat.dial_thickness+1) / 2;
+
+    XDrawArc(XtDisplay(w), XtWindow(w), gc,
+	CenterX(w) - radius,
+	CenterY(w) - radius,
+	2*radius, 2*radius,
+	64 * ((270 - w->rheostat.minimum_angle + 360) % 360),
+	64 * -AngleRange(w)
+    );
+}
+
+static void draw_ticks(w, gc)
+    XfwfRheostatWidget      w;
+    GC              gc;
+{
+    int i,cx,cy;
+    double theta,inc;
+    double ro,ri;       /* inner & outer radii of ticks */
+
+    if (w->rheostat.number_intervals <= 0 || w->rheostat.tick_length == 0)
+	return;
+
+    /*
+     * check if minimum_angle == maximum_angle (mod 360),
+     * so the last tick doesn't coincide with the first.
+     */
+    if (w->rheostat.minimum_angle % 360 == w->rheostat.maximum_angle % 360)
+	inc = RADIANS ((double)AngleRange (w)) /
+	    (double)(w->rheostat.number_intervals + 1);
+    else
+	inc = RADIANS ((double)AngleRange (w)) /
+	    (double)(w->rheostat.number_intervals);
+    ri = (double)(w->rheostat.radius + w->rheostat.inner_margin
+		+ (w->rheostat.dial_thickness+1)/2);
+    ro = ri +  w->rheostat.tick_length + (w->rheostat.dial_thickness+1)/2;
+    cx = CenterX(w);
+    cy = CenterY(w);
+
+    /*
+     * Draw segments:
+     */
+    theta = RADIANS((double)MinAngle(w));
+    i = w->rheostat.number_intervals + 1;
+    while (i--) {
+        double c = cos(theta);
+        double s = sin(theta);
+
+	XDrawLine(XtDisplay(w),XtWindow(w),gc,
+	    cx - (int)(ro * s), cy + (int)(ro * c),
+	    cx - (int)(ri * s), cy + (int)(ri * c));
+        theta += inc;
+    }
+}
+
+static void calculate_position(w)
+    XfwfRheostatWidget      w;
+{
+    double theta,length;
+
+    length = (double)w->rheostat.radius;
+    /*
+     * Calculate angle:
+     *   theta = (V - minV)*(maxTheta-minTheta) / (maxV - minV) + minTheta
+     */
+    theta = (double)(w->rheostat.value - MinValue(w))
+          * (double)(AngleRange(w))
+          / (double)(ValueRange(w))
+          + (double)(MinAngle(w));
+    theta = RADIANS(theta);
+
+    w->rheostat.tip_x = CenterX(w) - (int)(length * sin(theta));
+    w->rheostat.tip_y = CenterY(w) + (int)(length * cos(theta));
+}
+
+/*
+ * get_GCs
+ * allocate foreground & background. GCs.
+ */
+static void get_GCs(w)
+    XfwfRheostatWidget w;
+{
+    XGCValues       values;
+    XtGCMask        mask;
+
+    /*
+     * dial:
+     */
+    mask = GCForeground | GCBackground | GCLineWidth | GCCapStyle;
+    values.foreground = w->rheostat.dial_pixel;
+    values.background = w->core.background_pixel;
+    values.line_width = w->rheostat.dial_thickness;
+    values.cap_style = CapButt;
+    w->rheostat.dial_GC = XtGetGC(W w, mask, &values);
+
+    /*
+     * tick marks:
+     */
+    mask = GCForeground | GCBackground | GCFunction | GCLineWidth | GCCapStyle;
+    values.foreground = w->rheostat.tick_pixel;
+    values.background = w->core.background_pixel;
+    values.function = GXcopy;
+    values.line_width = w->rheostat.tick_thickness;
+    values.cap_style = CapButt;
+    w->rheostat.tick_GC = XtGetGC(W w, mask, &values);
+
+    /*
+     * Arrow:
+     */
+    mask = GCForeground | GCBackground | GCFunction | GCLineWidth
+	 | GCCapStyle | GCJoinStyle | GCFillStyle;
+    values.foreground = w->rheostat.arrow_pixel;
+    values.background = w->core.background_pixel;
+    values.line_width = w->rheostat.arrow_thickness;
+    values.cap_style = CapRound;
+    values.join_style = JoinRound;
+    values.fill_style = FillSolid;
+    w->rheostat.arrow_GC = XtGetGC(W w, mask, &values);
+
+    /*
+     * Eraser (identical to Arrow except fg & bg pixels are swapped):
+     */
+    values.foreground = w->core.background_pixel;
+    values.background = w->rheostat.arrow_pixel;
+    w->rheostat.eraser_GC = XtGetGC(W w, mask, &values);
+
+    return;
+}
+
+
+static void free_GCs(w)
+    XfwfRheostatWidget w;
+{
+    XtReleaseGC(W w,w->rheostat.arrow_GC);
+    XtReleaseGC(W w,w->rheostat.eraser_GC);
+    XtReleaseGC(W w,w->rheostat.dial_GC);
+    XtReleaseGC(W w,w->rheostat.tick_GC);
+    return;
+}
+
+#if NeedFunctionPrototypes
+static void XfwfDrawArrow(
+    Display *dpy, Drawable d, GC gc,
+    Position endx,
+    Position endy,			/* position of arrow tip */
+    int dx,
+    int dy,				/* slope of arrow */
+    Dimension outer_length,		/* distance tip->base */
+    Dimension inner_length,		/* distance tip->inner */
+    Dimension width,			/* distance base->outer points */
+    Boolean fill			 /* True=>fill arrow,False=>outline */
+)
+#else
+static void XfwfDrawArrow(dpy, d, gc, endx, endy, dx, dy,
+		       outer_length, inner_length, width, fill)
+    Display *dpy;
+    Drawable d;
+    GC gc;
+    Position endx, endy;		/* position of arrow tip */
+    int dx, dy;				/* slope of arrow */
+    Dimension outer_length;		/* distance tip->base */
+    Dimension inner_length;		/* distance tip->inner */
+    Dimension width;			/* distance base->outer points */
+    Boolean fill;			/* True=>fill arrow,False=>outline */
+#endif
+
+{
+    XPoint points[5];
+    float scalef = sqrt((double)(dx*dx+dy*dy)); /* normalization factor */
+    int al = (int)outer_length,
+	bl = (int)inner_length,
+	aw = (int)width / 2,
+	lx = al *  dx / scalef,	/* distance from tip to base */
+	ly = al *  dy / scalef,
+	mx = bl *  dx / scalef,	/* distance from tip to middle point */
+	my = bl *  dy / scalef,
+	wx = aw * -dy / scalef,	/* distance from base to outer points */
+	wy = aw *  dx / scalef;
+
+    points[0].x = endx;  	points[0].y = endy;
+    points[1].x = endx-lx + wx;	points[1].y = endy-ly + wy;
+    points[2].x = endx-mx;	points[2].y = endy-my;
+    points[3].x = endx-lx - wx;	points[3].y = endy-ly - wy;
+    points[4].x = endx; 	points[4].y = endy;
+
+    if (fill)
+	XFillPolygon(dpy,d,gc,
+		points,5,
+		inner_length <= outer_length ? Nonconvex : Convex,
+		CoordModeOrigin);
+    else
+	XDrawLines(dpy,d,gc,points,5,CoordModeOrigin);
+}
+
+#if 0                                                   /* GIPSY: disabled */
+
+/***********************************************************************
+ *
+ * Public functions:
+ *
+ ***********************************************************************/
+
+/* XfwfRheostatSetIntCallback()
+ * General-purpose callback function for XfwfRheostat widgets;
+ * gets the position of the Rheostat, sets *(int *)closure
+ *
+ * %%% Does anyone actually use this routine?
+ */
+
+void XfwfRheostatSetIntCallback(w,closure,call_data)
+    Widget w;
+    XtPointer closure;
+    XtPointer call_data;
+{
+    *((int *)closure) = ((XfwfRheostatCallbackStruct *)call_data)->value;
+}
+#endif
+#<
+
+#>            Rheostat.h
+/*************************************************************
+ *
+ * Rheostat.h.
+ * Public header file for Rheostat widget.
+ *
+ * Author: Joe English, joe@trystero.art.com
+ *
+ *************************************************************
+ */
+
+#ifndef  RHEOSTAT_H
+#define  RHEOSTAT_H
+
+extern WidgetClass xfwfRheostatWidgetClass;
+typedef struct _XfwfRheostatClassRec *XfwfRheostatWidgetClass;
+typedef struct _XfwfRheostatRec *XfwfRheostatWidget;
+
+/* %%% For backward-compatibility -- to be removed next release */
+#define rheostatWidgetClass xfwfRheostatWidgetClass
+#define RheostatCallbackStruct XfwfRheostatCallbackStruct
+
+/*
+ * Resources:
+ * Angles are specified in degrees, going clockwise from straight down.
+ * 0 = down, 90 = left, 180 = up, 270 = right, 360 = down again.
+ *
+ * The Dial value is an integer, with minimumValue <= value <= maximumValue
+ *
+ * Setting minimumAngle=minimumValue=0 and maximumAngle=maximumValue=360 
+ * will configure the Rheostat for specifying angles.
+ *
+ * If resizeArrow is True, then the arrow will be resized proportionally
+ * when the Rheostat is resized.
+ *
+ * If tickGravity is True, then clicking near a Rheostat tick will snap
+ * the indicator to that tick.
+ *
+ */ 
+
+#define XtNmaximumAngle "maximumAngle"
+#define XtNminimumAngle "minimumAngle"
+#define XtNmaximumValue "maximumValue"
+#define XtNminimumValue "minimumValue"
+#define XtNnumberIntervals "numberIntervals"
+#ifndef XtNvalue
+# define XtNvalue "value"
+#endif
+#define XtNresizeArrow "resizeArrow"
+#define XtNtickGravity "tickGravity"
+
+/* 
+ * Geometry-specifying resources (outside to inside):
+ */
+
+#define XtNouterMargin "outerMargin"
+#define XtNtickLength "tickLength"
+#define XtNdialThickness "dialThickness"
+#define XtNinnerMargin "innerMargin"
+#define XtNradius "radius"
+
+/*
+ * Appearance resources:
+ */
+#define XtNdialColor "dialColor"
+#define XtNtickColor "tickColor"
+#define XtNarrowColor "arrowColor"
+#define XtNtickThickness "tickThickness"
+
+/*
+ * Arrow appearance:
+ */
+#define XtNarrowWidth "arrowWidth"
+#define XtNinnerArrowLength "innerArrowLength"
+#define XtNouterArrowLength "outerArrowLength"
+#define XtNfillArrow "fillArrow"
+#define XtNarrowThickness "arrowThickness"
+
+/* if useShadowColors is True, then the Motif * topShadowColor and 
+ * bottomShadowcolor resources will be used for dialColor and arrowColor.
+ * Only valid in Motif version of Rheostat.
+ */
+#define XtNuseShadowColors "useShadowColors"
+
+
+/*
+ * Callbacks:
+ */
+#define XtNnotifyCallback "notifyCallback"
+#define XtNsetCallback "setCallback"
+
+#define XtCNumberIntervals "NumberIntervals"
+#define XtCGravity "Gravity"
+#define XtCMinimum "Minimum"
+#define XtCMaximum "Maximum"
+
+/*
+ * Rheostat callback structure:
+ */
+typedef struct {
+    int 	reason;		/* for Motif compatibility only */
+    XEvent 	*event;		/* Ditto */
+    int		value;		/* current dial value */
+} XfwfRheostatCallbackStruct;
+
+/*
+ * Convenience callback function:
+ * 'closure' must be an 'int *', into which is stored the current dial value.
+ */
+
+#if 0                                                   /* GIPSY: disabled */
+extern void XfwfRheostatSetIntCallback(
+#if NeedFunctionPrototypes
+	Widget,		/* RheostatWidget */
+	XtPointer, 	/* int *closure */
+	XtPointer  	/* RheostatCallbackStruct *call_data */ 
+#endif
+);
+#endif /* GIPSY */
+
+#if 0                                                   /* GIPSY: disabled */
+extern void XfwfDrawArrow(
+#if NeedFunctionPrototypes
+    Display *,
+    Drawable d,
+    GC gc,
+    Position endx,
+    Position endy,			/* position of arrow tip */
+    int dx,
+    int dy,				/* slope of arrow */
+    Dimension outer_length,		/* distance tip->base */
+    Dimension inner_length,		/* distance tip->inner */
+    Dimension width,			/* distance base->outer points */
+    Boolean fill 			/* True=>fill arrow,False=>outline */
+#endif
+);
+#endif /* GIPSY */
+#endif	/* RHEOSTAT_H */
+
+#<
+
+#>            RheostatP.H
+/*************************************************************
+ *
+ * RheostatP.h
+ * Private header file for Rheostat widget.
+ *
+ * Author: Joe English, joe@trystero.art.com
+ *
+ *************************************************************
+ */
+
+#ifndef RHEOSTATP_H
+#define RHEOSTATP_H
+
+typedef struct _XfwfRheostatClassPart {
+    int             hosebrain;
+} XfwfRheostatClassPart;
+
+typedef struct _XfwfRheostatClassRec {
+    CoreClassPart   		core_class;
+#   ifdef MOTIF
+    XmPrimitiveClassPart	primitive_class;
+#   endif
+    XfwfRheostatClassPart   	rheostat_class;
+} XfwfRheostatClassRec;
+
+extern XfwfRheostatClassRec xfwfRheostatClassRec;
+
+typedef struct _XfwfRheostatPart 
+{
+    int             	value;              	/* value */
+    int             	minimum_value;      	/* minimum value */
+    int             	maximum_value;      	/* maximum value */
+    int             	minimum_angle;      	/* angle of minimum value */
+    int             	maximum_angle;		/* angle of maximum value */
+    int   	 	number_intervals;	/* #tick mark intervals */
+    Boolean		tick_gravity;	/* click by tick sticks to tick? */
+    Boolean		resize_arrow;	/* resize arrow? */
+
+    XtCallbackList	set;            /* callbacks for Set() action */
+    XtCallbackList	notify;         /* callbacks for Notify() */
+
+    Dimension		outer_margin;
+    Dimension		tick_length;
+    Dimension		dial_thickness;
+    Dimension		inner_margin;
+    Dimension		radius;
+    Dimension		outer_arrow_length;	/* from tip to outer points */
+    Dimension		inner_arrow_length;	/* from tip to inner point */
+    Dimension		arrow_width;		/* width of arrow */
+    Boolean		fill_arrow;		/* filled/outlined arrow */
+    Dimension		arrow_thickness;	/* line thickness if outlined */
+    Dimension		tick_thickness;
+
+#ifdef MOTIF
+    Boolean		use_shadow_colors;	/* for arrow & dial */
+#endif
+    Pixel		arrow_pixel;		/* arrow color */
+    Pixel		tick_pixel;		/* ticks  */
+    Pixel		dial_pixel;		/* circular border */
+
+    /* Private: */
+    GC          	dial_GC;            	/* assorted GCs */
+    GC          	arrow_GC;		/* to draw pointer */
+    GC          	eraser_GC;		/* to erase pointer */
+    GC          	tick_GC;		/* to erase pointer */
+    Position    	tip_x;              	/* coords of arrow tip */
+    Position    	tip_y;
+
+    Dimension		orig_radius;		/* Used to resize arrow */
+    Dimension		orig_outer_length;	/*  if resize_arrow True */
+    Dimension		orig_inner_length;
+    Dimension		orig_width;
+
+} XfwfRheostatPart;
+
+typedef struct _XfwfRheostatRec {
+    CorePart        	core;
+#   ifdef MOTIF
+    XmPrimitivePart	primitive;
+#   endif
+    XfwfRheostatPart    rheostat;
+} XfwfRheostatRec;
+
+#endif  /* RHEOSTATP_H */
+#<
+
+#>            rheostat.dc3
+Document:     rheostat
+
+Purpose:      Rheostat widget
+
+Category:     USER-INTERFACE, SYSTEM
+
+File:         rheostat.src
+
+Author:       J.P. Terlouw
+
+Description:  rheostat.src contains Joe English' Rheostat widget
+              for use in GIPSY. It is part of the Free Widget Foundation
+              widget library. The original source code is included in
+              tar'ed, gzip'ped, uuencode'd format.
+              The `packaging' of this widget has been slightly modified for
+              easier inclusion in giplib.
+
+Updates:      Jan  6, 1999: JPT, Document created.
+#<
+
+#>            rheostat.uue
+begin 444 Rheostat.tar.gz
+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
+6S<_/S\_/S\_/?^#G?P"LSO@@ !@! &;V
+ 
+end
+#<

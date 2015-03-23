@@ -1,0 +1,831 @@
+skycalc.src
+
+        Copyright (c) Kapteyn Laboratorium Groningen 2009
+        All Rights Reserved.
+
+Name:         skycalc.src
+Creator:      terlouw
+Host:         albirumi
+Date:         Dec 21, 2009
+Contents:     skycalc.make skycalc.py skycalc.dc1
+
+#>            skycalc.make
+#
+# skycalc.make
+#
+
+SHELL   = /bin/sh
+
+default:: skycalc
+
+skycalc : skycalc.py
+	cp skycalc.py skycalc
+	chmod +x skycalc
+
+pack::
+	$$gip_sys/pack.csh skycalc.src skycalc.make skycalc.py skycalc.dc1
+#<
+
+#>            skycalc.py
+#!/usr/bin/env python
+
+import os, sys, string, time
+
+# ==========================================================================
+#                            Startup code
+# --------------------------------------------------------------------------
+if 'SP' in sys.argv:                                 # started by Hermes 
+   try:
+      from gipsy import *
+   except:
+       print 'GIPSY has no Python module'
+       sys.exit(-1)
+else:
+   logfile = '%f.LOG' % time.time()
+   try:
+      os.system('$gip_sys/ngipsy.csh -l%s ' % logfile
+                + string.join(sys.argv))             # run from own Hermes
+      os.remove(logfile)
+   except:
+      print 'GIPSY is not installed'
+      sys.exit(-1)
+   sys.exit(0)
+
+# --------------------------------------------------------------------------
+
+init()                                               # connect to Hermes
+
+try:
+   from kapteyn.wcs import Transformation, icrs, equatorial, ecliptic, \
+           galactic, supergalactic, fk4, fk4_no_e, fk5, j2000, Projection
+except Exception, message:
+   anyout("""
+
+The kapteyn package appears to be absent. The kapteyn package is a
+general purpose Python package which contains the modules for coordinate
+transformations and projections used in this program.
+It is distributed separate from the GIPSY distribution and can be downloaded
+from the package's web page: http://www.astro.rug.nl/software/kapteyn/
+Installation instructions are included. 
+
+""")
+   error(4, str(message))
+
+try:
+   import pyfits, operator
+except Exception, message:
+   anyout('\n\nOne or more essential modules or packages are absent:')
+   error(4, str(message))
+   
+
+TW = 31   # textfield width
+LW = 140  # textfield label width
+FW = 800  # form container width
+
+# ==========================================================================
+#                           Class Coordinate
+# --------------------------------------------------------------------------
+#
+class Coordinate(object):
+   coordinates = []                     # contains all Coordinate objects
+   fixedcoord  = None                   # fixed coordinate
+   icrspos     = (0.0, 0.0)             # current position in the ICRS system
+   precision   = 7                      # decimal degrees precision
+   epobs       = None                   # epoch of observation
+ 
+   def posproc(cb):
+      cb.coordinate.newpos(cb.key)
+   posproc = staticmethod(posproc)      # keyword handler for positions
+
+   def epoproc(cb):
+      cb.coordinate.newepo(cb.key)
+   epoproc = staticmethod(epoproc)      # keyword handler for epochs
+
+   def fixproc(cb):                     # keyword handler for fixing coordinates
+      cb.coordinate.fix(cb.key)
+   fixproc = staticmethod(fixproc)
+
+   def updateall(self):
+      for coordinate in self.coordinates:
+         coordinate.update()
+   updateall = classmethod(updateall)
+    
+   def newepobs(self, epobs):
+      self.epobs = epobs
+      for coordinate in self.coordinates:
+         coordinate.transform()
+      if self.fixedcoord is None:
+         self.updateall()
+      else:
+         key = self.fixedcoord.key
+         wkey(key+usertext(key))
+
+   newepobs = classmethod(newepobs)
+   
+   def __init__(self, key, skysys, epochkey=None):
+      self.coordinates.append(self)          # add object to list
+      self.key = key                         # position keyword
+      self.skysys = skysys                   # sky system (without epoch)
+      self.epochkey = epochkey
+      if epochkey is not None:
+         self.epoch = usertext(epochkey, defval='J2000.0')
+         KeyCallback(self.epoproc, epochkey, coordinate=self)
+         KeyCallback(self.fixproc, 'FIX_'+key, coordinate=self)
+      else:
+         self.epoch = None
+      self.transform()
+      self.ignore = False                    # ignore next position key event?
+      Hex(key, 'HEX_'+key, equatorial in skysys) # connect hex representation
+      KeyCallback(self.posproc, key, coordinate=self)
+
+   def transform(self):
+      skysys = self.skysys
+      if self.epoch is not None:
+         skysys += (self.epoch,)
+         if self.epobs is not None:
+            skysys += (self.epobs,)
+      self.trans = Transformation(icrs, skysys)
+
+   def newpos(self, key):
+      if self.ignore:
+         self.ignore = False
+      else:
+         try:
+            position = tuple(userdble(key, default=4, defval=None, nmax=2))
+            Coordinate.icrspos = self.trans(position, reverse=True)
+            for coordinate in self.coordinates:        # update other objects
+               if coordinate is not self:
+                  coordinate.update()
+         except:
+            pass
+
+   def newepo(self, key):
+      epoch = usertext(key, defval=None)
+      prev_epoch = self.epoch
+      self.epoch = epoch
+      try:
+         self.transform()
+      except Exception, message:
+         reject(key, 'Invalid epoch')
+         self.epoch = prev_epoch
+         return
+      if self.fixedcoord is None or self.fixedcoord.epochkey!=self.epochkey:
+         self.update()
+      elif self.fixedcoord is self:
+         wkey(self.key+usertext(self.key))
+               
+   def fix(self, key):
+      if userlog(key):
+         if self is not self.fixedcoord:
+            if self.fixedcoord is not None:
+               wkey('FIX_'+self.fixedcoord.key)
+         Coordinate.fixedcoord = self
+      elif self is self.fixedcoord:
+         Coordinate.fixedcoord = None
+      
+   def update(self):
+      self.ignore = True
+      lon, lat = self.trans(self.icrspos)
+      prec = self.precision
+      if ('%.*f' % (prec, lon))[:3]=='360':    lon = 0.0
+      if ('%.*f' % (prec, lat))=='-0.'+'0'*prec : lat = 0.0
+      wkey(self.key + '%.*f %.*f' % (prec, lon, prec, lat))
+
+# ==========================================================================
+#                               Class Hex
+# --------------------------------------------------------------------------
+#  Class Hex is responsible for the conversion between decimal degrees
+#  and the hexagesimal formats.
+#
+class Hex(object):
+
+   precision = 3
+   fac0      = 10.0**precision
+   fac1      = 10.0**(precision+1)
+   fmt_templ = '%%s%%s%%3d %%02d %%%2.2d.%df %%s%%02d %%02d %%%2.2d.%df'
+   hmsformat = fmt_templ % (7, 4, 6, 3)
+   dmsformat = fmt_templ % (6, 3, 6, 3)
+   decformat = '%s%.7f %.7f'
+
+   def hexproc(cb):
+      cb.coordinate.hex()
+   hexproc = staticmethod(hexproc)
+
+   def decproc(cb):
+      cb.coordinate.dec()
+   decproc = staticmethod(decproc)
+
+   def setprecision(self, p):
+      self.precision = p
+      self.hmsformat = self.fmt_templ % (p+4, p+1, p+3, p)
+      self.dmsformat = self.fmt_templ % (p+3, p,   p+3, p)
+      self.decformat = '%%s%%.%df %%.%df' % (p+4, p+4)
+      self.fac0      = 10.0**p
+      self.fac1      = 10.0**(p+1)
+   setprecision = classmethod(setprecision)
+
+   def __init__(self, keydec, keyhex, hours):
+      self.keydec = keydec
+      self.keyhex = keyhex
+      self.hours  = hours
+      self.ignore = False
+      KeyCallback(self.hexproc, keyhex, coordinate=self)
+      KeyCallback(self.decproc, keydec, coordinate=self)
+    
+   def dec(self):
+      if self.ignore:
+         self.ignore = False
+      else:
+         try:
+            x,y = userdble(self.keydec, default=4, defval=None, nmax=2)
+            signx = '-' * int(x<0)
+            x = abs(x)
+            signy = '-' * int(y<0) + '+' * int(y>=0)
+            y = abs(y)
+            if self.hours: x /= 15.0
+            ix  = int(x)
+            xm  = x*60.0 - ix*60.0
+            ixm = int(xm)
+            if self.hours:
+               xs  = int((xm*60.0-ixm*60.0)*self.fac1)/self.fac1
+               format = self.hmsformat
+            else:
+               xs  = int((xm*60.0-ixm*60.0)*self.fac0)/self.fac0
+               format = self.dmsformat
+            iy  = int(y)
+            ym  = y*60.0 - iy*60.0
+            iym = int(ym)
+            ys  = int((ym*60.0-iym*60.0)*self.fac0)/self.fac0
+            
+            self.ignore = True
+            wkey(format
+               % (self.keyhex, signx, ix, ixm, xs, signy, iy, iym, ys) )
+         except:
+            pass
+
+   def hex(self):
+      if self.ignore:
+         self.ignore = False
+      else:
+         try:
+            ix, ixm, xs, iy, iym, ys = \
+               userdble(self.keyhex, default=4, defval=None, nmax=6)
+            signx = 1-2*int(ix<0)
+            x = ix + signx*ixm/60.0 + signx*xs/3600.0
+            if self.hours: x *= 15.0
+            signy = 1-2*int(iy<0)
+            y = iy + signy*iym/60.0 + signy*ys/3600.0
+            self.ignore = True
+            wkey(self.decformat % (self.keydec, x, y))
+         except:
+            pass
+
+# ==========================================================================
+#                               Class Map
+# --------------------------------------------------------------------------
+#  Class Map handles the interaction with FITS files and pixel coordinates.
+#
+class Map(object):
+   current = None 
+   
+   def pixelproc(cb):
+      cb.map.newpixel(cb.key)
+   pixelproc = staticmethod(pixelproc)
+
+   def skyproc(cb):
+      cb.map.newsky(cb.key)
+   skyproc = staticmethod(skyproc)
+   
+   def usedate(self, flag):
+      if self.current is not None:
+         self.current.proj.usedate = flag
+   usedate = classmethod(usedate)
+
+   def newepobs(self, epobs):
+      if self.current is not None:
+         self.current.proj.epobs = epobs
+   newepobs = classmethod(newepobs)
+
+   def __init__(self, filename):
+      if self.current is not None:
+         self.current.pix_cb.deschedule()
+         self.current.sky_cb.deschedule()
+         Map.current = None
+      hdulist = pyfits.open(filename)
+      header = hdulist[0].header
+      self.proj = Projection(header, skyout=icrs).sub([1,2])
+      wkey('EPOCH1=%s' % self.proj.epoch)
+      if Coordinate.fixedcoord is None:
+         wkey('PIXEL=%.2f %.2f' % (header['CRPIX1'], header['CRPIX2']))
+      hdulist.close() ### ???
+      self.pix_cb = KeyCallback(self.pixelproc, 'PIXEL=', map=self)
+      self.sky_cb = KeyCallback(self.skyproc, 'EQ_ICRS=', map=self)
+      self.ignore = False
+      Map.current = self
+      
+   def newpixel(self, key):
+      if self.ignore:
+         self.ignore = False
+      else:
+         try:
+            pixelpos = tuple(userdble(key, default=4, defval=None, nmax=2))
+            skypos   = self.proj.toworld(pixelpos)
+            self.ignore = True
+            wkey('EQ_ICRS=%.9f %.9f' % skypos)
+         except:
+            reject(key, 'Invalid pixel position')
+            
+   def newsky(self, key):
+      if self.ignore:
+         self.ignore = False
+      else:
+         try:
+            skypos   = tuple(userdble(key, default=4, defval=None, nmax=2))
+            pixelpos = self.proj.topixel(skypos)
+            self.ignore = True
+            wkey('PIXEL=%.2f %.2f' % pixelpos)
+         except:
+            self.ignore = True
+            wkey('PIXEL=cannot convert')
+
+
+# ----------------------------------------------------------------------------
+#                                file_cb
+# ----------------------------------------------------------------------------
+#  Keyword handler for FILE menu
+#
+def file_cb(cb):
+   choice = userint(cb.key, defval=-1)
+   if choice == 0:
+      finis()
+
+# ----------------------------------------------------------------------------
+#                                map_cb
+# ----------------------------------------------------------------------------
+#  Keyword handler for FITS file specification
+#
+def map_cb(cb):
+
+   global base
+
+   try:
+      Map(usertext(cb.key))
+      if Map.current.proj.dateobs is not None:
+         base.handleEvents()
+         wkey('EPOBS=%s' % Map.current.proj.epobs)
+   except:
+      reject(cb.key, 'Non-existent or unuseable file')
+
+# ----------------------------------------------------------------------------
+#                                epobs_cb
+# ----------------------------------------------------------------------------
+#  Keyword handler for epoch of observation
+#
+def epobs_cb(cb):
+
+   epobs = usertext(cb.key, defval=None)
+
+   try:
+      if not userlog('NO_OD='):
+         Map.newepobs(epobs)
+         Map.usedate(True)
+         Coordinate.newepobs(epobs)
+   except:
+      reject(cb.key, 'Invalid observation epoch')
+
+
+# ----------------------------------------------------------------------------
+#                                useod_cb
+# ----------------------------------------------------------------------------
+#  Keyword handler for NO_OD button
+#
+def useod_cb(cb):
+
+   global base, epobs
+
+   useod = not userlog(cb.key)
+
+   epobs.active(useod)
+   base.handleEvents()
+   if useod:
+      obsepoch = usertext('EPOBS=', defval=None)
+   else:
+      obsepoch = None
+   Map.newepobs(obsepoch)
+   Map.usedate(useod)
+   Coordinate.newepobs(obsepoch)
+
+# ----------------------------------------------------------------------------
+#                                prec_cb
+# ----------------------------------------------------------------------------
+#  Keyword handler for precision field
+#
+def prec_cb(cb):
+   p = userint(cb.key, defval=3)+1
+   Coordinate.precision = p+4
+   Hex.setprecision(p)
+   Coordinate.updateall()
+
+# ----------------------------------------------------------------------------
+#                                gui
+# ----------------------------------------------------------------------------
+#  GUI building function
+#
+def gui():
+
+   global base, epobs
+
+   # -----------------------------------
+   #  build compound coordinate element
+   # -----------------------------------
+   def compound(container, key, label, help1, help2, fix=True):
+      f = container.Form('', 0)
+      ex = f.TextField('HEX_'+key, help1, TW)
+      e  = f.TextField(key, help2, TW)
+      if fix:
+         ef = f.Button('FIX_'+key, 'If depressed, this coordinate\nwill be fixed when changing\nan epoch')
+         wkey('FIX_'+key)
+         ef.setLabel('F')
+         ef.setPosition(1, ex, 0, None)
+      else:
+         ef = f.Label(' ')
+         ef.setPosition(1, ex, 0, None)
+      ex.setLabel(label, LW)
+      ex.alignLabel(2)
+      e.setLabel(' ', LW)
+      ex.setPosition(0, None, 0, None)
+      ef.setPosition(-1, ex, 0, None)
+      e.setPosition(0, None, -2, ex)
+      return f
+
+   base = GgiBase()
+
+   topbar = base.Form('', 1)
+   coord1 = base.Form('', 1)
+   coord2 = base.Form('', 1)
+   mapfrm = base.Form('', 1)
+
+   topbar.setPosition(0, None, 0, None)
+   topbar.Label(' ').setPosition(FW, None, 0, None)
+   coord1.setPosition(0, None, 0, topbar)
+   coord1.Label(' ').setPosition(FW, None, 0, None)
+   coord2.setPosition(0, None, 0, coord1)
+   coord2.Label(' ').setPosition(FW, None, 0, None)
+   mapfrm.setPosition(0, None, 0, coord2)
+   mapfrm.Label(' ').setPosition(FW, None, 0, None)
+
+   filemenu = topbar.Menu('FILE=', None, ['Exit'])
+   helpmenu = topbar.HelpMenu('HELP=', 'HELP', 'SKYCALC documentation',
+               ['Overview',
+                'Input',
+                'Keywords',
+                'About'],
+               ['skycalc.dc1#overview',
+                'skycalc.dc1#input',
+                'skycalc.dc1#keywords',
+                'skycalc.dc1#about'] )
+   wkey('FILE=')  # nothing selected initially
+   filemenu.setPosition(0, None, 0, None)
+   helpmenu.setPosition(FW-helpmenu.width, None, 0, None)
+   precmenu = topbar.Menu('PRECISION=', 'Set arcsecond\ndisplay precision',
+                          ['1','2','3','4','5'])
+   precmenu.setPosition(0, filemenu, 0, None)
+
+   eq_icrs = compound(coord1, 'EQ_ICRS=', 'RA, Dec (ICRS)',
+                'RA, Dec (hms,dms)', 'RA, Dec (degrees)', False)
+   ecl_icrs = compound(coord1, 'ECL_ICRS=', 'Ecliptic L, B (ICRS)',
+                'Ecliptic L, B  (dms,dms)', 'Ecliptic L, B (degrees)', False)
+   gal = compound(coord1, 'GAL=', 'Galactic-II L, B',
+              'Galactic-II L, B (dms,dms)', 'Galactic-II L, B (degrees)', False)
+   sgal = compound(coord1, 'SGAL=', 'Supergalactic L, B',
+          'Supergalactic L, B (dms,dms)', 'Supergalactic L, B (degrees)', False)
+   eq_icrs.setPosition(0, None, 0, None)
+   ecl_icrs.setPosition(0, eq_icrs, 0, None)
+   gal.setPosition(0, None,  0, eq_icrs)
+   sgal.setPosition(0, eq_icrs, 0, eq_icrs)
+
+   epofrm_1 = coord2.Form('', 0)
+   epoch_1 = epofrm_1.TextField('EPOCH1=', None, TW)
+   epoch_1.setLabel('Equinox 1', LW)
+   epoch_1.setPosition(0, None, 0, None)
+   eq_fk5_1 = compound(coord2, 'EQ_FK5_1=', 'RA, Dec (FK5)',
+                       'RA, Dec (hms,dms)', 'RA, Dec (degrees)')
+   eq_fk4_1 = compound(coord2, 'EQ_FK4_1=', 'RA, Dec (FK4)',
+                       'RA, Dec (hms,dms)', 'RA, Dec (degrees)')
+   eq_noe_1 = compound(coord2, 'EQ_NOE_1=', 'RA, Dec (FK4-NO-E)',
+                       'RA, Dec (hms,dms)', 'RA, Dec (degrees)')
+   ecl_fk5_1 = compound(coord2, 'ECL_FK5_1=', 'Ecliptic L, B (FK5)',
+                      'Ecliptic L, B (dms,dms)', 'Ecliptic L, B (degrees)')
+   ecl_fk4_1 = compound(coord2, 'ECL_FK4_1=', 'Ecliptic L, B (FK4)',
+                      'Ecliptic L, B (dms,dms)', 'Ecliptic L, B (degrees)')
+   ecl_j2000_1 = compound(coord2, 'ECL_J2000_1=', 'Ecliptic L, B (J2000)',
+                      'Ecliptic L, B (dms,dms)', 'Ecliptic L, B (degrees)')
+   epofrm_1.setPosition (0, None, 0, None)
+   eq_fk5_1.setPosition (0, None, 0, epofrm_1)
+   eq_fk4_1.setPosition (0, None, 0, eq_fk5_1)
+   eq_noe_1.setPosition (0, None, 0, eq_fk4_1)
+   ecl_fk5_1.setPosition(0, None, 0, eq_noe_1)
+   ecl_fk4_1.setPosition(0, None, 0, ecl_fk5_1)
+   ecl_j2000_1.setPosition(0, None, 0, ecl_fk4_1)
+
+   epofrm_2 = coord2.Form('', 0)
+   epoch_2 = epofrm_2.TextField('EPOCH2=', None, TW)
+   epoch_2.setLabel('Equinox 2', LW)
+   epoch_2.setPosition(0, None, 0, None)
+   eq_fk5_2 = compound(coord2, 'EQ_FK5_2=', 'RA, Dec (FK5)',
+                       'RA, Dec (hms,dms)', 'RA, Dec (degrees)')
+   eq_fk4_2 = compound(coord2, 'EQ_FK4_2=', 'RA, Dec (FK4)',
+                       'RA, Dec (hms,dms)', 'RA, Dec (degrees)')
+   eq_noe_2 = compound(coord2, 'EQ_NOE_2=', 'RA, Dec (FK4-NO-E)',
+                       'RA, Dec (hms,dms)', 'RA, Dec (degrees)')
+   ecl_fk5_2 = compound(coord2, 'ECL_FK5_2=', 'Ecliptic L, B (FK5)',
+                      'Ecliptic L, B (dms,dms)', 'Ecliptic L, B (degrees)')
+   ecl_fk4_2 = compound(coord2, 'ECL_FK4_2=', 'Ecliptic L, B (FK4)',
+                      'Ecliptic L, B (dms,dms)', 'Ecliptic L, B (degrees)')
+   ecl_j2000_2 = compound(coord2, 'ECL_J2000_2=', 'Ecliptic L, B (J2000)',
+                      'Ecliptic L, B (dms,dms)', 'Ecliptic L, B (degrees)')
+   epofrm_2.setPosition (0, eq_fk5_1, 0, None)
+   eq_fk5_2.setPosition (0, eq_fk5_1, 0, epofrm_2)
+   eq_fk4_2.setPosition (0, eq_fk5_1, 0, eq_fk5_2)
+   eq_noe_2.setPosition (0, eq_fk5_1, 0, eq_fk4_2)
+   ecl_fk5_2.setPosition(0, eq_fk5_1, 0, eq_noe_2)
+   ecl_fk4_2.setPosition(0, eq_fk5_1, 0, ecl_fk5_2)
+   ecl_j2000_2.setPosition(0, eq_fk5_1, 0, ecl_fk4_1)
+   
+   fitsfrm = mapfrm.Form('')
+   fitsfrm.setPosition(0, None, 0, None)
+   epobs = fitsfrm.TextField('EPOBS=', 'Epoch of observation', TW)
+   epobs.setLabel('Observation epoch', LW)
+   epobs.setPosition(0, None, 0, None)
+   useod = fitsfrm.Button('NO_OD=', 'If depressed, the observation\nepoch is not used')
+   wkey('NO_OD=')
+   useod.setLabel('D')
+   useod.setPosition(-1, epobs, 0, None)
+   inmap = fitsfrm.TextField('MAP=', 'FITS file', TW)
+   inmap.setLabel('FITS file', LW)
+   inmap.setPosition(0, None, 0, epobs)
+   pixel = fitsfrm.TextField('PIXEL=', 'Pixel position in map', 15)
+   wkey('PIXEL=')
+   pixel.setLabel('Pixel')
+   pixel.setPosition(10, inmap, 0, epobs)
+   logo = fitsfrm.Logo()
+   logo.setPosition(FW-logo.width, None, 0, None)
+   return base
+
+def triggerkey(key, value=None):
+   value =  usertext(key, default=2, defval=value)
+   if value is not None:
+      wkey("%s%s" % (key, value))
+
+# ============================================================================
+#                              Main Program
+# ----------------------------------------------------------------------------
+
+triggerkey('EPOCH1=', 'J2000.0')                   # default epochs
+triggerkey('EPOCH2=', 'B1950.0')
+wkey('PRECISION=%d' % (Hex.precision-1))           # default from Hex class
+
+base = gui()                                       # build GUI
+
+KeyCallback(file_cb,  'FILE=')
+KeyCallback(map_cb,   'MAP=')
+KeyCallback(prec_cb,  'PRECISION=')
+KeyCallback(epobs_cb, 'EPOBS=')
+KeyCallback(useod_cb, 'NO_OD=')
+
+Coordinate('EQ_ICRS=',   (equatorial, icrs))       # create coordinate objects
+Coordinate('ECL_ICRS=',  (ecliptic, icrs))
+Coordinate('GAL=',  (galactic,))
+Coordinate('SGAL=', (supergalactic,))
+Coordinate('EQ_FK5_1=',  (equatorial, fk5), 'EPOCH1=')
+Coordinate('EQ_FK5_2=',  (equatorial, fk5), 'EPOCH2=')
+Coordinate('EQ_FK4_1=',  (equatorial, fk4), 'EPOCH1=')
+Coordinate('EQ_FK4_2=',  (equatorial, fk4), 'EPOCH2=')
+Coordinate('EQ_NOE_1=',  (equatorial, fk4_no_e), 'EPOCH1=')
+Coordinate('EQ_NOE_2=',  (equatorial, fk4_no_e), 'EPOCH2=')
+Coordinate('ECL_FK5_1=', (ecliptic, fk5), 'EPOCH1=')
+Coordinate('ECL_FK5_2=', (ecliptic, fk5), 'EPOCH2=')
+Coordinate('ECL_FK4_1=', (ecliptic, fk4), 'EPOCH1=')
+Coordinate('ECL_FK4_2=', (ecliptic, fk4), 'EPOCH2=')
+Coordinate('ECL_J2000_1=', (ecliptic, j2000), 'EPOCH1=')
+Coordinate('ECL_J2000_2=', (ecliptic, j2000), 'EPOCH2=')
+
+triggerkey('EQ_ICRS=', '0.0000000 0.0000000')      # initial position
+base.handleEvents()
+triggerkey('EPOBS=')
+base.handleEvents()
+triggerkey('MAP=')
+
+mainloop()                                         # Action!
+#<
+
+#>            skycalc.dc1
+Program:       SKYCALC
+
+#begin section overview
+                             OVERVIEW
+                             ========
+
+SKYCALC calculates for a given position in one of the sky systems, 
+the corresponding position in other sky systems. A description of
+the supported sky systems and the used rotation matrices can be 
+found in the documentation of module 'celestial' in the 'Kapteyn' 
+package (url: http://www.astro.rug.nl/software/kapteyn/)
+
+Program SKYCALC can be started either on the command line of Hermes 
+where it runs in the context of GIPSY, or on the Unix/Linux command line.
+In the latter case the name is entered in lowercase letters: 'skycalc'.
+
+The program is terminated with option 'Exit' in the File menu. 
+
+The initial state of the program is a position 0 degrees in Right
+Ascension and 0 degrees in Declination in the ICRS.
+All other fields represent this position in a different sky system.
+One can change a position in each of these fields and the program 
+converts this new position to all other sky systems.
+
+
+Epoch and Equinox:
+
+When an equinox or epoch is changed, the starting point is the coordinate 
+listed in the ICRS field. You can change this behaviour by fixing
+one of the sky systems by pressing the corresponding button 'F'.
+A fixed system will not change its coordinates when an equinox is 
+changed. This is convenient if one wants to explore how a position
+changes with precession.
+
+
+Epoch of observation:
+
+FK4 is a slowly rotating system.  One can correct for this rotation if
+the epoch of observation is known.  This is the time when the mean place
+was correct.  However one should be aware that this correction
+introduces fictitious proper motions in FK5.  If you are sure that this
+cannot be real (e.g.  for extra galactic objects for which you know that
+they don't have proper motions in FK5), then disable the 'Epoch of
+observation' field by pressing the 'D' button.  Then an epoch
+independent transformation is applied. 
+
+
+SKYCALC panels:
+
+The SKYCALC display is divided in several parts.  The upper part deals
+with sky systems that are not associated with an Equinox.  The left side
+of the main panel deals with sky systems that are associated with an
+equinox.  Changing the equinox implies a precession.  The right part has
+the same functionality but for another equinox.  This makes comparisons
+between different equinoxes much easier.  For accurate conversions from
+FK4 coordinates to FK5, an epoch of observation is required.
+
+The panel below is for the input of a FITS file.  When the file is
+suitable for a sky transformation, then the pixel that corresponds to
+the header values CRPIX1 and CRPIX2 is the default position in the
+'Pixel' field, the value of the FITS keyword EQUINOX or EPOCH is put
+into the 'Equinox 1' field and any DATEOBS value is put into the
+'Observation epoch' field.  Positions in this input field correspond to
+the sky system found in the FITS header. 
+
+One can exclude the observation epoch from the calculations by pressing
+the 'D' button next to the epoch input field.  With the epoch of
+observation, one corrects for the fact that the reference system FK4 is
+slowly rotating. 
+
+
+Ecliptic coordinates:
+
+Ecliptic coordinates are coupled to a certain type of equatorial system. 
+For a transformation of an equatorial coordinate to an ecliptic sky
+system one needs to know the reference system.  Then a value of the
+obliquity of the ecliptic is calculated.  This is the only variable in
+the rotation matrix for transformations between equatorial and ecliptic
+systems.  ICRS has no associated equinox and therefore corresponds to an
+ecliptic system that is fixed for J2000.  FK4 coordinates are catalogue
+coordinates that are not (yet) corrected for the elliptic terms of
+aberration.  The system with real mean places is called FK4-NO-E (term
+originates from FITS).  This system is the starting point for
+transformations to and from ecliptic coordinates (this applies to
+galactic coordinates also).  Note that a coordinate (0,0) in an ecliptic
+system should transform to (0,0) in the corresponding equatorial system. 
+Besides the standard sky- and reference systems, we also added the
+dynamical J2000 system.  Offsets between ICRS, FK5 and dyn.  J2000 are
+responsible for small differences between positions in these systems. 
+The ecliptic system associated with dyn.  J2000 can be precessed to
+another equinox using the IAU 2000 model for precession. 
+               
+#end section overview
+
+#begin section input
+                                         INPUT 
+                                         =====
+          
+Position:
+
+-First input field: A position is a hexagesimal longitude followed 
+by a space or a comma followed by a hexagesimal latitude.
+Right Ascensions are entered in hours minutes seconds.
+Other longitudes and declinations are entered in degrees minutes seconds
+E.g.: 23 59 59.9 -00 00 00.12
+ 
+-Second input field: A position is a decimal longitude followed 
+by a space or a comma followed by a decimal latitude.
+E.g.: 288.03 89.9
+
+A field is cleared if you press the escape key, CTRL-U or the right
+mouse button.  For the output of coordinates one can change the default
+precision with a selection from the 'PRECISION' menu on the top bar.. 
+
+  
+Epoch, Equinox:
+
+For epochs and equinoxes a prefix is required to set the given 
+number in the right context. The table below lists the possible 
+prefixes and their meaning. Prefixes are case-insensitive.
+
+Prefix               Epoch
+=============================================================
+B      Besselian epoch. Example 'B 1950', 'B1983.5', '-B1100'
+J      Julian epoch. Example: 'J2000.7', 'J 2000', '-J100.0'
+JD     Julian date. This number of days (with decimals)
+       that have elapsed since the initial epoch defined
+       as noon Universal Time (UT) Monday, January 1, 4713 BC
+       in the proleptic Julian calendar
+       Example: 'JD2450123.7'
+MJD    The Modified Julian Day (MJD) is the number of days
+       that have elapsed since midnight at the beginning of
+       Wednesday November 17, 1858. In terms of the Julian day:
+       MJD = JD - 2400000.5
+       Example: 'MJD 24034', 'MJD50123.2'
+RJD    The Reduced Julian Day (RJD): Julian date counted from
+       nearly the same day as the MJD,
+       but lacks the additional offset of 12 hours that MJD has.
+       It therefore starts from the previous noon UT or TT,
+       on Tuesday November 16, 1858. It is defined as:
+       RJD = JD - 2400000
+MJD    The Modified Julian Day (MJD) is the number of days
+       that have elapsed since midnight at the beginning of
+       Wednesday November 17, 1858. In terms of the Julian day:
+       MJD = JD - 2400000.5
+       Example: 'MJD 24034', 'MJD50123.2'
+RJD    The Reduced Julian Day (RJD): Julian date counted from
+       nearly the same day as the MJD,
+       but lacks the additional offset of 12 hours that MJD has.
+       It therefore starts from the previous noon UT or TT,
+       on Tuesday November 16, 1858. It is defined as:
+       RJD = JD - 2400000
+       Example:  'RJD50123.2', 'RJD 23433'
+F      1) DD/MM/YY  Old FITS format
+         Example: '29/11/57'
+       2) YYYY-MM-DDFITS format
+         Example: 'F2000-01-01'
+       3) YYYY-MM-DDTHH:MM:SS  FITS format with date and time.
+         Example: 'F2002-04-04T09:42:42.1'
+
+Examples: J1983.5
+          B 1983.5 
+          F2008-03-31T8:09
+          F 2007-01-14T13:18:59.9
+
+#end section input
+
+#begin section keywords
+                                KEYWORDS
+                                ========
+
+   EPOBS=      Epoch of observation
+   EPOCH1=     Epoch for EQUINOX for left column
+   EPOCH2=     Epoch for EQUINOX for right column
+   MAP=        Name of a FITS file
+
+              Other keywords are for internal program use only.
+#end section keywords
+
+
+#begin section about
+Purpose:       Calculator for transformation of single positions between sky systems 
+
+Category:      COORDINATES, UTILITY
+
+File:          skycalc
+
+Author:        J.P. Terlouw, M.G.R. Vogelaar
+
+Keywords:      See section keywords
+
+Version:       1.0
+
+Example:
+
+Notes:         This task is the first GIPSY application which uses the Python 
+               package 'kapteyn', which is external to GIPSY and must be installed
+               separately. More information about this package can be found via
+               the link below.
+
+Related documents: 
+               http://www.astro.rug.nl/software/kapteyn/
+
+Updates:       Oct  7, 2008: JPT, Version 0.9
+               May 20, 2009: JPT, Modified for latest WCS module from
+                                  kapteyn package v. 1.8.5.
+               Dec 21, 2009: JPT, Fixed hexagesimal format bug
+#end section about
+#<

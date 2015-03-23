@@ -1,0 +1,69 @@
+
+Document:     grdevices
+
+Purpose:      The file grdevices, which resides in the gip_loc directory,
+              describes the available graphics devices.
+
+Category:     SYSTEM SETUP
+
+Files:        grdevices.doc
+
+Author:       K.G. Begeman
+
+Description:  The graphics devices description consists of several fields,
+              separated by colons (:). The fields contain the
+              following information:
+              field          information
+                1            Name of host or list of hosts (separated by
+                             comma's) or asterix (*) if device is for
+                             all possible hosts.
+                2            Type code of graphics device: possible
+                             types are:
+                                0 (Null device)
+                                1 (Tektronix)
+                                2 (PostScript Landscape)
+                                3 (Postscript Portrait)
+                                4 (Colour Postscript Landscape)
+                                5 (Colour Postscript Portrait)
+                                6 (Xterm in tektronix mode)
+                                7 (GIDS in graphics mode)
+                                8 (thermes tektronix window)
+                                9 (PGPLOT X11 driver)
+                3            Name of graphics device.
+                4            Command to print hardcopy (if hardcopy
+                             device) or name of physical device.
+                5 (optional) Width of device in milli-inches
+                6 (optional) Height of device in milli-inches
+                7 (optional) Horizontal offset in milli-inches
+                8 (optional) Vertical offset in milli-inches
+
+              The last 4 fields are currently only used by the PostScript
+              drivers.
+
+Example:      *:0:NULL:
+              *:1:TEKTRONIX:TEK_DEVICE
+              brahe,kepler:2:L1LASER:lpr -r -Pps %s
+              huygens,zanstra:2:L1LASER:lp -s -dps %s
+              brahe,kepler:2:L2LASER:lpr -r -Pps2 %s
+              huygens,zanstra:2:L2LASER:lp -s -dps2 %s
+              *:2:lpsfile:echo Created file %s
+              brahe,kepler:3:p1laser:lpr -r -Pps %s
+              huygens,zanstra:3:p1laser:lp -s -dps %s
+              brahe,kepler:3:p2laser:lpr -r -Pps2 %s
+              huygens,zanstra:3:p2laser:lp -s -dps2 %s
+              *:3:PPSFILE:echo Created file %s
+              brahe,kepler:4:LCOLOUR:lpr -r -Pcps %s
+              huygens,zanstra:4:LCOLOUR:lp -s -dcps %s
+              *:4:LCPSFILE:echo Created file %s
+              brahe,kepler:4:PCOLOUR:lpr -r -Pcps %s
+              huygens,zanstra:4:PCOLOUR:lp -s -dcps %s
+              *:5:PCPSFILE:echo Created file %s
+              *:6:XTERM:/dev/tty
+              *:7:GIDS:DEFAULT_DISPLAY
+              *:8:THERTEK:THERTEK
+              *:9:X11:PGWINDOW
+ 
+Updates:      Jan 15, 1991: KGB, document created.
+              Jan 18, 1993: KGB, example in document.
+              Sep 15, 1993: KGB, device #9 implemented.
+              Sep 21, 1993: KGB, size and offset for PostScript implemented.

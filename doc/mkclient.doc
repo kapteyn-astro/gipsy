@@ -1,0 +1,20 @@
+
+Script:       mkclient
+
+Purpose:      Make current host a GIPSY client.
+
+Category:     MANAGEMENT
+
+File:         mkclient.doc
+
+Author:       K.G. Begeman
+
+Use:          mkclient.csh mode
+
+Description:  This script creates a new clients file (clients.new) in
+              current directory with the client flags as specified on the
+              command line.
+
+Updates:      Jan 11, 1993: KGB, Document created.
+              Sep 22, 2000: JPT, Add copy .template files to $gip_loc
+

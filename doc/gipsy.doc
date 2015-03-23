@@ -1,0 +1,49 @@
+
+Script:       gipsy
+
+Purpose:      Starts a GIPSY session with thermes.
+
+Category:     MANAGEMENT
+
+File:         gipsy.csh
+
+Author:       K. Begeman
+
+Use:          gipsy
+
+Description:  The gipsy script will start a GIPSY session. The gipsy
+              environment must have been defined.
+
+Use:          $gip_sys/gipsy.csh [session_number] ( when running csh )
+              $gip_sys/gipsy.sh  [session_number] ( when running sh )
+
+              session_number       Gipsy session id [1]. If you want to
+                                   run two gipsy sessions separately on
+                                   the same user account, you need to
+                                   specify different session numbers.
+                                   If you want to run more than one
+                                   display server (gids), you also should
+                                   specify different sessions numbers.
+                                    
+Notes:        The gipsy.csh script looks for $HOME/.gipsyrc, and the
+              gipsy.sh script looks for $HOME/.gipsysc. If present,
+              the script will executae it.
+
+Related Docs: xgipsy.doc
+
+Updates:      Oct  7, 1991: KGB, script create.
+              Mar 23, 1993: KGB, also for sh.
+              Jul  3, 1995: JPT, define WEB_BROWSER.
+              Apr  9, 1996: JPT, search for editor.
+              May 30, 2001: JPT, undefined Ggi-incompatibe environment vars.
+              Aug 22, 2003: JPT, set Python path.
+              Nov 15, 2004: JPT, removed client exclusion tests.
+              Apr 10, 2006: JPT, interfaced Firefox browser.
+              Oct 16, 2006: JPT, also support system-installed Python.
+              Oct 30, 2006: JPT, system Python tried before GIPSY-private.
+              Jul 12, 2007: JPT, changed PYTHONPATH for new Python module.
+              May 27, 2008: JPT, merge PYTHONPATH with existing PYTHONPATH.
+              Aug 23, 2010: JPT, reversed PYTHONPATH merge order.
+              May 31, 2011: JPT, removed command line mode.
+              Jan 21, 2014: JPT, enforce C number format.
+

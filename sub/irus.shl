@@ -1,0 +1,360 @@
+c irus.shl
+c
+c#>            irus.dc3
+c
+cDocument:     irus
+c
+cPurpose:      Contains the irus_routines.
+c
+cCategory:     IRAS
+c
+cFile:         irus.shl
+c
+cAuthor:       D. Kester
+c
+cDescription:  Refer to original documents. At the moment the modules
+c              contained are irus_coor and irus_inst.
+c
+cUpdates:      Jul 15, 1991: KGB, Document created.
+c
+c#<
+c
+c@ integer function irus_coor( integer, integer, character )
+c@ subroutine irus_inst( integer, character )
+c#>        irus_coor.dc2
+cFunction:	IRUS_COOR
+c
+cCategory:	IRAS, WORLD COORDINATES
+c
+cPurpose:      obtains a valid coordinate number from the user
+c 
+cFile:         irus_coor.shl
+c 
+cAuthor:       Do Kester
+c 
+cPerson resp.: Do Kester
+c 
+cAddress:      guspace!do or rugfx4!do         (uucp)
+c 
+cUse: integer irus_coor(	
+c 	coor,			I	integer
+c 	default,		I	integer
+c 	keyword )		I	character*(*)
+c
+c	IRUS_COOR
+c 	coor	default coordinate system; 0 if n/a
+c 	default level of default (as in USERxxx)
+c 	keyword to prompt the user with (as in USERxxx) 		
+c 		
+cDescription:  
+c   The user is prompted for a coordinate system and an epoch if such
+c   is applicable i.e. in case of Equatorial, Ecliptic or SunReferenced.
+c   If the epoch is not equal to 2000, the system is precessed and stored
+c   as a new system. If the system is unknown, the user is prompted
+c   further for the definition of such a system. It is then made and
+c   installed as a new system. 
+c   Connections to EQU 2000 (system nr 1) are always made.
+c 
+c 
+c 
+cExternals:    
+c 
+cUpdates:      16 July 1990 DK 
+c		11 Dec 1990  DK, output = input in case of default
+c#<
+
+	integer function IRUS_COOR( coor, default, keyword )
+
+	integer		coor, default
+	character*(*)	keyword
+
+	character*15	coname
+	real		epoch, epout, ep
+	doubleprecision poledis, refnode, newnode, D2R
+	parameter	( D2R = 0.01745329252 )
+	character*60	mess
+	character*30	cost(2), newname, defcost
+	integer		coin, cout, nitem, pitem, ios, nelc
+	integer		USERCHARU, USERREAL, USERLOG, USERDBLE
+	integer		k, kep
+	logical 	epfound, newco
+
+	data	defcost	/ 'EQUATORIAL' /
+
+	if coor .eq. 0
+	then
+	  call IRCO_NAMEPOCH(   1 , coname ,epoch )
+	else
+	  call IRCO_NAMEPOCH( coor, coname, epoch )
+	cif
+  	write( mess, '(a,f8.2,a)' ) 'Give coordinate system [ ' //
+     #          coname(:nelc(coname))//' ' , epoch, ' ]'
+	nitem = usercharu( cost, 2, default, keyword, mess )
+c if the default is chosen, return immediately.
+	if nitem .eq. 0
+	then
+	  IRUS_COOR = coor
+	  return
+	cif
+	pitem = 0
+	epout = 2000.0
+
+	while .true.
+	  kep = 0
+	  epfound = .false.
+	  for k = 1, nitem
+c decode the second item into a real to be assigned to the epoch of the system
+	    read( cost(k), '(f30.0)', iostat=ios ) ep
+	    if ios .eq. 0
+	    then
+	      epout = ep
+	      epfound = .true.
+	      kep = k
+	      xfor
+	    cif
+	  cfor
+	  k = mod( kep, 2 ) + 1
+	  cost(1) = cost(k)
+	  if .not. epfound .and. nitem .eq. 2
+	  then
+	    call ERROR( 2, 'Epoch must be a real' )
+	    nitem = USERREAL( epout, 1, 1, 'EPOCH=', 
+     #		'Give epoch pertaining to ' //
+     #		cost(1)(:nelc( cost(1) )) // ' [ 2000.0 ]' )
+	  cif
+
+c decode the first item according to match on 3 letters
+	  coin = index( 'EQUGALECLSUPSUN', cost(1)(:3) )
+	  if coin .eq. 1 .or. coin .eq. 4 .or. 
+     #	     coin .eq. 7 .or. coin .eq. 10
+	  then
+	    coin = ( coin + 2 ) / 3
+	    xwhile
+	  else if coin .eq. 13
+	  then
+c the sunreferenced system has default 'epoch' (==long. of sun) equal 0
+	    coin = 5
+	    if nitem .eq. 1
+	    then
+	      epout = 0.0
+	    cif
+	    xwhile
+	  else
+	    read( cost(1), '(f30.0)', iostat=ios ) ep
+	    if ios .eq. 0
+	    then
+c default system is EQUATORIAL
+	      coin = 1
+	      epout = ep
+	      xwhile
+	    else
+	      newco = .true.
+	      call ANYOUT( 1, 
+     #	'Do you really want to define a new coordinate system?' )
+	      k = userlog( newco, 1, 1, 'CONFIRM=',
+     #		'I want a new system [YES]' )
+	      if newco
+	      then
+c it must be a new system: try to obtain the definition of it.
+	        newname = cost(1)
+	        call ANYOUT( 1, 
+     #            'For the definition of a new coordinate ' //
+     #         	  'system, a reference coordinate system and ' // 
+     #  	  '3 angles are necessary:' )
+	        call ANYOUT( 1, 
+     #		  'the pole distance and the longitudes '//
+     # 		  ' of the ascending node in both systems.' )
+	        pitem = pitem + 
+     #		  USERDBLE( poledis, 1, 1, 'POLEDIST=', 'Give the'
+     #	          // ' distance between the poles in degrees [ 0.0 ]')
+	        pitem = pitem + USERDBLE( refnode, 1, 1, 'REFNODE=',
+     #		  'Give longitude of ascending node in ' //
+     #	  	  'ref. system [ 0.0 ]' )
+	        pitem = pitem + USERDBLE( newnode, 1, 1, 'NEWNODE=',
+     #	  	  'Give longitude of ascending node in ' //
+     #	  	  'new system [ 0.0 ]' )
+	        write( mess, '(a,f8.2,a)' )
+     #		  'Give ref. coordinate system [ ' // 
+     #		  coname(:nelc(coname)) , epoch ,' ]' 
+	      cif
+	      call CANCEL( keyword )
+	      cost(1) = defcost
+	      nitem = USERCHARU( cost, 2, default, keyword, mess )
+	    cif	    
+	  cif
+	cwhile
+
+	if epout .ne. 2000.0 .and. ( coin .eq. 1 .or. coin .eq. 3 )
+	then
+c precess EQUATORIAL or ECLIPTIC 
+	  cout = 0
+	  call IRCO_PRECESS( coin, epout, cout )
+	  call IRCO_CONNECT( 1, cout )
+	  coin = cout
+	else if epout .ne. 0.0 .and. coin .eq. 5
+	then
+c precess the SUNREFERENCED system
+	  epout = epout * D2R
+	  call IRCO_SUNREF( dble( epout ) )
+	cif
+
+	if pitem .gt. 0
+	then
+c make a new coordinate system
+	  poledis = poledis * D2R
+	  refnode = refnode * D2R
+	  newnode = newnode * D2R
+	  cout = 0
+	  call IRCO_NEWCOOR( coin, poledis, refnode, newnode, 
+     #		newname, cout )
+	  call IRCO_CONNECT( 1, cout )
+     	  coin = cout
+	cif
+
+	IRUS_COOR = coin
+
+	return
+	end
+
+c***********************************************************************
+
+c#>             irus_inst.dc2
+c
+cSubroutine:   irus_inst
+c 
+cPurpose:      obtain a instrument name from the user
+c 
+cFile:         irus_inst.sh
+c 
+cAuthor:       Do Kester
+c 
+cPerson resp.: Do Kester
+c 
+cAddress:      guspace!do or rugfx4!do         (uucp)
+c 
+cUse:   call irus_inst(
+c		default	    	I	integer
+c 		instrname ) 	I/O	character*(*)
+c
+c  default 	default level as in USERxxx
+c  instrname	instrument name
+c
+cDescription:
+c  The keyword INSTRUME is posed to the user until a valid IRAS instrument
+c  has been selected.
+c
+c  	INSTRUME=	Valid IRAS instrument name: A combination of
+c			observation mode and band number
+c  Valid observatio modes are ( 2 letters suffice )
+c	SURVEY	SPLINE	AO	FLASH  UNKNOWN
+c  Valid band numbers are ( 2 letters suffice )
+c	12 25 60 100 LRS BPHF 1 2 3 4 B1 B2 B3 B4
+c  ( They are searched in this order! )
+c
+c  When the user chooses the default, INSTRNAME is returned unchanged.
+c 
+cExternals:    IRCC_BANDNR IRCC_OBSMODE IRCC_INSTRNAME
+c 		ANYOUT CANCEL
+cUpdates:      5 jun 1990 DK, documentation only
+c		7 sep 1990 DK, code
+c#<
+
+	subroutine irus_inst( default, instrname )
+
+	integer		default
+	character*(*)	instrname
+
+	integer		MAXIL, MAXBL, k, bl, il
+	parameter	( MAXIL = 6, MAXBL = 10 )
+	character*10	inst(2), IRCC_INSTRNAME
+	character*2	blist(MAXBL), ilist(MAXIL)
+	character*80	mess
+	integer		IRCC_OBSMODE, IRCC_BANDNR, USERCHARU
+	integer		j, items, found
+
+	data	blist	/ '12', '25', '60', '10', 'LR', 'BP',
+     #                    '1 ', '2 ', '3 ', '4 ' /
+	data	ilist	/ 'SU', 'SP', 'AO', 'FL', 'UN', 'PO' /
+	data	mess	/ 'give instrument identification ' /
+
+c set defaults and make message for usercharl
+	if ( mod( default, 4 ) .ne. 0 )
+	then
+	  il = IRCC_OBSMODE( instrname )
+	  bl = IRCC_BANDNR( instrname )
+	  mess = mess(:36) // '[' // instrname // ']'
+	else
+	  il = 0
+	  bl = 0
+	cif
+
+c loop until proper answer is obtained
+	while .true.
+	  items = USERCHARU( inst, 2, default, 'INSTRUME=', mess )
+	  found = 0
+
+	  for k = 1, items
+c look for band
+	    for j = 1, MAXBL
+	      if index( inst(k), blist(j) ) .gt. 0
+	      then
+	        bl = j
+		found = found + 1
+		if bl .gt. 6
+		then
+		  bl = bl - 6
+		cif
+	        xfor
+	      cif
+	    cfor
+c check for instrument
+	    for j = 1, MAXIL
+	      if index( inst(k), ilist(j) ) .gt. 0
+	      then
+		found = found + 1
+		if ( j .eq. MAXIL )
+		then
+		  il = 3
+		else
+	          il = j
+		cif
+	        xfor
+	      cif
+	    cfor
+	  cfor
+c make SURVEY the default instrument if a band has been given
+	  if il .eq. 0 .and. bl .gt. 0
+	  then
+	    il = 1
+	  cif
+c check valid combinations
+	  if il .gt. 0 .and. bl .eq. 0
+	  then
+c an instrument has been found but no band
+	    call ANYOUT( 1, 'A band is also needed with instrument: '
+     #           // inst(1) // inst(2) )
+	    call CANCEL( 'INSTRUME=' )
+	  else if il .eq. 2 .and. bl .eq. 5
+	  then
+c SPLINE and LRS is an nonexisting combination
+	    call ANYOUT( 1, 'Invalid combination: ' 
+     #		// inst(1) // inst(2) )
+	    call CANCEL( 'INSTRUME=' )
+	    il = 0
+	    bl = 0
+	  else if found .lt. items
+	  then
+c some supplied items could not be identified
+	    call ANYOUT( 1, 'Cannot decode: ' // inst(1) // inst(2) )
+	    call CANCEL( 'INSTRUME=' )
+	    il = 0
+	    bl = 0
+	  else
+	    xwhile
+	  cif
+	cwhile
+
+	instrname = IRCC_INSTRNAME( il, bl )
+
+	return
+	end

@@ -1,0 +1,18 @@
+
+Script:       listdiffs
+
+Purpose:      List different files in two directories.
+
+Category:     UTILITY
+
+File:         listdiffs.csh
+
+Author:       K.G. Begeman
+
+Use:          listdiffs.csh newdir olddir
+
+Description:  This script lists the files which are modified and the
+              files which are only present in newdir.
+
+Updates:      Feb  4, 1993: KGB, Document created.
+

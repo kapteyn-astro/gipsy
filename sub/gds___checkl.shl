@@ -1,0 +1,80 @@
+	SUBROUTINE GDS___CHECKL(VERIFY,ERRI,ERRO,*)
+*
+* NOTICE: no C-compatible version possible due to alternate RETURN
+*
+*#>gds___checkl.dc3
+*Name:       GDS___CHECKL
+*
+*Purpose:    Condition checking and handling routine.
+*            Same as GDS___CHECK, excpet that GDS___LEAVEC is
+*            called before the exit is taken.
+*
+*Category:   GDS
+*
+*File:       gds___checkl.shl
+*
+*Author:     J.P. Terlouw
+*
+*Use:        CALL GDS___CHECKL ( cond, code, error, exit )
+*
+*                 cond   =   logical expression
+*                 code   =   INTEGER variable, constant or
+*                            expression
+*                 error  =   INTEGER variable containing the
+*                            error argument as declared
+*                 exit   =   any of the following specifiers:
+*                            *RETURN, *XWHILE, *XREPEAT, *XFOR or
+*                            *procedurename
+*
+*Description:
+*            If 'error' < 0 , this routine calls GDS___ERROR with this
+*            value and does no further checking.
+*            If 'error' >= 0, or if 'error' has not been specified in
+*            the call to the routine which calls this one, the following
+*            procedure is followed:
+*            If the condition 'cond' is .TRUE., this routine does nothing.
+*            If it is .FALSE., and 'error' has been specified in the call
+*            to the subroutine which calls GDS___CHECKL, then 'code' is
+*            copied to 'error'  and the statement specified in 'exit' is
+*            executed; if 'error' has not been specified, then GDS___CHECKL
+*            calls GDS___ERROR with 'code' as argument.
+*
+*Note:       This routine is not C-compatible.
+*
+*Update history:
+*            9-Feb-89    Original document
+*           15-Dec-89    version compliant with GPS
+*           25-Mar-94    modified for GDS server
+*#<
+
+	LOGICAL VERIFY,PRESENTN
+	INTEGER ERRI,ERRO
+
+* Check any previous error
+	IF PRESENTN(ERRO)
+	THEN
+N  Already error indication present?
+	   IF ERRO.LT.0
+	   THEN
+N  Hit at this occasion
+	      CALL GDS___ERROR(ERRO-1000)
+	   CIF
+	CIF
+
+N  Condition not met: error
+	IF .NOT.VERIFY
+	THEN
+N  Error argument specified?
+	   IF PRESENTN(ERRO)
+	   THEN
+N  Copy
+	      ERRO=ERRI
+N  Break normal flow of control
+F	      RETURN 1
+	   ELSE
+N  Not specified: severe punishment
+	      CALL GDS___ERROR(ERRI)
+	   CIF
+	CIF
+	RETURN
+	END

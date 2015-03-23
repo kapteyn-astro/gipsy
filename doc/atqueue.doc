@@ -1,0 +1,22 @@
+
+Script:       atqueue
+
+Purpose:      Schedule compile to update GIPSY libraries and applications.
+
+Category:     MANAGEMENT
+
+File:         atqueue.csh
+
+Author:       K.G. Begeman
+
+Use:          In principle atqueue.csh has to be started once manually.
+              It will submit itself to run at 1.00 am the next morning by
+              default, or at the time entered on the command line.
+              This script has to be run from the user which is owner
+              of the gipsy sources, and that user must have priviledge
+              to use at.
+
+Example:      atqueue.csh 2
+
+Updates:      May 26, 1992: KGB, Document created.
+

@@ -1,0 +1,663 @@
+E     PROGRAM MNMX (copyright notice)
+C mnmx.shl
+C                           COPYRIGHT (c) 1990
+C         Kapteyn Astronomical Institute - University of Groningen
+C            P.O. box 800,  9700 AV Groningen, The Netherlands
+C
+E     PROGRAM MNMX (mnmx.dc1)
+C#>            mnmx.dc1
+C
+CProgram:      MNMX
+C
+CPurpose:      This program finds the minimum and maximum value in a
+C              subset or part of a subset. It also counts the number
+C              of blanks.
+C
+CCategory:     CALCULATION, HEADER, MANIPULATION
+C
+CFile:         mnmx.shl
+C
+CAuthor:       K.G. Begeman
+C
+CKeywords:   
+C
+C   INSET=     Set (and subset(s)) for which to determine the minimum
+C              and maximum. Maximum number of subsets is 2048.
+C
+C** BOX=       Area to be searched for minimum and maximum [entire subset].
+C
+C** TOFILE=    Write result table to file?  Y/[N]
+C              Hidden keyword. Is set to Y the result table is written
+C              to a file on disk in the directory where GIPSY is
+C              started. The file has a fixed name. That name is _mnmxtmp_
+C
+CNotes:        1. MNMX updates the descriptor items DATAMIN, DATAMAX and
+C              NBLANK only when working on whole subsets.
+C              2. If subsets have zero dimension, i.e. if they are
+C              pixels, then MNMX will display the pixel values.
+C
+CExample:      <USER  >MNMX
+C              <USER  >MNMX     ,INSET=AURORA RA -3:4 DEC 0 FREQ 32
+C              Set AURORA has 3 axes
+C              RA-NCP             from    -7 to     8
+C              DEC-NCP            from    -7 to     8
+C              FREQ-OHEL          from     1 to    59
+C              (   RA,  DEC, FREQ)  DATA VALUE
+C              (   -3,    0,   32)  -4.0723352
+C              (   -2,    0,   32)  -2.8402100
+C              (   -1,    0,   32)  -3.8706512
+C              (    0,    0,   32)   5.0316072
+C              (    1,    0,   32)  -11.610437
+C              (    2,    0,   32)  -6.4864664
+C              (    3,    0,   32)   4.0308046
+C              (    4,    0,   32)   3.9248881
+C              <STATUS>  MNMX    +++ FINISHED +++
+C
+CUpdates:      Jan 29, 1990: KGB, Document created.
+C              Jun 25, 1997: VOG, Hidden keyword CHANGE= added
+C                                 Keyword is undocumented and for 
+C                                 special purposes only.
+C              Feb 25, 2013: VOG, Increased filename length to 1024
+C              Nov 10, 2014: VOG, Added keyword TOFILE= to facilitate
+C                                 output in GUIPSY
+C
+C#<
+E     PROGRAM MNMX (code)
+      program mnmx
+C
+C     Parameters:
+C
+      character*(*) ident
+N     Change version number on this line
+      parameter (ident = ' MNMX  Version 1.0  Jan 29, 1990 ')
+      integer       maxaxes
+N     Maximum number of axes in set
+      parameter (maxaxes = 10)
+      integer       maxsubs
+N     Maximum number of subsets
+      parameter (maxsubs = 2048)
+      integer       maxbuf
+N     Size of data array
+      parameter (maxbuf = 4096)
+      integer       outdev
+N     Device on which to display info
+      parameter (outdev = 11)
+C
+C     Declarations for input set:
+C
+N     Array with axis names
+      character*18  axname(maxaxes)
+N     Name of input set
+      character*1024  set
+N     Permutation array of axes numbers
+      integer       axperm(maxaxes)
+N     Array with sizes of subset axis
+      integer       axsize(maxaxes)
+N     Coordinate Words of choosen frame
+      integer       cwlo, cwhi
+N     Number of input subsets
+      integer       nsub
+N     Array with subset coordinate words
+      integer       subset(maxsubs)
+N     Dimension of input set
+      integer       setdim
+N     Dimension of input subsets
+      integer       subdim
+N     Transfer id input data
+      integer       tid
+C
+C     Declaration of local variables:
+C
+N     Labels for axes
+      character*5   axlab(maxaxes)
+N     Arrays containing choosen frame
+      integer       blo(maxaxes), bhi(maxaxes)
+N     Grid counter
+      integer       g
+N     Various GDS error returns
+      integer       gerror
+N     Arrays containing min and max position
+      integer       gmin(maxaxes), gmax(maxaxes)
+N     Position of minimum and maximum
+      integer       imin, imax
+N     Length of axis name
+      integer       l
+N     Loop counter
+      integer       m
+N     Counter  for minmax4
+      integer       mcount
+N     Loop counter
+      integer       n
+N     Number of blanks in subsets
+      integer       nblank(maxsubs)
+N     Number of points actually read from subset
+      integer       nd
+N     Array containing number of pixels (dimension)
+      integer       nf(maxaxes)
+N     Number of points on axis inside frame 
+      integer       np
+N     Subset counter
+      integer       ns
+N     Total number of pixels in subset
+      integer       ntotal
+N     For output formatting
+      integer       tabs(6)
+N     Logical indicating whether header update is possible
+      logical       change
+N     Logical for writing to file _mnmxtmp_
+      logical       tofile
+N     Array which recieves the data
+      real          buf(maxbuf)
+N     Minimum and maximum value in subsets
+      real          datamin(maxsubs), datamax(maxsubs)
+C
+C     Functions:
+C
+N     Returns name of axis
+      character*18  gdsc_name
+N     Returns number of input subsets
+      integer       gdsinp
+N     Returns coordinate word
+      integer       gdsc_fill
+N     Returns grid coordinate from coordinate word
+      integer       gdsc_grid
+N     Returns number of dimensions in coordinate word
+      integer       gdsc_ndims
+N     Returns number of characters in string
+      integer       nelc
+N     integer       userlog
+C
+C     Data statements:
+C
+N     Default change descriptors
+      data change / .true. /
+N     Write to file or not
+      data tofile / .false. /
+N     Various GDS error returns
+      data gerror / 0 /
+N     Total number of pixels
+      data ntotal / 1 /
+N     Dimension of subset
+      data subdim / 0 /
+C
+C     Executable statements:
+C
+N     contact HERMES
+      call init
+N     tell user who we are
+      call anyout( 8, ident )
+N     get input database
+      nsub = gdsinp( set,
+     #               subset,
+     #               maxsubs,
+     #               0,
+     #               'INSET=',
+     #               'Set (and subset(s)) to work on', 
+     #               outdev,
+     #               axperm,
+     #               axsize,
+     #               maxaxes,
+     #               1,
+     #               subdim )
+N     Get number of axis
+      setdim = gdsc_ndims( set, 0 )
+N     Get axis names and prepare axis lables
+      for m = 1, setdim
+N        Get name of axis
+         axname(m) = gdsc_name( set, axperm(m), gerror )
+N        Reset label
+         axlab(m) = ' '
+N        Length of axis name
+         l = nelc( axname(m) )
+N        Position of hyphen in axis name
+         n = index( axname(m), '-' )
+N        Hyphen found, so ...
+         if (n .gt. 0)
+         then
+N           ... set number of characters to display
+            l = n - 1
+         cif
+N        When too large, truncate axis name
+         l = min( 5, l )
+N        Now do some right adjusting
+         axlab(m)(5-l+1:) = axname(m)(:l)
+      cfor
+N     get area of subset to work on (hidden keyword)
+      call gdsbox( blo,
+     #             bhi,
+     #             set,
+     #             subset,
+     #             2,
+     #             ' ',
+     #             ' ',
+     #             outdev,
+     #             0 )
+N     get size of subset
+      for n = 1, subdim
+N        Store it here for later use
+         nf(n) = ntotal
+N        Number of pixels along nth axis
+         np = bhi(n) - blo(n) + 1
+N        Add to total, that is, multiply
+         ntotal = ntotal * np
+N        Determine whether header update is possible
+         change = ((change) .and. (np .eq. axsize(n)))
+      cfor
+      if (.not. change) 
+      then
+         call userlog( change, 1, 2, 'CHANGE=', 
+     #                'Update header anyhow?  Y/[N]' )
+      cif
+      call userlog(tofile, 1, 2, 'TOFILE=',
+     #                'Write result table to file?   Y/[N]')
+      if (tofile)
+      then
+         open(unit=7, file='_mnmxtmp_')
+      cif
+N     print column head and determine format
+      call heading( outdev,
+     #              setdim,
+     #              subdim,
+     #              axlab,
+     #              tabs,
+     #              tofile)
+N     loop through subsets      
+      for ns = 1, nsub
+N        show user what we are working on
+         call showsub1( set, subset(ns), axperm )
+N        Get lower coordinate word of frame
+         cwlo = gdsc_fill( set, subset(ns), blo )
+N        Get upper coordinate word of frame
+         cwhi = gdsc_fill( set, subset(ns), bhi )
+N        Reset transfer id
+         tid = 0
+N        initialize count for minmax4
+         mcount = 0
+N        loop trough this subset
+         repeat
+N           Read chunk of data into buffer
+            call gdsi_read( set,
+     #                      cwlo,
+     #                      cwhi,
+     #                      buf,
+     #                      maxbuf,
+     #                      nd,
+     #                      tid )
+N           Determine running minimum and maximum etc.
+            call minmax4( buf,
+     #                    nd,
+     #                    datamin(ns),
+     #                    datamax(ns),
+     #                    imin,
+     #                    imax,
+     #                    nblank(ns),
+     #                    mcount )
+N        Ready when all data read
+         until (mcount .eq. ntotal)
+N        get coordinates of min and max outside subset
+         for n = subdim + 1, setdim
+N           Get grid
+            gmin(n) = gdsc_grid( set, axperm(n), subset(ns), gerror )
+N           Is the same for a subset
+            gmax(n) = gmin(n)
+         cfor
+N        not all values BLANK?
+         if (ntotal .gt. nblank(ns))
+         then
+N           get coordinates of min and max inside subset
+            for n = subdim, 1, -1
+N              divide by naxis1 * naxis 2 * ... * naxis(n-1)
+               g = imin / nf(n)
+N              subtract nth axis part from position
+               imin = imin - g * nf(n)
+N              this is the nth grid
+               gmin(n) = blo(n) + g
+N              divide by naxis1 * naxis 2 * ... * naxis(n-1)
+               g = imax / nf(n)
+N              subtract nth axis part from position
+               imax = imax - g * nf(n)
+N              this is the nth grid
+               gmax(n) = blo(n) + g
+            cfor
+         cif
+N        put out results
+         call output( outdev,
+     #                setdim,
+     #                subdim,
+     #                gmin,
+     #                gmax,
+     #                datamin(ns),
+     #                datamax(ns),
+     #                nblank(ns),
+     #                tabs,
+     #                tofile)
+      cfor
+      if (tofile)
+      then
+         close(7)
+      cif
+N     update descriptors ?
+      if (change)
+      then
+N        Update
+         call wminmax( set,
+     #                 subset,
+     #                 datamin,
+     #                 datamax,
+     #                 nblank,
+     #                 nsub,
+     #                 0 )
+      cif
+N     Quit communication with user
+      call finis
+C
+C     End of program
+C
+      stop
+      end
+E     PROGRAM MNMX (subroutine heading)
+      subroutine heading( outdev, setdim, subdim, axlab, tabs, tofile )
+C
+C     This procedure prints the heading of the columns which will be
+C     printed by OUTPUT. At the same time the column positions are
+C     determined. The tabs are set in the following way:
+C     ........t1........t2........t3........t4........t5........t6
+C     subset  DATAMIN   position  DATAMAX   position  NBLANK    END
+C      grids            minimum             maximum
+C
+C     Arguments:
+C
+N     Output device
+      integer     outdev
+N     Number of labels (set dimension)
+      integer     setdim
+N     Dimension of subset
+      integer     subdim
+N     Axis labels:
+      character*5 axlab(*)
+N     Tabulator stops
+      integer     tabs(7)
+      logical     tofile
+C
+C     Local variables:
+C
+N     Character string for output
+      character*132 mess
+N     Loop counter
+      integer       m
+N     Tab counter
+      integer       t
+C
+C     Executable code:
+C
+N     Reset this mess
+      mess = ' '
+N     the first position
+      t = 1
+N     are the grids assigned to subset ?
+      if (subdim .lt. setdim)
+      then
+N        show them between brackets
+         mess(t:) = '('
+N        next writing position
+         t = 3
+N        show grids defined in subset coordinate word
+         for m = subdim + 1, setdim
+N           put stripped axis name in place
+            write( mess(t:), '(A,'','')' ) axlab(m)
+N           next writing position
+            t = t + 6
+         cfor
+N        closing bracket
+         write( mess(t-1:), '('') '')' )
+N        next writing position
+         t = t + 1
+      cif
+N     save first tabulator stop
+      tabs(1) = t
+N     Is subset a pixel?
+      if (subdim .gt. 0)
+      then
+N        show column head
+         write( mess(t:), '(''DATAMIN at '')' )
+N        next writing position
+         t = t + 11
+N        save second tabulator stop
+         tabs(2) = t
+N        show position of minimum between brackets
+         write( mess(t:), '(''('')' )
+N        next writing position
+         t = t + 1
+N        loop through subset axes
+         for m = 1, subdim
+N           put stripped axisname in place
+            write( mess(t:), '(A,'','')' ) axlab(m)
+N           next writing position
+            t = t + 6
+         cfor
+N        closing bracket
+         write( mess(t-1:), '('') '')' )
+N        next writing position
+         t = t + 1
+N        save third tabulator stop
+         tabs(3) = t
+N        show column head
+         write( mess(t:), '(''DATAMAX at '')' )
+N        next writing position
+         t = t + 11
+N        save fourth tabulator stop
+         tabs(4) = t
+N        put position of maximum between brackets
+         write( mess(t:), '(''('')' )
+N        next writing position
+         t = t + 1
+N        loop trough dimensions of subset
+         for m = 1, subdim
+N           put stripped axis name in place
+            write( mess(t:), '(A,'','')' ) axlab(m)
+N           next writing position
+            t = t + 6
+         cfor
+N        write closing bracket
+         write( mess(t-1:), '('') '')' )
+N        next writing position
+         t = t + 1
+N        save fifth tabulator stop
+         tabs(5) = t
+N        write column head
+         write( mess(t:), '(''  NBLANK '')' )
+N        next writing position
+         t = t + 9
+N        save sixth tabulator stop
+         tabs(6) = t
+N     subset is a pixel
+      else
+N        show column head
+         write( mess(t:), '('' DATA VALUE    '')' )
+N        last writing position
+         t = t + 16
+N        save second tabulator stop
+         tabs(2) = t
+      cif
+N     output to output device
+      call anyout( outdev, mess(:t) )
+      if (tofile)
+      then
+         write(7,*) mess(:t)
+      cif
+C
+C     Return to caller
+C
+      return
+      end
+E     PROGRAM MNMX (subroutine output)
+      subroutine output( outdev, setdim, subdim, gmin, gmax,
+     #                   amin, amax, nblank, tabs, tofile )
+C
+C     This procedure prints the grids defined in the subset coordinate
+C     word, the minimum, position of minimum, maximum, position of
+C     maximum and the number of blanks. It uses the tabulator stops
+C     determined by subroutine heading.
+C     ........t1........t2........t3........t4........t5........t6
+C     subset  DATAMIN   position  DATAMAX   position  NBLANK    END
+C      grids            minimum             maximum
+C
+C     Arguments:
+C
+N     Output device
+      integer outdev
+N     Set dimension
+      integer setdim
+N     Subset dimension
+      integer subdim
+N     Grid positions of minimum
+      integer gmin(*)
+N     Grid positions of maximum
+      integer gmax(*)
+N     Minimum value
+      real    amin
+N     Maximum value
+      real    amax
+N     Number of blanks
+      integer nblank
+N     Tabulator stops
+      integer tabs(6)
+      logical tofile
+C
+C     Locals:
+C
+N     Character string
+      character*132 mess
+N     Loop counter
+      integer       m
+N     Tabulator counter
+      integer       t
+C
+C     Functions:
+C
+N     Returns true if argument blank value
+      logical fblank
+C
+C     Executable statements:
+C
+N     Reset this mess
+      mess = ' '
+N     The first position
+      t = 1
+N     any grids defined in subset coordinate word ?
+      if (subdim .lt. setdim)
+      then
+N        show them between brackets
+         mess(t:) = '('
+N        next writing position
+         t = 3
+N        loop through dimensions outside subset
+         for m = subdim + 1, setdim
+N           put grid coordinate in place
+            write( mess(t:), '(i5,'','')' ) gmin(m)
+N           next writing position
+            t = t + 6
+         cfor
+N        closing bracket
+         write(mess(t-1:),'('') '')')
+      cif
+N     now at fist tabulator stop
+      t = tabs(1)
+N     is subset a pixel ?
+      if (subdim .gt. 0)
+      then
+N        is minimum defined ?
+         if (.not. fblank( amin ))
+         then
+N           show minimum
+            write( mess(t:), '(g10.3,1x)' ) amin
+         else
+N           minimum not defined
+            write( mess(t:), '(''  BLANK    '')' )
+         cif
+N        now at second tabulator stop
+         t = tabs(2)
+N        show position between brackets
+         write( mess(t:), '(''('')' )
+N        next writing position
+         t = t + 1
+N        loop through subset dimensions
+         for m = 1, subdim
+N           minimum defined ?
+            if (.not. fblank( amin ))
+            then
+N              show grid coordinate of minimum
+               write( mess(t:), '(i5,'','')' ) gmin(m)
+            else
+N              minimum not defined
+               write( mess(t:), '(''     ,'')' )
+            cif
+N           next writing position
+            t = t + 6
+         cfor
+N        closing bracket
+         write( mess(t-1:), '('') '')' )
+N        now at third tabulator stop
+         t = tabs(3)
+N        maximum defined ?
+         if (.not. fblank( amax ))
+         then
+N           show maximum
+            write( mess(t:), '(g10.3,1x)' ) amax
+         else
+N           maximum not defined
+            write( mess(t:), '(''  BLANK    '')' )
+         cif
+N        now at fourth tabulator stop
+         t = tabs(4)
+N        show position of maximum between brackets
+         write( mess(t:), '(''('')' )
+N        next writing position
+         t = t + 1
+N        loop through subset dimensions
+         for m = 1, subdim
+N           maximum defined ?
+            if (.not. fblank( amax ))
+            then
+N              show grid coordinate of maximum
+               write( mess(t:), '(i5,'','')' ) gmax(m)
+            else
+N              maximum not defined
+               write( mess(t:), '(''     ,'')' )
+            cif
+N           next writing position
+            t = t + 6
+         cfor
+N        closing bracket
+         write( mess(t-1:), '('') '')' )
+N        now at fifth tabulator stop
+         t = tabs(5)
+N        show number of blanks
+         write( mess(t:), '(i8,1x)' ) nblank
+N        now at last tabulator stop
+         t = tabs(6)
+N     subset is a pixel
+      else
+N        data value defined
+         if (.not. fblank( amin ))
+         then
+N           show data value
+            write( mess(t:), '(g15.8,1x)' ) amin
+         else
+N           show BLANK
+            write( mess(t:), '(''      BLANK     '')')
+         cif
+N        Now at second tabulator stop
+         t = tabs(2)
+      cif
+N     send text to output device
+      call anyout( outdev, mess(:t) )
+      if (tofile)
+      then
+         write(7,*) mess(:t)
+      cif
+C
+C     Return to caller
+C
+      return
+      end

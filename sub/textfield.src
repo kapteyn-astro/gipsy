@@ -1,0 +1,2621 @@
+textfield.src
+
+        Copyright (c) Kapteyn Laboratorium Groningen 1999
+        All Rights Reserved.
+
+Name:         textfield.src
+Creator:      terlouw
+Host:         hipparchus
+Date:         Jul 8, 1999
+Contents:     Makefile.uti TextField.c TextField.h TextFieldP.h TextFieldGetEditable.dc3
+              TextFieldGetInsertionPosition.dc3 TextFieldGetString.dc3 TextFieldInsert.dc3 TextFieldReplace.dc3 TextFieldSetEditable.dc3
+              TextFieldSetInsertionPosition.dc3 TextFieldSetSelection.dc3 TextFieldSetString.dc3 textfield.dc3 textfield.uue
+
+#>            Makefile.uti
+SHELL  = /bin/sh
+
+pack::
+	$$gip_sys/pack.csh textfield.src Makefile.uti \
+        TextField.c TextField.h TextFieldP.h \
+        TextFieldGetEditable.dc3 TextFieldGetInsertionPosition.dc3 \
+        TextFieldGetString.dc3 TextFieldInsert.dc3 TextFieldReplace.dc3 \
+        TextFieldSetEditable.dc3 TextFieldSetInsertionPosition.dc3 \
+        TextFieldSetSelection.dc3 TextFieldSetString.dc3 \
+        textfield.dc3 \
+	textfield.uue
+#<
+
+#>            TextField.c
+/* -XT */
+/*-----------------------------------------------------------------------------
+ * TextField	A single line text entry widget
+ *
+ * Copyright (c) 1995 Robert W. McMullen
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Library General Public
+ * License as published by the Free Software Foundation; either
+ * version 2 of the License, or (at your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Library General Public License for more details.
+ *
+ * You should have received a copy of the GNU Library General Public
+ * License along with this library; if not, write to the Free
+ * Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *
+ *
+ * Author: Rob McMullen <rwmcm@orion.ae.utexas.edu>
+ *         http://www.ae.utexas.edu/~rwmcm
+ */
+
+#define _TextField_
+
+#include        "stddef.h"
+#include        "stdio.h"
+#include        <wchar.h>
+
+#include <X11/IntrinsicP.h>
+#include <X11/StringDefs.h>
+#include <X11/Xatom.h>
+#include <X11/Xmu/Xmu.h>
+
+#include <stdlib.h> 
+
+#include "TextFieldP.h"
+
+#define offset(field) XtOffsetOf(TextFieldRec, text.field)
+static XtResource resources[] =
+{
+  {XtNallowSelection, XtCBoolean, XtRBoolean, sizeof(Boolean),
+    offset(AllowSelection), XtRString, "True"},
+  {XtNdisplayCaret, XtCBoolean, XtRBoolean, sizeof(Boolean),
+    offset(DisplayCursor), XtRString, "True"},
+  {XtNecho, XtCBoolean, XtRBoolean, sizeof(Boolean),
+    offset(Echo), XtRString, "True"},
+  {XtNeditable, XtCBoolean, XtRBoolean, sizeof(Boolean),
+    offset(Editable), XtRString, "True"},
+  {XtNfont, XtCFont, XtRFontStruct, sizeof(XFontStruct *),
+    offset(font), XtRString, XtDefaultFont},
+  {XtNforeground, XtCForeground, XtRPixel, sizeof(Pixel),
+    offset(foreground_pixel), XtRString, XtDefaultForeground},
+  {XtNinsertPosition, XtCInsertPosition, XtRInt, sizeof(int),
+    offset(CursorPos), XtRString, "0"},
+  {XtNlength, XtCLength, XtRInt, sizeof(int),
+    offset(TextMaxLen), XtRString, "0"},
+  {XtNmargin, XtCMargin, XtRDimension, sizeof(Dimension),
+    offset(Margin), XtRString, "3"},
+  {XtNpendingDelete, XtCBoolean, XtRBoolean, sizeof(Boolean),
+    offset(PendingDelete), XtRString, "True"},
+  {XtNstring, XtCString, XtRString, sizeof(char *),
+    offset(DefaultString), XtRString, NULL},
+  {XtNactivateCallback, XtCCallback, XtRCallback, sizeof(XtPointer),
+    offset(ActivateCallback), XtRCallback, NULL},
+};
+
+#undef offset
+
+static void Initialize();
+static void Destroy();
+static void Redisplay();
+static void Resize();
+static Boolean SetValues();
+static void Draw(), DrawInsert(), MassiveChangeDraw(), DrawTextReposition(),
+  ClearHighlight(), DrawHighlight(), DrawCursor(), EraseCursor();
+static Boolean PositionCursor(), MassiveCursorAdjust();
+static void Nothing(), Activate(), InsertChar(), ForwardChar(), BackwardChar(),
+  DeleteNext(), DeletePrev(), SelectStart(), ExtendStart(), ExtendAdjust(),
+  ExtendEnd(), InsertSelection();
+
+static char defaultTranslations[] =
+"<Key>Right:	forward-char()\n\
+ <Key>Left:	backward-char()\n\
+ <Key>Delete:	delete-next-char()\n\
+ <Key>BackSpace:	delete-previous-char()\n\
+ <Key>Return:	activate()\n\
+ <Key>:		insert-char()\n\
+ Shift<Btn1Down>:	extend-start()\n\
+ <Btn1Down>:	select-start()\n\
+ <Btn1Motion>:	extend-adjust()\n\
+ <Btn1Up>:	extend-end()\n\
+ <Btn2Down>:	insert-selection()\n\
+ <Btn3Down>:	extend-start()\n\
+ <Btn3Motion>:	extend-adjust()\n\
+ <Btn3Up>:	extend-end()\n\
+ <EnterWindow>:	enter-window()\n\
+ <LeaveWindow>:	leave-window()\n\
+ <FocusIn>:	focus-in()\n\
+ <FocusOut>:	focus-out()";
+
+static XtActionsRec actions[] =
+{
+  {"insert-char", InsertChar},
+  {"forward-char", ForwardChar},
+  {"backward-char", BackwardChar},
+  {"delete-next-char", DeleteNext},
+  {"delete-previous-char", DeletePrev},
+  {"activate", Activate},
+  {"select-start", SelectStart},
+  {"extend-start", ExtendStart},
+  {"extend-adjust", ExtendAdjust},
+  {"extend-end", ExtendEnd},
+  {"insert-selection", InsertSelection},
+  {"enter-window", Nothing},
+  {"leave-window", Nothing},
+  {"focus-in", Nothing},
+  {"focus-out", Nothing},
+};
+
+TextFieldClassRec textfieldClassRec =
+{
+  {
+	/* core_class fields     */
+	/* superclass            */ (WidgetClass) & widgetClassRec,
+	/* class_name            */ "TextField",
+	/* widget_size           */ sizeof(TextFieldRec),
+	/* class_initialize      */ NULL,
+	/* class_part_initialize */ NULL,
+	/* class_inited          */ False,
+	/* initialize            */ Initialize,
+	/* initialize_hook       */ NULL,
+	/* realize               */ XtInheritRealize,
+	/* actions               */ actions,
+	/* num_actions           */ XtNumber(actions),
+	/* resources             */ resources,
+	/* num_resources         */ XtNumber(resources),
+	/* xrm_class             */ NULLQUARK,
+	/* compress_motion       */ True,
+	/* compress_exposure     */ XtExposeCompressMultiple,
+	/* compress_enterleave   */ True,
+	/* visible_interest      */ True,
+	/* destroy               */ Destroy,
+	/* resize                */ Resize,
+	/* expose                */ Redisplay,
+	/* set_values            */ SetValues,
+	/* set_values_hook       */ NULL,
+	/* set_values_almost     */ XtInheritSetValuesAlmost,
+	/* get_values_hook       */ NULL,
+	/* accept_focus          */ NULL,
+	/* version               */ XtVersion,
+	/* callback_private      */ NULL,
+	/* tm_table              */ defaultTranslations,
+	/* query_geometry        */ XtInheritQueryGeometry,
+	/* display_accelerator   */ XtInheritDisplayAccelerator,
+	/* extension             */ NULL
+  },
+  {
+    0				/* some stupid compilers barf on empty structures */
+  }
+};
+
+WidgetClass textfieldWidgetClass = (WidgetClass) & textfieldClassRec;
+
+/* Convenience macros */
+#define TopMargin(w) (int)(w->text.Margin - 1)
+#define BottomMargin(w) (int)(w->text.Margin)
+
+/* Font functions */
+#define FontHeight(f)  (int)(f->max_bounds.ascent + f->max_bounds.descent)
+#define FontDescent(f) (int)(f->max_bounds.descent)
+#define FontAscent(f)  (int)(f->max_bounds.ascent)
+#define FontTextWidth(f,c,l) (int)XTextWidth(f, c, l)
+
+static void
+InitializeGC(TextFieldWidget w)
+{
+  static char dots[] =
+  {2, 1, 1};
+  XGCValues values;
+  XtGCMask mask;
+
+  values.line_style = LineSolid;
+  values.line_width = 0;
+  values.fill_style = FillSolid;
+  values.font = w->text.font->fid;
+  values.background = w->core.background_pixel;
+  values.foreground = w->text.foreground_pixel;
+  mask = GCLineStyle | GCLineWidth | GCFillStyle | GCForeground | GCBackground | GCFont;
+  w->text.drawGC = XtGetGC((Widget) w, mask, &values);
+
+  values.foreground = w->core.background_pixel;
+  values.background = w->text.foreground_pixel;
+  w->text.highlightGC = XtGetGC((Widget) w, mask, &values);
+
+  values.line_style = LineSolid;
+  values.line_width = 0;
+  values.background = w->core.background_pixel;
+  values.foreground = w->text.foreground_pixel;
+  mask = GCLineStyle | GCLineWidth | GCForeground | GCBackground;
+  w->text.cursorGC = XtGetGC((Widget) w, mask, &values);
+
+  values.foreground = w->core.background_pixel;
+  values.background = w->text.foreground_pixel;
+  w->text.eraseGC = XtGetGC((Widget) w, mask, &values);
+
+  values.line_style = LineOnOffDash;
+  values.background = w->core.background_pixel;
+  values.foreground = w->text.foreground_pixel;
+  w->text.dashGC = XtGetGC((Widget) w, mask, &values);
+  XSetDashes(XtDisplay(w), w->text.dashGC, 0, &dots[1],
+    (int) dots[0]);
+
+  w->text.YOffset = TopMargin(w) + FontAscent(w->text.font);
+}
+
+static void
+ClipGC(TextFieldWidget w)
+{
+  XRectangle clip;
+
+  clip.x = 0;
+  clip.y = w->text.YOffset - FontAscent(w->text.font) + 1;
+  clip.width = w->text.ViewWidth + 1;
+  clip.height = FontHeight(w->text.font);
+  XSetClipRectangles(XtDisplay((Widget) w), w->text.drawGC,
+    w->text.Margin, 0, &clip, 1, Unsorted);
+  XSetClipRectangles(XtDisplay((Widget) w), w->text.highlightGC,
+    w->text.Margin, 0, &clip, 1, Unsorted);
+}
+
+static void
+SetString(TextFieldWidget w, char *s)
+{
+  int len;
+
+  if (s) {
+    len = strlen(s);
+    if (len > w->text.TextAlloc) {
+      w->text.TextAlloc += len;
+      w->text.Text = XtRealloc(w->text.Text, w->text.TextAlloc);
+    }
+    strcpy(w->text.Text, s);
+    w->text.TextLen = len;
+    w->text.TextWidth = w->text.OldTextWidth =
+      FontTextWidth(w->text.font, w->text.Text,
+      w->text.TextLen);
+    if ((w->text.TextMaxLen > 0) && (w->text.TextLen > w->text.TextMaxLen))
+      w->text.TextMaxLen = w->text.TextLen;
+  }
+  w->text.DefaultString = w->text.Text;
+}
+
+static void
+Initialize(Widget treq, Widget tnew, ArgList args, Cardinal * num)
+{
+  TextFieldWidget new;
+  int height;
+
+  new = (TextFieldWidget) tnew;
+
+  new->text.timer_id = (XtIntervalId) 0;
+  new->text.multi_click_time = XtGetMultiClickTime(XtDisplay((Widget) new));
+  new->text.highlight_time = new->text.multi_click_time / 2;
+
+  if (new->text.TextMaxLen > 0) {
+    new->text.TextAlloc = new->text.TextMaxLen + 1;
+  }
+  else {
+    new->text.TextAlloc = TEXTFIELD_ALLOC_SIZE;
+  }
+  new->text.Text = (char *) XtMalloc(new->text.TextAlloc);
+  new->text.TextLen = 0;
+  new->text.SelectionText = NULL;
+  new->text.TextWidth = new->text.OldTextWidth = 0;
+  if (new->text.DefaultString)
+    SetString(new, new->text.DefaultString);
+
+  if (new->text.CursorPos > 0) {
+    if (new->text.CursorPos > new->text.TextLen) {
+      new->text.CursorPos = new->text.TextLen;
+    }
+  }
+  else {
+    new->text.CursorPos = 0;
+  }
+  new->text.OldCursorX = -1;
+  new->text.HighlightStart = new->text.HighlightEnd = -1;
+  new->text.OldHighlightStart = new->text.OldHighlightEnd = -1;
+
+  height = FontHeight(new->text.font);
+  if (new->core.height == 0)
+    new->core.height = (Dimension) height + TopMargin(new) + BottomMargin(new);
+
+  if (new->core.width == 0) {
+    new->text.ViewWidth = 200;
+    new->core.width = new->text.ViewWidth + 2 * new->text.Margin;
+  }
+  else {
+    int width;
+
+    width = (int) new->core.width - 2 * new->text.Margin;
+    if (width < 0)
+      new->text.ViewWidth = new->core.width;
+    else
+      new->text.ViewWidth = width;
+  }
+
+  new->text.XOffset = new->text.OldXOffset = 0;
+
+  InitializeGC(new);
+
+  ClipGC(new);
+}
+
+static void
+Destroy(TextFieldWidget w)
+{
+  XtReleaseGC((Widget) w, w->text.drawGC);
+  XtReleaseGC((Widget) w, w->text.highlightGC);
+  if (w->text.SelectionText)
+    XtFree(w->text.SelectionText);
+  XtFree(w->text.Text);
+}
+
+static void
+Redisplay(Widget aw, XExposeEvent * event, Region region)
+{
+  TextFieldWidget w = (TextFieldWidget) aw;
+
+  if (!XtIsRealized(aw))
+    return;
+
+  Draw(w);
+}
+
+static Boolean
+SetValues(Widget current, Widget request, Widget reply,
+  ArgList args, Cardinal * nargs)
+{
+  TextFieldWidget w = (TextFieldWidget) current;
+  TextFieldWidget new = (TextFieldWidget) reply;
+  Boolean redraw = False;
+
+  if ((w->text.foreground_pixel != new->text.foreground_pixel) ||
+    (w->core.background_pixel != new->core.background_pixel) ||
+    (w->text.font != new->text.font)) {
+    XtReleaseGC((Widget) w, w->text.drawGC);
+    XtReleaseGC((Widget) w, w->text.highlightGC);
+    XtReleaseGC((Widget) w, w->text.cursorGC);
+    XtReleaseGC((Widget) w, w->text.eraseGC);
+    XtReleaseGC((Widget) w, w->text.dashGC);
+    InitializeGC(new);
+    redraw = True;
+  }
+
+  if ((w->text.CursorPos != new->text.CursorPos) ||
+    (w->text.DisplayCursor != new->text.DisplayCursor)) {
+    redraw = True;
+  }
+  if (w->text.DefaultString != new->text.DefaultString) {
+    redraw = True;
+    SetString(new, new->text.DefaultString);
+    new->text.HighlightStart = new->text.HighlightEnd = -1;
+    new->text.CursorPos = new->text.TextLen;
+#ifdef DEBUG_TF
+    printf("SetValues: %s\n", new->text.DefaultString);
+#endif
+  }
+
+  return redraw;
+}
+
+
+static void
+Resize(Widget aw)
+{
+  TextFieldWidget w = (TextFieldWidget) aw;
+  int width, height;
+
+  if (!XtIsRealized(aw))
+    return;
+
+  width = w->core.width - 2 * w->text.Margin;
+  if (width < 0)
+    w->text.ViewWidth = w->core.width;
+  else
+    w->text.ViewWidth = width;
+
+
+  height = (((int) w->core.height - FontHeight(w->text.font)) / 2) +
+    FontAscent(w->text.font);
+  w->text.YOffset = height;
+
+  ClipGC(w);
+
+  MassiveChangeDraw(w);
+}
+
+static void
+TextDelete(TextFieldWidget w, int start, int len)
+{
+  int i;
+
+  if (len > 0) {
+    for (i = start + len; i < w->text.TextLen; i++)
+      w->text.Text[i - len] = w->text.Text[i];
+    w->text.TextLen -= len;
+    w->text.TextWidth = FontTextWidth(w->text.font, w->text.Text,
+      w->text.TextLen);
+    w->text.Text[w->text.TextLen] = 0;
+  }
+}
+
+static void
+TextDeleteHighlighted(TextFieldWidget w)
+{
+  if (w->text.HighlightStart >= 0) {
+    TextDelete(w, w->text.HighlightStart,
+      w->text.HighlightEnd - w->text.HighlightStart);
+    w->text.CursorPos = w->text.HighlightStart;
+    w->text.HighlightStart = w->text.HighlightEnd = -1;
+  }
+}
+
+/* returns value indicating if the text can be redrawn using the fast
+ * method */
+static Boolean
+TextInsert(TextFieldWidget w, char *buf, int len)
+{
+  int i;
+  Boolean regular_copy, fast_insert;
+
+  fast_insert = True;
+  if (len > 0) {
+    if (w->text.HighlightStart >= 0) {
+      fast_insert = False;
+      if (w->text.PendingDelete)
+	TextDeleteHighlighted(w);
+      else
+	ClearHighlight(w);
+    }
+
+    regular_copy = True;
+    if (w->text.TextMaxLen > 0) {
+      if (w->text.TextLen + len > w->text.TextMaxLen)
+	regular_copy = False;
+    }
+    else if (w->text.TextLen + len > w->text.TextAlloc) {
+      i = TEXTFIELD_ALLOC_SIZE;
+      if (i < len)
+	i = len;
+      w->text.TextAlloc += i + 1;
+      w->text.Text = XtRealloc(w->text.Text, w->text.TextAlloc);
+#ifdef DEBUG_TF
+      printf("TextInsert: Alloced new space: %d bytes\n", w->text.TextAlloc);
+#endif
+    }
+    if (regular_copy) {
+      for (i = w->text.TextLen - 1; i >= w->text.CursorPos; i--)
+	w->text.Text[i + len] = w->text.Text[i];
+      strncpy(&w->text.Text[w->text.CursorPos], buf, len);
+      w->text.FastInsertCursorStart = w->text.CursorPos;
+      w->text.FastInsertTextLen = len;
+      w->text.TextLen += len;
+      w->text.CursorPos += len;
+    }
+    else {
+      int i1;
+
+      for (i = w->text.TextLen - 1; i >= w->text.CursorPos; i--)
+	if (i + len < w->text.TextMaxLen)
+	  w->text.Text[i + len] = w->text.Text[i];
+      w->text.TextLen += len;
+      if (w->text.TextLen > w->text.TextMaxLen)
+	w->text.TextLen = w->text.TextMaxLen;
+      i1 = w->text.CursorPos;
+      for (i = 0; i < len; i++) {
+	if (i1 < w->text.TextMaxLen)
+	  w->text.Text[i1] = *buf++;
+	else
+	  break;
+	i1++;
+      }
+      w->text.FastInsertCursorStart = w->text.CursorPos;
+      w->text.FastInsertTextLen = i1 - w->text.CursorPos;
+      w->text.CursorPos = i1;
+    }
+    w->text.TextWidth = FontTextWidth(w->text.font,
+      w->text.Text, w->text.TextLen);
+    w->text.Text[w->text.TextLen] = 0;
+  }
+  return fast_insert;
+}
+
+static int
+TextPixelToPos(TextFieldWidget w, int x)
+{
+  int i, tot, cur, pos;
+
+  pos = 0;
+
+  x -= (int) w->text.Margin + w->text.XOffset;
+
+/* check if the cursor is before the 1st character */
+  if (x <= 0) {
+    pos = 0;
+  }
+
+/* OK, how 'bout after the last character */
+  else if (x > FontTextWidth(w->text.font, w->text.Text, w->text.TextLen)) {
+    pos = w->text.TextLen;
+  }
+
+/* must be in between somewhere... */
+  else {
+    tot = 0;
+    pos = -1;
+    for (i = 0; i < w->text.TextLen; i++) {
+      cur = FontTextWidth(w->text.font, &w->text.Text[i], 1);
+      if (x < tot + (cur / 2)) {
+	pos = i;
+	break;
+      }
+      tot += cur;
+    }
+    if (pos < 0)
+      pos = w->text.TextLen;
+  }
+  return pos;
+}
+
+/*
+ * TextField Widget Action procedures
+ */
+
+/* ARGSUSED */
+static void
+Nothing(Widget aw, XEvent * event, String * params, Cardinal * num_params)
+{
+}
+
+/* ARGSUSED */
+static void
+Activate(Widget aw, XEvent * event, String * params, Cardinal * num_params)
+{
+  TextFieldWidget w = (TextFieldWidget) aw;
+  TextFieldReturnStruct ret;
+
+  ret.reason = 0;
+  ret.event = event;
+  ret.string = w->text.Text;
+
+  if (XtNactivateCallback)
+    XtCallCallbacks(aw, XtNactivateCallback, &ret);
+}
+
+/* ARGSUSED */
+static void
+ForwardChar(Widget aw, XEvent * event, String * params, Cardinal * num_params)
+{
+  TextFieldWidget w = (TextFieldWidget) aw;
+
+  if (!w->text.Editable)
+    return;
+
+  ClearHighlight(w);
+  if (w->text.CursorPos < w->text.TextLen) {
+    w->text.CursorPos++;
+    EraseCursor(w);
+    if (PositionCursor(w))
+      DrawTextReposition(w);
+    DrawCursor(w);
+  }
+}
+
+/* ARGSUSED */
+static void
+BackwardChar(Widget aw, XEvent * event, String * params, Cardinal * num_params)
+{
+  TextFieldWidget w = (TextFieldWidget) aw;
+
+  if (!w->text.Editable)
+    return;
+
+  ClearHighlight(w);
+  if (w->text.CursorPos > 0) {
+    w->text.CursorPos--;
+    EraseCursor(w);
+    if (PositionCursor(w))
+      DrawTextReposition(w);
+    DrawCursor(w);
+  }
+}
+
+/* ARGSUSED */
+static void
+InsertChar(Widget aw, XEvent * event, String * params, Cardinal * num_params)
+{
+  TextFieldWidget w = (TextFieldWidget) aw;
+  int len;
+
+#define INSERTCHARBUFSIZ 32
+  char buf[INSERTCHARBUFSIZ];
+
+  if (!w->text.Editable)
+    return;
+
+  len = XLookupString((XKeyEvent *) event, buf, BUFSIZ, NULL, NULL);
+  if (len > 0) {
+    EraseCursor(w);
+    if (TextInsert(w, buf, len))
+      DrawInsert(w);
+    else
+      Draw(w);
+  }
+}
+
+/* ARGSUSED */
+static void
+DeleteNext(Widget aw, XEvent * event, String * params, Cardinal * num_params)
+{
+  TextFieldWidget w = (TextFieldWidget) aw;
+
+  if (!w->text.Editable)
+    return;
+
+  if (w->text.HighlightStart >= 0 && w->text.PendingDelete) {
+    TextDeleteHighlighted(w);
+    MassiveChangeDraw(w);
+  }
+  else if (w->text.CursorPos < w->text.TextLen) {
+    ClearHighlight(w);
+    TextDelete(w, w->text.CursorPos, 1);
+    Draw(w);
+  }
+}
+
+/* ARGSUSED */
+static void
+DeletePrev(Widget aw, XEvent * event, String * params, Cardinal * num_params)
+{
+  TextFieldWidget w = (TextFieldWidget) aw;
+
+  if (!w->text.Editable)
+    return;
+
+  if (w->text.HighlightStart >= 0 && w->text.PendingDelete) {
+    TextDeleteHighlighted(w);
+    MassiveChangeDraw(w);
+  }
+  else if (w->text.CursorPos > 0) {
+    ClearHighlight(w);
+    TextDelete(w, w->text.CursorPos - 1, 1);
+    w->text.CursorPos--;
+    Draw(w);
+  }
+}
+
+/* ARGSUSED */
+static void
+SelectStart(Widget aw, XEvent * event, String * params, Cardinal * num_params)
+{
+  TextFieldWidget w = (TextFieldWidget) aw;
+
+  if (!w->text.AllowSelection)
+    return;
+
+  w->text.CursorPos = TextPixelToPos(w, event->xbutton.x);
+  w->text.HighlightPivotStart =
+    w->text.HighlightPivotEnd = w->text.CursorPos;
+
+  if (w->text.HighlightStart >= 0) {
+    ClearHighlight(w);
+  }
+  else {
+    EraseCursor(w);
+    DrawCursor(w);
+  }
+}
+
+/* ARGSUSED */
+static void
+ExtendStart(Widget aw, XEvent * event, String * params, Cardinal * num_params)
+{
+  TextFieldWidget w = (TextFieldWidget) aw;
+  int pos;
+
+  if (!w->text.AllowSelection)
+    return;
+
+  pos = TextPixelToPos(w, event->xbutton.x);
+
+  EraseCursor(w);
+  if (w->text.HighlightStart < 0) {
+    w->text.HighlightStart =
+      w->text.HighlightEnd =
+      w->text.HighlightPivotStart =
+      w->text.HighlightPivotEnd = w->text.CursorPos;
+  }
+  else {
+    w->text.HighlightPivotStart = w->text.HighlightStart;
+    w->text.HighlightPivotEnd = w->text.HighlightEnd;
+  }
+  if (pos < w->text.HighlightStart) {
+    w->text.HighlightStart = pos;
+  }
+  else {
+    w->text.HighlightEnd = pos;
+  }
+  w->text.CursorPos = pos;
+#ifdef DEBUG_TF
+  printf("ExtendStart: %d - %d\n", w->text.HighlightStart,
+    w->text.HighlightEnd);
+#endif
+  DrawHighlight(w);
+  DrawCursor(w);
+}
+
+static void
+ExtendHighlight(TextFieldWidget w)
+{
+  int x, pos;
+
+  if (!w->text.AllowSelection)
+    return;
+
+  x = w->text.timer_x;
+  pos = TextPixelToPos(w, x);
+
+  if (x < (int) w->text.Margin) {
+    pos = TextPixelToPos(w, (int) 0);
+    if (pos > 0)
+      pos--;
+    else if (pos == w->text.CursorPos)
+      return;
+  }
+  else if (x > (int) (w->text.Margin + w->text.ViewWidth)) {
+    pos = TextPixelToPos(w, (int) (w->text.Margin + w->text.ViewWidth));
+    if (pos < w->text.TextLen)
+      pos++;
+    else if (pos == w->text.CursorPos)
+      return;
+  }
+  if (pos == w->text.CursorPos)
+    return;
+
+  EraseCursor(w);
+  if (pos <= w->text.HighlightPivotStart) {
+    w->text.HighlightStart = pos;
+    w->text.HighlightEnd = w->text.HighlightPivotEnd;
+  }
+  else {
+    w->text.HighlightStart = w->text.HighlightPivotStart;
+    w->text.HighlightEnd = pos;
+  }
+  w->text.CursorPos = pos;
+#ifdef DEBUG_TF
+  printf("Highlighting: x=%d pos=%d  %d - %d\n", x, pos, w->text.HighlightStart,
+    w->text.HighlightEnd);
+#endif
+  if (PositionCursor(w))
+    DrawTextReposition(w);
+  DrawHighlight(w);
+  DrawCursor(w);
+}
+
+static void
+ExtendTimer(XtPointer client_data, XtIntervalId * idp)
+{
+  TextFieldWidget w = (TextFieldWidget) client_data;
+
+  ExtendHighlight(w);
+  w->text.timer_id = XtAppAddTimeOut(
+    XtWidgetToApplicationContext((Widget) w),
+    (unsigned long) w->text.highlight_time,
+    ExtendTimer,
+    (XtPointer) w);
+
+}
+
+/* ARGSUSED */
+static void
+ExtendAdjust(Widget aw, XEvent * event, String * params, Cardinal * num_params)
+{
+  TextFieldWidget w = (TextFieldWidget) aw;
+
+  if (!w->text.AllowSelection)
+    return;
+
+  w->text.timer_x = event->xbutton.x;
+
+  if (event->xbutton.x < w->text.Margin || event->xbutton.x > w->text.Margin + w->text.ViewWidth) {
+    if (w->text.timer_id)
+      ExtendHighlight(w);
+    else
+      ExtendTimer((XtPointer) w, (XtIntervalId) 0);
+  }
+  else {
+    if (w->text.timer_id) {
+      XtRemoveTimeOut(w->text.timer_id);
+      w->text.timer_id = (XtIntervalId) 0;
+    }
+    ExtendHighlight(w);
+  }
+}
+
+/* ARGSUSED */
+static Boolean
+ConvertSelection(Widget aw, Atom * selection, Atom * target, Atom * type,
+  XtPointer * value, unsigned long *length, int *format)
+{
+  TextFieldWidget w = (TextFieldWidget) aw;
+  XSelectionRequestEvent *req = XtGetSelectionRequest(aw, *selection, NULL);
+
+  if (*target == XA_TARGETS(XtDisplay(aw))) {
+    Atom *targetP, *std_targets;
+    unsigned long std_length;
+
+    XmuConvertStandardSelection(aw, req->time, selection,
+      target, type, (XPointer *) & std_targets,
+      &std_length, format);
+
+    *value = XtMalloc((unsigned) sizeof(Atom) * (std_length + 1));
+    targetP = *(Atom **) value;
+    *length = std_length + 1;
+    *targetP++ = XA_STRING;
+    memmove((char *) targetP, (char *) std_targets, sizeof(Atom) * std_length);
+    XtFree((char *) std_targets);
+    *type = XA_ATOM;
+    *format = sizeof(Atom) * 8;
+    return True;
+  }
+  else if (*target == XA_STRING) {
+    *length = (long) w->text.SelectionLen;
+    *value = w->text.SelectionText;
+    *type = XA_STRING;
+    *format = 8;
+    return True;
+  }
+  return False;
+}
+
+/* ARGSUSED */
+static void
+LoseSelection(Widget aw, Atom * selection)
+{
+  TextFieldWidget w = (TextFieldWidget) aw;
+
+  ClearHighlight(w);
+}
+
+/* ARGSUSED */
+static void
+ExtendEnd(Widget aw, XEvent * event, String * params, Cardinal * num_params)
+{
+  TextFieldWidget w = (TextFieldWidget) aw;
+  int len;
+
+  if (!w->text.AllowSelection)
+    return;
+
+  if (w->text.timer_id) {
+    XtRemoveTimeOut(w->text.timer_id);
+    w->text.timer_id = (XtIntervalId) 0;
+  }
+  len = w->text.HighlightEnd - w->text.HighlightStart;
+  if (len > 0) {
+    w->text.SelectionLen = len;
+    if (w->text.SelectionText)
+      XtFree(w->text.SelectionText);
+    w->text.SelectionText = XtMalloc(len);
+    strncpy(w->text.SelectionText, &w->text.Text[w->text.HighlightStart], len);
+
+    XtOwnSelection(aw, XA_PRIMARY, event->xbutton.time,
+      ConvertSelection, LoseSelection, NULL);
+    XChangeProperty(XtDisplay(aw), DefaultRootWindow(XtDisplay(aw)),
+      XA_CUT_BUFFER0, XA_STRING, 8, PropModeReplace,
+      (unsigned char *) w->text.SelectionText, len);
+
+  }
+}
+
+/* ARGSUSED */
+static void
+RequestSelection(Widget aw, XtPointer client, Atom * selection, Atom * type,
+  XtPointer value, unsigned long *length, int *format)
+{
+  TextFieldWidget w = (TextFieldWidget) aw;
+
+  if ((value == NULL) || (*length == 0)) {
+#ifdef DEBUG_TF
+    printf("RequestSelection: no selection\n");
+#endif
+  }
+  else {
+    int savex;
+
+    ClearHighlight(w);
+    savex = w->text.OldCursorX;
+    w->text.CursorPos = (int) client;
+#ifdef DEBUG_TF
+    printf("RequestSelection: inserting %s length=%d at pos: %d\n",
+      (char *) value, (int) (*length), w->text.CursorPos);
+#endif
+    TextInsert(w, (char *) value, (int) (*length));
+    w->text.OldCursorX = savex;
+    Draw(w);
+  }
+}
+
+/* ARGSUSED */
+static void
+InsertSelection(Widget aw, XEvent * event, String * params, Cardinal * num_params)
+{
+  TextFieldWidget w = (TextFieldWidget) aw;
+  int pos;
+
+  if (!w->text.AllowSelection)
+    return;
+
+  pos = TextPixelToPos(w, event->xbutton.x);
+#ifdef DEBUG_TF
+  printf("InsertSelection: event at pos: %d\n", pos);
+#endif
+  XtGetSelectionValue(aw, XA_PRIMARY, XA_STRING,
+    RequestSelection,
+    (XtPointer) pos, event->xbutton.time);
+}
+
+
+/*
+ * TextField private drawing functions
+ */
+
+static Boolean
+PositionCursor(TextFieldWidget w)
+{
+  int x, start, end;
+  Boolean moved;
+
+  moved = False;
+  if (w->text.CursorPos < 0)
+    w->text.CursorPos = 0;
+  else if (w->text.CursorPos > w->text.TextLen)
+    w->text.CursorPos = w->text.TextLen;
+  x = FontTextWidth(w->text.font, w->text.Text, w->text.CursorPos);
+  start = -w->text.XOffset;
+  end = start + w->text.ViewWidth;
+  if (x < start) {
+    w->text.XOffset = -x;
+    moved = True;
+  }
+  else if (x > end) {
+    w->text.XOffset = w->text.ViewWidth - x;
+    moved = True;
+  }
+  return moved;
+}
+
+static Boolean
+MassiveCursorAdjust(TextFieldWidget w)
+{
+  int start, end, last;
+  Boolean moved;
+
+  moved = False;
+  end = FontTextWidth(w->text.font, w->text.Text, w->text.CursorPos);
+  if (w->text.HighlightStart >= 0)
+    start = FontTextWidth(w->text.font, w->text.Text, w->text.HighlightStart);
+  else
+    start = end;
+
+  if (end < w->text.ViewWidth) {
+    if (w->text.XOffset < 0) {
+      w->text.XOffset = 0;
+      moved = True;
+    }
+  }
+  else if (start >= w->text.XOffset && end < w->text.XOffset + w->text.ViewWidth)
+    return moved;
+  else {
+    last = FontTextWidth(w->text.font, w->text.Text, w->text.TextLen);
+    if (start - end > w->text.ViewWidth) {
+      if (last - end > w->text.ViewWidth)
+	w->text.XOffset = w->text.ViewWidth - last;
+      else
+	w->text.XOffset = w->text.ViewWidth - end;
+    }
+    else if (end > w->text.ViewWidth)
+      w->text.XOffset = w->text.ViewWidth - end;
+    else
+      w->text.XOffset = 0;
+    moved = True;
+  }
+  return moved;
+}
+
+/*
+ * Actually draw a range of text onto the widget
+ */
+static void
+DrawText(TextFieldWidget w, int start, int end, Boolean highlight)
+{
+  int x;
+  GC gc;
+
+  if (!w->text.Echo)
+    return;
+
+  if (w->text.TextLen > 0) {
+    if (start < 0)
+      return;
+    else if (end < start) {
+      int temp;
+
+      temp = start;
+      start = end;
+      end = temp;
+    }
+    if (end <= w->text.TextLen) {
+      x = w->text.Margin + w->text.XOffset +
+	FontTextWidth(w->text.font, w->text.Text, start);
+      if (highlight)
+	gc = w->text.highlightGC;
+      else
+	gc = w->text.drawGC;
+      XDrawImageString(XtDisplay(w), XtWindow(w), gc,
+	x, w->text.YOffset,
+	&w->text.Text[start], end - start);
+    }
+  }
+}
+
+static void
+DrawTextRange(TextFieldWidget w, int start, int end)
+{
+  if (!w->text.Echo)
+    return;
+
+  if (w->text.TextLen > 0) {
+    if (start < 0)
+      return;
+    else if (end < start) {
+      int temp;
+
+      temp = start;
+      start = end;
+      end = temp;
+    }
+
+/* If there is no highlighting, or the refresh area doesn't cross the */
+/* the highlight borders, just redraw it. */
+    if (w->text.HighlightStart < 0 ||
+      start >= w->text.HighlightEnd ||
+      end <= w->text.HighlightStart) {
+      DrawText(w, start, end, False);
+    }
+
+/* OK, the refresh area crosses one or both highlight borders. */
+    else {
+      int clip;
+
+      while (start < end) {
+	if (start < w->text.HighlightStart) {
+	  if (end <= w->text.HighlightStart)
+	    clip = end;
+	  else
+	    clip = w->text.HighlightStart;
+	  DrawText(w, start, clip, False);
+	  start = clip;
+	}
+	else if (start < w->text.HighlightEnd) {
+	  if (end <= w->text.HighlightEnd)
+	    clip = end;
+	  else
+	    clip = w->text.HighlightEnd;
+	  DrawText(w, start, clip, True);
+	  start = clip;
+	}
+	else {
+	  DrawText(w, start, end, False);
+	  start = end;
+	}
+      }
+
+
+    }
+  }
+}
+
+static void
+DrawTextReposition(TextFieldWidget w)
+{
+  int xsrc, xdest, width, start, end;
+
+  if (!w->text.Echo)
+    return;
+
+  if (w->text.XOffset < w->text.OldXOffset) {
+    xsrc = w->text.OldXOffset - w->text.XOffset;
+    xdest = 0;
+    width = w->text.ViewWidth - xsrc + 1;
+
+    /* Need to redraw some characters at the end. */
+
+    end = TextPixelToPos(w, w->text.Margin + w->text.ViewWidth);
+    start = TextPixelToPos(w, w->text.Margin + w->text.ViewWidth - xsrc);
+  }
+  else if (w->text.XOffset > w->text.OldXOffset) {
+    xsrc = 0;
+    xdest = w->text.XOffset - w->text.OldXOffset;
+    width = w->text.ViewWidth - xdest + 1;
+
+    /* Need to redraw some characters at the beginning. */
+
+    start = TextPixelToPos(w, w->text.Margin);
+    end = TextPixelToPos(w, w->text.Margin + xdest);
+  }
+  else
+    return;
+
+  if (width > 0) {
+#ifdef DEBUG_TF
+    printf("Reposition: xoff=%d old=%d src=%d dest=%d width=%d refresh %d-%d\n",
+      w->text.XOffset, w->text.OldXOffset, xsrc, xdest, width, start, end);
+#endif
+    XCopyArea(XtDisplay(w), XtWindow(w), XtWindow(w),
+      w->text.drawGC,
+      w->text.Margin + xsrc, 0,
+      (unsigned int) width, (unsigned int) w->core.height,
+      w->text.Margin + xdest, 0);
+    DrawTextRange(w, start, end);
+  }
+  w->text.OldXOffset = w->text.XOffset;
+}
+
+static void
+DrawTextWithCopyArea(TextFieldWidget w)
+{
+  int x, insert_width;
+  int xsrc, xdest, width;
+
+  if (!w->text.Echo)
+    return;
+
+  x = w->text.XOffset;
+  insert_width = FontTextWidth(w->text.font, &w->text.Text[w->text.FastInsertCursorStart], w->text.FastInsertTextLen);
+  if (PositionCursor(w)) {
+    /*
+     *  if the text is scrolled, then:
+     * 1.  the cursor is at the end
+     * 2.  the copy will move to the left.
+     */
+    xsrc = 0;
+    width = w->text.OldCursorX + x;
+    xdest = w->text.ViewWidth - (x + w->text.OldCursorX) - insert_width;
+    XCopyArea(XtDisplay(w), XtWindow(w), XtWindow(w),
+      w->text.drawGC,
+      w->text.Margin + xsrc, 0,
+      (unsigned int) width, (unsigned int) w->core.height,
+      w->text.Margin + xdest, 0);
+#ifdef DEBUG_TF
+    printf("DrawInsert: x=%d xsrc=%d xdest=%d width=%d\n", x, xsrc, xdest, width);
+#endif
+  }
+  else {
+
+    /*
+     * the text hasn't been scrolled, so:
+     * 1.  the text left of the cursor won't change
+     * 2.  the stuff after the cursor will be moved right.
+     */
+    xsrc = FontTextWidth(w->text.font, w->text.Text, w->text.FastInsertCursorStart) + x;
+    width = w->text.ViewWidth - xsrc;
+    xdest = xsrc + insert_width;
+    XCopyArea(XtDisplay(w), XtWindow(w), XtWindow(w),
+      w->text.drawGC,
+      w->text.Margin + xsrc, 0,
+      (unsigned int) width, (unsigned int) w->core.height,
+      w->text.Margin + xdest, 0);
+#ifdef DEBUG_TF
+    printf("DrawInsert: x=%d xsrc=%d xdest=%d width=%d\n", x, xsrc, xdest, width);
+#endif
+  }
+  DrawTextRange(w, w->text.FastInsertCursorStart,
+    w->text.FastInsertCursorStart + w->text.FastInsertTextLen);
+  if (w->text.TextMaxLen > 0) {
+
+    /*
+     * This is pretty much a hack:
+     * clear everything to end of window if this is a
+     * fixed length TextField
+     */
+    xsrc = w->text.XOffset + w->text.TextWidth;
+    width = w->text.ViewWidth - xsrc;
+    /*    printf("DrawInsert: TextWidth=%d Old=%d\n", w->text.TextWidth, w->text.OldTextWidth); */
+    XClearArea(XtDisplay(w), XtWindow(w),
+      w->text.Margin + xsrc, 0,
+      (unsigned int) width, w->core.height, False);
+  }
+  else if (w->text.TextWidth < w->text.OldTextWidth) {
+    XClearArea(XtDisplay(w), XtWindow(w),
+      w->text.Margin + w->text.XOffset + w->text.TextWidth, 0,
+      w->text.OldTextWidth - w->text.TextWidth + 1,
+      w->core.height, False);
+  }
+  w->text.OldTextWidth = w->text.TextWidth;
+  w->text.OldXOffset = w->text.XOffset;
+}
+
+static void
+DrawAllText(TextFieldWidget w)
+{
+  if (!w->text.Echo)
+    return;
+
+  DrawTextRange(w, 0, w->text.TextLen);
+  if (w->text.TextWidth < w->text.OldTextWidth) {
+    XClearArea(XtDisplay(w), XtWindow(w),
+      w->text.Margin + w->text.XOffset + w->text.TextWidth, 0,
+      w->text.OldTextWidth - w->text.TextWidth + 1,
+      w->core.height, False);
+  }
+  w->text.OldTextWidth = w->text.TextWidth;
+  w->text.OldXOffset = w->text.XOffset;
+  w->text.OldHighlightStart = w->text.HighlightStart;
+  w->text.OldHighlightEnd = w->text.HighlightEnd;
+}
+
+/* Draw an I-beam cursor */
+static void
+DrawIBeamCursor(TextFieldWidget w, int x, GC gc)
+{
+  XDrawLine(XtDisplay(w), XtWindow(w), gc,
+    x, w->text.YOffset - FontAscent(w->text.font) - 1,
+    x, w->text.YOffset + FontDescent(w->text.font) + 1);
+  XDrawLine(XtDisplay(w), XtWindow(w), gc,
+    x - 2, w->text.YOffset - FontAscent(w->text.font) - 1,
+    x + 2, w->text.YOffset - FontAscent(w->text.font) - 1);
+  XDrawLine(XtDisplay(w), XtWindow(w), gc,
+    x - 2, w->text.YOffset + FontDescent(w->text.font) + 1,
+    x + 2, w->text.YOffset + FontDescent(w->text.font) + 1);
+}
+
+static void
+DrawCursor(TextFieldWidget w)
+{
+  int x;
+  GC gc;
+
+  if (w->text.DisplayCursor) {
+    x = FontTextWidth(w->text.font, w->text.Text, w->text.CursorPos);
+    w->text.OldCursorPos = w->text.CursorPos;
+    w->text.OldCursorX = x;
+    x += w->text.Margin + w->text.XOffset;
+
+    gc = w->text.cursorGC;
+    DrawIBeamCursor(w, x, gc);
+  }
+}
+
+static void
+EraseCursor(TextFieldWidget w)
+{
+  int x;
+
+  if (w->text.DisplayCursor && w->text.OldCursorX >= 0) {
+    x = w->text.OldCursorX + w->text.Margin + w->text.XOffset;
+    DrawIBeamCursor(w, x, w->text.eraseGC);
+
+    /* Little hack to fix up the character that might have been affected by
+     * erasing the old cursor.
+     */
+    if (w->text.OldCursorPos < w->text.TextLen)
+      DrawTextRange(w, w->text.OldCursorPos, w->text.OldCursorPos + 1);
+  }
+}
+
+static void
+ClearHighlight(TextFieldWidget w)
+{
+  if (!w->text.Echo)
+    return;
+
+  if (w->text.HighlightStart >= 0) {
+    EraseCursor(w);
+    DrawText(w, w->text.HighlightStart, w->text.HighlightEnd, False);
+    DrawCursor(w);
+    w->text.HighlightStart = w->text.HighlightEnd = -1;
+  }
+  w->text.OldHighlightStart = w->text.OldHighlightEnd = -1;
+}
+
+static void
+DrawHighlight(TextFieldWidget w)
+{
+  if (!w->text.Echo)
+    return;
+
+  if (w->text.OldHighlightStart < 0) {
+    DrawText(w, w->text.HighlightStart, w->text.HighlightEnd,
+      True);
+  }
+  else {
+    DrawText(w, w->text.HighlightStart, w->text.OldHighlightStart,
+      (w->text.HighlightStart < w->text.OldHighlightStart));
+    DrawText(w, w->text.HighlightEnd, w->text.OldHighlightEnd,
+      (w->text.HighlightEnd > w->text.OldHighlightEnd));
+  }
+  w->text.OldHighlightStart = w->text.HighlightStart;
+  w->text.OldHighlightEnd = w->text.HighlightEnd;
+}
+
+/*
+ * Special redraw function after a text insertion
+ */
+static void
+DrawInsert(TextFieldWidget w)
+{
+  /*  EraseCursor must be called before this */
+  DrawTextWithCopyArea(w);
+  DrawCursor(w);
+}
+
+/*
+ * Redraw the entire widget, but don't scroll the window much
+ */
+static void
+Draw(TextFieldWidget w)
+{
+  EraseCursor(w);
+  PositionCursor(w);
+  DrawAllText(w);
+  DrawCursor(w);
+}
+
+/*
+ * Like Draw(), but has different rules about scrolling the window to
+ * place the cursor in a good place
+ */
+static void
+MassiveChangeDraw(TextFieldWidget w)
+{
+  EraseCursor(w);
+  MassiveCursorAdjust(w);
+  DrawAllText(w);
+  DrawCursor(w);
+}
+
+/*
+ * Motif-like TextField public functions
+ *
+ * Note that this set of functions is only a subset of the functions available
+ * in the real Motif XmTextField.
+ */
+
+Boolean
+TextFieldGetEditable(Widget aw)
+{
+  TextFieldWidget w = (TextFieldWidget) aw;
+
+  if (!XtIsTextField(aw))
+    return 0;
+
+  return w->text.Editable;
+}
+
+int
+TextFieldGetInsertionPosition(Widget aw)
+{
+  TextFieldWidget w = (TextFieldWidget) aw;
+
+  if (!XtIsTextField(aw))
+    return 0;
+
+  return w->text.CursorPos;
+}
+
+char *
+TextFieldGetString(Widget aw)
+{
+  TextFieldWidget w = (TextFieldWidget) aw;
+  char *ret;
+
+  if (!XtIsTextField(aw)) {
+    ret = XtMalloc(1);
+    *ret = '\0';
+    return ret;
+  }
+
+  ret = XtMalloc(w->text.TextLen + 1);
+  strncpy(ret, w->text.Text, w->text.TextLen);
+  ret[w->text.TextLen] = '\0';
+  return ret;
+}
+
+void
+TextFieldInsert(Widget aw, int pos, char *str)
+{
+  TextFieldWidget w = (TextFieldWidget) aw;
+  int len;
+
+  if (!XtIsTextField(aw))
+    return;
+
+  if (str && ((len = strlen(str)) > 0) && pos >= 0 && pos <= w->text.TextLen) {
+    w->text.HighlightStart = w->text.HighlightEnd = pos;
+    TextInsert(w, str, len);
+    MassiveChangeDraw(w);
+  }
+}
+
+void
+TextFieldReplace(Widget aw, int first, int last, char *str)
+{
+  TextFieldWidget w = (TextFieldWidget) aw;
+  int len;
+
+  if (!XtIsTextField(aw))
+    return;
+
+  if (str) {
+    len = strlen(str);
+    if (last > w->text.TextLen)
+      last = w->text.TextLen;
+    if (first <= last) {
+      w->text.HighlightStart = first;
+      w->text.HighlightEnd = last;
+      TextDeleteHighlighted(w);
+      TextInsert(w, str, len);
+      MassiveChangeDraw(w);
+    }
+  }
+}
+
+void
+TextFieldSetEditable(Widget aw, Boolean editable)
+{
+  TextFieldWidget w = (TextFieldWidget) aw;
+
+  if (!XtIsTextField(aw))
+    return;
+
+  w->text.Editable = editable;
+}
+
+void
+TextFieldSetInsertionPosition(Widget aw, int pos)
+{
+  TextFieldWidget w = (TextFieldWidget) aw;
+
+  if (!XtIsTextField(aw))
+    return;
+
+  if (pos >= 0 && pos <= w->text.TextLen) {
+    w->text.CursorPos = pos;
+    MassiveChangeDraw(w);
+  }
+}
+
+/* ARGSUSED */
+void
+TextFieldSetSelection(Widget aw, int start, int end, Time time)
+{
+  TextFieldWidget w = (TextFieldWidget) aw;
+
+  if (!XtIsTextField(aw))
+    return;
+
+  if (end < start) {
+    int temp;
+
+    temp = start;
+    start = end;
+    end = temp;
+  }
+  if (start < 0)
+    start = 0;
+  if (end > w->text.TextLen)
+    end = w->text.TextLen;
+  w->text.HighlightStart = start;
+  w->text.HighlightEnd = w->text.CursorPos = end;
+  MassiveChangeDraw(w);
+}
+
+void
+TextFieldSetString(Widget aw, char *str)
+{
+  TextFieldWidget w = (TextFieldWidget) aw;
+  int len;
+
+  if (!XtIsTextField(aw))
+    return;
+
+  if (str) {
+    len = strlen(str);
+    w->text.HighlightStart = 0;
+    w->text.HighlightEnd = w->text.TextLen;
+    TextDeleteHighlighted(w);
+    TextInsert(w, str, len);
+    MassiveChangeDraw(w);
+  }
+}
+#<
+
+#>            TextField.h
+/*-----------------------------------------------------------------------------
+ * TextField	A single line text entry widget
+ *
+ * Copyright (c) 1995 Robert W. McMullen
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Library General Public
+ * License as published by the Free Software Foundation; either
+ * version 2 of the License, or (at your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Library General Public License for more details.
+ *
+ * You should have received a copy of the GNU Library General Public
+ * License along with this library; if not, write to the Free
+ * Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *
+ *
+ * Author: Rob McMullen <rwmcm@orion.ae.utexas.edu>
+ *         http://www.ae.utexas.edu/~rwmcm
+ */
+
+#ifndef _TextField_H
+#define _TextField_H
+
+#include <X11/Core.h>
+
+#define _TextField_WIDGET_VERSION	1.0
+
+#ifndef XtIsTextField
+#define XtIsTextField(w) XtIsSubclass((Widget)w, textfieldWidgetClass)
+#endif 
+
+/* Athena style resource names */
+
+#ifndef XtNecho
+#define XtNecho			"echo"
+#endif
+#ifndef XtNpendingDelete
+#define XtNpendingDelete	"pendingDelete"
+#endif
+#ifndef XtNlength
+#define XtNlength		"length"
+#endif
+#ifndef XtNstring
+#define XtNstring		"string"
+#endif
+#ifndef XtNinsertPosition
+#define XtNinsertPosition	"insertPosition"
+#endif
+#ifndef XtNdisplayCaret
+#define XtNdisplayCaret		"displayCaret"
+#endif
+#ifndef XtNeditable
+#define XtNeditable		"editable"
+#endif
+#define XtNmargin		"margin"
+#define XtNcursorWidth		"cursorWidth"
+#define XtNallowSelection	"allowSelection"
+#define XtNactivateCallback	"activateCallback"
+
+
+/* Motif style resource names */
+
+#ifndef XmNmaxLength
+#define XmNmaxLength		XtNlength
+#endif
+#ifndef XmNvalue
+#define XmNvalue		XtNvalue
+#endif
+#ifndef XmNcursorPosition
+#define XmNcursorPosition	XtNinsertPosition
+#endif
+#ifndef XmNcursorPositionVisible
+#define XmNcursorPositionVisible	XtNdisplayCaret
+#endif
+#ifndef XmNeditable
+#define XmNeditable		XtNeditable
+#endif
+#ifndef XmNactivateCallback
+#define XmNactivateCallback	XtNactivateCallback
+#endif
+
+
+extern WidgetClass textfieldWidgetClass;
+
+typedef struct _TextFieldClassRec *TextFieldWidgetClass;
+typedef struct _TextFieldRec      *TextFieldWidget;
+
+typedef struct _TextFieldReturnStruct {
+	int	reason;		/* Motif compatibility */
+	XEvent	*event;
+	char	*string;
+} TextFieldReturnStruct;
+
+/*
+** Public function declarations
+*/
+#if __STDC__ || defined(__cplusplus) || 1 /* ALWAYS take first branch - JPT */
+#define P_(s) s
+#else
+#define P_(s) ()
+#endif
+
+/* TextField.c */
+Boolean TextFieldGetEditable P_((Widget aw));
+int TextFieldGetInsertionPosition P_((Widget aw));
+char *TextFieldGetString P_((Widget aw));
+void TextFieldInsert P_((Widget aw, int pos, char *str));
+void TextFieldReplace P_((Widget aw, int first, int last, char *str));
+void TextFieldSetEditable P_((Widget aw, Boolean editable));
+void TextFieldSetInsertionPosition P_((Widget aw, int pos));
+void TextFieldSetSelection P_((Widget aw, int start, int end, Time time));
+void TextFieldSetString P_((Widget aw, char *str));
+
+#undef P_
+
+#endif /* _TextField_H */
+#<
+
+#>            TextFieldP.h
+/*-----------------------------------------------------------------------------
+ * TextField	A single line text entry widget
+ *
+ * Copyright (c) 1995 Robert W. McMullen
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Library General Public
+ * License as published by the Free Software Foundation; either
+ * version 2 of the License, or (at your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Library General Public License for more details.
+ *
+ * You should have received a copy of the GNU Library General Public
+ * License along with this library; if not, write to the Free
+ * Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *
+ *
+ * Author: Rob McMullen <rwmcm@orion.ae.utexas.edu>
+ *         http://www.ae.utexas.edu/~rwmcm
+ */
+
+#ifndef _TextFieldP_H
+#define _TextFieldP_H
+
+#include <X11/Core.h>
+
+#include "TextField.h"
+
+#define TEXTFIELD_ALLOC_SIZE	256
+
+typedef struct {
+  int dummy;			/* keep compiler happy with dummy field */
+} TextFieldClassPart;
+
+typedef struct _TextFieldClassRec {
+  CoreClassPart core_class;
+  TextFieldClassPart TextField_class;
+} TextFieldClassRec;
+
+extern TextFieldClassRec textfieldClassRec;
+
+typedef struct {
+  /* Public stuff ... */
+  long foreground_pixel;	/* data storage for resources ... */
+  long cursor_pixel;
+  XFontStruct *font;
+  Dimension Margin;
+  int TextMaxLen;
+  Boolean Echo;
+  Boolean Editable;
+  Boolean DisplayCursor;
+  Boolean AllowSelection;
+  Boolean PendingDelete;
+  char *DefaultString;
+  XtCallbackList ActivateCallback;
+
+  /* Private stuff ... */
+  GC drawGC;			/* GC for drawing and copying */
+  GC highlightGC;		/* GC for highlighting text */
+  GC cursorGC;			/* GC for cursor (not clipped like drawGC) */
+  GC dashGC;			/* GC for cursor when we don't have focus */
+  GC eraseGC;			/* GC for erasing (not clipped) */
+
+  int CursorPos;		/* text position of cursor */
+  int OldCursorPos;		/* previous position */
+  int OldCursorX;		/* previous pixel pos of cursor */
+  int HighlightStart;		/* text pos of leftmost highlight pos */
+  int HighlightEnd;		/* text pos of rightmost highlight pos */
+  int HighlightPivotStart;	/* left pivot pos for ExtendHighlight */
+  int HighlightPivotEnd;	/* right ... */
+  int OldHighlightStart;	/* save data */
+  int OldHighlightEnd;
+
+  char *Text;			/* pointer to the text */
+  int TextAlloc;		/* number of bytes allocated for the text */
+  int TextLen;			/* current length of text */
+
+  char *SelectionText;		/* pointer to text selection, when needed */
+  int SelectionLen;		/* length */
+
+  int FastInsertCursorStart;	/* data storage for some text optimization */
+  int FastInsertTextLen;
+
+  Dimension ViewWidth;		/* visible width of widget */
+  int XOffset;			/* offset from x=0 to start of text string */
+  int OldXOffset;
+  int YOffset;			/* y pixel offset to baseline of font */
+  int TextWidth;		/* char width of text */
+  int OldTextWidth;
+
+  XtIntervalId timer_id;	/* timer for double click test */
+  int timer_x;			/* save event x pos */
+  int highlight_time;		/* time delay for scrolling */
+  int multi_click_time;		/* local storage for XtGetMultiClickTime */
+} TextFieldPart;
+
+typedef struct _TextFieldRec {
+  CorePart core;
+  TextFieldPart text;
+} TextFieldRec;
+
+
+#endif /* _TextFieldP_H */
+#<
+
+#>            TextFieldGetEditable.dc3
+Function:     TextFieldGetEditable
+
+Purpose:      TextField widget convenience function
+
+Category:     SYSTEM, USER-INTERFACE
+
+File:         textfield.src
+
+Author:       J.P. Terlouw
+
+Description:  This module is a convenience function for the TextField widget.
+              For more information refer to the documentation in the
+              original distribution. This is included in textfield.src.
+
+Updates:      Jan 12, 1998: JPT, Document created.
+              May  2, 2007: JPT, For Apple Mac: include wchar.h and stdlib.h
+              
+#<
+
+#>            TextFieldGetInsertionPosition.dc3
+Function:     TextFieldGetInsertionPosition
+
+Purpose:      TextField widget convenience function
+
+Category:     SYSTEM, USER-INTERFACE
+
+File:         textfield.src
+
+Author:       J.P. Terlouw
+
+Description:  This module is a convenience function for the TextField widget.
+              For more information refer to the documentation in the
+              original distribution. This is included in textfield.src.
+
+Updates:      Jan 12, 1998: JPT, Document created.
+              
+#<
+
+#>            TextFieldGetString.dc3
+Function:     TextFieldGetString
+
+Purpose:      TextField widget convenience function
+
+Category:     SYSTEM, USER-INTERFACE
+
+File:         textfield.src
+
+Author:       J.P. Terlouw
+
+Description:  This module is a convenience function for the TextField widget.
+              For more information refer to the documentation in the
+              original distribution. This is included in textfield.src.
+
+Updates:      Jan 12, 1998: JPT, Document created.
+              
+#<
+
+#>            TextFieldInsert.dc3
+Function:     TextFieldInsert
+
+Purpose:      TextField widget convenience function
+
+Category:     SYSTEM, USER-INTERFACE
+
+File:         textfield.src
+
+Author:       J.P. Terlouw
+
+Description:  This module is a convenience function for the TextField widget.
+              For more information refer to the documentation in the
+              original distribution. This is included in textfield.src.
+
+Updates:      Jan 12, 1998: JPT, Document created.
+              
+#<
+
+#>            TextFieldReplace.dc3
+Function:     TextFieldReplace
+
+Purpose:      TextField widget convenience function
+
+Category:     SYSTEM, USER-INTERFACE
+
+File:         textfield.src
+
+Author:       J.P. Terlouw
+
+Description:  This module is a convenience function for the TextField widget.
+              For more information refer to the documentation in the
+              original distribution. This is included in textfield.src.
+
+Updates:      Jan 12, 1998: JPT, Document created.
+              
+#<
+
+#>            TextFieldSetEditable.dc3
+Function:     TextFieldSetEditable
+
+Purpose:      TextField widget convenience function
+
+Category:     SYSTEM, USER-INTERFACE
+
+File:         textfield.src
+
+Author:       J.P. Terlouw
+
+Description:  This module is a convenience function for the TextField widget.
+              For more information refer to the documentation in the
+              original distribution. This is included in textfield.src.
+
+Updates:      Jan 12, 1998: JPT, Document created.
+              
+#<
+
+#>            TextFieldSetInsertionPosition.dc3
+Function:     TextFieldSetInsertionPosition
+
+Purpose:      TextField widget convenience function
+
+Category:     SYSTEM, USER-INTERFACE
+
+File:         textfield.src
+
+Author:       J.P. Terlouw
+
+Description:  This module is a convenience function for the TextField widget.
+              For more information refer to the documentation in the
+              original distribution. This is included in textfield.src.
+
+Updates:      Jan 12, 1998: JPT, Document created.
+              
+#<
+
+#>            TextFieldSetSelection.dc3
+Function:     TextFieldSetSelection
+
+Purpose:      TextField widget convenience function
+
+Category:     SYSTEM, USER-INTERFACE
+
+File:         textfield.src
+
+Author:       J.P. Terlouw
+
+Description:  This module is a convenience function for the TextField widget.
+              For more information refer to the documentation in the
+              original distribution. This is included in textfield.src.
+
+Updates:      Jan 12, 1998: JPT, Document created.
+              
+#<
+
+#>            TextFieldSetString.dc3
+Function:     TextFieldSetString
+
+Purpose:      TextField widget convenience function
+
+Category:     SYSTEM, USER-INTERFACE
+
+File:         textfield.src
+
+Author:       J.P. Terlouw
+
+Description:  This module is a convenience function for the TextField widget.
+              For more information refer to the documentation in the
+              original distribution. This is included in textfield.src.
+
+Updates:      Jan 12, 1998: JPT, Document created.
+              
+#<
+
+#>            textfield.dc3
+Document:     textfield
+
+Purpose:      TextField widget
+
+Category:     USER-INTERFACE, SYSTEM
+
+File:         textfield.src
+
+Author:       J.P. Terlouw
+
+Description:  textfield.src contains Robert W. McMullen's TextField widget
+              for use in GIPSY. The original distribution is included in
+              tar'ed, gzip'ped, uuencode'd format.
+              It is licensed under the GNU Library General Public License.
+
+Updates:      Jan 12, 1998: JPT, Document created.
+              Jul  8, 1999: JPT, Removed XtMalloc macro
+#<
+
+#>            textfield.uue
+begin 644 TextField-1.0.tar.gz
+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
+@_^_:_^_:_^_:_^_:_^_:_^_Z\^7W^?\!(<Q8I0#@`0#_
+`
+end
+#<

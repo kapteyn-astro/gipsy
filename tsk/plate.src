@@ -1,0 +1,2270 @@
+plate.src
+
+        Copyright (c) Kapteyn Laboratorium Groningen 1994
+        All Rights Reserved.
+
+Name:         plate.src
+Creator:      do
+Host:         vega
+Date:         Apr 19, 1994
+Contents:     plate.dc1 irpl_plate.shl irpl_userinfo.shl irpl_corners.shl irpl_sopatt.shl
+              irpl_snip.shl irpl_sniplate.shl irpl_snipscan.shl irpl_search.shl irpl_scanheader.shl
+              irpl_snipsmall.shl irpl_sniptimes.shl irpl_extend.shl irpl_greatxsmall.shl irpl_noise.shl
+              vector_inprod.shl vector_outprod.shl plate.make
+
+#>            plate.dc1
+ 
+Program:        PLATE
+ 
+Purpose:        snips raw data from tape(s) to custom plate
+
+Category:       IRAS
+ 
+Author:         Do Kester
+
+File:		plate.src
+ 
+Keywords:
+ 
+     INSTRUME= 	give instrument identification []
+		a combination of observation mode 
+			SURVEY SPLINE AO PO FLASH UNKNOWN
+		and band number 
+			12 25 60 100 LRS BPHF 1 2 3 4
+		( 2 letters suffice )
+		PO is an alias for AO; AOs, POs and UNKNOWNs are 
+		collectively known as pointed observations.
+
+     CENTER=	give the central longitude and latitude of the plate
+
+     SIZE=	give (long. and lat.) size of the plate [1.0]
+
+     COOR=	give coordinate system [EQUATORIAL 2000]
+		standard coordinate systems are:
+			EQUATORIAL 	2000.0
+			GALCTIC 
+			ECLIPTIC 	2000.0
+			SUPERGALACTIC 
+			SUNREFERENCED	sun at lambda=0.0
+		( 3 letters suffice )
+
+     If the second item cannot be read the system will ask
+
+     EPOCH=	give epoche pertaining to COOR [2000.0]
+
+     If the coordinate system is unknown the program asks whether you
+     want to make a new system, if not you get a retry.
+
+ *** CONFIRM=	I want a new system [yes]
+
+     If yes, the system asks for 3 angles and a reference system:
+
+ *** POLEDIST=	give distance between the poles in degrees [0.0]
+				of the reference coordinate system and 
+				the coordinate system to be defined
+
+ *** REFNODE=	give long. of the asc. node in the ref. system [0.0]
+
+ *** NEWNODE=	give long. of the asc. node in the new system [0.0]
+
+ *** COOR=	give ref. coordinate system [EQUATORIAL 2000]
+
+     IRSET=	give set name to write to [no snip action]
+
+     If the set already exists the program asks for
+
+     STATUS=	it already exists: choose merge, error or [overwrite]
+			( 1 letter suffices )
+
+     OBJECT=	give name of the object [no name]
+
+     OBSERVER=	give name of the observer [no name]
+
+ *** FLASHTIMES= number of secs to cut from the beginning and end of the scans.
+                 [32,20]
+		In case of AO or Unknown the flashtimes are set to 0,0
+		by default.
+ 
+ *** SOPATT=	select only this sop/att combination
+		Zero, one or two items can be given here. Depending on the
+		selected instrument the following happens:
+
+		instrume   items in
+			   SOPATT=
+
+		survey	     0	   normal case, no list is displayed	
+			  	   select all scans overlapping the plate
+
+			     1 	   display list of all overlapping scans
+			  	   request further selection with SOPATT=
+    
+			     2     no list is displayed
+				   select only the scan indicated with SOPATT=
+
+		AO or	     0     display list of all overlapping scans
+		unknown	           select the first scan in the list
+
+			     1     display list of all overlapping scans
+			           ask again for one SOPATT=
+
+			     2     no list is displayed
+				   select only the scan indicated with SOPATT=
+
+		Note that survey scans are snipped to the plate size; Use
+		MINTICK= to get a full sized scan.
+		Note also that the pointed observations are NOT snipped at all.
+		Except for the display of the list the central position is
+		irrelevant.
+
+ *** SKIPTICK= 	skip snips with a overlap length shorter than [2] ticks
+
+ *** MINTICK=	make snips of a minimum length of [2] ticks
+		This action is performed after the skip, so that
+		one can throw away too short snips and make all
+		others of a minimum length, with the selected
+		area as much as possible in the center of the snip.
+		Full scans are selected with MINTICK=6000 (or larger).
+		NB. Due to flashes at begin or end of a scan some
+		snips may actually turn out shorter.
+ Description:    
+ 
+     PLATE builds an IRAS Data Structure (IRDS) for a particular
+ area (custom plate) from the optical disc server. 
+ For the definition of an IRDS see IRAS User Manual SWG-ROG 90 003.
+
+     The custom plate is defined by an area on the sky: keyword CENTER,
+ SIZE and COOR, and keyword INSTRUME which defined the observation mode
+ and the band number. Only scan(snip)s which pertain to the same area
+ and instrument can be stored in the same IRDS. The area is called the
+ custom plate.
+
+     The unsnipped data are stored on digital optical discs which reside
+ in a jukebox like server.
+
+     With IRSET the name of the IRDS is queried. 
+ If IRSET is presented with an existing IRDS 
+ it is asked whether it is an error, or to overwrite it, or to merge
+ the new data with this existing one. In this way an existing IRDS
+ can be enlarged. Note that if this IRDS is on quite a different 
+ location as the one requested by CENTER, SIZE and COOR, two unrelated 
+ custom plates are stored in one IRDS. It is not clear what the use of 
+ such a set is.
+
+     Where the beginning or the end of a scan falls within the custom plate
+ the snip starts later or ends earlier by a number of seconds given
+ with FLASHTIMES. The first number pertains to the beginning and the
+ second to the ending of the scans. In this way the flashes at the 
+ start and end of each scan are avoided. AO's have no flashes at the 
+ beginning and end of the scans. For them the FLASHTIMES are by default 0.
+
+     When sop/att selection is asked either by default for pointed
+ observations or if the keywords SOPATT received some input 
+ ( the answer 0 will do the trick ) a list of sop/att combinations 
+ which are present in the selected area is made and the user is asked 
+ to select from this list. Selection can only be done in increasing order.
+
+     Some data around data outages were discovered to be corrupt. Those
+ parts are put to the GIPSY blank value.
+ 
+ Updates:       900105 	DK, documentation only
+		900327 	DK, creation of code
+		910308 	DK, add noise estimate on snip-detector level
+		910912	DK, adapted for the optical disc server
+		920218  DK, blank out corrupt data
+		920225	DK, list available sop-att's if sop/att selection
+		920225	DK, put flashtimes=0 0 by default for AO's
+		920226  DK, SCANTYPE is added to the header at snip-level
+		920227	DK, proper handling of crippled irds's
+		930330	DK, add UNKNOWNs and PO as alias for AO
+		931019  DK, allow single scan selection
+		940419	DK, repaired obscure bug in string handling
+#<
+
+#>            irpl_plate.shl
+c		 irpl_plate.shl
+c
+c           Copyright (c) 1991
+c  Laboratory for Space Research Groningen 
+c       Kapteyn Laboratory Groningen 
+c           All Rights Reserved.
+c
+c Function:     irpl_plate.shl
+c 
+c Purpose:      snip a custom plate
+c
+c Category:     IRAS
+c
+c Author:       Do Kester
+c
+c Use:  	See plate.dc1
+c
+c Updates:      25 Oct 1991: DK, Creation date
+c		18 Feb 1992: DK, add version number
+c		09 Mar 1993: DK, add `unknown' instrument type
+c		30 Mar 1993: DK, add PO as alias to AO
+c		19 Oct 1993: DK, extract single scans without much effort
+c		06 Dec 1993: DK, repaired mistake in irpl_extend
+c		19 Apr 1994: DK, obscure bug in string handling;
+c				 all INSTRUMENT strings put to character*20
+
+	program	plate
+
+	character*80	irds
+
+	data	irds	/ ' ' /
+
+c open hermes connection
+	call INIT
+
+c write identification
+	call ANYOUT( 0, 'PLATE  Version 3.3 (19 Apr 1994)' )
+
+c fetch user information
+	call IRPL_USERINFO( irds )
+
+c snip the plates
+	call IRPL_SNIP( irds )
+
+c close hermes connection
+	call FINIS
+
+	stop
+	end
+#<
+
+#>            irpl_userinfo.shl
+c                 irpl_userinfo.dc2
+c
+c Subroutine:     irpl_userinfo
+c 
+c Purpose:        read user information to snip a plate
+c 
+c File:           irpl_userinfo.sh
+c 
+c Author:         Do Kester
+c 
+c Person resp.:   Do Kester
+c 
+c Address:        guspace!do or rugfx4!do         (uucp)
+c 
+c Use: call irpl_userinfo(
+c       irds )      	O  	character*(*)
+c
+c       irds      	name of the IRDS to be made
+c 
+c Description:    
+c 	The routine queries the user for items necessary to build
+c 	an IRDS. The folling keywords are (possibly) requested:
+c
+c 	INSTRUME= 	observation mode and band  (in IRUS_INST)
+c 	CENTER=		longitude and latitude of the IRDS center
+c 	SIZE=		longitudinal and latitudinal size of the
+c			IRDS to snip [1.0 1.0]
+c 	COOR=		coordinate system CENTER is given in (in IRUS_COOR)
+c			[EQUATORIAL 2000.0]
+c ***	EPOCH=		( in IRUS_COOR ) [2000.0]
+c ***	POLEDISTANCE=	( in IRUS_COOR ) [0.0]
+c ***	REFNODE=	( in IRUS_COOR ) [0.0]
+c ***   NEWNODE=	( in IRUS_COOR ) [0.0]
+c	IRSET=		name of the IRDS to be made [no snip action]
+c ***	STATUS=		if the IRDS already exists: Overwrite, Error, Merge.
+c			[Overwrite]
+c	OBJECT=		name of the object on the custom plate [none]
+c	OBSERVER=	name of the observer [none]
+c 
+c Externals:    
+c	IRUS_INST IRUS_COOR
+c	IRCC_OBSMODE IRCC_RATE IRCC_NDETS
+c	USERDBLE USERINT USERCHAR USERCHARU
+c	ANYOUT CANCEL NELC 
+c	IRDS_EXIST IRDS_CREATE IRDS_DELETE IRDS_ENQUIRE IRDS_CLOSE
+c	IRCO_NAMEPOCH IRCO_NUMBER
+c 
+c Updates:       23 Apr  1990 DK, code
+c		 17 July 1990 DK, change coor into integer
+c		 03 Mar  1993 DK, set anyout-level to 0 or 16
+c 
+
+
+	subroutine irpl_userinfo( irds )
+
+	character*(*)	irds
+	integer		coor
+	doubleprecision center(2), size(2)
+	character*20	instru
+
+	integer		axes(3), USERTEXT
+	character*20	object, observer, object1
+        character*80    kgb
+	integer		IRCC_NDETS, IRCC_RATE, IRDS_EXIST, IRCC_OBSMODE
+	integer		USERANGLE, USERCHAR, USERCHARU
+	integer		k, nitem, error, naxis1, axes1(4), nelc
+	integer		obsmode, default, coor1, IRCO_NUMBER, IRUS_COOR
+	doubleprecision center1(2), size1(2)
+	character*20	instru1, irstat
+	character*30	coname, mess
+	real		epoch
+	doubleprecision xx, yy, EPSILON
+	logical		isequal
+	parameter	( EPSILON = 1.0e-4 )
+
+	isequal( xx, yy ) = abs( xx - yy ) .lt. EPSILON
+
+	data	default, coor1 / 0, 0 /
+
+	while .true.
+	  call IRUS_INST( default, instru )
+	  obsmode = IRCC_OBSMODE( instru )
+	  if ( ( obsmode .ge. 1 .and. obsmode .le. 3 ) .or. 
+     #		 obsmode .eq. 5 )
+	  then
+c it is a survey, splines or AOs: find area (to snip)
+	    nitem = USERANGLE( center, 2, 4, 'CENTER=',
+     #      'give the central longitude and latitude of the plate' )
+	    size(1) = 1.0
+	    nitem = USERANGLE( size, 2, 1, 'SIZE=',
+     #	      'give (long. and lat.) size of the plate [1.0]' )
+	    if ( nitem .le. 1 )
+	    then
+	      size(2) = size(1)
+	    cif
+	    coor = IRUS_COOR( 1, 1, 'COOR=' )
+	    xwhile
+	  elseif ( obsmode .eq. 4 )
+	  then
+c it is FLASH: don't know how to handle this case (yet)
+	    call ANYOUT( 0, 
+     #		'It is not yet possible to handle flash data.' )
+	  else
+c its is unknown: can not be used in this situation
+	    k = NELC( instru )
+	    call ANYOUT( 0, 'Erroneous band identification: ' // 
+     #        instru(:k) )
+	  cif
+	  call ANYOUT( 0, 'Use SURVEY, SPLINE, AO or UNKNOWN, //
+     #         combined with bandnumber or LRS.' )
+	cwhile
+
+	while .true.
+c get a set name to write to
+	  nitem = USERCHAR( irds, 1, 1, 'IRSET=',
+     #		'give set name to write to [no snip action]' )
+	  error = 0
+	  if ( IRDS_EXIST( irds, error ) .ne. -1 )
+	  then
+c it already exists: check status of the set
+	    k = nelc( irds )
+            kgb = irds
+	    call ANYOUT( 16, 'the irset called: ' // kgb(:k) //
+     #		' already exists; ' )
+	    call ANYOUT( 16, ' there are three options: ' //
+     #		'overwrite, merge or erroneous name' )
+	    irstat = 'OVERWRITE'
+	    nitem = USERCHARU( irstat, 1, 1, 'STATUS=',
+     #	    'It already exists: choose merge, error or [overwrite]' )
+	    if ( irstat(1:1) .eq. 'O' )
+	    then
+c overwrite: delete the existing IRDS
+	      call IRDS_DELETE( irds, error )
+	      xwhile
+	    elseif ( irstat(1:1) .eq. 'M' )
+	    then
+c merge: check whether the centers, coordinates and instruments are the same
+	      call IRDS_ENQUIRE( irds, object1, instru1, naxis1, axes1, 
+     #		center1, size1, coname, epoch, error )
+	      coor1 = irco_number( coname, epoch )
+	      if ( error .eq. 0 .and. 
+     #            isequal( center(1), center1(1) ) .and.
+     #            isequal( center(2), center1(2) ) .and.
+     #            instru .eq. instru1 .and. coor .eq. coor1 )
+	      then
+	        xwhile
+	      else
+	        call IRDS_CLOSE( irds, error )
+	        call ANYOUT( 0, 'the irset does not have the same ' 
+     #	 	          // 'coordinates as the one to snip.' )
+	      cif
+	    cif
+	    call CANCEL( 'IRSET=' )
+	    call CANCEL( 'STATUS=' )
+	  else
+	    xwhile
+	  cif
+	cwhile
+
+	if ( IRDS_EXIST( irds, error ) .eq. -1 )
+	then
+c the IRDS does not yet exist: create a new one with dummy lengths
+	  axes(1) = IRCC_RATE( instru )
+	  axes(2) = 1
+	  axes(3) = IRCC_NDETS( instru )
+	  object = ' '
+	  observer = ' '
+	  k = USERTEXT( object, 1, 'OBJECT=',
+     #	     'give name of the object [no name]' )
+	  k = USERTEXT( observer, 1, 'OBSERVER=',
+     #	     'give name of the observer [no name]' )
+	  call IRCO_NAMEPOCH( coor, coname, epoch )
+	  call IRDS_CREATE( irds, instru, axes, center, size, coname,
+     #	    epoch, object, observer, error )
+	cif
+
+	call irds_close( irds, error )
+
+	return
+	end
+#<
+
+#>            irpl_corners.shl
+
+c	irpl_corners.dc2
+c Subroutine:	IRPL_CORNERS.
+c
+c Purpose:      Calculate plate corners in plate-referenced coordinates.
+c
+c File:		irpl_standard.shl.
+c
+c Author: 	Uwe Peppel
+c 
+c Use: 
+c	call IRPL_CORNERS (
+c		size     I	doubleprecision(2),
+c		corner   O	doubleprecision(3,4).
+c		)
+c	size	long. and lat. length of a plate edge in radians 
+c		(= great circle angular distance),
+c	corner	xyz of the four corners of the plate in plate-
+c		referenced coordinates.
+c Description: 
+c	The plate-referenced coordinate system is a rectangular
+c       system having the plate center at its x-axis. The y-axis
+c       points to the top of the plate.
+c       IRPL_CORNERS accepts any value for SIZE. In practice the
+c       maximum value for SIZE should be pi/2, which is a plate
+c       covering one half of the whole sky.
+c       The corners are counted anti-clockwise when the x-y-z-system
+c       is taken to be right handed and the plate is seen from outside
+c       the unit-sphere, beginning at the corner with y and z coordinates
+c       both having positive values. With this convention the top
+c       of the plate consists of the corners 1 and 4.
+c
+c Updates:
+c	900501 Sjag Steensma; documentation only.
+c	900926 DK, change plate definition 
+c
+c subroutine irpl_corners ( double precision, double precision )
+
+      	subroutine IRPL_CORNERS( size, corner )
+
+      	doubleprecision	size(2), corner(3,4)
+
+	doubleprecision	s1, s2, x, y, z, p
+
+	s1 = size(1) / 2
+	s2 = size(2) / 2
+	z = sin( s2 )
+	y = sin( s1 )
+	p = cos( s2 ) ** 2 - y ** 2 
+	x = sign( sqrt( abs( p ) ), p )
+
+	corner(1,1) = x
+	corner(2,1) = y
+	corner(3,1) = z
+	corner(1,2) = x
+	corner(2,2) = y
+	corner(3,2) =-z
+	corner(1,3) = x
+	corner(2,3) =-y
+	corner(3,3) =-z
+	corner(1,4) = x
+	corner(2,4) =-y
+	corner(3,4) = z
+
+	return
+	end
+
+#<
+
+#>            irpl_sopatt.shl
+c Subroutine:	IRPL_SOPATT
+c
+c Purpose:	lists the sop-atts selected from the server
+c
+c Author:	Do Kester
+c
+c Category:	IRAS
+c
+c File:		irpl_sopatt.shl
+c
+c Use:	subroutine IRPL_SOPATT(
+c	obsmode		I	integer
+c	mtid )		I	integer
+c
+c	instrument	name of the instrument
+c	mtid		tape on which the scans are located
+c
+c Description
+c     A list of sop-atts present in the data base is displayed in case
+c     of the following combinations of instrument and number of items
+c     given to the key SOPATT=
+c
+c		nitem:		0	1	2
+c	survey			no	yes	no
+c	AO			yes	yes	no
+c	unknown			yes	yse	no
+c 
+c Contains	IRPL_SOPATT 
+c
+c Update	930318	DK code
+
+       subroutine IRPL_SOPATT( obsmode, mtid )
+ 
+	integer		obsmode, mtid
+
+        integer       	OK, FATAL, EOT, MHD, DEBUG, AO
+	parameter	( DEBUG = 16, AO = 3 )
+        parameter     ( OK = 0, FATAL = 4, EOT = -13, MHD = 72*80 )
+        character    	header*(MHD), mess*80, salist*80
+	character	obj*20, type*10
+	integer		CFTSD_GETH, FTS_SKIPFIL, FTSD_RCHAR
+        integer         tid, filenr, nitem, ierr, skip, snipnr, skipped
+	integer		sopatt(2), USERINT, sop, att, FTSD_RINT, mm
+
+	data	skip, filenr, snipnr, sopatt / 1, 0, 0, 0, 0 /
+
+	nitem = USERINT( sopatt, 2, 2, 'SOPATT=', 
+     #			'Give sop and att to select ' )
+
+	if ( ( nitem .eq. 0 .and. obsmode .lt. AO ) .or. nitem .eq. 2 )
+	then
+	  return
+	cif
+
+	salist = ' '
+	mm = 3
+	call ANYOUT( 0, 'The following sop-att''s are present in the '
+     #		     // 'IRAS database:' )
+
+c for all scans on the tape
+        while .true.
+          filenr = filenr + 1
+c Read scan header and get scan parameters
+          tid = 0
+	  ierr = CFTSD_GETH( mtid, header, tid )
+c  	  write( mess, '(5i10)' ) filenr, tid, ierr
+c	  call anyout( 16, mess )
+
+          if ierr .eq. EOT 
+          then
+	    xwhile
+	  else if ierr .lt. 0
+	  then
+	    write( mess, '(a,i5)' ) 
+     #			'CFTSD_GETH failed with error code:', ierr
+            call ERROR( FATAL, mess )
+            return
+          cif
+
+c Find sop and att of the files selected.
+	  ierr = 0
+          ierr = min( ierr, FTSD_RINT( header, 'SOP', sop ) )
+          ierr = min( ierr, FTSD_RINT( header, 'ATT', att ) )
+          ierr = min( ierr, FTSD_RCHAR( header, 'SCANTYPE', type ) )
+	  write( obj, '(2i4,2x,a)' ) sop, att, type
+	  salist(mm:mm+19) = obj
+	  mm = mm + 24
+
+	  if ( mm .ge. 70 ) 
+	  then
+	    call ANYOUT( 0, salist )
+	    mm = 3
+	    salist = ' '
+	  cif
+
+c go to the next fits file
+	  skipped = FTS_SKIPFIL( mtid, skip )
+	  if skipped .eq. EOT
+	  then
+	    xwhile
+	  else if abs( skip ) .ne. skipped
+	  then
+	    call ERROR( 3, 'Cannot skip on fits files ' )
+	    xwhile
+	  cif
+	cwhile
+
+	if ( mm .gt. 4 ) 
+	then
+	  call ANYOUT( 0, salist )
+	cif
+
+c rewind the file
+	skipped = FTS_SKIPFIL( mtid, -filenr )
+
+        return
+	end
+
+#<
+
+#>            irpl_snip.shl
+c subroutine IRPL_SNIP( character, double precision, integer, 
+c			 integer, integer )
+c             irpl_snip.dc2
+c		
+c Subroutine:   IRPL_SNIP
+c 
+c Purpose:      snip a customplate out of plate system tapes
+c 
+c File:         irpl_snip.shl
+c 
+c Author:       Do Kester
+c 
+c Person resp.: Do Kester
+c 
+c Address:      guspace!do or rugfx4!do         (uucp)
+c 
+c Use: subroutine irpl_snip(
+c 	irds,		I	character*(*)
+c	size,		I	doubleprecision(2)
+c	coor )		I	integer
+c
+c 	irds		the data structure containing the custom plate
+c	size		of the irds to build
+c 	coor		coordinate system of the irds
+c 
+c Description:  
+c 
+c 
+c Externals:    
+c 
+c Updates:      900918	DK code
+c
+
+	subroutine IRPL_SNIP( irds )
+
+	character*(*)	irds
+
+	character*80	instrument, object, coname
+	character*80	observer, irdsx, dummy, device
+	doubleprecision	center(2), size(2), radcen(2), xyz(3)
+	integer		naxis, axes(4), coor, AO, minlen, MAXAOLEN
+	real		epoch, D2R, radius, eclon, eclat
+	parameter	( D2R = 0.01745329252, AO = 3, MAXAOLEN = 700 )
+	integer		crid, necl, IRCO_NUMBER, IRCC_OBSMODE, obsmode
+	integer		ierr, NELC, nitem, USERINT, mtid, sopatt(2)
+	integer		flash(2), IRCC_BANDNR, IRSERVER_OPEN, FATAL
+	parameter	( FATAL = 4 )
+	integer		USERCHAR, MTOPEN, MTCLOSE, IRDS_EXIST
+	logical		GDS_EXIST, server
+
+	data	flash 	/ 32, 20 /
+
+	ierr = 0
+	call IRDS_ENQUIRE( irds, object, instrument, naxis, axes,
+     #			center, size, coname, epoch, ierr )
+
+	call anyout( 16, 'irpl_snip starts' )
+
+c change BUNIT to mV in case of LRS data
+	if IRCC_BANDNR( instrument ) .eq. 5
+	then
+	  call gdsd_wchar( irds, 'BUNIT', 0, 'mV', ierr )
+	cif
+
+c precess ecliptic to 1983.5 ( = mid mission )
+	crid = IRCO_NUMBER( 'ECLIPTIC', 2000.0 )
+	necl = crid
+	call IRCO_PRECESS( crid, 1983.5, necl )
+
+c make custom plate system
+	radcen(1) = center(1) * D2R
+	radcen(2) = center(2) * D2R
+	crid = 0
+	coor = IRCO_NUMBER( coname, epoch )
+	call IRCO_PLATE( coor, radcen, 'customplate', crid )
+
+c find ecliptic coordinates of center
+	call IRCO_TORECT( radcen(1), radcen(2), xyz, 1 )
+	call IRCO_TRANSFORM( xyz, coor, xyz, necl, 1 )
+	call IRCO_TOSPHER( xyz, radcen(1), radcen(2), 1 )
+	eclon = radcen(1)
+	eclat = radcen(2)
+c make a list of sop-att's in case of SOPATT selection
+	radius = max( size(1), size(2) ) * D2R
+
+	call anyout( 16, 'search for instrument ' // instrument(:20) )
+
+	call IRPL_SEARCH( eclon, eclat, radius, instrument )
+
+	call anyout( 16, 'search done for instrument ' )
+
+c open server for scans centered around (eclon,eclat)
+	server = .true.
+	nitem = USERINT( sopatt, 2, 2, 'SOPATT=', 
+     #			'Give sop and att to select [none]' )
+	if ( nitem .eq. 2 )
+	then
+	  mtid = IRSERVER_SCAN( sopatt(1), sopatt(2), 1, instrument )
+	else
+	  mtid = IRSERVER_OPEN( eclon, eclat, radius, instrument )
+	cif
+	if mtid .lt. 0
+	then
+	  call ANYOUT( 0, 
+     #		'The IRAS Server is not available on this machine' )
+	  nitem = USERCHAR( device, 1, 1, 'TAPE=', 
+     #		'Give tape device or directory to read from [quit]' )
+	  if nitem .gt. 0
+	  then
+	    mtid = MTOPEN( device )
+	    if mtid .lt. 0
+	    then
+	      call ERROR( FATAL, 
+     #			'Cannot open ' // device(:NELC( device )) )
+	    cif
+	    server = .false.
+	  else
+	    return
+	  cif
+	cif
+
+	obsmode = IRCC_OBSMODE( instrument )
+	call irpl_sopatt( obsmode, mtid )
+
+c check if a irds has been given; else return.
+	irdslen = NELC( irds )
+	if ( irdslen .eq. 0 ) 
+	then
+	  return
+	cif
+
+c make scratch IRDS name and determine maximum length for this IRDS
+	irdsx = irds(:NELC( irds )) // 'SCR'
+	if obsmode .ge. AO
+	then
+	  axes(2) = MAXAOLEN
+	  flash(1) = 0
+	  flash(2) = 0
+	else
+	  axes(2) = nint( 16 * ( sqrt( size(1)**2 + size(2)**2 ) + 2 ) )
+	cif
+	minlen = 0
+	nitem = USERINT( minlen, 1, 2, 'MINTICK=', 'minimum length' )
+	axes(2) = max( axes(2), minlen )
+
+c obtain hidden key FLASHTIMES
+	nitem = USERINT( flash, 2, 2, 'FLASHTIMES=', 
+     #			'ticks to cut from begin and end of scan' )
+	write( dummy, '(a,2i4)' ) 'FLASHTIMES', flash
+	call ANYOUT( 16, dummy )
+
+c create a scratch IRDS; delete it first, just in case
+	if GDS_EXIST( irdsx, ierr )
+	then
+	    call IRDS_DELETE( irdsx, ierr )
+	cif
+	call IRDS_CREATE( irdsx, instrument, axes, center, size,
+     #			coname, epoch, object, observer, ierr )
+
+c snip the plate into a scratch IRDS
+	call IRPL_SNIPLATE( irdsx, instrument, mtid, 
+     #			crid, size, flash )
+
+c merge the two IRDS's 
+	call IRDS_MERGE( irdsx, irds, ierr )
+
+c search for corrupt data and blank them if found
+	if ierr .eq. 0
+	then
+	  call IRPL_UNTAB( irds, ierr )
+	cif
+
+	if server
+	then
+c close the data server
+	  call IRSERVER_CLOSE( mtid )
+	else
+	  ierr = MTCLOSE( mtid )
+	cif
+
+c delete the scratch IRDS
+	call IRDS_DELETE( irdsx, ierr )
+
+	return
+	end
+#<
+
+#>            irpl_sniplate.shl
+c Subroutine:	IRPL_SNIPLATE
+c
+c Purpose:	snips scans over a plate
+c               cannibalized version of WvO's SNPLAT
+c
+c Author:	Do Kester
+c
+c Category:	IRAS
+c
+c File:		irpl_sniplate.shl
+c
+c Use:	subroutine IRPL_SNIPLATE(
+c	irds,		I	character*(*)
+c	instrument,	I	character*(*)
+c	mtid,		I	integer
+c	customcoor,	I	integer
+c	size,		I	doubleprecision(2)
+c	flash )		I	integer
+c
+c	irds		the IRDS to be created
+c	instrument	name of the instrument
+c	mtid		tape on which the scans are located
+c	files		the maximum number of files to be read
+c	platenr		plate number associated with tape
+c	customcoor	predefined coordinate number of the plate
+c	size		long and lat size of the plate
+c	flash		ticks to be cut from begin and end of scan
+c
+c Description
+c     For each scan on the input tape the intersections with the plate
+c     are calculated. If no intersection is found the scan is skipped
+c     else the part crossing the plate is written to the IRDS
+c 
+c     The tape has to be assigned before and released after use 
+c     with MTOPEN and MTCLOSE.
+c
+c Externals	IRPL_SNIPSCAN IRPL_EXTEND FTSD_ IRCC_
+c
+c Contains	IRPL_SNIPLATE IRPL_SNIPSCAN IRPL_SCANHEADER 
+c		IRPL_SNIPSMALL IRPL_SNIPTIMES IRPL_EXTEND
+c
+c Update	900918	DK code
+
+       subroutine IRPL_SNIPLATE( irds, instrument, mtid, 
+     & 			customcoor, size, flash )
+ 
+	character*(*)	irds, instrument
+	integer		mtid, customcoor, flash(2)
+	doubleprecision size(2)
+
+        integer       	OK, FATAL, EOT, MHD, DEBUG, AO
+	parameter	( DEBUG = 16, AO = 3 )
+        parameter     ( OK = 0, FATAL = 4, EOT = -13, MHD = 72*80 )
+        character    	header*(MHD), mess*80, sames*15
+	integer		CFTSD_GETH, IRPL_SNIPSCAN, FTS_SKIPFIL
+        integer         nrsnips, cuts(2), tid, filenr, nitem, def
+	integer		ierr, skip, snipnr, skipped, IRPL_EXTEND
+	integer		obsmode, sopatt(2), USERINT
+	integer		sop, att, FTSD_RINT
+
+	data	skip, filenr, snipnr, def, sopatt / 1, 0, 0, 6, 0, 0 /
+
+	obsmode = IRCC_OBSMODE( instrument )
+        nitem = USERINT( sopatt, 2, 2, 'SOPATT=',
+     #                  'Give sop and att to select ' )
+        if nitem .gt. 0 .or. obsmode .ge. AO
+        then
+          if nitem .eq. 1
+          then
+            call CANCEL( 'SOPATT=' )
+          cif
+	  def = 5
+	cif
+
+c for all scans on the tape
+        while .true.
+          filenr = filenr + 1
+c Read scan header and get scan parameters
+          tid = 0
+	  ierr = CFTSD_GETH( mtid, header, tid )
+  	  write( mess, '(5i10)' ) filenr, tid, ierr
+	  call anyout( 16, mess )
+
+          if ierr .eq. EOT 
+          then
+	    xwhile
+	  else if ierr .lt. 0
+	  then
+	    write( mess, '(a,i5)' ) 
+     #			'CFTSD_GETH failed with error code:', ierr
+            call ERROR( FATAL, mess )
+            return
+          cif
+	  nitem = USERINT( sopatt, 2, def, 'SOPATT=', 
+     #			'Give sop and att to select ' )
+
+c Get points to snip on
+	  nrsnips = IRPL_SNIPSCAN( header, instrument, customcoor, 
+     #			size, cuts, sopatt )
+
+	  ierr = 0
+          ierr = min( ierr, FTSD_RINT( header, 'SOP', sop ) )
+          ierr = min( ierr, FTSD_RINT( header, 'ATT', att ) )
+	  write( sames, '(a,2i4)' ) 'Sop-att', sop, att
+
+	  if nrsnips .eq. 1
+          then
+	    snipnr = snipnr + 1
+	    ierr = IRPL_EXTEND( irds, instrument, mtid, tid, header, 
+     #			snipnr, cuts, flash )
+	    if ierr .eq. OK
+	    then
+	      write( mess, '(3(a,i4))' ) sames //
+     #		': ticks ', cuts(1), ' to ', cuts(2),
+     #			' into snip nr ', snipnr
+	      if obsmode .ge. AO
+	      then
+	        call status( mess )
+		xwhile
+	      else if def .eq. 5
+	      then
+	        call cancel( 'SOPATT=' )
+	      cif
+	    else
+	      write( mess, '(a)' ) sames // 
+     #			': error reported and skipped '
+	      ierr = OK
+	    cif
+	  elseif nrsnips .eq. 0
+	  then
+	    write( mess, '(a)' ) sames // ': no overlap'
+	  elseif nrsnips .eq. -2
+	  then
+	    write( mess, '(a)' ) sames // ': not requested'
+	  else
+	    write( mess, '(a)' ) sames // ': problems.... '
+	  cif
+	  call STATUS( mess )
+	  call ANYOUT( 16, mess )
+c go to the next fits file
+	  skipped = FTS_SKIPFIL( mtid, skip )
+	  if skipped .eq. EOT
+	  then
+	    xwhile
+	  else if abs( skip ) .ne. skipped
+	  then
+	    call ERROR( 3, 'Cannot skip on fits files ' )
+	    xwhile
+	  cif
+	cwhile
+
+        return
+	end
+
+#<
+
+#>            irpl_snipscan.shl
+c***********************************************************************
+c	integer IRPL_SNIPSCAN( 
+c	header, 	I	character*(*)
+c	instrument, 	I	character*(*)
+c	coor, 		I	integer
+c	size, 		I	doubleprecision(2)
+c	cuts,		O	integer(2)
+c	sopatt )	I	integer(2)
+c
+c	header 		header of the scan to be snipped
+c	instrument 	target instrument
+c	coor 		coordinate number of the custom plate
+c	size 		long. and lat. size of the plate
+c	cuts 		satcals from begin of scan to cut on resp
+c			entry and exit of plate.
+c	sopatt		sop and att to select; (0,0) means all
+c	IRPL_SNIPSCAN	-1 Error in reading the header
+c			-2 scan is not of the requested instrument
+c			0, 1 number of snips found
+c
+
+	integer function IRPL_SNIPSCAN( header, instrument, coor, 
+     #			size, cuts, sopatt )
+
+	character*(*)	header, instrument
+	integer		coor, cuts(2), sopatt(2)
+	doubleprecision	size(2)
+
+	integer		ierr, satcal, nrsecs, icross, OK, ls, li, FATAL
+	character*20	scaninst, object
+	integer		IRPL_SCANHEADER, NELC, DEBUG, IRCC_BANDNR, AO
+	real		crval, tentry, texit, psi, psirate, theta
+	doubleprecision	corner(3,4), IRCO_SUNLONG, rsize(2), sizextra
+	real		D2R, offcen, psicro(2,4), z, yy, zz, M2D
+	parameter	( D2R = 3.1415926535897932384 / 180 )
+	parameter	( M2D = 1.0 / 60.0 )
+	parameter	( OK = 0, FATAL = 3, DEBUG = 16, AO = 3 )
+	character*80	mess
+	integer		sop, att, IRCC_OBSMODE
+
+c get some header information
+	scaninst = instrument
+	ierr = IRPL_SCANHEADER( header, scaninst, object, satcal, 
+     #			nrsecs, crval, psi, psirate, theta )
+	ls = NELC( scaninst )
+	li = NELC( object )
+	write( mess, '(a,2i10)' ) 'Scan ' // object(:li) // '  ' //
+     #			scaninst(:ls) // '  satcal & length', 
+     #			satcal+nint(crval), nrsecs
+	call ANYOUT( DEBUG, mess )
+	write( mess, '(a,3f10.4)' ) 'psi, psirate & theta ',
+     #			psi+crval*psirate, psirate, theta
+	call ANYOUT( DEBUG, mess )
+
+	read( object, '(2i4)' ) sop, att
+	li = NELC( instrument )
+
+	if ierr .ne. OK
+	then
+          call ERROR( FATAL, 'IRPL_SNIPSCAN: ' //
+     #         'Illegal data: Reading keyword/value failed')
+	  IRPL_SNIPSCAN = -1
+	  return
+	else if .not. (( sopatt(1) .eq.  0  .and. sopatt(2) .eq.  0  ) 
+     #		.or.   ( sopatt(1) .eq. sop .and. sopatt(2) .eq. att ))
+	then
+	  IRPL_SNIPSCAN = -2
+	  return
+        cif
+
+	if IRCC_OBSMODE( instrument ) .ge. AO
+	then
+	  cuts(1) = int( crval )
+	  cuts(2) = nrsecs
+	  IRPL_SNIPSCAN = 1
+	  return
+	cif
+
+        psirate = psirate * D2R
+	call IRCC_MASK( -IRCC_BANDNR( instrument ), offcen, z, yy, zz )
+	offcen = offcen * M2D
+        psi = ( psi + offcen ) * D2R + crval * psirate
+        theta = ( theta - z * M2D ) * D2R
+	sizextra = ( yy + zz ) * M2D
+
+c SATCAL at center of current scan for SUNREF coordinate system
+        satcal= satcal + nrsecs / 2 + int( crval )
+        call IRCO_SUNREF( IRCO_SUNLONG( satcal ) )
+
+c New plate referenced coordinates with size
+	rsize(1) = ( size(1) + sizextra ) * D2R
+	rsize(2) = ( size(2) + sizextra ) * D2R
+        call IRPL_CORNERS( rsize, corner )
+c Intersect small circle with plate
+        call IRPL_SNIPSMALL( corner, coor, theta, psicro, icross )
+
+	cuts(1) = 0
+	cuts(2) = 0
+	IRPL_SNIPSCAN = 0
+
+        if (icross .ge. 0)
+        then
+c Possible cut: intersection scan -- plate
+          call IRPL_SNIPTIMES( psi, psirate, nrsecs, psicro, 
+     #			       icross, tentry, texit )
+          if (texit .gt. 0.0)
+          then
+c Intersection found
+            cuts(1) = max( cuts(1), int( tentry ) )
+            cuts(2) = int( texit + 0.99999 )
+	    IRPL_SNIPSCAN = 1
+          cif
+        cif
+
+	return
+	end
+
+#<
+
+#>            irpl_search.shl
+c Subroutine:   irpl_search
+c 
+c Purpose:      list sop-att's within search radius
+c 
+c Category:	IRAS
+c
+c File:         irpl_search.shl
+c 
+c Author:       Do Kester
+c 
+c Use: call irpl_search(
+c 	elon,		I	real
+c 	elat,		I	real
+c 	radius,		I	real
+c 	instr )		I	character*(*)
+c 	
+c 	elon	ecliptic longitude
+c	elat	ecliptic latitude
+c 	radius	radius of the search circle
+c	instr	instrument of irds
+c 	
+c Description:  
+c 
+c Externals:    
+c 
+c Updates:      5 jan 1990 DK, creation
+
+	subroutine irpl_search( elon, elat, radius, instr )
+
+	real		elon, elat, radius
+	character*(*)	instr
+	integer		LS, IRCC_OBSMODE, obsmode, sopatt(2)
+	parameter	( LS = 65 )
+	character	mess*80, lines*(6*LS), intyp*20
+	integer		nitem, USERINT, k, mm, ml, IRSERVER_SEARCH
+
+c set indextype to AO or survey
+	obsmode = IRCC_OBSMODE( instr )
+	if ( obsmode .eq. 3 )
+	then
+	  intyp = 'AO'
+	else if ( obsmode .eq. 5 )
+	then
+	  intyp = 'unknown'
+	else
+	  intyp = 'survey'
+	cif
+
+c return if SOPATT has not been given and obsmode is not AO
+	nitem = USERINT( sopatt, 2, 2, 'SOPATT=', 
+     #			'Give sop and att to select' )
+	if nitem .eq. 0 .and. intyp(1:1) .eq. 's'
+	then
+	  return
+	cif
+
+c present the sop-att's found to the user
+	mess = 'The following sop-att''s are listed in the index file:'
+	repeat
+	  call ANYOUT( 16, mess )
+	  nitem = IRSERVER_SEARCH( elon, elat, radius, intyp, lines )
+	  k = 0
+	  mm = 3
+	  ml = 46
+	  mess = ' '
+	  while k .lt. nitem
+	    mess(mm:mm+9) = lines(ml:ml+7)
+	    mm = mm + 12
+	    ml = ml + LS
+	    k = k + 1
+	  cwhile
+	until nitem .le. 0
+
+c reset the selection with an impossible radius: -1.0
+	nitem = IRSERVER_SEARCH( elon, elat, -1.0, intyp, lines )
+
+	return
+	end
+
+#<
+
+#>            irpl_scanheader.shl
+
+c***********************************************************************
+c use	integer IRPL_SCANHEADER( 
+c	header, 	I	character*(*)
+c	instrument, 	I/O	character*(*)
+c	satcal, 	O	integer
+c	nrsecs, 	O	integer
+c	crval,		O	real
+c	psi, 		O	real
+c	psirate, 	O	real
+c	theta )		O	real
+c
+c	header		fits file header of a scan to be decoded
+c	instrument	requested/actual of the scan
+c	satcal		at the start of the original scan
+c	nrsecs		length in satcals  of this scan
+c	crval		offset of this scan w.r.t. the original scan
+c	psi		at the start of this scan (degrees)
+c	psirate		step in psi per satcal
+c	theta		solar aspect angle (degrees)
+c
+c	IRPL_SCANHEADER  0 all items found ok
+c			-1 could not identify the instrument of the scan
+c			-2 could not find some keyword/value
+c
+
+	integer function IRPL_SCANHEADER( header, instrument, object,
+     #            	satcal, nrsecs, crval1, psi, psirate, theta )
+
+	character*(*)	header, instrument, object
+	integer		satcal, nrsecs
+	real		psi, psirate, theta, crval1
+
+	integer		modenr, bandnr, IRCC_OBSMODE, IRCC_BANDNR
+	integer		FTSD_RCHAR, FTSD_FIND, FTSD_RINT, NELC
+	integer		FTSD_RREAL, naxis1, IRCC_RATE
+	character*20	IRCC_INSTRNAME, scaninst
+	integer		OK, FATAL, ierr, sop, att
+	parameter	( OK = 0, FATAL = 3 )
+        character*6   	bias(4), dummy
+	logical		found
+c	character*80	mess
+ 
+        data  bias  / 'BIAS23', 'BIAS16', 'BIAS08', 'BIAS01' /
+
+c Look for instrument name
+	found = .false.
+        if FTSD_RCHAR( header, 'INSTRUME', scaninst ) .le. OK
+        then
+c Assume splines data
+          modenr = 2
+          bandnr = 0
+          repeat
+             bandnr = bandnr + 1
+             found = FTSD_FIND( header, bias(bandnr), dummy ) .gt. 0
+          until (found .or. (bandnr .eq. 4))
+        else
+c try to decode instrument
+	  modenr = IRCC_OBSMODE( scaninst )
+	  bandnr = IRCC_BANDNR( scaninst )
+c fix for the fact that in LRSsnips INSTRUME= 'LRSSURB7'
+	  if bandnr .eq. 5 .and. modenr .eq. 0
+	  then
+	    modenr = IRCC_OBSMODE( instrument )
+	  cif
+          found = bandnr .gt. 0 .and. modenr .gt. 0
+        cif
+
+        if .not. found
+        then
+	  modenr = 0
+	  bandnr = 0
+          ierr= fatal
+          call ERROR( FATAL, 'IRPL_SCANHEADER: ' //
+     #			'Illegal data: Unknown band')
+	  IRPL_SCANHEADER = -1
+	  return
+        cif
+
+	instrument = IRCC_INSTRNAME( modenr, bandnr )
+	ierr = OK
+        ierr = min( ierr, FTSD_RINT( header, 'SOP', sop ) )
+        ierr = min( ierr, FTSD_RINT( header, 'ATT', att ) )
+	write( object, '(2i4)' ) sop, att
+c it might be an old GEISHA-style fits file
+	if ierr .lt. OK
+	then
+	  ierr = OK
+          ierr = min( ierr, FTSD_RCHAR( header, 'OBJECT', object ) )
+	cif
+        ierr = min( ierr, FTSD_RREAL( header, 'CRVAL1', crval1 ) )
+	ierr = min( ierr, FTSD_RINT( header, 'SATCAL', satcal ) )
+        ierr = min( ierr, FTSD_RREAL( header, 'PSIRATE', psirate ) )
+        ierr = min( ierr, FTSD_RREAL( header, 'PSI', psi ) )
+        ierr = min( ierr, FTSD_RREAL( header, 'THETA', theta ) )
+        ierr = min( ierr, FTSD_RINT( header, 'NAXIS1', naxis1 ) )
+        nrsecs = naxis1 / IRCC_RATE( instrument )
+	if ierr .lt. OK
+	then
+          call ERROR( FATAL, 
+     #         'Illegal data: Reading keyword/value failed')
+	  IRPL_SCANHEADER = -2
+        else
+	  IRPL_SCANHEADER = 0
+        cif
+
+	return
+	end 
+ 
+#<
+
+#>            irpl_snipsmall.shl
+
+c
+c Subroutine:	IRPL_SNIPSMALL
+c
+c Purpose:      calculate the intersections between a plate and a small circle
+c
+c File:		irp_sniplate.shl
+c
+c Class:	IRAS
+c
+c Author:       Uwe Peppel
+c
+c Use: subroutine IRPL_SNIPSMALL( 
+c	cornpl, 	I	doubleprecision(3,4)
+c	coor,		I	integer
+c	theta, 		I	real
+c	psicro, 	O	real(2,4)
+c	icross )	O	integer
+c       cornpl		plate corners given in plate coordinates
+c	coor		system number of the plate coordinate
+c       theta  		polar angle of the scan in sun-referenced coordinates
+c       psicro 		azimuthal angles in sun-referenced coodinates of the 
+c             intersection points, not defined for returns with icross < 1
+c       icross 		number of pairs of intersection points
+c                       = 0 : scan is completely inside the plate
+c                       = -1: scan is completely outside the plate
+c
+c Description:
+c	The plate-referenced and sun-referenced coordinate systems
+c       have to be set-up previously with IRCO_PLATE and IRCO_SUNREF.
+c       CORNPL can be calculated by IRPL_CORNERS
+c       For plates of relatively small size (plate-edge << 90 deg)
+c       the circle will not cross the plate in most cases. This is
+c       found out by a quick check preceding detailed calculations,
+c       so that frequent calls of IRPL_SNIPSMALL should have no problems 
+c       with computation time.
+c       If intersection points are found, they are given as pairs
+c       of azimuthal angles PSICRO(1,I) and PSICRO(2,I). The circle
+c       is inside the plate for
+c                 PSICRO(1,I) < psi < PSICRO(2,I),
+c       where I runs from 1 to ICROSS and PSICRO(2,ICROSS) .le. pi.
+c       For ICROSS > 1 the pairs are sorted according to increasing psi.
+c       The accuracy is guaranteed to 0.5 arcminute.
+c       The size of the plate should be less than or equal to 90 degrees.
+c 
+c Externals:  irpl_greatxsmall vector_inprod vector_outprod irco_transform
+c 
+c Update:      900912 DK adapted for Gipsy
+c
+
+      subroutine IRPL_SNIPSMALL( cornpl, coor, theta, psicro, icross )
+
+      doubleprecision 	cornpl(3,4)
+      real		theta, psicro(2,4)
+      integer 		coor, icross
+
+c the vectors are named in the following way: names ending in
+c   ..pl : plate-referenced system; ..su : sun-referenced system
+c corn.. : plate corners; cent.. : plate center; pint.. : intersection points
+c poed.. : pole of the plate-edge great circle
+
+        integer  	KSUN, DEBUG
+        doubleprecision PI, EPSILON, TWOPI
+        parameter     	( KSUN = 5, DEBUG = 16 )
+        parameter	( PI = 3.1415926535897932384 )
+c epsilon is 0.5 arcminute in radians
+        parameter     	( EPSILON = PI / ( 120 * 180 ), TWOPI = 2 * PI )
+
+c Number of intersections per edge
+        integer 	inters(4)
+c Coordinates of intermediate point
+        doubleprecision	intmsu(3), ll(4), bb(4)
+        doubleprecision cornsu(3,5), poedsu(3,4), pldiag, plsize
+        doubleprecision	centsu(3), VECTOR_INPROD, xaxis(3), sisize
+        real		psi(0:8), psimed, ctheta, x, pintsu(3,8)
+        integer 	i, j, k, m, n, n2, ipair
+	character*80	mess
+
+        data 	xaxis 	/ 1., 0., 0. /
+
+c transform plate edge plate-ref --> sun-ref
+        call IRCO_TRANSFORM( xaxis, coor, centsu, KSUN, 1 )
+c diagnostics
+	call IRCO_TOSPHER( centsu, ll, bb, 1 )
+	write( mess, '(a,2f12.6)') 'center of plate; psi & theta', 
+     #			ll(1)*180/PI, bb(1)*180/PI
+	call ANYOUT( DEBUG, mess )
+
+c pldiag is cos( diagonal plate-size )
+        pldiag = VECTOR_INPROD( cornpl(2,1), cornpl(2,3) )
+
+c quick check for scan not crossing plate: outside circumscribed circle
+        if abs( theta - acos( centsu(3) ) ) .gt. 0.5 * acos( pldiag )
+        then
+c return from quick-check: no intersection
+	  icross = -2
+	  return
+     	cif
+
+	plsize = VECTOR_INPROD( cornpl(2,1), cornpl(2,2) )
+c transform plate corners plate-ref --> sun-ref
+	call IRCO_TRANSFORM( cornpl, coor, cornsu, KSUN, 4 )
+c diagnostics
+	call IRCO_TOSPHER( cornsu, ll, bb, 4 )
+	for i = 1, 4
+	  write( mess, '(a,2f12.6)') 'corner of plate; psi & theta', 
+     #			ll(i)*180/PI, bb(i)*180/PI
+	  call ANYOUT( DEBUG, mess )
+	cfor
+
+	for j = 1,3
+	  cornsu(j,5) = cornsu(j,1)
+	cfor
+c calculate the poles of the plate edges
+	sisize = sqrt( 1. - plsize * plsize )
+	for i = 1,4
+	  call VECTOR_OUTPROD( cornsu(1,i), cornsu(1,i+1), 
+     #			       poedsu(1,i) )
+c normalize poedsu
+	  for j = 1,3
+	    poedsu(j,i) = poedsu(j,i) / sisize
+	  cfor
+	cfor
+
+c calculate intersection points: greatcircle: plate edge, smallcircle : scan
+	n = 1
+	n2 = 1
+	for i = 1, 4
+	  call IRPL_GREATXSMALL( poedsu(1,i), theta, 
+     #				   pintsu(1,n2), inters(n) )
+	  if inters(n) .eq. 2
+	  then
+c scan and edge are intersecting each other
+	    psi(n2) = atan2( pintsu(2,n2), pintsu(1,n2) )
+	    n2 = n2 + 1
+	    psi(n2) = atan2( pintsu(2,n2), pintsu(1,n2) )
+	    n2 = n2 + 1
+	    n = n + 1
+	  else
+c no intersection (one touching point is ignored)
+	  cif
+	cfor
+	n = n - 1
+	n2 = n2 - 1
+
+c sorting the arrays psi according to increasing psi by straight selection
+        for i = 1, n2 - 1
+	  k = i
+	  x = psi(i)
+	  for j = i+1, n2
+	     if psi(j) .lt. x
+	     then
+		k = j
+		x = psi(j)
+	     cif
+	  cfor
+	  psi(k) = psi(i)
+	  psi(i) = x
+        cfor
+
+	if n .eq. 0
+	then
+c no crossing has been found
+	  ctheta = cos( theta )
+	  if  (centsu(3) .lt. ctheta) .and. (cornsu(3,1) .lt. ctheta)
+     &    .or.(centsu(3) .gt. ctheta) .and. (cornsu(3,1) .gt. ctheta)
+	  then
+c Scan completely outside plate
+	    icross = -1
+	  else
+c Scan completely inside plate
+	    icross = 0
+	  cif
+	  return
+	cif
+
+c Combine points with distance < epsilon to one point
+        m = 1
+        for i = 2, n2
+	  if psi(i) - psi(m) .lt. EPSILON
+	  then
+c Found epsilon-pair: Do not increase M
+	    psi(m) = ( psi(m) + psi(i) ) / 2.0
+	  else
+c No epsilon-pair found yet
+	    m = m + 1
+	    psi(m) = psi(i)
+	  cif
+        cfor
+c check whether the first and last poit are an EPSILON-pair
+	if psi(1) - psi(m) + TWOPI .lt. EPSILON
+	then
+	  psi(1) = ( psi(1) + psi(m) - TWOPI ) / 2
+	  m = m - 1
+	cif
+	call ANYOUT( DEBUG, 
+     #	  'Ordered list of plate edge great circle crossings in psi' )
+	write( mess, '(8f10.4)' ) ( psi(i)*180/PI, i=1,m )
+	call ANYOUT( DEBUG, mess )
+
+c Determine in- or outside for pieces of scan; Take inside pairs only
+        icross = 0
+        psi(0)= psi(m) - TWOPI
+        for ipair = 1, m
+c Calculate intermediate point
+	  psimed = ( psi(ipair-1) + psi(ipair) ) / 2.0
+	  intmsu(1) = dble( cos( psimed ) * sin( theta ) )
+	  intmsu(2) = dble( sin( psimed ) * sin( theta ) )
+	  intmsu(3) = dble( cos( theta ) )
+	  if    ( VECTOR_INPROD( poedsu(1,1), intmsu ) .le. 0. )
+     &    .and. ( VECTOR_INPROD( poedsu(1,2), intmsu ) .le. 0. )
+     &    .and. ( VECTOR_INPROD( poedsu(1,3), intmsu ) .le. 0. )
+     &    .and. ( VECTOR_INPROD( poedsu(1,4), intmsu ) .le. 0. )
+	  then
+c Intermediate point lies inside plate
+	     icross= icross + 1
+	     psicro(1, icross)= psi(ipair - 1)
+	     psicro(2, icross)= psi(ipair)
+	     write( mess, '(2(a,f10.4))') 'plate overlap from psi', 
+     #		psi(ipair-1)*180/PI, ' to psi', psi(ipair)*180/PI
+	     call ANYOUT( DEBUG, mess )
+ 	  cif
+        cfor
+        if (icross .eq. 0)
+        then
+	  icross= -3
+        cif
+
+	return
+	end
+
+#<
+
+#>            irpl_sniptimes.shl
+
+c
+c Subroutine:	IRPL_SNIPTIMES
+c 
+c Purpose:	crossing times for a scan from scan-plate intersection
+c
+c File:		irpl_sniplate.shl
+c
+c Class:	IRAS
+c 
+c Author:       Wim van Oosterom
+c 
+c Use: subroutine IRPL_SNIPTIMES( 
+c	psinul, 	I	real
+c	psidot, 	I	real
+c	length, 	I	integer
+c	psicro,		I	real(2,4)
+c       icross, 	I	integer
+c	tentry, 	O	real
+c	texit )		O	real
+c 
+c   	PSINUL  Psi of start of scan (presort index file),
+c       PSIDOT  Scan speed in rad/sec,
+c       LENGTH  Length of the scan in seconds
+c       PSICRO  Pairs of intersection points between the complete
+c                    small circle of the scan and the plate
+c                    (in azimuthal angles psi, see PLINSC)
+c       ICROSS  Number of pairs of intersection points ( <5 )
+c                    0 : scan is completely inside the plate
+c    	TENTRY  Time in seconds where scan enters the plate
+c       TEXIT   Time in seconds where scan leaves the plate,
+c                    0.0 if scan did not cross the plate.
+c 
+c Description:
+c    IRPL_SNIPTIMES calculates the times
+c    when the scan enters and leaves the plate.
+c    TENTRY and TEXIT are in seconds of scan time.
+c    If the scan crosses the plate more than one time, the
+c    minimum TENTRY and the maximum TEXIT are given.
+c    If the scan starts inside the plate, TENTRY will be zero;
+c    if it ends inside the plate, TEXIT will be equal to the
+c    length of the scan in seconds.
+c 
+c Update:    881102  Albrecht de Jonge, now accepts zero scan speed
+c	     900911  DK 
+c
+		
+       subroutine IRPL_SNIPTIMES( psinul, psidot, length, psicro, 
+     #				  icross, tentry, texit )
+
+       real          	tentry, texit, psinul, psidot, psicro(2,4)
+       integer       	icross, length
+
+       doubleprecision	pi
+       parameter     	( pi= 3.1415926535897932384 )
+c Length of small circle in SATCAL seconds
+       real          	t2pi
+       character	mess*80
+
+c Intersect scan with plate
+       if (icross .eq. 0)
+       then
+	  tentry = 0.0
+	  texit  = float (length)
+       else if psidot .eq. 0
+       then
+	  tentry = 0.0
+	  if psicro(1,1).lt.psinul .and. psinul.lt.psicro(2,icross)
+	  then
+	     texit = float(length)
+	  else
+	     texit = 0.0
+	  cif
+       else
+c Starting point depending on scan direction
+	  if (psidot .lt. 0.0)
+	  then
+	     tentry = psicro(2, icross) 
+	     texit  = psicro(1, 1)
+	  else
+	     tentry = psicro(1, 1)
+	     texit  = psicro(2, icross)
+	  cif
+	  tentry = ( tentry - psinul ) / psidot
+	  texit  = ( texit  - psinul ) / psidot
+	  t2pi = 2 * pi / abs (psidot)
+	  if (texit .lt. 0.0)
+	  then
+c Only true when PLINSC gives pair in increasing psi: psi1 < psi2
+	     tentry = tentry + t2pi
+	     texit  = texit  + t2pi
+	  elseif (texit .gt. t2pi)
+	  then
+	     tentry = tentry - t2pi
+	     texit  = texit  - t2pi
+	  cif
+	  tentry = max ( tentry, 0.0 )
+	  texit  = min ( texit, float (length) )
+	  if (tentry .ge. float (length))
+	  then
+	     tentry = 0.0
+	     texit  = 0.0
+	  cif
+       cif
+
+       write( mess, '(a,2f10.4)' ) 'time of entry and exit', 
+     #			tentry, texit
+       call ANYOUT( 16, mess )
+
+       return
+       end
+
+#<
+
+#>            irpl_extend.shl
+
+c Function:     IRPL_EXTEND
+c 
+c Purpose:      extends an IRDS with one (snipped) scan
+c 
+c Category	IRAS
+c
+c File:         irpl_sniplate.shl
+c 
+c Author:       Do Kester
+c 
+c Person resp.: Do Kester
+c 
+c Address:      guspace!do or rugfx4!do         (uucp)
+c 
+c Use: integer IRPL_EXTEND(
+c 	irds		I	character*(*)
+c	instrument	I	character*(*)
+c 	mtid		I	integer
+c 	tid		I/O	integer
+c 	header		I	character*(*)
+c	snipnr		I/O	integer
+c 	cuts		I	integer(2)
+c
+c 	irds	to be extended
+c	instrument 	instrument id
+c 	mtid	tape ID
+c 	tid	transfer ID for FTSD_GETI
+c 	header	of the current scan
+c	snipnr	sequential number of this snip
+c 	cuts	satcals to snip on
+c 	
+c 	IRPL_EXTEND	 0 OK
+c			-1 cannot extend
+c			-2 failure to read data from FITS
+c			-3 failure to write data to IRDS
+c Description:  
+c 
+c Externals:    
+c 
+c Updates:      900917 Do Kester
+c		910319 DK, correction for LRS
+c		920226 DK, write scantype to the header at sniplevel
+c		920303 DRB, write obs to the header at sniplevel
+c		920219 HB/FL, new interface to irds_extend, replaces 
+c			      last two changes
+c		931206 DK, do not perform nonlinearity correction for LRS
+c			   for noise estimation samples
+
+	integer function IRPL_EXTEND( irds, instrument, mtid, tid, 
+     #			header, snipnr, cuts, flash )
+
+	character*(*)	irds, instrument, header
+	integer		mtid, tid, snipnr, cuts(2), flash(2)
+
+	character*20	scaninst, object
+	integer		satcal, nrsecs, scandur, snipdur, snipcal
+	real		crval, psi, psirate, theta, IRPL_NOISE
+	integer		ierr, sop, obs, att, IRPL_SCANHEADER, FTSD_RINT
+	integer		obsmode, rate, bandnr, CFTSI_GETR, FTSD_RCHAR
+	integer		OK, FATAL, SPLINES, FLASHES, MAXDET, MAXREAL
+	parameter	( OK = 0, SPLINES = 2, FLASHES = 4 )
+	parameter	( FATAL = 2, MAXREAL = 100000, MAXDET = 16 )
+	integer		IRCC_OBSMODE, IRCC_BANDNR, IRCC_RATE, IRCC_NDETS
+	integer		IRCC_DETNR, CFTS_SKIPPIX, det, sat100, ii, kk
+	integer		length, skipdata, tick, sdet, startsnip, ndets
+	real		reals(MAXREAL), noise, scale, blank
+	integer		i, k, rdfrom, rdtill, toread, level, GDSC_WORD
+	character	mess*80, scantype*10, string*250
+	logical		first
+	integer		minlen, skiptik, addtik, USERINT, sniplevel
+	save		first, minlen, skiptik
+
+	data	first, minlen, skiptik / .TRUE., 2, 2 /
+
+	if first
+	then
+	  ierr = USERINT( skiptik, 1, 2, 'SKIPTICK=', 
+     #			'skip snips smaller than length [2]' )
+	  ierr = USERINT( minlen, 1, 2, 'MINTICK=', 
+     #			'Make snips of minimum tick length [2]' )
+	  first = .false.
+	cif
+
+	snipdur = cuts(2) - cuts(1)
+	if snipdur .lt. skiptik
+	then
+c scan is too short: nothing to read, reset snipnr and return OK
+	  IRPL_EXTEND = OK
+	  snipnr = snipnr - 1
+	  return
+	else if snipdur .lt. minlen
+	then
+	  addtik = int( ( minlen - snipdur ) / 2 )
+	  cuts(2) = cuts(2) + addtik
+	  cuts(1) = cuts(1) - ( minlen - snipdur ) + addtik
+	cif
+
+	scaninst = instrument
+	ierr = IRPL_SCANHEADER( header, scaninst, object, satcal,
+     #		nrsecs, crval, psi, psirate, theta )
+	read( object, '(2i4)' ) sop, att
+	ierr = FTSD_RINT( header, 'OBSDUR', scandur )
+	if ierr .lt. OK
+	then
+	  scandur = nrsecs
+	cif
+c cut of the flashes if present
+	startsnip = nint( crval )
+	snipcal = max( startsnip + cuts(1), flash(1) )
+	cuts(1) = max( 0, snipcal - startsnip )
+	cuts(1) = min( cuts(1), cuts(2) )
+	cuts(2) = min( scandur - startsnip - flash(2), cuts(2) )
+	cuts(2) = max( cuts(1), cuts(2) )
+	snipdur = cuts(2) - cuts(1)
+	snipcal = startsnip + cuts(1)
+c check again for too short snips
+	if snipdur .lt. skiptik
+	then
+c scan is too short: nothing to read, reset snipnr and return OK
+	  IRPL_EXTEND = OK
+	  snipnr = snipnr - 1
+	  return
+	cif
+
+        write( mess, '(3(a,i5))' ) 'snip from tick', cuts(1),
+     #                  ' to tick', cuts(2), ' duration', snipdur
+        call ANYOUT( 16, mess )
+
+
+c get scantype for irds_extend
+	ierr = FTSD_RCHAR( header, 'SCANTYPE' , scantype)
+	if ierr .lt. 0
+	then
+		scantype = ' '
+	cif
+c get obs for irds_extend
+	ierr = FTSD_RINT( header, 'OBS', obs )
+	if ierr .lt. 0
+	then
+		obs = 0
+	cif
+
+	ierr = OK
+	call IRDS_EXTEND( irds, sop, obs, att, scantype, satcal,
+     #		scandur, snipcal, snipdur, psi, psirate, 
+     #		theta, ierr )
+	if ierr .ne. OK
+	then
+	  call ERROR( FATAL, 'IRPL_EXTEND: cannot extend irds.' )
+	  IRPL_EXTEND = -1
+	  return
+	cif
+
+	bandnr = IRCC_BANDNR( instrument )
+	obsmode = IRCC_OBSMODE( instrument )
+	rate = IRCC_RATE( instrument )
+c read enough datapoints to perform noise estimation
+	rdfrom = rate * int( ( cuts(1) + cuts(2) ) / 2 )
+	rdtill = max( rate * cuts(2), rdfrom + 240 )
+	rdfrom = min( rate * cuts(1), rdfrom - 240 )
+	rdtill = min( rate * nrsecs, rdtill )
+	rdfrom = max( 0, rdfrom )
+	skipdata = 0
+
+        write( mess, '(2(a,i7))' ) 'read from sample', rdfrom,
+     #                  ' to sample', rdtill
+        call ANYOUT( 16, mess )
+
+	call SETFBLANK( blank )
+	length = snipdur * rate
+	tick = 1
+	sdet = 0
+	ndets = IRCC_NDETS( instrument )
+	while sdet .lt. ndets
+	  sdet = sdet + 1
+	  det = IRCC_DETNR( sdet, instrument ) 
+
+	  skipdata = skipdata + rdfrom
+	  ierr = CFTS_SKIPPIX( mtid, skipdata )
+	  toread = rdtill - rdfrom
+	  ierr = CFTSI_GETR( mtid, reals, toread, tid )
+	  if ierr .ne. toread
+	  then
+	    write( mess, '(2(a,i6),a,2i4)' )'IRPL_EXTEND: reals asked',
+     #		 	toread, ' got', ierr, ' for', sop, att
+	    call ERROR( FATAL, mess )
+	    IRPL_EXTEND = -2
+	    return
+	  cif
+	  if bandnr .eq. 5
+	  then
+c it is LRS data: apply conversion to mv
+	    call IRLRS_DN2MV( reals, toread )
+	  cif
+	  if obsmode .eq. 2
+	  then
+c it is splines; apply spline conversion
+	    call IRC_DN2SPLINES( reals, toread )
+	  cif
+
+c write the part of the data that overlap
+	  skipdata = rate * cuts(1) - rdfrom + 1
+	  call IRDS_WR_SAMPLES( irds, snipnr, sdet, tick, 
+     #		reals(skipdata), length, ierr )
+	  if ierr .ne. OK
+	  then
+            string = 'IRPL_EXTEND: While writing IRDS ' // irds
+	    call ERROR( FATAL, string )
+	    IRPL_EXTEND = -3
+	    return
+	  cif
+
+c determine the random noise; first remove outages (= blank)
+	  k = 0
+	  i = 0
+	  kk = 0
+	  ii = 0
+	  while i .lt. toread
+	    i = i + 1
+	    if reals(i) .ne. blank 
+	    then
+	      k = k + 1
+	      reals(k) = reals(i)
+	    else
+	      if ( ii .lt. i .and. bandnr .ne. 5 ) 
+	      then
+		sat100 = MOD( satcal + cuts(1) + ii / rate, 100 )
+		call IRC_NONLIN( det, reals, k - kk, sat100, 0.0 )
+	      cif
+	      ii = i + 1
+	      kk = k
+	    cif
+	  cwhile
+
+c nonlinearity correction only for noise estimate
+          if bandnr .ne. 5
+          then 
+	    sat100 = MOD( satcal + cuts(1) + ii / rate, 100 )
+	    call IRC_NONLIN( det, reals, k - kk, sat100, 0.0 )
+          cif
+
+	  scale = 1.0
+	  noise = IRPL_NOISE( reals, k, scale )
+          write( mess, '(2(a,i7),a,f10.1)' ) 'detector', det, 
+     #          ' write samples', length, '   noise', noise
+          call ANYOUT( 16, mess )
+
+c write it to the irds at the proper det.snip
+	  ierr = 0
+          sniplevel = 0
+	  sniplevel = GDSC_WORD( irds, 4, snipnr, sniplevel, ierr )
+	  level = GDSC_WORD( irds, 3, sdet, sniplevel, ierr )
+	  call GDSD_WREAL( irds, 'NOISE', level, noise, ierr )
+
+	  skipdata = rate * nrsecs - rdtill
+	cwhile
+
+	IRPL_EXTEND = OK
+
+	return
+	end
+
+#<
+
+#>            irpl_greatxsmall.shl
+c             irpl_greatxsmall.dc2
+c
+c subroutine:	IRPL_GREATXSMALL
+c
+c Purpose:      intersections between a great circle and a small circle
+c
+c File:		irpl_greatxsmall.shl
+c
+c Class:	IRAS, Math
+c
+c Author:       Uwe Peppel
+c
+c Use:  subroutine IRPL_GREATXSMALL(
+c	polegc, 	I	doubleprecision(3)
+c	theta, 		I	real
+c	pint, 		O	real(3,2)
+c	nrint )         O	integer
+c 	polegc  	coordinates of one pole of the great circle
+c       theta   	polar angle of the small circle (in rad)
+c       pint    	intersection points
+c       nrint    	number of intersection points found
+c
+c Description:	The input parameters have to be given in a rectangular
+c            coordinate system with the z-axis pointing to the
+c            center of the small circle. The great circle has to
+c            be specified by the coordinates of one of its
+c            poles, the small circle by its polar angle.
+c            If intersection points are found, they are given by the
+c            array PINT. nrint can be 0, 1, or 2. nrint =1 means that
+c            the two circles have one common point. For the trivial case
+c            of THETA = 90 and POLEGC = (0,0,1) where the two circles
+c            are identical, nrint is given the value -1.
+c
+c Update:	900911	DK, all real variables to doubleprecision
+c
+c subroutine irpl_greatxsmall( double precision, real, real, integer )
+
+      	subroutine IRPL_GREATXSMALL( polegc, theta, pint, nrint )
+
+      	doubleprecision polegc(3)
+	real		theta, pint(3,2)
+      	integer         nrint
+
+      	real		PI, EPSILON
+      	parameter     ( PI = 3.14159265358979, EPSILON = 1.0e-7 )
+      	integer         icase
+      	real		p, phalf, q, s, t, u, u1, u2
+      	real		v, vv, v1, v2, w, ww, z
+      	logical		equalzero
+      	integer izzzse
+
+	equalzero( s ) = abs( s ) .lt. EPSILON
+
+c***********************************************************************
+c transformation of the original x,y,z coordinates to u,v,w coordinates
+        if abs( polegc(2) ) .ge. abs( polegc(1) )
+        then
+c x-axis --> u-axis , y-axis --> v-axis
+          u = real( polegc(1) )
+          v = real( polegc(2) )
+          icase = 1
+        else
+c x-axis --> v-axis , y-axis --> u-axis
+          v = real( polegc(1) )
+          u = real( polegc(2) )
+          icase = 2
+        cif
+
+        if equalzero( v )
+        then
+c special case u = v = 0.
+          if equalzero( theta - pi / 2. )
+          then
+c overlapping circles
+            nrint = -1
+            pint(1,1)= -1.0
+            pint(1,2)= 1.0
+            pint(2,1)= 0.0
+            pint(2,2)= 0.0
+            pint(3,1)= 0.0
+            pint(3,2)= 0.0
+          else
+c no intersection point
+            nrint = 0
+            pint(1,1)= -1000.0
+            pint(1,2)= -1000.0
+            pint(2,1)= -1000.0
+            pint(2,2)= -1000.0
+            pint(3,1)= -1000.0
+            pint(3,2)= -1000.0
+          cif
+
+          return
+	cif
+
+	z = real( polegc(3) )
+c z-axis --> w-axis
+        w = cos( theta )
+        ww = w * w
+c calculation of the intersection points
+c   by solving the second order equation
+        vv = v * v
+        t = u * u / vv  +  1
+        q = ( ww * z * z / vv - ( 1 - ww)) / t
+        p = 2 * u * z * w / vv / t
+        phalf = p / 2
+        s = phalf * phalf - q
+        if s .lt. 0.0
+        then
+c no intersection point
+          nrint = 0
+        else
+          if equalzero( s )
+          then
+c one intersection point
+            nrint = 1
+          else
+c two intersection points
+            nrint = 2
+          cif
+          s = sqrt(s)
+c solutions in u,v,w coordinates
+          u1 = - phalf + s
+          u2 = - phalf - s
+          v1 = - ( u1 * u + w * z ) / v
+          v2 = - ( u2 * u + w * z ) / v
+c transformation back to x,y,z coordinates
+          select icase
+          case 1
+            pint(1,1) = u1
+            pint(2,1) = v1
+            pint(1,2) = u2
+            pint(2,2) = v2
+          case 2
+            pint(1,1) = v1
+            pint(2,1) = u1
+            pint(1,2) = v2
+            pint(2,2) = u2
+          other
+          cselect
+          pint(3,1) = w
+          pint(3,2) = w
+        cif
+
+        return
+        end
+#<
+
+#>            irpl_noise.shl
+c	irpl_noise.shl
+c
+c	Copyright (c) Kapteyn Laboratorium Groningen 1990
+c	All Rights Reserved.
+c
+c real function irpl_noise( real, integer, real )
+
+c determine noise as the median of an 8-point zero-sum-filter
+
+	real function irpl_noise( dat, lensnp, scale )
+
+	integer		lensnp
+	real		dat(*), scale
+
+	integer		MHIS, SFAC, FILTER
+	parameter	( MHIS = 100, SFAC = 10, FILTER = 8 )
+        integer		k, histo(MHIS), kk(FILTER), i, izs
+	integer		hlen, keer
+	real		zsf, median
+c	character*80	mess
+
+	if ( lensnp .le. 0 )
+	then
+	   irpl_noise = 0
+	   return
+	cif
+
+c loop until the median falls inside histogram 
+	keer = 0
+	repeat
+	  keer = keer + 1
+c reset histo
+	  for k = 1, MHIS
+	    histo(k) = 0
+	  cfor
+c initialize filter indices
+	  for i = 1, FILTER
+	    kk(i) = i - 1
+	  cfor
+c set filter indices and circularize
+	  for k = 1, lensnp
+	    for i = 1, FILTER
+	      kk(i) = kk(i) + 1
+	      if kk(i) .gt. lensnp
+	      then
+	        kk(i) = 1
+	      cif
+	    cfor
+c make histogram of zero-sum-filter
+	    zsf = -dat(kk(1)) - dat(kk(2)) + dat(kk(3)) + dat(kk(4)) +
+     #	  	   dat(kk(5)) + dat(kk(6)) - dat(kk(7)) - dat(kk(8))
+c scale to FITS integers
+	    izs = nint( abs( zsf / scale ) ) + 1
+	    izs = min( MHIS, izs )
+	    histo(izs) = histo(izs) + 1
+	  cfor
+	  median = MHIS + 1
+c determine median of histogram
+	  izs = 0
+	  hlen = lensnp / 2
+	  for k = 1, MHIS - 1
+	    izs = izs + histo(k)
+	    if izs .gt. hlen
+	    then
+	      median = k - float( izs - hlen ) / histo(k)
+	      xfor
+	    cif
+	  cfor
+c	write( mess, '(a,5i6,2f10.1)' ) 'noise estimate ', keer, k, 
+c     #			histo(k), izs, hlen, scale, median
+c	call ANYOUT( 16, mess )
+c median falls outside histo: rescale with SFAC
+	  scale = scale * SFAC
+	until median .lt. MHIS .or. keer .gt. 8
+
+c scale back to intensity units and from median to standard deviation
+	irpl_noise = scale * median / ( sqrt( real( FILTER ) ) * SFAC )
+
+	return
+	end
+#<
+
+#>            vector_inprod.shl
+
+c               vector_inprod.dc2
+c Function:	VECTOR_INPROD
+c
+c Purpose:      Compute Vector Inner Product
+c
+c File:		vector_prod.shl
+c
+c Class:	Math
+c
+c Author:       Albrecht de Jonge
+c
+c Use: doubleprecision function VECTOR_INPROD( 
+c	X,	I	doubleprecision
+c	Y )  	I	doubleprecision
+c
+c       X, Y            two 3-dimensional vectors
+c       VECTOR_INPROD   the inner product ( X dot Y )
+c 
+c       Mainly meant as a shorthand for
+c               P = X(1) * Y(1) + X(2) * Y(2) + X(3) * Y(3)
+c 
+c Update:        901113 DK, adapted to GIPSY
+c
+c double precision function vector_inprod( double precision, 
+c					    double precision )
+
+        doubleprecision function VECTOR_INPROD( X, Y )
+
+	doubleprecision X(3), Y(3)
+
+	VECTOR_INPROD = X(1) * Y(1) + X(2) * Y(2) + X(3) * Y(3)
+
+	return
+	end
+
+#<
+
+#>            vector_outprod.shl
+
+c               vector_outprod.dc2
+c Subroutine:	VECTOR_OUTPROD
+c
+c Purpose:      Compute Vector Outer Product
+c
+c File:		vector_prod.shl
+c
+c Class:	Math
+c
+c Author:	Albrecht de Jonge
+c
+c Use: subroutine VECTOR_OUTPROD( 
+c	X, Y, 	I	doubleprecision(3)
+c	Z )	O	doubleprecision(3)
+c
+c       X, Y   	two 3-dimensional vectors
+c       Z      	the outer product ( X cross Y )
+c 
+c       Mainly meant as a shorthand for
+c               Z(1) = X(2) * Y(3) - X(3) * Y(2)
+c               Z(2) = X(3) * Y(1) - X(1) * Y(3)
+c               Z(3) = X(1) * Y(2) - X(2) * Y(1)
+c 
+c       The arguments may not share storage.
+c 
+c Update:       901113 DK, adapted to GIPSY
+c
+c subroutine vector_outprod( double precision, double precision,
+c			      double precision )
+
+       	subroutine VECTOR_OUTPROD( X, Y, Z )
+
+	doubleprecision X(3), Y(3), Z(3)
+
+	Z(1) = X(2) * Y(3) - X(3) * Y(2)
+	Z(2) = X(3) * Y(1) - X(1) * Y(3)
+	Z(3) = X(1) * Y(2) - X(2) * Y(1)
+
+	return
+	end
+
+#<
+
+#>            plate.make
+SHELL = /bin/sh
+# makefile for gipsy tasks, written in sheltran
+# fill in 
+#   PROG : the file name that contains the program-statement
+#   SUBS : the file names containing the subroutines belonging to PROG
+#   EXE  : the name to be assigned to the task; 
+#	   it should be different from PROG
+#
+# Examples for the program `plate'
+OBJ  = 	irpl_plate.o \
+	irpl_userinfo.o irpl_corners.o irpl_sopatt.o \
+	irpl_snip.o irpl_sniplate.o irpl_snipscan.o irpl_search.o \
+	irpl_scanheader.o irpl_snipsmall.o irpl_sniptimes.o \
+	irpl_extend.o irpl_greatxsmall.o irpl_noise.o \
+	vector_inprod.o vector_outprod.o 
+HEDR =
+EXE  =  plate
+
+# define the source files
+PROG =  $(OBJ:.o=.shl)
+# if (temporarily, for debugging) more objectfiles have to be linked,
+#   fill them in here. Otherwise leave empty.
+MOREOBJ = 
+
+# define name of executable
+MAK  =  $(EXE).make
+#define documentation file
+DOC  =  $(EXE).dc1
+# define the source files to be bundled 
+SRC  =  $(DOC) $(PROG) $(HEDR) $(MAK)
+# define the name of the bundle
+TASK =  $(EXE).src
+
+# Compiler, Options and Libraries for Fortran (Sheltran)
+COMP =  $(FC_COMP)
+OPTS =  $(FC_OPTS)
+LIBS =  $(FC_LIBS)
+# Compiler, Options and Libraries for C
+# COMP =        $(CC_COMP)
+# OPTS =        $(CC_OPTS)
+# LIBS =        $(CC_LIBS)
+
+# rules to make .o files
+.SUFFIXES	:
+.SUFFIXES	: .o .f .shl .c
+.shl.o		: 
+	$$gip_exe/sheltran $*.shl
+	$(FC_COMP) -w -c $(FC_OPTS) $*.f
+
+.c.o		: 
+	$(CC_COMP) -c $(CC_OPTS) $<
+
+# make a local task with the name EXE
+$(EXE)		: $(OBJ) $(MOREOBJ)
+	$(COMP) -o $(EXE) $(OBJ) $(MOREOBJ) $(LIBS)
+
+# bundle the sources and the makefile
+$(TASK)		: $(SRC) 
+	$$gip_sys/pack.csh $(TASK) $(SRC)
+	-rm -f $(TASK).bak
+
+# clean up the files created in compilation
+clean		: 
+	-rmchild -f $(SRC) 2> /dev/null
+	-rm -i $(SRC) 
+
+# print the source files on the laserjet
+print		: $(SRC)
+	qmsprint $?
+	@touch print
+#<

@@ -1,0 +1,49 @@
+
+Document:     clients
+
+Purpose:      The file clients, which resides in the gip_loc directory,
+              contains a list of all host names which are GIPSY
+              clients.
+
+Category:     SYSTEM SETUP
+
+File:         clients.doc
+
+Author:       K.G. Begeman
+
+Description:  All GIPSY clients are listed in this file. GIPSY clients
+              of the same machine architecture are supposed to run the
+              same version of the operating system and compilers.
+              Each client has a one line entry which contains several
+              fields separated by colons ':'.
+
+              Field        Meaning
+                #1         Hostname of GIPSY client or the string 'Generic-'
+                           followed by the result of 'uname -s'.
+                #2         Architecture (i.e. alliant, aix, sun4).
+                #3         Flag which denotes what the client may do:
+                           bit 1 (  +1): client may run gipsy.
+                           bit 2 (  +2): user may compile gipsy sources.
+                           bit 3 (  +4): user may install gipsy sources.
+                           bit 4 (  +8): compile runs not on GIPSY uid.
+                           bit 5 ( +16): compile uses own locking mechanism.
+                           bit 6 ( +32): old executables are NOT saved.
+                           bit 7 ( +64): compile runs on a remote machine
+                                         (bit must always be turned on,
+                                         except at the GIPSY source server
+                                         site).
+                           bit 8 (+128): compile obtains sources from the
+                                         GIPSY source server.
+                           bit 9 (+256): compile uses symbolic links for
+                                         synonyms (ln -s).
+                #4         Name of the gip_exe directory.
+                #5         Name of the gip_lib directory.
+                #6         Name of the gip_tmp directory.
+
+              Generic clients can only run GIPSY, not compile or install.
+
+Examples:     scott:sol4:103:/gipsy/exe/sol4:/gipsy/lib/sol4:/gipsy/tmp/sol4
+              Generic-Linux:linux:67:/gipsy/exe/linux:/gipsy/lib/linux:/gipsy/tmp/linux
+
+Updates:      May 23, 1991: KGB Document created.
+              Nov 15, 2004: JPT Generic feature documented.

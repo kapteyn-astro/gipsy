@@ -1,0 +1,523 @@
+C                           COPYRIGHT (c) 1990
+C                     Kapteyn Astronomical Institute
+C                University of Groningen, The Netherlands
+C                           All Rights Reserved.
+C
+C
+C#>             pbcorr.dc1
+C
+CProgram:       PBCORR
+C
+CPurpose:       Corrects maps for primary beam correction
+C
+CCategory:      MANIPULATION
+C
+CFile:          pbcorr.shl
+C
+CAuthor:        M. Vogelaar
+C
+CKeywords:
+C
+C    INSET=     Input set (and subsets). Maximum number of subsets
+C               is 2048.
+C              
+C    BOX=       Frame for input subsets.                 [entire subset]
+C               
+C
+C    OUTSET=    Output set and subset(s) for the result. The number 
+C               of output subsets is the same as the number of input 
+C               subsets.
+C
+C    POS=       Coordinates for which user wants             [stop]
+C               to know the primary beam correction. This keyword
+C               is asked only if MANUAL=Y is specified. Maximum 
+C               number of coordinate pairs is 64.
+C
+C*** BACK=      If user selects 'N' (default), a primary             [N]
+C               beam correction is applied. If 'Y' is selected, an
+C               attenuation is applied to your maps.
+C
+C*** MANUAL=    If user wants to apply correction                    [N]
+C               (or attenuation) on single points, select 'Y'. 
+C               End the session by pressing <return>.
+C
+C*** OPTION=    Give cutoff behaviour:                         1/2/3/[4]  
+C               For the manual mode only option 1 applies. The option
+C               cannot be changed in that case.
+C
+C   FREQUENCY=  Give frequency:                              [1.415 GHZ]
+C               If PBCORR cannot find a proper frequency, 
+C               the frequency is asked with FREQUENCY= The keyword 
+C               accepts a number and a unit. If no unit is given, the 
+C               number is in Ghz. Otherwise, a conversion is done to Ghz. 
+C               The possible units to convert from are for example MHz, 
+C               Hz, but also cm (all upper- or lowercase). The keyword
+C               is asked unhidden only once.
+C
+CDescription:   PBCORR corrects an image for the primary beam effects of
+C               WSRT, VLA (VLAP), ATCA (Australia Telescope Compact Array)
+C               FST antennas and the millimeter arrays IRAM-PdB, NMA
+C               (Nobeyama), OVRO and BIMA. The correction is proportional
+C               to the square of the distance from the pointing position.
+C               The coordinates of the pointing position are taken from 
+C               the header (items PCRA and PCDEC, values in degrees). If
+C               these descriptors cannot be found, the physical values of
+C               (pixel) position (0,0) is substituted and the user is 
+C               warned. There is a cutoff in the distance:
+C               Outside the validity range, the correction is set to a 
+C               value depending on OPTION= For WSRT and VLA The cutoff 
+C               occurs at a primary beam sensitivity of 2.3% of the value 
+C               at the beam center, i.e. where the Antenna Power Spectrum 
+C               is equal to 2.3/100. For the Fleurs telescope the cutoff
+C               is (at 21 cm) at a distance of 2.8 degrees.
+C               For the ATCA the cutoff occurs for RF = 50 arcmin GHz in 
+C               all bands.
+C
+C               Possible values for OPTION=
+C
+C               OPTION=1 : Return 0 if beyond cutoff, i.e. do 
+C                          not correct image values beyond cutoff.
+C               OPTION=2 : Return min. allowed correction beyond
+C                          cutoff. The function calculates
+C                          this value for different telescopes.
+C               OPTION=3 : Disable cutoff, i.e. return values
+C                          that correspond to coordinates
+C                          outside the validity range of the
+C                          correction function.
+C               OPTION=4 : Return blank if beyond cutoff.
+C
+CNotes:         The correction formulas are described in pribeam.dc1
+C                             
+CUpdates:       Mar 2,  1990: MV, Document created.
+C               Apr 8,  1992: MV, OPTION= included.
+C               Jul 24, 1992: MV, Document changed for new pribeam routine.
+C               Jun 9,  1993: MV, Document changed for new pribeam routine.
+C                                 (Millimeter arrays, Australia Telescope)
+C
+C#<
+C
+E     ***** Program PBCORR *****
+      PROGRAM PBCORR
+
+C     Declaration of parameters:
+
+      CHARACTER*(*)  ident
+      PARAMETER    ( ident = ' Version 2.0  apr 8, 1992' )
+      INTEGER        maxsubsets
+      PARAMETER    ( maxsubsets = 2048 )
+      INTEGER        maxaxes
+      PARAMETER    ( maxaxes = 10 )
+N     Default options for use in USERxxx() routines      
+      INTEGER        none, request, hidden
+      PARAMETER    ( none    = 0 )
+      PARAMETER    ( request = 1 )
+      PARAMETER    ( hidden  = 2 )
+N     Buffer size for I/O      
+      INTEGER        maxIObuf
+      PARAMETER    ( maxIObuf = 4096 )
+N     Remove with 'WMINMAX' old minmax descriptors
+      INTEGER        remove 
+      PARAMETER    ( remove = 1 )
+      INTEGER        maxcoords
+      PARAMETER    ( maxcoords = 128 )
+      
+C     Declarations for GDSINP:
+
+      INTEGER        GDSINP
+N     Array containing subset coordinate words      
+      INTEGER        subsets( maxsubsets )
+      INTEGER        nsubs
+      INTEGER        dfault
+      CHARACTER*80   setname
+      CHARACTER*10   keyword
+      CHARACTER*40   message
+      INTEGER        axperm(  maxaxes )
+      INTEGER        axcount( maxaxes )
+      INTEGER        class
+      INTEGER        dimofsubsets
+N     Number of output device [0..16]      
+      INTEGER        devicenum
+      
+C     Declarations for GDSBOX:
+
+N     Grid vectors of sub frames
+      INTEGER        BgridLO( maxaxes ), BgridHI( maxaxes )
+N     Grid vectors of entire frames 
+      INTEGER        FgridLO( maxaxes ), FgridHI( maxaxes )
+      INTEGER        FgridLOO( maxaxes ), FgridHIO( maxaxes )
+N     What's the default in GDSBOX      
+      INTEGER        option
+
+C     Declarations for GDSOUT:
+
+      INTEGER        GDSOUT
+      INTEGER        nsubsO
+      INTEGER        subsetsO( maxsubsets )
+      INTEGER        axpermO(  maxaxes )
+      INTEGER        axcountO( maxaxes )
+      CHARACTER*80   setnameO
+      
+C     Functions:
+
+N     Returns dimension of a set
+      INTEGER        GDSC_NDIMS
+N     Extracts grid coordinate from coord. word      
+      INTEGER        GDSC_GRID
+N     Returns coordinate word
+      INTEGER        GDSC_FILL
+N     Determine length of string
+      INTEGER        NELC  
+N     Obtain the name under which a GIPSY task runs
+      CHARACTER*9    MYNAME
+      REAL           PRIBEAM
+      INTEGER        USERINT
+      INTEGER        GDSPOS
+
+C     Variables for the algorithm:
+
+      INTEGER        i, m, q
+N     There are totpixels in one subset      
+      INTEGER        totpixels
+N     Transfer identifications for read/write      
+      INTEGER        tids
+      INTEGER        tidsO
+      INTEGER        mcount
+      INTEGER        ptrcount 
+      INTEGER        stilltowrite 
+N     Coordinate words for total & sub frame      
+      INTEGER        FcwLO, FcwHI
+      INTEGER        BcwLO, BcwHI
+      INTEGER        FcwloO, FcwhiO
+      INTEGER        numinreadbuf
+      INTEGER        numpixels
+N     For updating number of blanks      
+      INTEGER        nblanks( maxsubsets )      
+N     For updating minimum and maximum of subset      
+      REAL           minval(  maxsubsets  ), maxval( maxsubsets )
+      REAL           data(  maxIObuf )
+      REAL           dataO( maxIObuf )      
+
+
+C     Stabar variables:
+
+      REAL           stabarstart, stabarend, stabarcurrent      
+         
+C     Miscellaneous:
+
+      INTEGER        dimofset
+N     Error codes for Range and Grid routines      
+      INTEGER        Rerr, Gerr
+N     Coordinate words to determine total range      
+      INTEGER        cwlo, cwhi
+N     For use in function MYNAME
+      CHARACTER*9    task
+N     Value of system blank
+      REAL           blank
+      REAL           pbcfac
+      INTEGER        start
+N     Length of X-axis in box      
+      INTEGER        linelen
+      REAL           X, Y
+      INTEGER        IX, IY
+      REAL           dummy
+N     Help variable for data arrays      
+      REAL           val
+N     Return number of PRIBEAM error in errcode
+      INTEGER        errcode
+N     Get back from corrected set to original set?
+      LOGICAL        back
+N     Operate on single pixels?      
+      LOGICAL        manual
+N     Number of coordinates      
+      INTEGER        ncoords
+N     Array of coordinates       
+      DOUBLE PRECISION     coord( maxcoords )
+      LOGICAL        agreed
+      LOGICAL        more
+N     Are grid coordinates within range?      
+      LOGICAL        in
+      CHARACTER*80   pbctxt
+      CHARACTER*80   errtxt
+      INTEGER        result
+
+
+E     Main       
+      CALL INIT
+      devicenum = 11
+N     Display task name, time/date & version
+      task = MYNAME()
+      CALL ANYOUT( devicenum, task(1:nelc(task)) // ident )
+
+      CALL SETFBLANK( blank )
+N     Prepare for GDSINP for INSET      
+      dfault       = none      
+      keyword      ='INSET='
+      message      ='Give input set, subsets: '
+N     Application repeats operation for each subset      
+      class        = 1
+N     Let GDSINP determine the dim. of the subsets      
+      dimofsubsets = 0
+      devicenum    = 11
+      nsubs = GDSINP( setname, subsets, maxsubsets, dfault,
+     #                keyword, message, devicenum, axperm,
+     #                axcount, maxaxes, class, 
+     #                dimofsubsets )
+
+N     Determine the edges of this set
+C     The size of the input set will be copied to the output set.
+C     It is possible to work on a smaller area. Therefore we need
+C     the grid coordinates of the frame ('Fgrid') and 
+C     the coordinates of the user defined box ('Bgrid').
+
+      Rerr = 0
+      Gerr = 0
+      CALL GDSC_RANGE( setname, 0, cwlo, cwhi, Rerr )
+      totpixels = 1            
+      
+      FOR m = 1, dimofsubsets
+        FgridLO(m) = GDSC_GRID( setname, axperm(m), cwlo, Gerr )
+        FgridHI(m) = GDSC_GRID( setname, axperm(m), cwhi, Gerr )
+N       Calculate number of pixels per subset        
+        totpixels = totpixels * ( FgridHI(m) - FgridLO(m) + 1 )
+      CFOR
+        
+C     Is PBC possible?       
+
+      errcode = -1
+      X = 0
+      Y = 0
+      dummy   = PRIBEAM( setname, subsets(1), axperm, (X), (Y), 
+     #                   errcode, errtxt )
+N     Error codes are in the external fie PRIBEAM
+      IF (errcode .LT. 0) 
+      THEN
+        CALL ANYOUT( 3, ' PBCORR: No primary beam correction.' )
+        CALL ANYOUT( 3, errtxt )
+        CALL ERROR( 4, '!!!No PBC possible!!!' )
+      CIF
+
+C     Prepare for a frame for SET:
+
+      manual = .FALSE.
+      CALL USERLOG( manual, 1, hidden, 'MANUAL=', ' ' )
+      IF manual
+N     Prepare GDSBOX for a default      
+      THEN
+        dfault = hidden
+      ELSE
+        dfault = request
+      CIF      
+      keyword   = 'BOX='
+      message   = ' '
+N     Default is entire subset      
+      option    = 0
+      devicenum = 11
+      CALL GDSBOX( BgridLO, BgridHI, setname, subsets,
+     #             dfault, keyword, message, devicenum, option )
+            
+C     Create an output set:
+   
+      IF (.NOT. manual)
+      THEN           
+C       Assign GDSINP buffer to GDSOUT
+C       Output set will get same coordinate-
+C       system as input INSET
+        keyword   = 'OUTSET='
+        dimofset  = GDSC_NDIMS( setname, 0 )       
+        CALL GDSASN( 'INSET=', keyword, class )
+        dfault    = none
+        message   ='Give output set (and subsets):'
+        devicenum = 8
+        REPEAT
+          nsubsO = GDSOUT( setnameO, subsetsO, nsubs,
+     #                     dfault, keyword, message, devicenum,
+     #                     axpermO, axcountO, maxaxes )
+          agreed = (nsubsO .EQ. nsubs)
+          IF (.NOT. agreed)
+          THEN
+            CALL CANCEL( keyword )
+            CALL ANYOUT( 3, ' PBCORR: Wrong number of subsets: ' )
+          CIF
+        UNTIL agreed
+
+        Rerr = 0
+        Gerr = 0
+        CALL GDSC_RANGE( setnameO, 0, cwlo, cwhi, Rerr )
+        FOR m = 1, dimofsubsets
+          FgridLOO(m) = GDSC_GRID( setnameO, axpermO(m), cwlo, Gerr )
+          FgridHIO(m) = GDSC_GRID( setnameO, axpermO(m), cwhi, Gerr )
+        CFOR
+      CIF
+
+C     Hidden keyword:
+
+      back = .FALSE.
+      CALL USERLOG( back, 1, hidden, 'BACK=', ' ' )
+
+
+
+C     PBC of single positions:
+  
+      IF manual
+      THEN 
+        errcode = 1
+        keyword = 'POS='
+        message = 'Coordinates for correction:  [stop]'
+        REPEAT
+N         Put X, Y's in array
+          ncoords = GDSPOS( coord, maxcoords, request, keyword,
+     #                      message, setname, subsets(1) )
+          more = (ncoords .NE. 0)
+N         Control X, Y
+          IF (more)
+          THEN
+            FOR i = 1, ncoords, 2
+              in = .TRUE.
+              X = SNGL(coord(i))
+              Y = SNGL(coord(i + 1))
+              in = (  (X .GE. REAL(BgridLO(1))) .AND. 
+     #                (X .LE. REAL(BgridHI(1))) )
+              IF (dimofsubsets .EQ. 2)
+              THEN
+                in = ( in .AND.
+     #               (Y .GE. REAL(BgridLO(2))) .AND. 
+     #               (Y .LE. REAL(BgridHI(2)))  )
+              CIF
+              IF in
+              THEN
+                pbcfac = PRIBEAM( setname, subsets(1), axperm, 
+     #                            (X), (Y), errcode, errtxt )
+                IF (pbcfac .EQ. 0.0)
+                THEN
+                  WRITE(pbctxt,'(''('',F12.6,'','',F12.6,''): '',
+     #                 ''outside validity range of primary '',
+     #                 ''beam correction'')' ) X, Y
+                  CALL ANYOUT( 3, pbctxt )
+                ELSE
+                  WRITE(pbctxt,'(''PBC('',F12.6,'','',F12.6,'') = '',
+     #                   G12.6 )' ) X, Y, pbcfac
+                  CALL ANYOUT( 3, pbctxt )
+                CIF              
+              ELSE
+                WRITE(pbctxt,'(''('',F12.6,'','',F12.6,'') : '',
+     #               ''outside range of box'' )' ) X, Y
+                CALL ANYOUT( 3, pbctxt )
+              CIF
+            CFOR
+          CIF
+          CALL CANCEL( keyword )
+        UNTIL (.NOT. more)
+      CIF
+
+
+
+C     If not manual, repeat action for all subsets:
+           
+      IF (.NOT. manual)
+      THEN    
+        errcode = 4
+        result = USERINT( errcode, 1, hidden, 'OPTION=', 
+     #                   'Give cutoff behaviour:   [1]/2/3/4' )
+        stabarstart = 0.0
+        stabarend = FLOAT( nsubsO * totpixels )
+        stabarcurrent = 0.0
+        CALL STABAR( stabarstart, stabarend, stabarcurrent )
+N       cw=coordinate word, lo=lower, hi=upper
+        FOR m = 1, nsubsO
+N         F=Frame, B=Box
+          FcwLO  = GDSC_FILL( setname, subsets(m), FgridLO )
+          FcwHI  = GDSC_FILL( setname, subsets(m), FgridHI )
+          BcwLO  = GDSC_FILL( setname, subsets(m), BgridLO )
+          BcwHI  = GDSC_FILL( setname, subsets(m), BgridHI )
+          FcwloO = GDSC_FILL( setnameO, subsetsO(m), FgridLOO )
+          FcwhiO = GDSC_FILL( setnameO, subsetsO(m), FgridHIO ) 
+          linelen   = FgridHI(1) - FgridLO(1) + 1        
+          tids      = 0        
+          tidsO     = 0        
+          mcount    = 0
+          ptrcount  = 0
+          start     = 0
+          numpixels = 0        
+          stilltowrite = totpixels
+          REPEAT
+N           # per iteration cannot exceed maxIObuf
+            numinreadbuf = MIN( maxIObuf, stilltowrite )
+
+            CALL GDSI_READ( setname, FcwLO, FcwHI,
+     #                      data, numinreadbuf, numpixels, tids )
+                
+            FOR q = 1, numpixels
+              start = start + 1
+              IY =   (start - 1) / linelen
+              IX = ( (start - 1) - IY * linelen ) + FgridLO(1)
+              IY = IY + FgridLO(2)              
+              in = ((IX .GE. BgridLO(1)) .AND. (IX .LE. BgridHI(1)))
+              IF (dimofsubsets .EQ. 2)
+              THEN
+                in = in .AND. 
+     #             ((IY .GE. BgridLO(2)) .AND. (IY .LE. BgridHI(2)))
+              CIF
+              IF (in)
+              THEN
+                 val = data(q)
+                 X = FLOAT( IX )
+                 Y = FLOAT( IY )
+N                Primary beam correction for this position            
+                 pbcfac = PRIBEAM( setname, subsets(m), axperm, 
+     #                             (X), (Y), errcode, errtxt )
+N                Correct if inside PRIBEAM validity range     
+                 IF (pbcfac .EQ. blank)
+                 THEN 
+                   dataO(q) = blank
+                 ELSE
+                    IF (pbcfac .NE. 0.0)
+N                   ... because outside val.range, PRIBEAM = 0.0
+                    THEN 
+                      IF back
+                      THEN
+N                       PBC attenuation                  
+                        val = val * pbcfac
+                      ELSE
+N                       PBC correction                  
+                        val = val / pbcfac
+                      CIF               
+                    CIF
+                    dataO(q) = val
+                 CIF
+              ELSE
+                 dataO(q) = blank
+              CIF
+            CFOR
+            CALL GDSI_WRITE( setnameO, FcwloO, FcwhiO,
+     #                       dataO, numpixels, numpixels,
+     #                       tidsO )
+
+            CALL MINMAX3( dataO, numpixels, minval(m), maxval(m),
+     #                    nblanks(m), mcount )
+            stilltowrite = stilltowrite - numpixels
+            stabarcurrent = stabarcurrent + numpixels
+            CALL STABAR( stabarstart, stabarend, stabarcurrent )
+          UNTIL ( stilltowrite .EQ. 0 )
+        CFOR
+N       min max always change, ==> update min, max      
+        CALL WMINMAX( setnameO, subsetsO, minval, maxval, nblanks,
+     #                nsubsO, remove )
+N       Endif, if not manual     
+      CIF
+     
+      CALL FINIS
+      
+      STOP
+      END
+
+
+E     ***** Technicalities *****
+        
+C     Options in GDSBOX:
+C     1 box may exceed subset size
+C     2 default is in BgridLO
+C     4 default is in BgridHI
+C     8 box restricted to size defined in BgridHI
+C     These codes work additive. 
+
+

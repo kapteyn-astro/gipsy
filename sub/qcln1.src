@@ -1,0 +1,392 @@
+qcln1.src
+
+	Copyright (c) Kapteyn Laboratorium Groningen 1991
+	All Rights Reserved.
+
+Contents: qcln1.f
+
+Remarks:  This source file contains code for fast subtracting and searching a
+          CLEAN component. There is an optimized version for ALLIANT machines
+          and a standard version included.
+
+#>            qcln1.dc2
+
+Function:     QCLN1
+
+Purpose:      Fast subtract and search routine for CLEAN.
+
+Category:     MISC
+
+File:         qcln1.src
+
+Author:       K.G. Begeman
+
+Use:          CALL QCLN1( MAP ,      Input/Output     REAL ARRAY
+                          APT,          Input         REAL ARRAY
+                          NL ,          Input         INTEGER
+                          NM ,          Input         INTEGER
+                          NA ,          Input         INTEGER
+                          IA ,          Input         INTEGER
+                          SCOFF ,       Input         REAL
+                          ACMP ,        Input         REAL
+                          NCMP ,        Input         INTEGER
+                          AMAX ,        Output        REAL
+                          NMAX ,        Output        INTEGER
+                          AMIN ,        Output        REAL
+                          NMIN )        Output        INTEGER
+
+              MAP        Array containing the 2D dirty data.
+              APT        Array containing the antenna pattern.
+              NL         Size in X of map.
+              NM         Size in Y of map.
+              NA         Size in X of antenna pattern.
+              IA         Position of centre of antenna pattern.
+              SCOFF      Offset so that all data > 0 are searched
+                         for clean components.
+              ACMP       Amplitude of component to subtract.
+              NCMP       Position of component.
+              AMAX       New maximum after subtraction of component.
+              NMAX       Position new maximum.
+              AMIN       New minimum after subtraction of component.
+              NMIN       Position new minimum.
+
+Updates:      Apr 17, 1991: KGB Document created.
+
+#<
+
+#!IF    F2C
+
+#>    qcln1.f
+C
+C     C to Fortran interface:
+C
+C@    subroutine qcln1( real, real, integer, integer, integer, integer,
+C@                      real, real, integer, real, integer, real, integer )
+C
+      SUBROUTINE QCLN1( MAP ,
+     #                  APT ,
+     #                  NL ,
+     #                  NM ,
+     #                  NA ,
+     #                  IA ,
+     #                  SCOFF ,
+     #                  ACMP ,
+     #                  NCMP ,
+     #                  AMAX ,
+     #                  NMAX ,
+     #                  AMIN ,
+     #                  NMIN )
+C
+C     DECLARATION OF ARGUMENTS:
+C
+      REAL    MAP(*)
+      REAL    APT(*)
+      INTEGER NL
+      INTEGER NM
+      INTEGER NA
+      INTEGER IA
+      REAL    SCOFF
+      REAL    ACMP
+      INTEGER NCMP
+      REAL    AMAX
+      INTEGER NMAX
+      REAL    AMIN
+      INTEGER NMIN
+C
+C     LOCAL VARIABLES:
+C
+      INTEGER J, IMAP, IAPT, LC, MC, N
+C
+C     EXECUTABLE CODE:
+C
+      AMAX = SCOFF
+      AMIN = SCOFF
+      NMAX = 0
+      NMIN = 0
+      MC = ( NCMP - 1 ) / NL + 1
+      LC = NCMP - ( MC - 1 ) * NL
+      DO 10 J = 1, MC
+         IMAP = ( J - 1 ) * NL + 1
+         IAPT = IA - ( MC - J ) * NA - LC + 1
+         DO 12 N = 1, NL
+            AMAP = MAP(IMAP)
+            AMAP = AMAP - ACMP * APT(IAPT)
+            IF (AMAP .GT. 0.0) THEN
+               IF (AMAP .GT. AMAX) THEN
+                  NMAX = IMAP
+                  AMAX = AMAP
+               ELSEIF (AMAP .LT. AMIN) THEN
+                  NMIN = IMAP
+                  AMIN = AMAP
+               ENDIF
+            ENDIF
+            MAP(IMAP) = AMAP
+            IMAP = IMAP + 1
+            IAPT = IAPT + 1
+   12    CONTINUE
+   10 CONTINUE
+      DO 20 J = MC + 1, NM
+         IMAP = ( J - 1 ) * NL + 1
+         IAPT = IA + ( MC - J ) * NA + LC - 1
+         DO 22 N = 1, NL
+            AMAP = MAP(IMAP)
+            AMAP = AMAP - ACMP * APT(IAPT)
+            IF (AMAP .GT. 0.0) THEN
+               IF (AMAP .GT. AMAX) THEN
+                  NMAX = IMAP
+                  AMAX = AMAP
+               ENDIF
+               IF (AMAP .LT. AMIN) THEN
+                  NMIN = IMAP
+                  AMIN = AMAP
+               ENDIF
+            ENDIF
+            MAP(IMAP) = AMAP
+            IMAP = IMAP + 1
+            IAPT = IAPT - 1
+   22    CONTINUE
+   20 CONTINUE
+      AMIN=AMIN-SCOFF
+      AMAX=AMAX-SCOFF
+      RETURN
+      END
+#<
+
+#!ELIF	ALLIANT
+
+Compiler options:
+
+#>    qcln1.opt
+fortran -c -w -Ogv qcln1.f
+#<
+
+#>    qcln1.f
+C
+C     C to Fortran interface:
+C
+C@    subroutine qcln1( real, real, integer, integer, integer, integer,
+C@                      real, real, integer, real, integer, real, integer )
+C
+      SUBROUTINE QCLN1( MAP ,
+     #                  APT ,
+     #                  NL ,
+     #                  NM ,
+     #                  NA ,
+     #                  IA ,
+     #                  SCOFF ,
+     #                  ACMP ,
+     #                  NCMP ,
+     #                  AMAX ,
+     #                  NMAX ,
+     #                  AMIN ,
+     #                  NMIN )
+C
+C     DECLARATION OF ARGUMENTS:
+C
+      REAL    MAP(*)
+      REAL    APT(*)
+      INTEGER NL
+      INTEGER NM
+      INTEGER NA
+      INTEGER IA
+      INTEGER LS
+      INTEGER MS
+      REAL    SCOFF
+      REAL    ACMP
+      INTEGER NCMP
+      REAL    AMAX
+      INTEGER NMAX
+      REAL    AMIN
+      INTEGER NMIN
+C
+C     PARAMETERS:
+C
+      INTEGER VECLEN
+      PARAMETER (VECLEN = 512)
+C
+C     LOCAL VARIABLES:
+C
+      REAL    VAMAX(VECLEN), VAMIN(VECLEN)
+      INTEGER VNMAX(VECLEN), VNMIN(VECLEN), VNPOS(VECLEN)
+      INTEGER N, NLEFT, NDONE, MC, LC, J, I, IMAP, IAPT
+C
+C     EXECUTABLE CODE:
+C     
+C
+C     THE NEXT LOOP RESETS THE INITIAL EXTREMA
+C
+CVD$  SELECT(VECTOR)
+      DO 1 N = 1, VECLEN
+         VAMAX(N) = SCOFF
+         VAMIN(N) = SCOFF
+         VNMAX(N) = 0
+         VNMIN(N) = 0
+    1 CONTINUE
+C
+C     CALCULATE 2-D POSITION OF COMPONENT
+C
+      MC = ( NCMP - 1 ) / NL + 1
+      LC = NCMP - ( MC - 1 ) * NL
+C
+C     LOOP OVER ALL LINES
+C
+CVD$L NOVECTOR
+      DO 2 J = 1, NM
+         IMAP = ( J - 1 ) * NL + 1
+         IF (J .GT. MC) THEN
+            IAPT = IA + ( MC - J ) * NA + LC - 1
+CVD$        SELECT(VECTOR)
+            MAP(IMAP:IMAP+NL-1) = MAP(IMAP:IMAP+NL-1) - 
+     #                            ACMP * APT(IAPT:IAPT-NL+1:-1)
+         ELSE
+            IAPT = IA - ( MC - J ) * NA - LC + 1
+CVD$        SELECT(VECTOR)
+            MAP(IMAP:IMAP+NL-1) = MAP(IMAP:IMAP+NL-1) - 
+     #                            ACMP * APT(IAPT:IAPT+NL-1)
+         ENDIF
+C
+C        LOOP IN STEPS OF VECLEN
+C
+         NLEFT = NL
+CVD$L    NOVECTOR
+         DO 3 I = 1, NL, VECLEN
+            NDONE = MIN( VECLEN, NLEFT )
+            DO 4 N = 1, NDONE
+               VNPOS(N) = IMAP + N - 1
+    4       CONTINUE
+CVD$        SELECT(VECTOR)
+            WHERE (MAP(IMAP:IMAP+NDONE-1) .GT. 0.0 .AND.
+     #             MAP(IMAP:IMAP+NDONE-1) .GT. VAMAX(1:NDONE))
+               VAMAX(1:NDONE) = MAP(IMAP:IMAP+NDONE-1)
+               VNMAX(1:NDONE) = VNPOS(1:NDONE)
+            END WHERE
+CVD$        SELECT(VECTOR)
+            WHERE (MAP(IMAP:IMAP+NDONE-1) .GT. 0.0 .AND.
+     #             MAP(IMAP:IMAP+NDONE-1) .LT. VAMIN(1:NDONE))
+               VAMIN(1:NDONE) = MAP(IMAP:IMAP+NDONE-1)
+               VNMIN(1:NDONE) = VNPOS(1:NDONE)
+            END WHERE
+            IMAP = IMAP + NDONE
+            NLEFT = NLEFT - NDONE
+    3    CONTINUE
+    2 CONTINUE
+      AMAX = SCOFF
+      AMIN = SCOFF
+      NMAX = 0
+      NMIN = 0
+CVD$L NOVECTOR
+      DO 5 N = 1, MIN(VECLEN,NL)
+         IF (VNMAX(N) .GT. 0 .AND. VAMAX(N) .GT. AMAX) THEN
+            AMAX = VAMAX(N)
+            NMAX = VNMAX(N)
+         ENDIF
+         IF (VNMIN(N) .GT. 0 .AND. VAMIN(N) .LT. AMIN) THEN
+            AMIN = VAMIN(N)
+            NMIN = VNMIN(N)
+         ENDIF
+    5 CONTINUE
+      AMIN=AMIN-SCOFF
+      AMAX=AMAX-SCOFF
+      RETURN
+      END
+#<
+
+#!ELSE
+
+#>    qcln1.f
+C
+C     C to Fortran interface:
+C
+C@    subroutine qcln1( real, real, integer, integer, integer, integer,
+C@                      real, real, integer, real, integer, real, integer )
+C
+      SUBROUTINE QCLN1( MAP ,
+     #                  APT ,
+     #                  NL ,
+     #                  NM ,
+     #                  NA ,
+     #                  IA ,
+     #                  SCOFF ,
+     #                  ACMP ,
+     #                  NCMP ,
+     #                  AMAX ,
+     #                  NMAX ,
+     #                  AMIN ,
+     #                  NMIN )
+C
+C     DECLARATION OF ARGUMENTS:
+C
+      REAL    MAP(*)
+      REAL    APT(*)
+      INTEGER NL
+      INTEGER NM
+      INTEGER NA
+      INTEGER IA
+      REAL    SCOFF
+      REAL    ACMP
+      INTEGER NCMP
+      REAL    AMAX
+      INTEGER NMAX
+      REAL    AMIN
+      INTEGER NMIN
+C
+C     LOCAL VARIABLES:
+C
+      INTEGER J, IMAP, IAPT, LC, MC, N
+C
+C     EXECUTABLE CODE:
+C
+      AMAX = SCOFF
+      AMIN = SCOFF
+      NMAX = 0
+      NMIN = 0
+      MC = ( NCMP - 1 ) / NL + 1
+      LC = NCMP - ( MC - 1 ) * NL
+      DO 10 J = 1, MC
+         IMAP = ( J - 1 ) * NL + 1
+         IAPT = IA - ( MC - J ) * NA - LC + 1
+         DO 12 N = 1, NL
+            AMAP = MAP(IMAP)
+            AMAP = AMAP - ACMP * APT(IAPT)
+            IF (AMAP .GT. 0.0) THEN
+               IF (AMAP .GT. AMAX) THEN
+                  NMAX = IMAP
+                  AMAX = AMAP
+               ELSEIF (AMAP .LT. AMIN) THEN
+                  NMIN = IMAP
+                  AMIN = AMAP
+               ENDIF
+            ENDIF
+            MAP(IMAP) = AMAP
+            IMAP = IMAP + 1
+            IAPT = IAPT + 1
+   12    CONTINUE
+   10 CONTINUE
+      DO 20 J = MC + 1, NM
+         IMAP = ( J - 1 ) * NL + 1
+         IAPT = IA + ( MC - J ) * NA + LC - 1
+         DO 22 N = 1, NL
+            AMAP = MAP(IMAP)
+            AMAP = AMAP - ACMP * APT(IAPT)
+            IF (AMAP .GT. 0.0) THEN
+               IF (AMAP .GT. AMAX) THEN
+                  NMAX = IMAP
+                  AMAX = AMAP
+               ENDIF
+               IF (AMAP .LT. AMIN) THEN
+                  NMIN = IMAP
+                  AMIN = AMAP
+               ENDIF
+            ENDIF
+            MAP(IMAP) = AMAP
+            IMAP = IMAP + 1
+            IAPT = IAPT - 1
+   22    CONTINUE
+   20 CONTINUE
+      AMIN=AMIN-SCOFF
+      AMAX=AMAX-SCOFF
+      RETURN
+      END
+#<
+
+#!ENDIF

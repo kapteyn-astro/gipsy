@@ -1,0 +1,1195 @@
+      REAL FUNCTION PRIBEAM( setname, subset, axperm, X, Y, option,
+     #                       errtxt )
+C----------------------------------------------------------------------
+C#>            pribeam.dc2
+C
+CFunction:     PRIBEAM
+C
+CPurpose:      Calculate primary beam correction
+C              (after proper initialization)
+C
+CFiles:        pribeam.shl
+C
+CAuthor:       M. Vogelaar
+C
+CCategory:     RADIO DATA, HEADER
+C
+CUse:          REAL PRIBEAM( setname    ,   Input   CHARACTER*(*)
+C                            subset     ,   Input   INTEGER
+C                            axperm     ,   Input   INTEGER ARRAY
+C                            X          ,   Input   REAL
+C                            Y          ,   Input   REAL
+C                            option     ,   I/O     INTEGER
+C                            errtxt     ,   O       CHARACTER*(*)
+C                          )
+C
+C              PRIBEAM    Returns correction value less than 1.0 (i.e.
+C                         a 'Antenna Power Spectrum' value) after
+C                         proper initialization. The setup needs to be
+C                         done only once and is achieved by calling the
+C                         function with option = 0.
+C                         If the function returns option <> 0 it is
+C                         ready for calculating the corrections.
+C              setname    Name of GDS set.
+C              subset     Subset coordinate word.
+C                         The subset can be 1- or 2-dimensional. If it
+C                         is one dimensional, the coordinates are to be
+C                         supplied in X.
+C              axperm     Axis permutation array.
+C              X          Grid position of point in longitude direction.
+C              Y          Grid position in latitude direction.
+C              option     INPUT:
+C                         option = 0 : Initialize PRIBEAM.
+C                         option = 1 : Return 0 if beyond cutoff.
+C                         option = 2 : Return min. allowed value beyond
+C                                      cutoff. The function calculates
+C                                      this value for different telescopes.
+C                         option = 3 : Disable cutoff, i.e. return values
+C                                      that correspond to coordinates
+C                                      outside the validity range of the
+C                                      correction function.
+C                         option = 4 : Return blank if beyond cutoff.
+C
+C                         Use option <> 4 very carefully!
+C
+C                         OUTPUT:
+C                         option < 0 : Not a successful initialization.
+C                                     'errtxt' contains the error message.
+C
+C              errtxt     After an unsuccessful initialization, errtxt
+C                         contains a message about what went wrong.
+C
+CDescription:  PRIBEAM looks in the set header for the instrument
+C              used. Instruments recognized by PBCORR are: WSRT, VLA,
+C              (VLAP), FST and the millimeter arrays IRAM-PdB, NMA (Nobeyama),
+C              OVRO and BIMA. The VLAP beam shape comes from A. Rots.  
+C              The shape for the millimeter arrays are approximated by form.4 
+C              (F. Viallefond). 
+C              Added in 2010 is the GMRT, The Giant Metrewave Radio Telescope
+C
+C              RF is [D * freq (GHz)], where D is the distance
+C              from the pointing position in minutes of arc for
+C              the VLA and the ATCA antenna and in degrees for
+C              other antennas. The distance D is computed using spherical
+C              geometry except for the millimeter arrays for which
+C              a flat geometry is a good approximation (small ratio
+C              primary beam size/pixel size) to speed up the computations.
+C
+C              The shape of the primary beam then, is represented by the
+C              following formulas (PBC is the correction factor):
+C
+C              form.1 : WSRT
+C                       PBC = COS(C*RF)**6
+C                       4995    Mhz (6  cm): C = 61.18
+C                       1415    Mhz (21 cm): C = 61.18
+C                        608.5  Mhz (50 cm): C = 66.4
+C                        327.25 Mhz (90 cm): C = 62.9   (After jan '89)
+C
+C
+C              form.3 : VLA all frequencies outside freq. ranges of form 5 
+C                       PBC = 1 / F(RF**2)
+C                       The VLA correction is described by the function:
+C                       ( 1/correction=Power Spectrum )
+C                         F(RF2) =  0.9920378
+C                                  +0.9956885 E-3   RF2
+C                                  +0.3814573 E-5   RF2*RF2
+C                                  -0.5311695 E-8   RF2*RF2*RF2
+C                                  +0.3980963 E-11  RF2*RF2*RF2*RF2
+C
+C                         F(FR2) =   a0
+C                                  + a1*RF2
+C                                  + a2*RF2*RF2
+C                                  + a3*RF2*RF2*RF2
+C                                  + a4*RF2*RF2*RF2*RF2
+C
+C     ------------------------------------------------------------------
+C     Instru.   VLA              ATCA      ATCA      ATCA      ATCA
+C     Band      all bands        20cm      13cm      6cm       3cm
+C     ------------------------------------------------------------------
+C     a0        +0.9920378       +1.       +1.       +1.       +1.
+C     a1        +0.9956885 E-03  +8.99E-04 +1.02E-03 +1.08E-03 +1.04E-03
+C     a2        +0.3814573 E-05  +2.15E-06 +9.48E-07 +1.31E-06 +8.36E-07
+C     a3        -0.5311695 E-08  -2.23E-09 -3.68E-10 -1.17E-09 -4.68E-10
+C     a4        +0.3980963 E-11  +1.56E-12 +4.88E-13 +1.07E-12 +5.50E-13
+C     ------------------------------------------------------------------
+C
+C                   N.B. range for the ATCA [0-50] arcmin GHz for the 
+C                   20, 13, 6 and 3cm bands (ref. "Measurement of the ATCA 
+C                   primary beam" Sept. 8, 1992 by Wieringe and Kesteven.
+C
+C              form.4 : FST (Fleurs) and millimeter arrays
+C                       PBC = EXP(-T2*RF*RF) (T2 = 0.8031 for the FST)
+C
+C                   T0, T2, T4 and T6 depend on the instrument used and in
+C                   some cases also on the frequency.
+C
+C              form.5: new VLA for different frequency ranges (R. Perley 
+C                      report 21-Nov-00). Fits were made to 3% cutoff in power
+C                      for 24 antennas. Poor fits and discrepant fits were
+C                      discarded, and the most consistent subset of antennas
+C                      had their fitted coefficients averaged to produce
+C                      the 'best' coefficients. The estimated errors (from the
+C                      scatter in the fitted coefficients) are genarally very
+C                      small:
+C                      a1: 0.003 E-3 at all bands except Q (0.14 E-3)
+C                      a2: 0.03 to 0.07 E-7 at all bands except Q (0.15 E-7)    
+C                      a2: 0.01 to 0.02 E-10 at all bands except Q (0.04 E-10)    
+C                       PBC = 1 / F(RF**2)
+C                       The VLA correction is described by the function:
+C                       ( 1/correction=Power Spectrum )
+C
+C                         F(FR2) =   a0
+C                                  + a1*RF2 
+C                                  + a2*RF2*RF2
+C                                  + a3*RF2*RF2*RF2
+C
+C --------------------------------------------------------------------------------------
+C INSTRUME   VLA       VLA        VLA        VLA        VLA        VLA         VLA 
+C Band       L                    C          X          U          K           Q
+C Freq range            1.43-1.73 4.5-5.0    8.0-8.8    14.4-15.4  22-24       40-50
+C Freq (GHz) 1.285      1.465     4.885      8.435      14.965     22.485      43.315
+C Lambda     20cm       13cm      6cm        3.6cm      2cm        1.3cm       0.7cm
+C --------------------------------------------------------------------------------------
+C a0        +1.        +1.        +1.        +1.        +1.        +1.        +1.      
+C a1        -1.329E-03 -1.343E-03 -1.372E-03 -1.306E-03 -1.305E-03 -1.417E-03 -1.321E-03 
+C a2        +6.445E-07 +6.579E-07 +6.940E-07 +6.253E-07 +6.155E-07 +7.332E-07 +6.185E-07
+C a3        -1.146E-10 -1.186E-10 -1.309E-10 -1.100E-10 -1.030E-10 -1.352E-10 -0.983E-10
+C
+C              form 6:
+C                 For the GMRT the following formula applies:
+C                 1 + (a/10^3)x^2 + (b/10^7)x^4 + (c/10^10)x^6 + (d /10^13)x^8
+C                 where x = RF
+C
+C -------------------------------------------------------------------------------------
+C Freq band  a0         a1        a2      a3       Halfpower width
+C 153 MHz   -4.04       76.2     -68.8    22.03    180'
+C 235 MHz   -3.366      46.159   -29.963  7.529    118.5'
+C 325 MHz   -3.397      47.192   -30.931  7.803    85.2'
+C 610 MHz   -3.486      47.749   -35.203  10.399   44.4'
+C L band    -2.27961    21.4611  -9.7929  1.80153  26.2' ( 1280 MHz)
+C -------------------------------------------------------------------------------------
+C              
+C
+C              Outside the validity range, the correction is set to a
+C              value depending on 'option'. For WSRT and VLA The cutoff
+C              occurs at a primary beam sensitivity of 2.3% of the value
+C              at the beam center, i.e. where the Antenna Power Spectrum
+C              is equal to 2.3/100. For the ATCA the cutoff occurs for
+C              RF = 50 arcmin GHz in all bands. For the Fleurs telescope
+C              the cutoff is (at 21 cm) at a distance of 2.8 degrees.
+C              The pointing position is obtained from the header items
+C              PCRA and PCDEC. If these items are not available, the
+C              reference values (CRVAL) of pixel 0 are used.
+C
+CNote:         If PRIBEAM cannot find a proper frequency, the frequency
+C              is asked with FREQUENCY= The keyword accepts a number and a
+C              unit. If no unit is given, the number is in GHz. Otherwise
+C              a conversion is done to GHz. The possible units to convert
+C              are for example MHz, Hz, but also cm. Only the first time
+C              the keyword is asked unhidden. Documentation
+C              about this keyword should be included in the documentation
+C              of the application that calls 'PRIBEAM'.
+C
+CUpdates:      Mar 27, 1990: MV,  Document created.
+C              Jan 14, 1992: MV,  Cotrans to calculate distance.
+C              Apr  8, 1992: MV,  Other VLA formula.
+C              Jul 23, 1992: MV,  Made suitable for 1-dim. subsets.
+C              Jul 24, 1992: MV,  One formula for all WSRT frequencies.
+C              Dec 31, 1992: FV,  Millimeter arrays added
+C              Mar  9, 1993: FV,  Australia Telescope added
+C              Mar 29, 2003: FV,  Updated now using form 5 for the VLA
+C              Apr 21, 2010: VOG, Added GMRT
+C              Dec 26, 2013: VOG, Added two conversions from double to single
+C                                 with SNGL(), after report of weird values.
+C
+C#<
+C
+C@ real function pribeam( character, integer, integer, real,
+C@                        real, integer, character )
+C
+
+C     Parameters:
+
+N     Dummy coordinate word to indicate top level
+      INTEGER           toplevel
+      PARAMETER       ( toplevel = 0 )
+      INTEGER           maxaxes
+      PARAMETER       ( maxaxes = 9 )
+
+N     Prevent overflows
+      DOUBLE PRECISION  limit
+      PARAMETER       ( limit = 0.0000001 )
+
+C     Arguments:
+
+      CHARACTER*(*)     setname
+      INTEGER           subset
+      INTEGER           axperm(  * )
+      INTEGER           axnum( maxaxes )
+N     Position of pixel to be corrected
+      REAL              X, Y
+N     Return an error message
+      INTEGER           option
+N     Error message
+      CHARACTER*(*)     errtxt
+
+C     Miscellaneous:
+
+      INTEGER           oldsubset
+      INTEGER           setdim
+N     Known (radio) instruments
+      LOGICAL           WSRT, VLA, VLAP, FST, DRAO, ATCA, GMRT
+      LOGICAL           IRAM15m, NRO10m, OVRO10m, BIMA6m
+N     Is it a millimeter array?
+      LOGICAL           MMARRAY
+N     Is it radio data?
+      LOGICAL           radio
+N     Are corrections possible?
+      LOGICAL           available
+N     Holds name of used instrument
+      CHARACTER*18      instr
+N     Needed to check on spatiality.
+      CHARACTER*18      cunit(  maxaxes )
+      CHARACTER*18      dunit(  maxaxes )
+      CHARACTER*18      ctype(  maxaxes )
+      INTEGER           typeno( maxaxes )
+      INTEGER           skysys
+      INTEGER           prosys
+      INTEGER           velsys
+N     Pointing center of telescope (RA-DEC)
+      DOUBLE PRECISION  pcra, pcdec
+N     Use ref. frequency for all corrections
+      DOUBLE PRECISION  freq
+N     Needed for conversion to physical coordinates
+      DOUBLE PRECISION  crval( maxaxes ), cdelt( maxaxes )
+N     Correction factor for the declination
+      DOUBLE PRECISION  corrfac
+N     Offset between telescope & subset origin
+      DOUBLE PRECISION  Xoffset, Yoffset
+N     For conversion of freq. to wavelength
+      DOUBLE PRECISION  c, cm
+N     Converted correction parameters
+      DOUBLE PRECISION  T0, T2, T4, T6
+N     Use diameter of an element for millimeter arrays
+      DOUBLE PRECISION  DIAM
+N     Cutoff validity range of prim. beam corr.
+      DOUBLE PRECISION  cutoff
+N     Product of dist. to pointing center & freq
+      DOUBLE PRECISION  R, RF,RF2, RFMAX2
+N     Hor. & Vert. distance from pointing center
+      DOUBLE PRECISION  dx, dy
+      DOUBLE PRECISION  acarg
+N     Westerbork calibration factor
+      DOUBLE PRECISION  calib
+N     Counters
+      INTEGER           i, j, m
+N     Which formula has to applied
+      INTEGER           form
+N     Error codes for functions
+      INTEGER           Nerr, Rerr
+N     Dummy character for converting purposes
+      CHARACTER*1       ch
+N     Dimension of subset
+      INTEGER           subdim
+N     Blank value for option 4
+      REAL              blank
+N     Values at cutoff in validity region
+      REAL              minval(4)
+N     Multiply degs by 'degtorad' to obtain rads
+      DOUBLE PRECISION  degtorad
+      CHARACTER*200     message
+      CHARACTER*40      freqtxt(2)
+      DOUBLE PRECISION  coordin(2), coordout(10)
+      DOUBLE PRECISION  posra, posdec
+      DOUBLE PRECISION  cfact
+      DOUBLE PRECISION  PI
+      PARAMETER       ( PI=3.1415927 )
+      DOUBLE PRECISION  value
+      DOUBLE PRECISION  crvalspectral, cdeltspectral
+      INTEGER           spectralaxis, longaxis, lataxis
+      DOUBLE PRECISION  Q
+      DOUBLE PRECISION  A(5)
+      DOUBLE PRECISION  A1, A2, A3, A4, A5
+      INTEGER           grid
+      LOGICAL           agreed
+      INTEGER           dflt
+      LOGICAL           unitscm
+      INTEGER           naxis
+
+
+C     Functions:
+
+N     Used to determine dim. of subset
+      INTEGER           GDSC_NDIMS
+      INTEGER           GDSC_GRID
+      INTEGER           COTRANS, res
+      INTEGER           FACTOR
+      INTEGER           AXTYPE
+      INTEGER           DCDDBLE
+      INTEGER           USERCHARU
+      INTEGER           NCOORDS
+
+
+C     Save variables after initialization:
+
+      SAVE cdelt, Xoffset, Yoffset, freq, form, T0, T2, T4, T6, A,
+     #     cutoff, blank, minval, degtorad, pcra, pcdec, corrfac,
+     #     cfact, subdim, oldsubset, crvalspectral, cdeltspectral,
+     #     spectralaxis, longaxis, lataxis, calib, MMARRAY
+
+
+
+C----------------------------------------------------------------------
+C     Input Q=[R(deg)*60.0*freq(GHz)]**2
+C     ==> Inverse power spectrum of VLA beam and ATCA beam
+C----------------------------------------------------------------------
+      DINVPOWERSP( A1, A2, A3, A4, A5, Q ) = SNGL( 
+     #                              ( A1 +
+     #                          Q * ( A2 +
+     #                          Q * ( A3 +
+     #                          Q * ( A4 +
+     #                          Q * ( A5 )))))
+     #                          )
+C----------------------------------------------------------------------
+
+
+N     Initialize
+      PRIBEAM = 0.0
+      degtorad = DATAN(1.0D0) / 45.0
+      errtxt = ' '
+      IF (option .LE. 0)
+      THEN
+        Rerr = 0
+        CALL GDSD_RCHAR( setname, 'INSTRUME', toplevel, instr, Rerr )
+        IF ( Rerr .LT. 0 )
+N       Not in header
+        THEN
+          option = -1
+          errtxt = 'PBC: Instrument name not defined in header'
+          RETURN
+        ELSE
+          WSRT = ( instr .EQ. 'WSRT')
+          VLA  = ( instr .EQ. 'VLA' )
+          VLAP = ( instr .EQ. 'VLAP')
+          FST  = ( instr .EQ. 'FST' )
+          DRAO = ( instr .EQ. 'DRAO')
+          ATCA = ( instr .EQ. 'ATCA')
+          GMRT = ( instr .EQ. 'GMRT')
+          IRAM15m = .FALSE.
+          NRO10m  = .FALSE.
+          OVRO10m = .FALSE.
+          BIMA6m  = .FALSE.
+          IF ((Index(instr,'PdB') .NE. 0) .OR.
+     #        (Index(instr,'PDB') .NE. 0) .OR.
+     #        (Index(instr,'pdb') .NE. 0) )
+          THEN
+          IRAM15m = .TRUE.
+          ELSEIF ((Index(instr,'NRO') .NE. 0) .OR.
+     #            (Index(instr,'NMA') .NE. 0) )
+          THEN
+          NRO10m  = .TRUE.
+          ELSEIF (Index(instr,'OVRO') .NE. 0)
+          THEN
+          OVRO10m = .TRUE.
+          ELSEIF (Index(instr,'BIMA') .NE. 0)
+          THEN
+          BIMA6m  = .TRUE.
+          CIF
+        CIF
+N       Is it radio data?
+        radio = (WSRT .OR. VLA .OR. VLAP .OR. FST .OR. DRAO .OR. ATCA 
+     #         .OR. GMRT
+     #         .OR. IRAM15m .OR. NRO10m .OR. OVRO10m . OR. BIMA6m )
+        IF (.NOT. radio)
+        THEN
+          option = -2
+          errtxt = 'PBC: Not a known radio telescope'
+          RETURN
+        CIF
+N       Are correction parameters available?
+        available = (radio .AND. (.NOT. DRAO))
+        IF (.NOT. available)
+        THEN
+          option = -3
+          errtxt = 'PBC: No correction parameters available'
+          RETURN
+        CIF
+
+C------------------------------------------------
+C       Subset dimension must be 1 or 2
+C------------------------------------------------
+
+        setdim = GDSC_NDIMS( setname, 0 )
+        subdim = GDSC_NDIMS( setname, subset )
+        IF ((subdim .LT. 1) .OR. (subdim .GT. 2))
+        THEN
+          option = -4
+          errtxt = 'PBC: Dimension subset not 1 or 2'
+          RETURN
+        CIF
+
+C----------------------------------------------------
+C       Correction is possible if the axis/axes of a
+C       subset is/are spatial
+C----------------------------------------------------
+
+        spectralaxis = -1
+        longaxis     = -1
+        lataxis      = -1
+N       number of coordinates including the hidden!
+        naxis        = MAX( setdim, NCOORDS(setname) )
+        FOR i = 1, naxis
+          Nerr = 0
+          WRITE( ch, '(I1)' ) i
+          Rerr = 0
+          CALL GDSD_RCHAR(setname, 'CTYPE'//ch, toplevel, ctype(i),
+     #                    Rerr)
+          IF (Rerr .LT. 0)
+          THEN
+            ctype(i)  = ' '
+            typeno(i) = 0
+          ELSE
+            typeno(i) = AXTYPE( ctype(i), cunit(i), dunit(i),
+     #                          skysys, prosys, velsys )
+          CIF
+          IF (typeno(i) .EQ. 1)
+          THEN
+            longaxis = i
+          CIF
+          IF (typeno(i) .EQ. 2)
+          THEN
+            lataxis = i
+          CIF
+          IF (typeno(i) .EQ. 3)
+          THEN
+            spectralaxis = i
+          CIF
+        CFOR
+
+C----------------------------------------------------------------------
+C       A subset is accepted if it is 1-dimensional and the subset
+C       axis is spatial or the subset is 2-dimensional and both
+C       axes are (different) spatial axes.
+C----------------------------------------------------------------------
+
+        FOR i = 1, subdim
+           IF ((typeno(axperm(i)) .NE. 1) .AND.
+     #         (typeno(axperm(i)) .NE. 2))
+           THEN
+             option = -5
+             errtxt = 'PBC: Subset axis not spatial'
+             RETURN
+           CIF
+        CFOR
+
+        IF (subdim .EQ. 2)
+        THEN
+           IF (longaxis .EQ. lataxis)
+           THEN
+              option = -5
+              errtxt = 'PBC: Spatial axes not different'
+              RETURN
+           CIF
+        CIF
+
+        IF (subdim .EQ. 1)
+        THEN
+           IF (longaxis .GT. 0)
+           THEN
+              IF (lataxis .LT. 0)
+              THEN
+                 option = -5
+                 errtxt = 'PBC: Cannot obtain a latitude'
+                 RETURN
+              CIF
+           ELSE
+N             Now there is a lat. axis
+              IF (longaxis .LT. 0)
+              THEN
+                 option = -5
+                 errtxt = 'PBC: Cannot obtain a longitude'
+                 RETURN
+              CIF
+           CIF
+        CIF
+
+
+C       Axes info
+
+        i = 0
+        IF (longaxis .GT. 0)
+        THEN
+           i = i + 1
+           axnum(i) = longaxis
+        CIF
+        IF (lataxis .GT. 0)
+        THEN
+           i = i + 1
+           axnum(i) = lataxis
+        CIF
+        IF (spectralaxis .GT. 0)
+        THEN
+           i = i + 1
+           axnum(i) = spectralaxis
+        CIF
+        FOR j = 1, i
+          m = axnum(j)
+          WRITE( ch, '(I1)' ) m
+          Rerr = 0
+N         Get the real(!) units of this axis
+          CALL GDSD_RCHAR(setname, 'CUNIT'//ch, toplevel, cunit(m),
+     #                    Rerr)
+          Rerr = 0
+N         Get the reference value of this axis
+          CALL GDSD_RDBLE(setname, 'CRVAL'//ch, toplevel, crval(m),
+     #                    Rerr)
+          IF (Rerr .EQ. -46)
+N         Number could have been stored as a real (-46)
+          THEN
+            crval(m) = DBLE( crval(m) )
+            Rerr = 0
+          CIF
+          IF ( Rerr .LT. 0 )
+          THEN
+            option = -7
+            errtxt = 'PBC: Fits item CRVAL not available'
+            RETURN
+          CIF
+          Rerr = 0
+N         Get the pixel separation of this axis
+          CALL GDSD_RDBLE(setname, 'CDELT'//ch, toplevel, cdelt(m),
+     #                    Rerr)
+          IF (Rerr .EQ. -46)
+N         Number could have been stored as a real (-46)
+          THEN
+            cdelt(m) = DBLE( cdelt(m) )
+            Rerr = 0
+          CIF
+          IF ( Rerr .LT. 0 )
+          THEN
+            option = -7
+            errtxt = 'PBC: Fits item CDELT  not available'
+            RETURN
+          CIF
+        CFOR
+
+
+        IF (spectralaxis .EQ. -1)
+N       No spectral axis frequency found; could be a single channel!
+        THEN
+           Rerr = 0
+N          Get the central frequency from header
+           CALL GDSD_RDBLE( setname, 'FREQ0', toplevel, freq, Rerr )
+N          Standard units for FREQ0 are in Hz
+           cfact = 1.0D-9
+           IF ( Rerr .EQ. -46 )
+N          Number could have been stored as a real (-46)
+           THEN
+              freq = DBLE( freq )
+              Rerr = 0
+           CIF
+           IF ( Rerr .LT. 0 )
+           THEN
+N             Prepare a default for user input in Ghz
+              IF (WSRT .OR. VLA .OR. VLAP .OR. FST .OR. DRAO .OR. ATCA)
+              THEN
+                 freq = 1.415
+              ELSEIF (IRAM15m .OR. NRO10m .OR. OVRO10m . OR. BIMA6m)
+              THEN
+                 freq = 115.271
+              ELSEIF (GMRT)
+              THEN
+                 freq = 0.610
+              CIF
+N             ask for a frequency
+              dflt = 1
+              PERFORM getfrq
+           CIF
+        ELSE
+           Rerr = 0
+           grid = GDSC_GRID( setname, spectralaxis,
+     #                       subset, Rerr )
+           crvalspectral = crval(spectralaxis)
+           cdeltspectral = cdelt(spectralaxis)
+           freq = crvalspectral + DBLE(grid) * cdeltspectral
+           res  = FACTOR( cunit(spectralaxis), 'GHZ', cfact )
+           IF (res .NE. 0)
+           THEN
+             option = -5
+             errtxt = 'PBC: Cannot convert to GHZ'
+             RETURN
+           CIF
+        CIF
+        oldsubset = subset
+        freq = freq * cfact
+        write( message, '(D12.6)' ) freq
+        call anyout ( 8,
+     #    'PBC:  Used frequency:'//message(1:nelc(message))//' GHz' )
+
+C--------------------------------------------
+C       Pointing position of telescope
+C--------------------------------------------
+
+
+        Rerr = 0
+        CALL GDSD_RDBLE( setname, 'PCRA', toplevel, pcra, Rerr )
+        IF (Rerr .EQ. -46)
+        THEN
+          pcra = DBLE( pcra )
+          Rerr = 0
+        CIF
+        IF ( Rerr .LT. 0 )
+N       RA of telescope position not in header
+        THEN
+          CALL ANYOUT( 3, 'PBC: Use position of grid 0 as '//
+     #                'telescope RA position.' )
+          pcra = crval( longaxis )
+        CIF
+        Rerr = 0
+        CALL GDSD_RDBLE( setname, 'PCDEC', toplevel, pcdec, Rerr )
+        IF (Rerr .EQ. -46)
+        THEN
+          pcdec = DBLE( pcdec )
+          Rerr = 0
+        CIF
+        IF ( Rerr .LT. 0 )
+N       DEC of telescope position not in header
+        THEN
+          CALL ANYOUT( 3, 'PBC: Use position of grid 0 as '//
+     #                'telescope DEC position.' )
+          pcdec = crval( lataxis )
+        CIF
+N       Return positive option after initialization
+        option = 1
+N       Correct for declination & put COS arg. in rad
+        corrfac = COS( crval(2) * degtorad )
+        Xoffset = (pcra  - crval(1)) * corrfac
+        Yoffset = (pcdec - crval(2))
+
+        pcra  = pcra  * degtorad
+        pcdec = pcdec * degtorad
+
+N       Speed of light in cm/s
+        c = 2.9979250000D+10
+N       Frequency in GHz
+        cm = c / (freq*1.0D9)
+        IF WSRT
+        THEN
+C         At 4995 Mhz (~ 6.0 cm)
+          IF ((cm .GT. 0.0) .AND. (cm .LT. 16.0))
+          THEN
+N           Frequency from Mhz to Ghz
+            calib = 0.06118*1000.0
+            form = 1
+          CIF
+C         At 1415 Mhz (~ 21.1 cm)
+          IF ((cm .GE. 16.0) .AND. (cm .LT. 35.0))
+          THEN
+            calib = 0.06118*1000.0
+            form = 1
+          CIF
+C         At 608.5 Mhz (~ 49.3 cm)
+          IF ((cm .GE. 35.0) .AND. (cm .LT. 70.0))
+          THEN
+            calib = 0.0664*1000.0
+            form = 1
+          CIF
+C         At 327.25 Mhz (~ 91.6 cm)
+          IF (cm .GE. 70.0)
+          THEN
+            calib = 0.0629*1000.0
+            form = 1
+          CIF
+          minval(form) = 2.3/100.0
+        CIF
+        IF ( VLA .OR. ATCA )
+        THEN
+           form = 3
+           IF VLA
+           THEN
+              A(1) = +0.9920378D0
+              A(2) = +0.9956885D-3
+              A(3) = +0.3814573D-5
+              A(4) = -0.5311695D-8
+              A(5) = +0.3980963D-11
+C             -----------------------------------------------------
+C             For all four wavelengths: 20.5, 6.1, 2.0, 1.3 cm
+C             the cutoff occurs at a primary beam sensitivity of
+C             2.3% of the value at the beam center, i.e. a
+C             primary beam correction of 100/2.3
+C             -----------------------------------------------------
+              minval(form) = 2.3/100.0
+C
+C             New VLA
+C
+
+              minval(form) = 2.3/100.0
+
+              IF ( freq .LT. 1.43D0 )
+              THEN
+N             20 CM band
+                 form = 5
+                 A(1) = +1.D0
+                 A(2) = -1.329D-03
+                 A(3) = +6.445D-07
+                 A(4) = -1.146D-10
+              ELSEIF ( (freq .GT. 1.42D0) .AND. (freq .LT. 1.74D0) )
+              THEN
+N             20 CM band
+                 form = 5
+                 A(1) = +1.D0
+                 A(2) = -1.343D-03
+                 A(3) = +6.579D-07
+                 A(4) = -1.186D-10
+              ELSEIF ( (freq .GT. 4.4D0) .AND. (freq .LT. 5.1D0) )
+              THEN
+N             6 CM band
+                 form = 5
+                 A(1) = +1.D0
+                 A(2) = -1.372D-03 
+                 A(3) = +6.940D-07 
+                 A(4) = -1.309D-10
+              ELSEIF ( (freq .GT. 7.9D0) .AND. (freq .LT. 8.9D0) )
+              THEN
+N             3.6 CM band
+                 form = 5
+                 A(1) = +1.D0
+                 A(2) = -1.306D-03 
+                 A(3) = +6.253D-07 
+                 A(4) = -1.100D-10 
+              ELSEIF ( (freq .GT. 14.3D0) .AND. (freq .LT. 15.5D0) )
+              THEN
+N             2 CM band
+                 form = 5
+                 A(1) = +1.D0
+                 A(2) = -1.305D-03 
+                 A(3) = +6.155D-07 
+                 A(4) = -1.030D-10 
+              ELSEIF ( (freq .GT. 21.9D0) .AND. (freq .LT. 24.1D0) )
+              THEN
+N             1.3 CM band
+                 form = 5
+                 A(1) = +1.D0
+                 A(2) = -1.417D-03
+                 A(3) = +7.332D-07  
+                 A(4) = -1.352D-10
+              ELSEIF ( (freq .GT. 39.9D0) .AND. (freq .LE. 50.1D0) )
+              THEN
+N             0.7 CM band
+                 form = 5
+                 A(1) = +1.D0
+                 A(2) = -1.321D-03
+                 A(3) = +6.185D-07
+                 A(4) = -0.983D-10
+C                 CALL ANYOUT(3,'Q band data')
+              CIF
+
+           ELSEIF ATCA
+           THEN
+N          Australia Telescope Compact Array case
+              A(1) = 1.D0
+              IF ( ( freq .GT. 1.25D0 ) .AND. ( freq .LE. 1.78D0 ) )
+              THEN
+N             20 CM band
+                 A(2) = +0.899D-3
+                 A(3) = +0.215D-5
+                 A(4) = -0.223D-8
+                 A(5) = +0.156D-11
+              ELSEIF ( (freq .GT. 2.20D0) .AND. (freq .LE. 2.50D0) )
+              THEN
+N             13 CM band
+                 A(2) = +0.102D-2
+                 A(3) = +0.948D-6
+                 A(4) = -0.368D-9
+                 A(5) = +0.488D-12
+              ELSEIF ( (freq .GT. 4.40D0) .AND. (freq .LE. 6.10D0) )
+              THEN
+N             6 CM band
+                 A(2) = +0.108D-2
+                 A(3) = +0.131D-5
+                 A(4) = -0.117D-8
+                 A(5) = +0.107D-11
+              ELSEIF ( (freq .GT. 8.00D0) .AND. (freq .LE. 9.20D0) )
+              THEN
+N             3 CM band
+                 A(2) = +0.104D-2
+                 A(3) = +0.836D-6
+                 A(4) = -0.468D-9
+                 A(5) = +0.550D-12
+              CIF
+              RFMAX2 = 50.D0*50.D0
+N             (arcmin x GHz)**2
+              minval(form) = SNGL(1.D0/DINVPOWERSP(A(1),A(2),A(3),A(4),
+     #                                        A(5), RFMAX2))
+           CIF
+        CIF
+        IF VLAP
+        THEN
+          T0 = 1.00714
+          T2 = 4.81882
+          T4 = 9.03274
+          T6 = 6.73891
+          cutoff = 0.43
+          form = 1
+C         PBC at cutoff
+          minval(form) = SNGL( T0 + cutoff*(-T2 + cutoff*(T4 -
+     #                           cutoff*T6)) )
+        CIF
+
+        IF GMRT
+        THEN
+           form = 6
+N          153 MHz band
+           IF ( freq .LT. 0.175D0 )
+           THEN
+              A(1) = -4.04
+              A(2) = 76.2
+              A(3) = -68.8
+              A(4) = 22.03
+           ELSEIF ( (freq .GT. 0.175) .AND. (freq .LT. 0.277) )
+N          235 MHz band
+           THEN
+              A(1) = -3.366
+              A(2) = 46.159
+              A(3) = -29.963
+              A(4) = 7.529
+           ELSEIF ( (freq .GT. 0.277) .AND. (freq .LT. 0.480) )
+N          325 MHz band
+           THEN
+              A(1) = -3.397
+              A(2) =  47.192
+              A(3) = -30.931
+              A(4) = 7.803
+           ELSEIF ( (freq .GT. 0.480) .AND. (freq .LT. 0.900) )
+N          610 MHz band
+           THEN
+              A(1) = -3.486
+              A(2) =  47.749
+              A(3) = -35.203
+              A(4) = 10.399
+           ELSEIF (freq .GT. 0.900)
+N          1280 MHz (L) band
+           THEN
+              A(1) = -2.27961
+              A(2) =  21.4611
+              A(3) = -9.7929
+              A(4) = 1.80153
+           CIF
+           A(1) = A(1) * 1.0D-3
+           A(2) = A(2) * 1.0D-7
+           A(3) = A(3) * 1.0D-10
+           A(4) = A(4) * 1.0D-13
+C          cutoff unknown; I do not truncate ...
+           cutoff = 999.   
+        CIF
+
+        IF FST
+        THEN
+          T0 = 3.0
+          T2 = 0.8031
+          T4 = 9.03274
+          T6 = 6.73891
+          cutoff = 2.8
+          form = 4
+C         PBC at cutoff
+          minval(form) = SNGL( EXP( -T2*cutoff ) )
+        CIF
+        IF IRAM15m
+        THEN
+          DIAM=15.D0
+C         cutoff not well known; I truncate at 15% (S. Guilloteau)
+          cutoff = 1.291
+        ELSEIF (NRO10m)
+        THEN
+          DIAM=10.D0
+C         cutoff unknown; I do not truncate ...
+          cutoff = 999.
+        ELSEIF (OVRO10m)
+        THEN
+          DIAM=10.4D0
+C         cutoff unknown; I do not truncate ...
+          cutoff = 999.
+        ELSEIF (BIMA6m)
+        THEN
+          DIAM=6.D0
+C         cutoff unknown; I do not truncate ...
+          cutoff = 999.
+        CIF
+        IF (IRAM15m .OR. NRO10m .OR. OVRO10m .OR. BIMA6m)
+        THEN
+          MMARRAY = .TRUE.
+          T2=6.527D-3*DIAM*DIAM
+          form = 4
+C         PBC at cutoff
+          minval(form) = SNGL( DEXP( -T2*cutoff ) )
+        ELSE
+          MMARRAY = .FALSE.
+        CIF
+N       For option 4 you need a blank
+        CALL SETFBLANK( blank )
+
+C       ===== END OF INITIALIZATION OF PRIBEAM =====
+      ELSE
+C       Pribeam is initialized. Calculate the correction factor.
+C       Make use of the saved variables:
+
+C=======================================================================
+C       Given the position X, Y, calculate the Power Spectrum value of
+C       an antenna. R is the distance from the pointing position in
+C       degrees.
+C=======================================================================
+
+N       Calculate R (distance) in degrees
+        errtxt = ' '
+        coordin(1) = DBLE(X)
+        IF (subdim .EQ. 2)
+        THEN
+           coordin(2) = DBLE(Y)
+        CIF
+        IF (MMARRAY)
+        THEN
+          dx =  Xoffset -  coordin(1) * cdelt(1)
+          dy =  Yoffset - coordin(2) * cdelt(2)
+          IF (DABS(dx) .LT. limit)
+          THEN
+            dx = 0
+          CIF
+          IF (DABS(dy) .LT. limit)
+          THEN
+            dy = 0
+          CIF
+          R = SQRT( dx*dx + dy*dy )
+        ELSE
+          res = COTRANS( setname, subset, coordin, coordout, 1 )
+          posra  = coordout(longaxis) * degtorad
+          posdec = coordout(lataxis)  * degtorad
+N         Convert to degrees again
+          acarg = SIN(pcdec)*SIN(posdec) +
+     #            COS(pcdec)*COS(posdec)*COS(pcra-posra)
+          acarg = MAX(-1D0,MIN(1D0,acarg))
+          R = ACOS(acarg) / degtorad
+        CIF
+C       WRITE(message, '(D12.6)' ) R
+C       CALL  ANYOUT( 3, message )
+
+C---------------------------------------------------------
+C       If the subset is a new subset, recalculate freq
+C---------------------------------------------------------
+
+        IF (subset .NE. oldsubset)
+        THEN
+           IF (spectralaxis .EQ. -1)
+           THEN
+N            Ask next frequencies hidden
+             dflt = 2
+             PERFORM getfrq
+           ELSE
+             Rerr = 0
+             grid = GDSC_GRID( setname, spectralaxis,
+     #                         subset, Rerr )
+             freq = crvalspectral + DBLE(grid) * cdeltspectral
+             freq = freq * cfact
+           CIF
+           oldsubset = subset
+        CIF
+
+
+
+N       Radius times frequency in Ghz
+        RF  = R * freq
+        RF2 = RF * RF
+
+N       Validity range (disabled with option 3 or VLA or WSRT)
+        IF ( (RF2 .LT. cutoff) .OR. (option .EQ. 3) .OR.
+     #       (form .EQ. 3) .OR. (form .EQ. 5) .OR.
+     #       (form .EQ. 6) .OR. (form .EQ. 1) )
+        THEN
+N         WSRT case
+          IF (form .EQ. 1)
+          THEN
+N            'degtorad' converts to radians
+             value = SNGL((COS(calib*degtorad*RF))**6)
+N            Power smaller than 2.3% ?
+             IF ((value .GE. 0.023D0) .OR. (option .EQ. 3))
+             THEN
+N              Primary beam correction
+               PRIBEAM = SNGL(value)
+               RETURN
+             ELSE
+N              Outside validity range
+               IF (option .EQ. 1)
+N              Return 0 if beyond cutoff.
+               THEN
+                  PRIBEAM = 0.0
+                  RETURN
+               CIF
+               IF (option .EQ. 2)
+N              Return min. allowed value beyond cutoff
+               THEN
+                  PRIBEAM = minval(form)
+                  RETURN
+               CIF
+               IF (option .EQ. 4)
+N              Return blank if beyond cutoff
+               THEN
+                 PRIBEAM = blank
+                 RETURN
+               CIF
+             CIF
+          ELSEIF ( (form .EQ. 3) .OR. (form .EQ. 5) .OR. (form .EQ. 6) )
+          THEN
+N         VLA, ATCA or GMRT case
+N            Convert distance in degrees to arcmin
+             RF = (R * 60.0) * freq
+             RF2 = RF * RF
+             IF ( form .EQ. 3 )
+             THEN
+                value = DINVPOWERSP( A(1),A(2),A(3),A(4),A(5),RF2 )
+             ELSEIF (form .EQ. 5)
+             THEN
+                value = 1.0D0/(A(1)+RF2*(A(2)+RF2*(A(3)+RF2*A(4))))
+             ELSEIF (form .EQ. 6)
+             THEN
+             value=1.0D0/(1.0+RF2*(A(1)+RF2*(A(2)+RF2*(A(3)+RF2*A(4)))))
+             CIF
+N            Power spectrum values cannot exceed 1.0!
+             value = 1.0D0 / MAX( 1.0D0, value )
+N            Power smaller than 2.3% ?
+C             IF ((value .GE. 0.023D0) .OR. (option .EQ. 3))
+             IF ((value .GE. DBLE(minval(form))).OR.(option .EQ. 3) 
+     #           .OR. (form .EQ. 6))
+             THEN
+N              Primary beam correction
+               PRIBEAM = SNGL(value)
+               RETURN
+             ELSE
+N              Outside validity range
+               IF (option .EQ. 1)
+N              Return 0 if beyond cutoff.
+               THEN
+                  PRIBEAM = 0.0
+                  RETURN
+               CIF
+               IF (option .EQ. 2)
+N              Return min. allowed value beyond cutoff
+               THEN
+                  PRIBEAM = minval(form)
+                  RETURN
+               CIF
+               IF (option .EQ. 4)
+N              Return blank if beyond cutoff
+               THEN
+                  PRIBEAM = blank
+                  RETURN
+                CIF
+             CIF
+          ELSEIF (form .EQ. 4)
+N         FST and millimeter arrays cases
+          THEN
+            PRIBEAM = SNGL( EXP( -T2*RF2 ) )
+          CIF
+        ELSE
+N         Outside validity range
+          IF (option .EQ. 1)
+N         Return 0 if beyond cutoff.
+          THEN
+            PRIBEAM = 0.0
+            RETURN
+          CIF
+          IF (option .EQ. 2)
+N         Return min. allowed value beyond cutoff
+          THEN
+            PRIBEAM = minval(form)
+            RETURN
+          CIF
+          IF (option .EQ. 4)
+N         Return blank if beyond cutoff
+          THEN
+            PRIBEAM = blank
+            RETURN
+          CIF
+        CIF
+      CIF
+      RETURN
+
+
+
+      PROC getfrq
+C--------------------------------------------------------------
+C     Input of frequency if routine cannot create one itself
+C     Units can be specified at the same time as the frequency,
+C     conversion is done automatically.
+C--------------------------------------------------------------
+           REPEAT
+             unitscm = .FALSE.
+             WRITE(message,'(''Give frequency:       ['',
+     #           F8.3,'' GHZ]'')')freq
+             WRITE(freqtxt(1)(1:9),'(F8.3,A1)')freq,0
+             WRITE(freqtxt(2)(1:4),'(''GHZ'',A1)')0
+             res = USERCHARU( freqtxt, 2, dflt, 'FREQUENCY=',
+     #                        message)
+
+             IF (res .EQ. 0)
+             THEN
+               freq = 1.415D+9
+               res = 1
+             CIF
+             IF (res .LT. 2)
+             THEN
+               cfact = 1.0D0
+               IF (res .EQ. 1)
+               THEN
+                 res  = DCDDBLE( freqtxt(1), freq, 1, Rerr )
+                 agreed = (res .EQ. 1)
+                 IF ( .NOT. agreed )
+                 THEN
+                   message = 'Cannot convert number'
+                 CIF
+               CIF
+             ELSE
+               res = FACTOR( freqtxt(2), 'GHZ', cfact )
+               agreed = (res .EQ. 0)
+               IF ( .NOT. agreed )
+               THEN
+N                 Could have been cm.
+                  IF ( (freqtxt(2)(1:1) .EQ. 'C') .AND.
+     #                 (freqtxt(2)(2:2) .EQ. 'M') )
+                  THEN
+                     unitscm = .TRUE.
+                     agreed = .TRUE.
+                  ELSE
+                     message = 'Cannot convert to GHZ'
+                  CIF
+               CIF
+               IF (agreed)
+               THEN
+                  Rerr = 0
+                  res  = DCDDBLE( freqtxt(1), freq, 1, Rerr )
+                  agreed = (res .EQ. 1)
+                  IF ( .NOT. agreed )
+                  THEN
+                    message = 'Cannot convert number'
+                  ELSE
+                     IF (unitscm)
+N                    Convert cm to Ghz
+                     THEN
+                        freq = 29.979250 / freq
+                        cfact = 1.0D0
+                     CIF
+                  CIF
+               CIF
+             CIF
+             IF (.NOT. agreed)
+             THEN
+                CALL REJECT( 'FREQUENCY=', message )
+                dflt = 1
+              CIF
+           UNTIL (agreed)
+           CALL CANCEL( 'FREQUENCY=' )
+C           WRITE(message,'('' Input frequency:'',G12.6,''Ghz'')')freq
+C           CALL ANYOUT(3, message )
+      CPROC
+
+      END
+
+

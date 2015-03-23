@@ -1,0 +1,60 @@
+Program:      htmldoc
+
+Purpose:      Generate .html files containing links to the ASCII-based
+              documentation (-.dc1, -.dc2, -.dc3, -.doc).
+
+Category:     MANAGEMENT
+
+File:         htmldoc.src
+
+Author:       J.P. Terlouw
+
+Use:          $gip_exe/htmldoc type
+              
+              type is the documentation type: "dc1", "dc2", "dc3" or "doc".
+
+Description:  The program generates a number of html files in the current
+              working directory, depending on 'type'.
+
+              dc1:
+                   alltasks.html with links to the .dc1 documents;
+                   cattasks.html with links to catagorized .html documents;
+                   <category>_tasks.html with links to .dc1 documents for
+                   every category.
+              dc2:
+                   alldc2subs.html with links to the .dc2 documents;
+                   catdc2subs.html with links to catagorized .html documents;
+                   <category>_dc2subs.html with links to .dc2 documents for
+                   every category.
+              dc3:
+                   alldc3subs.html with links to the .dc3 documents;
+                   catdc3subs.html with links to catagorized .html documents;
+                   <category>_dc3subs.html with links to .dc3 documents for
+                   every category.
+              doc:
+                   alldocs.html with links to the .doc documents;
+                   catdocs.html with links to catagorized .html documents;
+                   <category>_docs.html with links to .doc documents for
+                   every category.
+
+              As input it takes the documents of the designated type for
+              the purpose lines and source file names and it reads
+              the document 'categories.doc' for the category descriptions.
+
+              The program also detects whether there is an html file with the
+              name $gip_htm/<name>/index.html, where <name> is the name
+              of the document file, with the type stripped off.
+              If such a file exists, htmldoc will extract the information
+              in the html TITLE field and uses this to create a link to
+              the file. E.g.: "See also: Supplementary documentation".
+
+              The generated files will usually be placed in $gip_htm/dc123doc.
+                   
+
+Updates:      Aug 16, 1995: JPT original document created.
+              Nov 13, 1995: JPT disallow leading blanks before section keyword.
+              Feb 22, 1996: JPT detect presence of associated html files.
+              May 29, 1999: JPT ignore "Called output()" internal error.
+              Aug 11, 2009: JPT renamed getline to GetLine.
+              Jul 11, 2011: JPT do not write links to source files anymore.
+              Aug 15, 2012: JPT added missing include alloc.h to filecontents.c.

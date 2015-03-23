@@ -1,0 +1,137 @@
+qcln2.src
+
+	Copyright (c) Kapteyn Laboratorium Groningen 1991
+	All Rights Reserved.
+
+Contents: qcln2.f
+
+Remarks:  This source file contains code for fast subtracting a CLEAN
+          component. There is an optimized version for ALLIANT machines
+          and a standard version included.
+
+#>            qcln2.dc2
+
+Function:     QCLN2
+
+Purpose:      Fast subtract routine for CLEAN
+
+Category:     MISC
+
+Author:       K.G. Begeman
+
+Use:          CALL QCLN2( MAP,       Input/Output     REAL ARRAY
+                          AP ,          Input         REAL ARRAY
+                          ACMP ,        Input         REAL
+                          NL )          Input         INTEGER
+
+              MAP        Array containing the 2D dirty data.
+              AP         Array containing the antenna pattern.
+              ACMP       Amplitude of component to subtract.
+              NL         Size in X of map.
+
+Updates:      Apr 17, 1991: KGB Document created.
+
+#<
+
+#!IF    F2C
+
+#>    qcln2.f
+C
+C     C to fortran interface:
+C
+C@    subroutine qcln2( real, real, real, integer )
+C
+      SUBROUTINE QCLN2( MAP ,
+     #                  AP ,
+     #                  ACMP ,
+     #                  NL )
+C
+C     DECLARATION OF ARGUMENTS:
+C
+      REAL    MAP(*)
+      REAL    AP(*)
+      REAL    ACMP
+      INTEGER NL
+C
+C     LOCAL VARIABLES:
+C
+      INTEGER N
+C
+C     EXECUTABLE CODE:
+C
+      DO 1 N = 1, NL
+         MAP(N) = MAP(N) - ACMP * AP(N)
+    1 CONTINUE
+C
+      RETURN
+      END
+#<
+
+#!ELIF	ALLIANT
+
+#>    qcln2.opt
+fortran -c -w -Ogv qcln2.f
+#<
+
+#>    qcln2.f
+C
+C     C to fortran interface:
+C
+C@    subroutine qcln2( real, real, real, integer )
+C
+      SUBROUTINE QCLN2( MAP ,
+     #                  AP ,
+     #                  ACMP ,
+     #                  NL )
+C
+C     DECLARATION OF ARGUMENTS:
+C
+      REAL    MAP(*)
+      REAL    AP(*)
+      REAL    ACMP
+      INTEGER NL
+C
+C     EXECUTABLE CODE:
+C
+CVD$  SELECT(VECTOR)
+      MAP(1:NL) = MAP(1:NL) - ACMP * AP(1:NL)
+C
+      RETURN
+      END
+#<
+
+#!ELSE
+
+#>    qcln2.f
+C
+C     C to fortran interface:
+C
+C@    subroutine qcln2( real, real, real, integer )
+C
+      SUBROUTINE QCLN2( MAP ,
+     #                  AP ,
+     #                  ACMP ,
+     #                  NL )
+C
+C     DECLARATION OF ARGUMENTS:
+C
+      REAL    MAP(*)
+      REAL    AP(*)
+      REAL    ACMP
+      INTEGER NL
+C
+C     LOCAL VARIABLES:
+C
+      INTEGER N
+C
+C     EXECUTABLE CODE:
+C
+      DO 1 N = 1, NL
+         MAP(N) = MAP(N) - ACMP * AP(N)
+    1 CONTINUE
+C
+      RETURN
+      END
+#<
+
+#!ENDIF

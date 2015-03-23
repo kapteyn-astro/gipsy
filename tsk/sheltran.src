@@ -1,0 +1,6789 @@
+sheltran.src
+
+	Copyright (c) Kapteyn Laboratorium Groningen 1991
+	All Rights Reserved.
+
+
+This source contains the code for the SHELTRAN compiler in SHELTRAN and
+in FORTRAN. Also the tex document describing the language is included.
+
+#>            sheltran.doc
+
+Document:     sheltran
+
+Purpose:      Compiles SHELTRAN source code into FORTRAN 77.
+
+Category:     SYSTEM
+
+Author:       K.G. Begeman
+
+Use:          On unix systems:
+
+              sheltran source [-I<dir>] [-f] [-l[<lo>] [-ln<lpp>]]
+
+              source         source file containing SHELTRAN code
+                             (must have extension .shl).
+              -I<dir>        directory where to look for include files
+                             (default is current directory).
+              -f             do not produce a fortran source.
+              -l<lo>         create SHELTRAN listing according to the
+                             listing option <lo> (can be 0, 1, 2, or 3,
+                             1 is default).
+              -ln<lpp>       lines per page for listing (default is 57).
+
+              On VMS systems:
+
+              SHELTRAN SOURCE[/INCLUDE=<dir>][/NOFOR]
+                       [/LIST[/LO=<lo>][/LPP=<lpp>]]
+
+              SOURCE         source file containing SHELTRAN code
+                             (must have extension .shl).
+              /INCLUDE=<dir> directory where to look for include files
+                             (default is current directory).
+              /NOFOR         do not produce a fortran source.
+              /LIST          produce SHELTRAN listing
+              /LO=<lo>       create SHELTRAN listing according to the
+                             listing option <lo> (can be 0, 1, 2, or 3,
+                             1 is default).
+              /LPP=<lpp>     lines per page for listing (default is 57).
+
+Related Docs: sheltran.tex for ans explanation of the language.
+
+Updates:      Jun 17, 1991: KGB Document created.
+              Sep 14, 2007: JPT Colon edit descriptor fix for gfortran.
+
+#<
+
+#>    sheltran.tex
+\documentstyle[rep10]{report}
+\spaceskip=3.33pt plus 3.33pt minus 1pt
+\font\tt=cmtt10
+\begin{document}
+\begin{titlepage}
+\null
+\begin{center}
+{\Large Universiteit Groningen -- Kapteyn Laboratorium}\\
+\vfill
+{\huge SHELTRAN\\}
+
+\end{center}
+\end{titlepage}
+\thispagestyle{empty}
+\tableofcontents
+\newpage
+\pagenumbering{arabic}
+\chapter{Introduction.}
+
+The program SHLTRN accepts a program written in the SHELTRAN language
+and generates the corresponding FORTRAN 77 program and, optionally, a
+source listing. 
+
+SHELTRAN is 'structured FORTRAN' - this being ANSI FORTRAN 77 with
+certain facilities replaced by corresponding 'structured' facilities,
+plus additional facilities with no FORTRAN equivalents. 
+
+SHELTRAN declares statement labels (except for the FORMAT statement)
+illegal, and hence any control statement requiring statement labels as
+arguments is also illegal.  These statements are replaced by
+closely-matching 'structured' facilities with controlled exits. 
+SHELTRAN also provides various forms of the repetition construct
+(allowing controlled exits). 
+
+\chapter{Description of the language.}
+
+In describing the SHELTRAN language the following nomenclature is used:
+
+\begin{itemize}
+
+\item SHELTRAN keywords appear in capitals.  (SHELTRAN keywords always
+start on a new line and must be followed by at least one blank)
+
+\item Syntactic elements are enclosed within $<$ $>$. 
+
+\item Items enclosed within [ ] are optional. 
+
+\item $<$statement$>$ is used to denote any SHELTRAN and/or FORTRAN
+statement(s). 
+
+\end{itemize}
+
+\section{Statement labels.}
+
+In SHELTRAN the statement label is forbidden for all executable
+statements.  The only context in which the statement label is permitted
+is in combination with a FORMAT statement.  In this case the label must
+be less than 10000. 
+
+As a direct consequence the following normal FORTRAN statements become
+unuseable in SHELTRAN:
+
+\begin{itemize}
+
+\item ASSIGN
+
+\item all forms of GOTO
+
+\item all forms of IF
+
+\item DO
+
+\item the RETURN $<$variable$>$ form of the RETURN statement
+
+\item the use of statement numbers in END= or ERR= clauses in I/O
+statements
+
+\item the use of statement numbers as arguments of CALL statements
+
+\end{itemize}
+
+To replace FORTRAN control structures several new SHELTRAN structures
+have been introduced. 
+
+\section{IF construct.}
+\subsection{Form:}
+\begin{verbatim}
+      IF <logical expression>
+      THEN
+         <statement>... 
+    [ ELSEIF <logical expression>
+      THEN
+         <statement>...      ] 
+    [ ELSE
+         <statement>...      ] 
+      CIF 
+\end{verbatim}
+\subsection{Notes:}
+\begin{itemize}
+
+\item $<$logical expression$>$ represents any valid FORTRAN logical
+expression which can take a value .TRUE.  or .FALSE.  It need not be
+surrounded by parentheses. 
+
+\item ELSEIFs when present must precede any corresponding ELSE. 
+
+\item The ELSE clause is optional. 
+
+\item Instead of CIF ENDIF may also be used. 
+
+\end{itemize}
+\subsection{Actions:}
+
+When the IF or ELSEIF condition has the value .TRUE., the statements
+following are executed and control is transferred to the statement
+following the CIF. 
+
+When the value is .FALSE., control is passed to the next ELSEIF and this
+$<$logical expression$>$ is evaluated. 
+
+When the IF and all ELSEIF clauses have a value which is .FALSE.,
+control is passed to the statement following the corresponding ELSE or
+CIF. 
+
+\subsection{Examples:}
+\begin{verbatim}
+      IF KEY.EQ.K1 
+      THEN 
+         KODE=1 
+      ELSEIF KEY.EQ.K2 
+      THEN 
+         KODE=2 
+      ELSE 
+         KODE=-1
+      CIF
+
+
+      IF X.LT.0 
+      THEN
+         X=999.0 
+      CIF 
+\end{verbatim}
+\section{SELECT construct.}
+\subsection{Form:}
+\begin{verbatim}
+      SELECT <arithmetic expression>
+      CASE n1 [,n2...]
+    [    <statement>...         ] 
+    [ CASE m1 [,m2...]
+         <statement>...         ] 
+      OTHER 
+    [    <statement>...         ] 
+      CSELECT 
+\end{verbatim}
+\subsection{Notes:}
+\begin{itemize}
+
+\item n1 [,n2...] represents a series of unsigned integer values,
+separated by commas.  At least one integer must be present for each CASE
+statement. 
+
+\item the integer values may appear in any order in the CASE clause. 
+
+\item the CASE clauses need not contain all values in the range 1 to N,
+where N is the largest integer value used.  However, a specific value
+may only appear once. 
+
+\item the largest value used in a SELECT construct must not exceed 198. 
+
+\item the OTHER clause is mandatory. 
+
+\end{itemize}
+\subsection{Actions:}
+
+The expression after the SELECT is evaluated and truncated to an integer
+value.  Control is transferred to the statements following the CASE
+statement which contains the value of the SELECT expression.  If no such
+value can be found, the OTHER clause is selected.  Finally control is
+transferred to the statement after CSELECT. 
+
+\subsection{Example:}
+\begin{verbatim}
+      SELECT COLOR+1.0
+      CASE 1
+         COLTXT='BLACK'
+      CASE 2
+         COLTXT='RED'
+      CASE 3
+         COLTXT='GREEN'
+      CASE 5
+         COLTXT='BLUE' 
+      CASE 8
+         COLTXT='WHITE'
+      OTHER 
+         COLTXT='MIXTURE'
+      CSELECT 
+\end{verbatim}
+
+\section{WHILE construct.}
+\subsection{Form:}
+\begin{verbatim}
+      WHILE <logical expression>
+         <statement>...
+    [    XWHILE 
+         <statement>...      ] 
+      CWHILE 
+\end{verbatim}
+\subsection{Actions:}
+
+Whilst $<$logical expression$>$ has a value .TRUE., the statements
+within the loop WHILE-CWHILE will be executed, and $<$logical
+expression$>$ re-evaluated.  When $<$logical expression$>$ has a value
+.FALSE., control is transferred to the statement following CWHILE.  At
+any point in the WHILE loop an XWHILE statement may be inserted.  This
+statement transfers control to the statement following CWHILE
+independently of the value of $<$logical expression$>$. 
+
+\subsection{Example:}
+\begin{verbatim}
+      
+      WHILE I.LE.72 
+         CHR=LINE(I) 
+         IF CHR.EQ.BLANK 
+         THEN
+            I=I+1 
+         ELSE
+            IF CHR.GE.'A'.AND.CHR.LE.'Z'
+            THEN
+               XWHILE
+            CIF 
+         CIF 
+      CWHILE
+
+\end{verbatim}
+\section{REPEAT construct. }
+\subsection{Form:}
+\begin{verbatim}
+      
+      REPEAT 
+         <statement>...
+    [    XREPEAT
+         <statement>...  ] 
+      UNTIL <logical expression>
+
+\end{verbatim}
+\subsection{Actions:}
+
+The statements between REPEAT and UNTIL are executed, and $<$logical
+expression$>$ evaluated.  When $<$logical expression$>$ has the value
+.TRUE., control is transferred to the the statement after UNTIL; if it
+is .FALSE., the statement after REPEAT gains control.  At any point in
+the REPEAT loop an XREPEAT statement may be inserted.  This statement
+transfers control to the statement following UNTIL, independently of
+$<$logical expression$>$. 
+
+\subsection{Example:}
+\begin{verbatim}
+
+     REPEAT
+        CALL WAIT(EVENT)
+        SELECT EVENT
+        CASE 1
+           CALL TYPEIN 
+        CASE 2,3,7,4
+           CALL SERVE
+        OTHER 
+           FINISH=.TRUE. 
+        CSELECT 
+     UNTIL FINISH
+
+\end{verbatim}
+\section{FOR construct.}
+\subsection{Form:}
+\begin{verbatim}
+
+      FOR <loop control>
+         <statement>...
+    [    XFOR 
+         <statement>...  ] 
+      CFOR 
+
+\end{verbatim}
+\subsection{Note:}
+
+The rules for writing $<$loop control$>$ are identical to those for the
+FORTRAN DO-loop. 
+
+\subsection{Actions:}
+
+The actions follow the FORTRAN DO-loop control actions.  At any point in
+the FOR-loop an XFOR statement may be inserted.  This statement
+transfers control to the statement following CFOR. 
+
+\subsection{Example:}
+\begin{verbatim}
+ 
+      FOR I=1,80
+         LINE(I)=' ' 
+      CFOR
+
+\end{verbatim}
+\section{PERFORM and PROC.}
+\subsection{Form:}
+\begin{verbatim}
+
+C     To invoke a procedure section: 
+      PERFORM <procedure name> 
+C     To define a procedure section: 
+      PROC <procedure name>
+         <statement>... 
+      CPROC 
+
+\end{verbatim}
+\subsection{Notes:}
+\begin{itemize}
+
+\item The procedure name must not be longer than 31 characters. 
+
+\item The statements in a PROC may not include:
+
+\begin{itemize}
+
+\item STOP or RETURN
+
+\item XWHILE, XREPEAT or XFOR unless the corresponding loop is wholly
+included within the range of the PROC-CPROC construct. 
+
+\end{itemize}
+
+\item A procedure section may only be defined in a program after all
+PERFORMs to that PROC have occurred, i.e.  PROCs normally preceed the
+END statement. 
+
+\item A PERFORM in a FOR-loop causes non-standard FORTRAN to be
+generated. 
+
+\end{itemize}
+\subsection{Actions:}
+
+Whenever a PERFORM statement is encountered, the appropriate statements
+between PROC and CPROC are executed. 
+
+\subsection{Example:}
+\begin{verbatim}
+
+         . 
+         . 
+      PERFORM CLFILE
+         . 
+         . 
+         . 
+         .
+      PROC CLFILE 
+         FOR LUN=1,NUNITS
+            CLOSE(UNIT=LUN) 
+         CFOR
+      CPROC 
+
+\end{verbatim}
+\section{I/O statements.}
+\subsection{Form:}
+\begin{verbatim}
+
+      ...,ERR=<exit specifier>,... 
+      and/or 
+      ...,END=<exit specifier>,... 
+
+\end{verbatim}
+\subsection{Notes:}
+\begin{itemize}
+
+\item The following I/O statements are recognized: READ, WRITE, OPEN,
+CLOSE, REWIND, BACKSPACE, INQUIRE, ENDFILE. 
+
+\item $<$exit specifier$>$ can be any one of the following: XWHILE,
+XREPEAT, XFOR, STOP, RETURN or $<$procedure name$>$. 
+
+\item The exit specification must appear on the first line of the I/O
+statement. 
+
+\end{itemize}
+\subsection{Actions:}
+
+The use of $<$procedure name$>$ is equivalent to a PERFORM of the
+procedure between the I/O statement and the statement following it.  The
+use of the other items will have the normal SHELTRAN meaning. 
+
+\subsection{Example:}
+\begin{verbatim}
+
+      WHILE .TRUE.
+         READ(1,FMT='(A)',END=XWHILE,ERR=ERRPRC) LINE
+         WRITE(2,FMT='(1X,A)',ERR=ERRPRC) LINE 
+      CWHILE
+         .
+         .
+         .
+      PROC ERRPRC 
+         REWIND 1
+         REWIND 2
+      CPROC 
+
+\end{verbatim}
+\section{CALL statement.}
+
+Within the CALL argument list statement label arguments may be replaced
+by one of the same keywords for I/O statements.  Such arguments must be
+preceded by an asterisk (*).  E.g. 
+
+\begin{verbatim}
+
+      CALL sub ( ..., *XWHILE, ... )
+
+\end{verbatim}
+
+\begin{center}
+Notes:
+\end{center}
+
+\begin{itemize}
+
+\item This feature can only be used in calls to existing FORTRAN
+subroutines that specify alternate returns.  The designers of SHELTRAN
+consider this feature undesirable and only provided an interface to
+existing routines, but have intentionally omitted the facility to
+construct them, i.e.  the 'RETURN i' statement is not allowed. 
+
+\item Asterisk arguments must appear on the first line of the CALL
+statement. 
+
+\end{itemize}
+\section{Additional features.}
+\subsection{Comment lines.}
+
+Comment lines follow the same rules as FORTRAN. 
+
+\subsection{Note lines.}
+
+Note lines are identified by an N in column 1, the text area being
+columns 2 to 72.  In the line printer listing the text of a Note line is
+printed in columns 75 to 124 and on the same line as the statement
+following the Note line.  If the next line is also a Note, the text is
+printed in the same columns of an otherwise blank line.  The text of the
+Note line may be 50 characters long and may appear anywhere in columns 2
+to 72.  Leading blanks between column 1 and the start of the Note text
+are ignored, i.e.  in the listing Notes are aligned. 
+
+\subsection{Eject lines.}
+
+Eject lines are identified by an E in column 1, the text area being
+columns 7 to 72.  The action of an Eject line is to force a new page on
+the line printer listing, with the page header taken from the Eject line
+text. 
+
+\subsection{Fortran directive lines.}
+
+Fortran directive lines are identified by an F in column 1.  The
+remainder of the line is written in columns 1 to 79 of the FORTRAN
+output file.  This facility can be used to pass directives to the
+FORTRAN compiler (e.g.  debug directives).  It should not be used to
+bypass SHELTRAN control structures. 
+
+\subsection{Input source deck.}
+
+The input SHELTRAN source deck follows the normal FORTRAN layout rules,
+apart from the above-mentioned features.  No indentation of structures
+need to be included, as the pre-processor will automatically provide
+indentation in the listing. 
+
+\subsection{Output source deck.}
+
+The output source deck consists of the input source deck plus the
+necessary generated FORTRAN statements.  It contains no Comment, Eject
+or Note lines.  The output deck is not indented. 
+
+\subsection{Include Files.}
+
+Code from other SHELTRAN sources can be included by putting an I in
+column 1 followed by the name of the source to be included.  The code
+included in this way will also be processed by the SHELTRAN compiler. 
+
+\section{Limitations.}
+\begin{itemize}
+
+\item The maximum number of procedure sections in a program unit is 99. 
+
+\item The following variable names are reserved by SHELTRAN and must not
+be used: IF, ELSEIF, WHILE, UNTIL, FOR; all 6-character variable names
+beginning with 'IZZZ'
+
+\item It is not allowed to give variable names beginning with 'I' an
+implicit type other than INTEGER. 
+
+\item PERFORM statements in FOR-loops cause non-standard FORTRAN to be
+generated.  This is because after a procedure section has been executed,
+a jump into the generated DO-loop is necessary to resume execution after
+the PERFORM statement.  Most compilers however allow this kind of jump
+which was part of the previous FORTRAN standard (FORTRAN IV). 
+
+\end{itemize}
+
+\chapter{Update history.}
+\begin{verbatim}
+
+ Jan-83  version 5.0: completely revised for FORTRAN 77
+                         J.P. Terlouw 
+
+21-Mar-83: scratch file opening changed; instead of 
+      TAPE2 and TAPE3 we now use SCRAT01 and SCRAT02
+                       J.P.T.
+
+ 3-Apr-84: error message for non-standard Fortran when using
+      PERFORM in for loops suppressed. 
+                       J.P.T.
+ 
+ 1-Nov-88: bug in FOR loop control repaired, procedure names
+      upto 31 characters, no trailing blanks in target and
+      source listing.
+                       K.G.B.
+
+\end{verbatim}
+\end{document}
+#<
+
+#!IF  TESTBED
+#>    sheltran.shl
+      PROGRAM SHLANS
+
+      LOGICAL      FOPERR
+      CHARACTER*80 INPUT, TARGET, LIST, INCDIR
+      INTEGER      LO, LPP
+
+      CALL GETCOM(INPUT,TARGET,LIST,INCDIR,LO,LPP )
+N     WARNING:: READONLY is not ANSI F77
+C
+      FOPERR=.FALSE.
+      OPEN(UNIT=1,FILE=INPUT,STATUS='OLD',ERR=FILERR)
+      IF FOPERR
+      THEN
+      WRITE(*,*) 'Cannot open source'
+      CALL EXITF(1)
+      ENDIF
+      IF TARGET.EQ.'0'
+      THEN
+      OPEN(UNIT=2,STATUS='SCRATCH')
+      ELSE
+      FOPERR=.FALSE.
+      OPEN(UNIT=2,FILE=TARGET,STATUS='NEW',ERR=FILERR)
+      IF (FOPERR)
+      THEN
+      OPEN(UNIT=2,FILE=TARGET,STATUS='OLD')
+      CIF
+      CIF
+      IF LIST.EQ.'0'
+      THEN
+      OPEN(UNIT=3,STATUS='SCRATCH')
+      ELSE
+      FOPERR=.FALSE.
+      OPEN(UNIT=3,FILE=LIST,STATUS='NEW',ERR=FILERR)
+      IF (FOPERR)
+      THEN
+      OPEN(UNIT=3,FILE=LIST,STATUS='OLD')
+      CIF
+      CIF
+      REWIND 2
+      CALL SHELTR(LO,LPP,1,2,3,NERR,4,10,INCDIR)
+      IF NERR.EQ.0
+      THEN
+      REWIND 2
+      ELSE
+      CLOSE(UNIT=2,STATUS='DELETE')
+      CIF
+N     WARNING: CALL EXIT NOT ANSI F77
+      IF (NERR.EQ.0)
+      THEN
+         CALL EXITF(0)
+      ELSE
+         WRITE(*,*) NERR, ' ERROR(S)'
+         CALL EXITF(1)
+      CIF
+      STOP
+      PROC FILERR
+      FOPERR=.TRUE.
+      CPROC
+      END
+N     GET COMMAND LINE ARGUMENTS
+      SUBROUTINE GETCOM(SOURCE,TARGET,LISTER,INCDIR,LO,LPP)
+      CHARACTER*(*) SOURCE,TARGET,LISTER,INCDIR
+      INTEGER       LO,LPP
+
+#!IF  UNIX
+      CHARACTER*80  ARGV,NAME
+      INTEGER       IARGC,IARG
+
+      NARG=IARGC( )
+
+      IARG=0
+      SOURCE='0'
+      TARGET='1'
+      LISTER='0'
+      INCDIR='0'
+      LO=1
+      LPP=57
+      WHILE (IARG.LE.NARG)
+#!IF  HPUX
+         CALL IGETARG(IARG,ARGV,LEN(ARGV) )
+#!ELSE
+         CALL GETARG(IARG,ARGV )
+#!ENDIF
+         IF (IARG.EQ.0)
+         THEN
+            NAME=ARGV
+         ELSE
+            IF (ARGV(1:3).EQ.'-ln')
+            THEN
+               LPP=0
+               I=4
+               WHILE (ARGV(I:I).GE.'0'.AND.ARGV(I:I).LE.'9')
+                  LPP=10*LPP+ICHAR(ARGV(I:I))-ICHAR('0')
+                  I=I+1
+               CWHILE
+            ELSEIF (ARGV(1:2).EQ.'-l')
+            THEN
+               LISTER='1'
+               IF (ARGV(3:3).GE.'0'.AND.ARGV(3:3).LE.'3')
+               THEN
+                  LO=ICHAR(ARGV(3:3))-ICHAR('0')
+               ENDIF
+            ELSEIF (ARGV.EQ.'-f')
+            THEN
+               TARGET='0'
+            ELSEIF (ARGV(1:2).EQ.'-I')
+            THEN
+               INCDIR=ARGV(3:)
+            ELSEIF (INDEX(ARGV,'.shl').NE.0)
+            THEN
+               SOURCE=ARGV
+            ELSE
+               WRITE(*,*) 'Unknown option on command line'
+               CALL EXITF(1)
+            ENDIF
+         ENDIF
+         IARG=IARG+1
+      CWHILE
+      IF (NARG.EQ.0)
+      THEN
+         N=INDEX(NAME,' ')
+         WRITE(*,*) NAME(:N),
+     #'source [-I<dir>] [-f] [-l[<lo>] [-ln<lpp>]]'
+         CALL EXITF(1)
+      ENDIF
+      N=INDEX(SOURCE,'.shl')
+      IF (N.EQ.0)
+      THEN
+         WRITE(*,*) 'No Source file specified!'
+         CALL EXITF(1)
+      ELSE
+         IF (LISTER.NE.'0')
+         THEN
+            LISTER=SOURCE(:N)//'sls'
+         ENDIF
+         IF (TARGET.NE.'0')
+         THEN
+            TARGET=SOURCE(:N)//'f'
+         ENDIF
+      ENDIF
+#!ELIF	VMS
+      CHARACTER*256 ARGS
+      CALL LIB$GET_FOREIGN(ARGS)
+      LENC=INDEX(ARGS,' ')
+      IF (ARGS.EQ.' ')
+      THEN
+         WRITE(*,*) 'SHELTRAN SOURCE.SHL[/LIST][/INCLUDE=<DIR>'//
+     #'[/LPP=<N>][/LO=<M>]][/NOFOR]'
+         CALL EXITF(1)
+      ELSE
+         TARGET='1'
+         LISTER='0'
+         LO=1
+         LPP=57
+         NL=INDEX(ARGS,'/LIST')
+         IF (NL.NE.0)
+         THEN
+            LISTER='1'
+            ARGS(NL:NL+4)=' '
+         ENDIF
+         NL=INDEX(ARGS,'/NOFOR')
+         IF (NL.NE.0)
+         THEN
+            TARGET='0'
+            ARGS(NL:NL+5)=' '
+         ENDIF
+         NL=INDEX(ARGS,'/INCLUDE=')
+         IF (NL.NE.0)
+         THEN
+            ARGS(NL:NL+8)=' '
+            NL=NL+9
+            I=0
+            WHILE (ARGS(NL:NL).NE.'/'.AND.ARGS(NL:NL).NE.' ')
+               I=I+1
+               INCDIR(I:I)=ARGS(NL:NL)
+               ARGS(NL:NL)=' '
+               NL=NL+1
+            CWHILE
+         ENDIF
+         NL=INDEX(ARGS,'/LO=')
+         IF (NL.NE.0)
+         THEN
+            ARGS(NL:NL+3)=' '
+            NL=NL+4
+            IF (ARGS(NL:NL).GE.'0'.AND.ARGS(NL:NL).LE.'3')
+            THEN
+               LO=ICHAR(ARGS(NL:NL))-ICHAR('0')
+               ARGS(NL:NL)=' '
+            ENDIF
+         ENDIF
+         NL=INDEX(ARGS,'/LPP=')
+         IF (NL.NE.0)
+         THEN
+            ARGS(NL:NL+4)=' '
+            NL=NL+5
+            LPP=0
+            WHILE (ARGS(NL:NL).GE.'0'.AND.ARGS(NL:NL).LE.'9')
+               LPP=10*LPP+ICHAR(ARGS(NL:NL))-ICHAR('0')
+               ARGS(NL:NL)=' '
+               NL=NL+1
+            CWHILE
+         ENDIF
+         NL=INDEX(ARGS,'.SHL')
+         IF (NL.NE.0)
+         THEN
+            NE=NL+3
+            NL=NL-1
+            WHILE (NL.GT.0.AND.ARGS(NL:NL).NE.' ')
+               NL=NL-1
+            CWHILE
+            SOURCE=ARGS(NL+1:NE)
+            ARGS(NL+1:NE)=' '
+         ENDIF
+         IF (ARGS.NE.' ')
+         THEN
+            WRITE(*,*) 'Unknown option(s) on command line'
+            CALL EXITF(1)
+         ENDIF
+      ENDIF
+      N=INDEX(SOURCE,'.SHL')
+      IF (N.EQ.0)
+      THEN
+         WRITE(*,*) 'No Source file specified!'
+         CALL EXITF(1)
+      ELSE
+         IF (LISTER.NE.'0')
+         THEN
+            LISTER=SOURCE(:N)//'SLS'
+         ENDIF
+         IF (TARGET.NE.'0')
+         THEN
+            TARGET=SOURCE(:N)//'F'
+         ENDIF
+      ENDIF
+#!ENDIF
+      RETURN
+      END
+N
+N     CONVERT SHELTRAN INTO FORTRAN 77
+      SUBROUTINE SHELTR(N1,N2,N3,N4,N5,N6,INCBEG,INCMAX,INCDIR)
+N
+N N1 LIST OPTION
+N N2 LINES PER PAGE
+N N3 INPUT FILE LOGICAL UNIT
+N N4 FORTRAN OUTPUT FILE LOGICAL UNIT
+N N5 LIST FILE LOGICAL UNIT
+N N6 NUMBER OF ERRORS FOUND
+N INCBEG FIRST FORTRAN UNIT FOR INCLUDE FILES
+N INCMAX LAST  FORTRAN UNIT FOR INCLUDE FILES
+N INCDIR DIRECTORY WHERE TO FIND INCLUDE FILES
+N
+      LOGICAL LNRPRT,CONPRT
+N      PRINT LINE-, CONT. LINE NUMBERS
+      PARAMETER(LNRPRT=.TRUE.,CONPRT=.TRUE.)
+      CHARACTER*80 INCDIR
+      CHARACTER*160 INCNAM
+      LOGICAL NEXIT,ENDINP
+      CHARACTER*1 LINE(80),CPARM(66)
+      CHARACTER*80 CLINE
+N     CHARACTER LAST USED
+      INTEGER POS
+      COMMON /BLINE/LINE
+      COMMON /BLIST/POS,LSTOPT,LINEPP,NPRINT
+      COMMON /BPARM/NPARM(66)
+      COMMON/CHPARM/ CPARM
+      COMMON /BPARS/NTYPE,NTARGT,NEXIT,NOUT,LUOUT
+N
+       COMMON /ERR/ NERROR,NWARN
+      INTEGER SOURC
+N     INDENTATION LEVEL AND STEP
+      INTEGER LEVEL,STEP
+      CHARACTER*1 BLANK,ZERO
+N     LEGAL CHARACTERS IN LINE-COLUMN 1 (STMT NTYPE 1)
+      CHARACTER*1 SPCHAR(6),FORMT(7)
+N     CHARACTER TYPE IN LINE-COLUMN 1
+      INTEGER SUBTYP
+N  LOWER TO UPPER FUNCTION ( 1 CHAR )
+      CHARACTER*1  LTU
+
+      EQUIVALENCE (LINE,CLINE)
+      DATA ENDINP/.FALSE./
+N     CONTROLS PRINTING OF ISN
+      DATA LEVEL/0/,STEP/3/
+      DATA BLANK/' '/,ZERO/'0'/
+      DATA SPCHAR/'C','E','N','*','F','I'/
+      DATA FORMT/'F','O','R','M','A','T','('/
+N LIST FILE OPTIONS(0,1,2,3)
+      LSTOPT=N1
+N LINES PER PAGE OF LISTING
+      LINEPP=N2
+N LUN FOR INPUT SOURCE TEXT FILE
+      SOURC=N3
+N LUN FOR LISTING OUTPUT FILE
+      NPRINT=N5
+N LUN FOR FINAL FORTRAN OUTPUT TEXT
+      NTARGT=N4
+N
+N     INITIALIZE SOURCE LISTER
+      CALL LISTER
+N      INITIALIZE PARSER
+      CALL PARSER
+E
+N      MAIN LOOP
+N
+      WHILE .TRUE.
+N     READ SOURCE LINE
+ 100    FORMAT(80A1)
+      READ (SOURC,100,END=ENDSRC) LINE
+      IF ENDINP
+      THEN
+      XWHILE
+      CIF
+N TRANSLATE TAB CHARACTERS
+N .   (CALL CAN BE REMOVED IF THERE WILL BE NO TABS)
+       CALL RTAB(LINE,80)
+N      FIND FIRST NON-BLANK
+      PERFORM NBLPOS
+      SELECT POS
+      CASE 1
+      PERFORM SUBTPE
+      SELECT SUBTYP
+N     COMMENT LINE
+      CASE 1,4
+      NTYPE=110
+N     EJECT LINE
+      CASE 2
+      NTYPE=100
+      CALL HEADER
+N     NOTE LINE
+      CASE 3
+      NTYPE=100
+      CALL PNOTE
+N      COMPILER DIRECTIVE LINE;
+      CASE 5
+N      LIST AS COMMENT
+      NTYPE=110
+      CALL FCARD
+      CASE 6
+      NTYPE=110
+      IF SOURC.EQ.N3
+      THEN
+      SOURC=INCBEG
+      ELSEIF SOURC.LT.INCMAX
+      THEN
+      SOURC=SOURC+1
+      ELSE
+      NTYPE=105
+      CIF
+      IF NTYPE.EQ.110
+      THEN
+      PERFORM MAKNAM
+N     WARNING:: READONLY is not ANSI F77
+C
+      OPEN(UNIT=SOURC,FILE=INCNAM,STATUS='OLD',ERR=OPERI)
+      CIF
+      OTHER
+      NTYPE=102
+      PERFORM FMTSCN
+      IF NTYPE.EQ.29
+N     FORMAT STATEMENT
+      THEN
+      PERFORM BLKPOS
+N      FORMAT LABEL TOO LARGE?
+      IF POS.EQ.6
+      THEN
+      NTYPE=103
+      CIF
+      CIF
+      CSELECT
+      CASE 2,3,4,5
+      NTYPE=102
+      PERFORM FMTSCN
+      CASE 6
+N      CONTINUATION LINE?
+      IF LINE(6).NE.ZERO
+      THEN
+      NTYPE=3
+      ELSE
+      CALL CLASS(NTYPE,POS)
+      CIF
+      OTHER
+N     CLASSIFY STATEMENT,RETURN TYPE AND CHAR. LAST USED
+      CALL CLASS(NTYPE,POS)
+      CSELECT
+E
+      IF NTYPE.LT.100
+      THEN
+N                                 PRINT OF VALID TYPES OTHER THAN 1
+      SELECT NTYPE
+      CASE 1
+N     CONTINUATION LINE
+      CASE 3
+      IF LEVEL.EQ.0
+      THEN
+      CALL PRINTC(CONPRT)
+      ELSE
+      CALL PRINT(LEVEL,CONPRT)
+      CIF
+N     IF,WHILE,FOR,SELECT,REPEAT,PROC
+      CASE 4,8,11,14,20,23
+      CALL PRINT(LEVEL,LNRPRT)
+      LEVEL=LEVEL+STEP
+N     THEN,ELSE,CASE,OTHER,ELSEIF
+      CASE 5,6,15,16,31
+      LEVEL=LEVEL-STEP
+      CALL PRINT(LEVEL,LNRPRT)
+      LEVEL=LEVEL+STEP
+N     CIF,CWHILE,CFOR,CSELECT,UNTIL,CPROC
+      CASE 7,10,13,17,18,24
+      LEVEL=LEVEL-STEP
+      CALL PRINT(LEVEL,LNRPRT)
+N     ENTRY,END : RESET LEVEL TO BEGIN-VALUE
+      CASE 27,28
+      LEVEL=0
+      CALL PRINT(LEVEL,LNRPRT)
+N     FORMAT
+      CASE 29
+N     PRINT ISN
+      CALL PRINTC(LNRPRT)
+N     FORTRAN,XWHILE,XFOR,XREPEAT,PERFORM
+      OTHER
+      CALL PRINT(LEVEL,LNRPRT)
+      CSELECT
+      CALL PARSE
+      ELSEIF NTYPE.GT.100
+      THEN
+      CALL PRINTC(.FALSE.)
+      SELECT NTYPE-100
+      CASE 1
+      CALL ERRMSG('INVALID CASE OR RETURN STATEMENT                  ')
+      CASE 2
+      CALL ERRMSG('INVALID CHARACTER OR ILLEGAL STATEMENT NUMBER     ')
+      CASE 3
+      CALL ERRMSG('FORMAT LABEL GREATER THAN 9999                    ')
+      CASE 4
+      CALL ERRMSG('MORE THAN 7 *-PARAMETERS                          ')
+N      NTYPE=110: COMMENT
+      CASE 5
+      CALL ERRMSG('INCLUDE FILE MAXIMUM NESTING DEPTH EXCEEDED       ')
+      CASE 6
+      CALL ERRMSG('INCLUDE FILE OPEN ERROR                           ')
+      OTHER
+      CSELECT
+      CIF
+N                                        NEXT SOURCE STATEMENT,PLEASE
+      CWHILE
+N                              PRINT FINAL MESSAGES
+      CALL FINAL
+       N6=NERROR
+      RETURN
+E
+N      TYPE PRE-SELECTION
+      PROC SUBTPE
+      SUBTYP=0
+      FOR I=1,6
+        IF ( LTU( LINE(1) ) .EQ. SPCHAR(I) )
+        THEN
+          SUBTYP=I
+          XFOR
+        CIF
+      CFOR
+      CPROC
+N
+N      END OF CURRENT SOURCE FILE
+      PROC ENDSRC
+      ENDINP=SOURC.EQ.N3
+      CLOSE(UNIT=SOURC)
+      IF SOURC.EQ.INCBEG
+      THEN
+      SOURC=N3
+      ELSE
+      SOURC=SOURC-1
+      CIF
+      CLINE='* END OF INCLUDE <<<<<<<<<<<<<<<<<'
+      CPROC
+N
+N    INCLUDE FILE OPEN ERROR
+      PROC OPERI
+      IF SOURC.EQ.INCBEG
+      THEN
+      SOURC=N3
+      ELSE
+      SOURC=SOURC-1
+      CIF
+      NTYPE=106
+      CPROC
+N
+N      FIND FIRST NON-BLANK IN LABEL FIELD
+      PROC NBLPOS
+      POS=0
+      REPEAT
+      POS=POS+1
+      UNTIL LINE(POS).NE.BLANK.OR.POS.EQ.7
+      CPROC
+N
+N
+N      FIRST BLANK AFTER START OF LABEL
+      PROC BLKPOS
+      POS=1
+      REPEAT
+      POS=POS+1
+      UNTIL LINE(POS).EQ.BLANK.OR.POS.EQ.6
+      CPROC
+N
+N
+N      VERIFY 'FORMAT'
+      PROC FMTSCN
+      J=1
+      I=7
+      WHILE I.LE.72
+      IF LINE(I).EQ.BLANK
+      THEN
+      I=I+1
+      ELSE
+      IF ( LTU( LINE(I) ) .EQ. FORMT(J)  )
+      THEN
+      I=I+1
+      J=J+1
+      IF J.EQ.8
+      THEN
+      NTYPE=29
+      XWHILE
+      CIF
+      ELSE
+      XWHILE
+      CIF
+      CIF
+      CWHILE
+      CPROC
+N     CONCATENATES INCLUDE FILENAME 
+N
+      PROC MAKNAM
+        INCNAM=' '
+        LNAM = 0
+        IF INCDIR.NE.'0'
+        THEN
+          FOR I=1,80
+            IF INCDIR(I:I).NE.' '
+            THEN
+              LNAM=LNAM+1
+              INCNAM(LNAM:LNAM)=INCDIR(I:I)
+            CIF
+          CFOR
+        CIF
+        FOR I=2,80
+          IF CLINE(I:I).NE.' '
+          THEN
+            LNAM=LNAM+1
+            INCNAM(LNAM:LNAM)=CLINE(I:I)
+          CIF
+        CFOR
+      CPROC
+      END
+N        HANDLES EVERY THING CONCERNING THE SOURCE LISTING.
+N
+      SUBROUTINE LISTER
+N
+      SAVE
+N      DEFAULTS: LIST OPTION - LINES PER PAGE
+      PARAMETER (LODEF=1,LPPDEF=50)
+      CHARACTER*1 LINE(80)
+      COMMON /BLINE/LINE
+      COMMON /BLIST/IPOS(1),LSTOPT,LINEPP,NPRINT
+       COMMON /ERR/ ERROR,NWARN
+      INTEGER CHARPL
+N                                        LINE COUNT START
+      INTEGER START
+N                                        SOURCE LINE COUNT
+      INTEGER COMCON
+      INTEGER PAGENO,LINENO
+      INTEGER SEQNO,LINTOT,ERROR,ERRTOT,WRNTOT
+      INTEGER POS
+      INTEGER I
+      INTEGER NEL, NELC
+      CHARACTER*1 BLLINE(72),POINTR,BLANK
+      INTEGER LEV,LEVEL,INIT,LAST,LENG
+N                                        BLANK LINE
+      LOGICAL NOTE
+      LOGICAL LNRPRT,LNOPRT
+      CHARACTER*1 TITLSV(66),TITLE(66)
+      CHARACTER*10 FORSEQ(4),NBRING
+      CHARACTER*5 SOURCE
+      CHARACTER*1 OUT(124)
+      CHARACTER*(*) TEXT
+      CHARACTER*1 TEXT2(6)
+      DATA SEQNO,LINTOT/0,0/
+      DATA ERRTOT,WRNTOT/0,0/
+       DATA TITLE/66*' '/
+      DATA OUT/124*' '/
+      DATA BLANK/' '/
+      DATA NOTE/.FALSE./
+       DATA START/1/
+      DATA BLLINE/72*' '/
+      DATA POINTR/'^'/
+      DATA FORSEQ/
+     - 'FORT + SEQ',
+     - '   FORTRAN',
+     - '   FORTRAN',
+     - 'SEQUENTIAL'/
+E
+  200 FORMAT(' ***ERROR***',10X,A)
+  201 FORMAT(1X)
+  202 FORMAT(' ..WARNING..',10X,6A1,1X,A)
+  203 FORMAT(7X,'*ERROR IN FOLLOWING LINE WITH SOURCE SEQ.NO :',I4,'*')
+  400 FORMAT('0END OF SEGMENT')
+  401 FORMAT('0  OPTIONS IN EFFECT - LINECOUNT=',I2,', LINEWIDTH=',I3,
+     - ', ',A,'URCE, ',A,' NUMBERING')
+  406 FORMAT('0',I4,' ERROR(S)',11X,I4,' TARGET STATEMENTS')
+  500 FORMAT('0END OF PROGRAM')
+  600 FORMAT(I4,'  SHELTRAN ERROR(S)')
+  601 FORMAT(I4,' WARNING MESSAGE(S)')
+N                              ><  SET INITIAL VALUES
+      IF LSTOPT.LT.0.OR.LSTOPT.GT.3
+      THEN
+      LSTOPT=LODEF
+      CIF
+      IF LINEPP.LE.0
+      THEN
+      LINEPP=LPPDEF
+      CIF
+      SOURCE='   SO'
+      CHARPL=79
+      NBRING=FORSEQ(LSTOPT+1)
+      SELECT LSTOPT
+      CASE 1
+      CHARPL=131
+      CASE 2,3
+      OTHER
+      SOURCE='NO SO'
+      CSELECT
+      FOR I=1,66
+      TITLSV(I)=TITLE(I)
+      CFOR
+         PERFORM BEGIN
+      RETURN
+E
+N      ><  ISSUE WARNING MESSAGES
+      ENTRY WARN(TEXT2,TEXT)
+N                                        CHECK FOR END OF PAGE
+         PERFORM CHECK
+         PERFORM TXTLEN
+         WRITE (NPRINT,202) TEXT2,TEXT(:NEL)
+C      WRITE(*,202) TEXT2,TEXT(:NEL)
+N      COUNT WARNINGS
+         NWARN=NWARN+1
+      RETURN
+N     ><  ISSUE ERROR MESSAGES
+N      (    ALSO COUNTS ERRORS)
+      ENTRY ERRMSG(TEXT)
+      POS = IPOS(1)
+      IF POS.GE.73
+      THEN
+      POS=72
+      CIF
+      ERROR = ERROR + 1
+      IF LSTOPT.EQ.0
+      THEN
+      COMCON=COMCON+4
+N                                        CHECK FOR END OF PAGE
+      PERFORM CHECK
+      WRITE (NPRINT,203) SEQNO
+N                              WRITE SOURCE LINE
+      NEL=NELC(LINE,80)
+      WRITE (NPRINT,'(1X,I4,3X,80(A1:))') LINENO,(LINE(KGB),KGB=1,NEL)
+      ELSE
+      COMCON = COMCON + 2
+      PERFORM CHECK
+      CIF
+      IF LSTOPT.NE.1
+      THEN
+N                                        SET POINTER
+      BLLINE(POS) = POINTR
+N                                        WRITE POINTER LINE
+      NEL=NELC(BLLINE,72)
+      WRITE(NPRINT,'(8X,72(A1:))') (BLLINE(KGB),KGB=1,NEL)
+N                                        CLEAR POINTER
+      BLLINE(POS) = BLANK
+      ELSE
+      WRITE (NPRINT,201)
+      CIF
+N                              WRITE ERROR MESSAGE
+      PERFORM TXTLEN
+      WRITE(NPRINT,200) TEXT(:NEL)
+C     WRITE(*,200) TEXT(:NEL)
+      WRITE(NPRINT,201)
+      RETURN
+N
+N          ><  INCREMENT SOURCE LINE NUMBER
+      ENTRY ICRISN(INCR)
+         LINENO = LINENO + INCR
+      RETURN
+N
+N      ><  PRINT SRC LINE; ALIGN & INDENT
+      ENTRY PRINT(LEV,LNRPRT)
+      LNOPRT=LNRPRT
+      SELECT LSTOPT
+      CASE 1
+      IF LEV.LE.30.AND.LEV.GE.0
+      THEN
+      LEVEL=LEV+7
+      ELSE
+      IF LEV.LT.0
+      THEN
+      LEVEL=7
+      ELSE
+      LEVEL=37
+      CIF
+      CIF
+      PERFORM FSTLST
+      IF LEVEL+LENG.GT.73.AND.NOTE
+      THEN
+      COMCON=COMCON+1
+      PERFORM CHECK
+      NEL=NELC(OUT,124)
+      WRITE(NPRINT,'(8X,124(A1:))') (OUT(KGB),KGB=1,NEL)
+      PERFORM BLKOUT
+                              ELSE
+      PERFORM CHECK
+      CIF
+      OUT(6)=LINE(6)
+      PERFORM LONGPR
+      CASE 2
+      PERFORM SHRTPR
+      CASE 3
+      PERFORM SEQPRT
+      OTHER
+      SEQNO=SEQNO+1
+      CSELECT
+      RETURN
+N
+N      ><  PRINT WITHOUT ALIGN OR INDENT
+      ENTRY PRINTC(LNRPRT)
+      LNOPRT=LNRPRT
+      SELECT LSTOPT
+      CASE 1
+      LEVEL=1
+      INIT=1
+      LAST=72
+      PERFORM CHECK
+      PERFORM LONGPR
+      CASE 2
+      PERFORM SHRTPR
+      CASE 3
+      PERFORM SEQPRT
+      OTHER
+      SEQNO=SEQNO+1
+      CSELECT
+      RETURN
+N
+N      ><  PROCESS NOTE
+      ENTRY PNOTE
+      SELECT LSTOPT
+      CASE 1
+      IF NOTE
+      THEN
+      PERFORM CHECK
+      NEL=NELC(OUT,124)
+      WRITE(NPRINT,'(8X,124(A1:))') (OUT(KGB),KGB=1,NEL)
+      PERFORM BLKOUT
+      CIF
+      PERFORM FSTLST
+      PERFORM CC26
+      IF LENG.GT.50
+      THEN
+      LAST=INIT+49
+      CIF
+      LEVEL=75
+      PERFORM FILOUT
+      NOTE=.TRUE.
+      CASE 2
+      PERFORM CHECK
+      NEL=NELC(LINE,80)
+      WRITE(NPRINT,'(8X,80(A1:))') (LINE(KGB),KGB=1,NEL)
+      CASE 3
+      PERFORM SEQPRT
+      OTHER
+      SEQNO=SEQNO+1
+      CSELECT
+      RETURN
+N
+N      ><  PROCESS EJECT LINE
+      ENTRY HEADER
+      PERFORM FSTLST
+      PERFORM CC26
+      IF LENG.NE.0.AND.LSTOPT.NE.0
+      THEN
+      FOR I=1,66
+      TITLSV(I)=LINE(I+6)
+      CFOR
+      CIF
+      SELECT LSTOPT
+      CASE 1,2
+N                              WRITE PAGE HEADER
+      PERFORM NWPAGE
+      CASE 3
+      COMCON=COMCON-1
+      PERFORM SEQPRT
+      PERFORM NWPAGE
+      OTHER
+      SEQNO=SEQNO+1
+      CSELECT
+      RETURN
+N
+N      ><  WRITE TRAILER
+      ENTRY TRAIL
+      COMCON=COMCON+5+MIN(1,NWARN)
+      PERFORM CHECK
+         WRITE(NPRINT,400)
+         PERFORM STAT
+         LINTOT = LINTOT + LINENO - START
+         ERRTOT = ERRTOT + ERROR
+      WRNTOT = WRNTOT + NWARN
+         PERFORM BEGIN
+      RETURN
+N
+N                              ><  FINAL ENTRY POINT
+      ENTRY FINAL
+      PERFORM CHECK
+N                              PRINT TRAILER
+         WRITE(NPRINT,500)
+N                              CHECK LAST STATEMENT IS <END>
+         IF LINENO .GT. START
+         THEN
+      WRITE (NPRINT,201)
+N                              WRITE ERROR
+      WRITE (NPRINT,200) 'END STATEMENT IS MISSING'
+C     WRITE(*,200) 'END STATEMENT IS MISSING'
+      LINTOT=LINTOT+LINENO+1-START
+            ERRTOT = ERRTOT + ERROR + 1
+      CIF
+      LINENO=LINTOT+START-1
+         ERROR = ERRTOT
+      NWARN = WRNTOT
+N                                        WRITE SOURCE LIST TRAILER
+         PERFORM STAT
+      SEQNO=0
+      LINTOT=0
+      ERRTOT=0
+      NOTE=.FALSE.
+      RETURN
+E
+N                              RESET COUNTERS
+      PROC BEGIN
+         PAGENO = 0
+         ERROR = 0
+      NWARN=0
+         LINENO = START
+      COMCON=LINEPP
+      FOR I=1,66
+      TITLSV(I)=TITLE(I)
+      CFOR
+      CPROC
+N
+N
+N      DETERMINE ALIGNMENT POINTERS
+      PROC FSTLST
+      INIT=6
+            REPEAT
+      INIT=INIT+1
+      UNTIL LINE(INIT).NE.BLANK.OR.INIT.EQ.73
+      IF INIT.NE.73
+      THEN
+      LAST=73
+           REPEAT
+      LAST=LAST-1
+      UNTIL LINE(LAST).NE.BLANK
+      LENG=LAST-INIT+1
+      ELSE
+      INIT=7
+      LAST=7
+      LENG=0
+      CIF
+      CPROC
+N
+N      PRINT LONG LINE
+      PROC LONGPR
+      PERFORM FILOUT
+      IF LNOPRT
+      THEN
+      NEL=NELC(OUT,124)
+      WRITE (NPRINT,'(1X,I4,3X,124(A1:))') LINENO,(OUT(KGB),KGB=1,NEL)
+      ELSE
+      NEL=NELC(OUT,124)
+      WRITE(NPRINT,'(8X,124(A1:))') (OUT(KGB),KGB=1,NEL)
+      CIF
+      PERFORM BLKOUT
+      NOTE =.FALSE.
+      CPROC
+N
+N      PRINT SHORT LINE
+      PROC SHRTPR
+      PERFORM CHECK
+      IF LNOPRT
+      THEN
+      NEL=NELC(LINE,80)
+      WRITE (NPRINT,'(1X,I4,3X,80(A1:))') LINENO,(LINE(KGB),KGB=1,NEL)
+      ELSE
+      NEL=NELC(LINE,80)
+      WRITE(NPRINT,'(8X,80(A1:))') (LINE(KGB),KGB=1,NEL)
+      CIF
+      CPROC
+N
+N      SEQUENCED PRINT
+      PROC SEQPRT
+      SEQNO=SEQNO+1
+      PERFORM CHECK
+      NEL=NELC(LINE,80)
+      WRITE (NPRINT,'(1X,I4,3X,80(A1:))') SEQNO,(LINE(KGB),KGB=1,NEL)
+      CPROC
+N
+N                                        CHECK FOR END OF PAGE
+      PROC CHECK
+         COMCON = COMCON + 1
+N                              CHECK FOR PAGE OVERFLOW
+         IF COMCON .GE. LINEPP
+         THEN
+N                              WRITE PAGE HEADER
+            PERFORM NWPAGE
+         CIF
+      CPROC
+N
+N     Length of TEXT string
+      PROC TXTLEN
+      NEL=LEN(TEXT)
+      WHILE (NEL.GT.0)
+      IF (TEXT(NEL:NEL).EQ.' ')
+      THEN
+      NEL=NEL-1
+      ELSE
+      XWHILE
+      CIF
+      CWHILE
+      CPROC      
+N
+N      NEW PAGE
+      PROC NWPAGE
+      COMCON = 0
+      PAGENO = PAGENO + 1
+      WRITE(NPRINT,'(''1VERSION 5.5 (OCT. 88)'',T58,''SHELTRAN-77'',
+     :T122,''PAGE'',I4)') PAGENO
+      NEL=NELC(TITLSV,66)
+      IF LSTOPT.LE.2
+      THEN
+      WRITE(NPRINT,'(''0TARGET'',7X,66(A1:))') (TITLSV(KGB),KGB=1,NEL)
+      WRITE(NPRINT,'(/'' STM.NO''/)')
+      ELSE
+      WRITE(NPRINT,'(''0SOURCE'',7X,66(A1:))') (TITLSV(KGB),KGB=1,NEL)
+      WRITE(NPRINT,'(/'' SEQ.NO''/)')
+      CIF
+      CPROC
+N
+N                                        WRITE SOURCE LIST TRAILER
+      PROC STAT
+N                              WRITE OPTIONS
+      WRITE (NPRINT,401) LINEPP,CHARPL,SOURCE,NBRING
+      LINENO=LINENO+1-START
+      WRITE (NPRINT,406) ERROR,LINENO -1
+      IF NWARN.GT.0
+      THEN
+      WRITE(NPRINT,601) NWARN
+      CIF
+      CPROC
+N
+N      FILL OUTPUT BUFFER
+      PROC FILOUT
+      FOR I=INIT,LAST
+      OUT(LEVEL)=LINE(I)
+      LEVEL=LEVEL+1
+      CFOR
+      CPROC
+N
+N      CLEAR OUTPUT BUFFER
+      PROC BLKOUT
+      FOR I=1,124
+      OUT(I)=BLANK
+      CFOR
+      CPROC
+N
+N      COLUMNS 2 ... 6
+      PROC CC26
+      FOR I=6,2,-1
+      IF LINE(I).NE.BLANK
+      THEN
+      INIT=I
+      CIF
+      CFOR
+      LENG=LAST-INIT+1
+      CPROC
+      END
+N        CLASSIFIES SHELTRAN  STATEMENTS BY THEIR FIRST
+N     SOURCE LINE.
+N
+      SUBROUTINE CLASS
+N
+      SAVE
+      CHARACTER*1 NCHAR(80) ,CPARM(66)
+      COMMON /BLINE/NCHAR
+      COMMON /BPARM/NPARM(66)
+      COMMON/CHPARM/ CPARM
+      COMMON /BLIST/NPOS,LSTOPT,LINEPP,NPRINT
+       LOGICAL NEXIT
+      COMMON /BPARS/NTYPE,NTARGT,NEXIT,NOUT,LUOUT
+N
+      INTEGER SUM, KGB
+N                                        TEMPORARY CHARACTER STORE
+      CHARACTER*1 CHARI
+      CHARACTER*1 BLANK,OPBRT,CLBRT
+      CHARACTER*1 COMMA,AMPST,EQUAL
+      INTEGER POSIT(8),DELIM
+      CHARACTER*1 KW(4,2)
+N LOWER TO UPPER FUNCTION
+      CHARACTER*1 LTU
+      LOGICAL COMFLG
+      DATA BLANK/' '/,OPBRT/'('/,CLBRT/')'/
+      DATA COMMA/','/
+      DATA AMPST/'*'/,EQUAL/'='/
+      DATA KW/'E','R','R','=','E','N','D','='/
+E
+      NPOS = 7
+      NTYPE = KEYWD1(NPOS)
+N                                        SET PARAMETERS TO ZERO
+      FOR I=1,66
+         NPARM(I) = 0
+      CFOR
+N                 SUPLEMENTARY CHECKS
+      SELECT NTYPE
+N                                       FIND CASE PARAMETER
+      CASE 15
+         SUM = 0
+         J = 1
+         FOR N = NPOS,72
+N                                        OBTAIN WORKING CHARACTER
+            IN = DELIM (NCHAR(N))
+N                                        CLASSIFY CHARACTER
+            SELECT IN
+N      SKIP IF BLANK
+            CASE 1
+N                                        COMMA
+            CASE 4
+      IF SUM.EQ.0
+                                 THEN
+N                                        SET ERROR AND EXIT
+      NTYPE=101
+      XFOR
+      ELSE
+N                                        STORE PARAMETER
+               NPARM(J) = SUM
+N                                        START ON NEXT PARAMETER
+               J = J + 1
+               SUM = 0
+      CIF
+N                                        DIGIT
+            CASE 8,9,10,11,12,13,14,15,16,17
+               SUM = 10 * SUM + IN - 8
+            OTHER
+N                                        WRONG CHARACTER: ERROR
+               NTYPE = 101
+      XFOR
+      CSELECT
+      CFOR
+N     STORE LAST PARAMETER
+      NPARM(J)=SUM
+         NPOS = N
+N     FOR; MUST BE FOLLOWED BY '=' AND AT LEAST 1 COMMA
+      CASE 11
+      REPEAT
+      NPOS=NPOS+1
+      CHARI=NCHAR(NPOS)
+      UNTIL CHARI.EQ.EQUAL.OR.CHARI.EQ.OPBRT.OR.NPOS.GE.70
+      IF CHARI.EQ.EQUAL.AND.NPOS.LE.70
+      THEN
+      KGB=0
+      REPEAT
+      NPOS=NPOS+1
+      CHARI=NCHAR(NPOS)
+      IF CHARI.EQ.OPBRT
+      THEN
+      KGB=KGB+1
+      ELSEIF CHARI.EQ.CLBRT
+      THEN
+      KGB=KGB-1
+      CIF
+      UNTIL (CHARI.EQ.COMMA.AND.KGB.EQ.0).OR.(NPOS.GE.72)
+      IF CHARI.NE.COMMA.OR.KGB.NE.0
+      THEN
+      NTYPE=2
+      CIF
+      ELSE
+      NTYPE=2
+      CIF
+N      SCAN I/O PARAMETERS
+      CASE 22
+      N1=0
+      NKW=0
+      REPEAT
+      NKW=NKW+1
+      PERFORM ENDERR
+      IF KWIND.EQ.5
+      THEN
+      N1=N1+1
+      POSIT(N1)=NPER
+      CIF
+      UNTIL NKW.EQ.2
+N      END= AND ERR= ABSENT?
+      IF N1.EQ.0
+      THEN
+N      --> FORTRAN
+      NTYPE=2
+      ELSE
+N      END= AND ERR= KEYWDS OUT OF ORDER?
+      IF N1.EQ.2 .AND. POSIT(1).GT.POSIT(2)
+      THEN
+      POSIT(3)=POSIT(1)
+      POSIT(1)=POSIT(2)
+      POSIT(2)=POSIT(3)
+      CIF
+N     --> FILL ARRAY NPARM TO BE USED BY THE PARSER
+      PERFORM PRMFIL
+      CIF
+N     CALL;IS THERE A '*' ,OTHERWISE FORTRAN
+      CASE 30
+      N1=0
+      COMFLG=.TRUE.
+      REPEAT
+      NPOS=NPOS+1
+      CHARI = NCHAR(NPOS)
+      UNTIL CHARI.EQ.OPBRT.OR.NPOS.GE.70
+N     SCAN FOR SUCCESSIVE '*'S
+      REPEAT
+      NPOS=NPOS+1
+      CHARI = NCHAR(NPOS)
+      IF CHARI.EQ.AMPST.AND.NPOS.LE.70
+      THEN
+N     IS '*' PRECEDED BY '(' OR ','
+      IF COMFLG
+      THEN
+N     SET LOOP COUNTER FOR PROCEDURE PRMFIL
+      N1=N1+1
+N     STORE POSITION OF '*'
+      POSIT(N1)=NPOS
+      COMFLG=.FALSE.
+      CIF
+      ELSE
+      IF CHARI.NE.BLANK.AND.COMFLG
+      THEN
+      COMFLG=.FALSE.
+      ELSE
+      IF CHARI.EQ.COMMA
+      THEN
+N     SET COMMA-FLAG
+      COMFLG=.TRUE.
+      CIF
+      CIF
+      CIF
+      UNTIL N1.EQ.8.OR.NPOS.GE.70
+      SELECT N1
+N     CALL WITH '*'
+      CASE 1,2,3,4,5,6,7
+      PERFORM PRMFIL
+N     IN FURTHER PROCESSING THERE IS NO DIFFERENCE
+N     BETWEEN READ AND CALL WITH SHELTRAN PARAMETERS
+      NTYPE=22
+N     ONLY 7 '*' PARAMETERS ARE ALLOWED
+      CASE 8
+N     SET ERROR-TYPE FOR ERROR-MESSAGE
+      NTYPE=104
+      OTHER
+      NTYPE=2
+      CSELECT
+      OTHER
+      CSELECT
+N                                        STATEMENT CLASSIFIED
+      RETURN
+N
+N     DETERMINE POSITION OF END= AND ERR=
+      PROC ENDERR
+      KWIND=1
+      NPER=NPOS
+      REPEAT
+      NPER=NPER+1
+      IF NCHAR(NPER).EQ.OPBRT
+N     SKIP PARENTHESIZED CONTRUCTS
+      THEN
+      KWIND=1
+      REPEAT
+      NPER=NPER+1
+      UNTIL NCHAR(NPER).EQ.CLBRT.OR.NPER.GE.70
+      ELSE
+N      BLANKS ARE INSIGNIFICANT
+      IF NCHAR(NPER).NE.BLANK
+      THEN
+      IF ( LTU( NCHAR(NPER) ) .EQ. KW(KWIND,NKW) )
+      THEN
+      KWIND=KWIND+1
+      ELSE
+      KWIND=1
+      CIF
+      CIF
+      CIF
+      UNTIL KWIND.EQ.5.OR.NPER.GE.70
+      CPROC
+N
+N      FILL ARRAY NPARM, TO BE USED BY THE PARSER
+      PROC PRMFIL
+         I = 8
+      FOR N=1,N1
+      J=(N-1)*9
+      I=I-1
+N                                        SET BEGIN POINTER
+      NPARM(J+2)=I
+N                                        SET END POINTER
+      NPARM(J+3)=POSIT(N)
+      I=POSIT(N)+1
+N                                        SAVE POINTER FOR PROC NAME COPY
+            L = I - 4
+N                                        LOOKUP KIND
+            M = KEYWD2(I)
+N                                        SET KIND
+      NPARM(J+1)=M
+      IF M.EQ.6
+N     PROCEDURE NAME
+            THEN
+N                                        COPY PROC NAME
+               K = 4
+               WHILE K .LE. 34
+                  IF K .LT. I - L - 1
+                  THEN
+N                                        DO NOT COPY BLANKS
+      CHARI = LTU( NCHAR(K+L) )
+      IF CHARI.NE.BLANK
+                     THEN
+      CPARM(J+K)=CHARI
+                     ELSE
+                        K = K - 1
+                        L = L + 1
+      CIF
+                  ELSE
+N                                        TRAIL WITH BLANKS
+      CPARM(J+K)=BLANK
+      CIF
+                  K = K + 1
+      CWHILE
+      CIF
+      CFOR
+      J=J+9
+      NPARM(J+1)=0
+      NPARM(J+2)=I-1
+N                                        SET END POINTER
+      NPARM(J+3)=72
+         NPOS = I
+      CPROC
+      END
+N          CLASSIFY STRING OF CHARACTERS AS ONE OF A SET OF
+N     KEYWORDS
+N
+      FUNCTION KEYWD1(POS)
+N
+      CHARACTER*1 NCHAR(80)
+      COMMON /BLINE/NCHAR
+      CHARACTER*1 CHARI
+      CHARACTER*1 BLANK,OPBRT,CLBRT,EQUAL,COMMA
+      INTEGER POS
+      CHARACTER*1 TREE(156)
+      INTEGER MATCH(156),FAIL(156)
+N LOWER TO UPPER FUNCTION
+      CHARACTER*1 LTU
+      DATA BLANK/' '/,OPBRT/'('/,CLBRT/')'/,EQUAL/'='/,COMMA/','/
+E                     1   2   3   4   5   6   7   8   9  10
+N                                        TREE
+     0DATA  TREE  / 'I','F','T','H','E','N','E','L','S','E',
+     1              'N','T','R','Y','D',' ','A','L','L','S',
+     2              'E','I','F','W','H','I','L','E','P','R',
+     3              'O','C','F','O','R','S','E','L','E','C',
+     4              'T','P','E','R','F','O','R','M','R','O',
+     5              'C','W','H','I','L','E','F','O','R',' ',
+     6              ' ',' ','(','S','E','L','E','C','T','T',
+     7              'O','P','R','E','P','E','A','T','T','U',
+     8              'R','N','A','D','X','W','H','I','L','E',
+     9              'F','O','R','R','E','P','E','A','T','U',
+     A              'N','T','I','L','O','T','H','E','R',' ',
+     B              'B','A','C','K','S','P','A','C','E','(',
+     C              'C','L','O','S','E','(','P','E','N','(',
+     D              'F','I','L','E','(','N','Q','U','I','R',
+     E              'E','(','R','I','T','E','(','W','I','N',
+     F              'D','(','I','F','I','F'/
+N                                        MATCH POINTERS
+     0DATA  MATCH /   2,110,  4,  5,  6, -5,  8,  9, 10,155,
+     1               12, 13, 14,-27,131,000, 18, 19,-30, 21,
+     2              -15, 23, -7, 25, 26, 27, 28,-10, 30, 31,
+     3               32,-24, 34, 35,-13, 37, 38, 39, 40, 41,
+     4              -17, 43, 44, 45, 46, 47, 48,-21, 50, 51,
+     5              -23, 53, 54, 55, 56, 60, 58, 59,-11, -8,
+     6              -14,-18,-22, 65, 66, 67, 68, 69, 61, 71,
+     7               72,-26, 74, 75, 76, 77, 78,-20, 80, 81,
+     8               82,-25, 84, 63, 86, 87, 88, 89, 90, -9,
+     9               92, 93,-12, 95, 96, 97, 98, 99,-19,101,
+     A              102,103,104, 62,106,107,108,109,-16, -4,
+     B              112,113,114,115,116,117,118,119,120,-22,
+     C              122,123,124,125,126,-22,128,129,130,-22,
+     D              132,133,134,135,-22,137,138,139,140,141,
+     E              142,-22,144,145,146,147,-22,149,150,151,
+     F              152,-22,154, -7,156,-31/
+N                                        FAIL POINTERS
+     0DATA  FAIL  /   3,136,  7, -2, -2, -2,121, 11, -2, -2,
+     1               -2, 15, -2, -2, -2,000, 22, 20, -2, -2,
+     2               -2, 24, -2, 29, -2, -2, -2, -2, 33, -2,
+     3               -2, -2, 36, -2, -2, -2, -2, -2, -2, -2,
+     4               -2, 52, 49, -2, -2, -2, -2, -2, -2, -2,
+     5               -2, 57,143, -2, -2, -2, 64, -2, -2, -2,
+     6               -2, -2, -2, 73, 70, -2, -2, -2, -2, -2,
+     7               -2, -2, 85, -2, 79, -2, -2, -2, 83, -2,
+     8               -2, -2,148, -2,100, 91, -2, -2, -2, -2,
+     9               94, -2, -2, -2, -2, -2, -2, -2, -2,105,
+     A               -2, -2, -2, -2,111,127, -2, -2, -2, -2,
+     B               -2, -2, -2, -2, -2, -2, -2, -2, -2, -2,
+     C               42, 17, -2, -2, -2, -2, -2, -2, -2, -2,
+     D              153, -2, -2, -2, -2, -2, -2, -2, -2, -2,
+     E               -2, -2, -2, -2, -2, -2, -2, -2, -2, -2,
+     F               -2, -2,-28, -2, -6, -2/
+E
+N
+N
+N.....................................................................
+N
+N                                        SHELTRAN KEYWORDS
+N***********************************************************************
+N*                                                                     *
+N*    SORTS STATEMENTS INTO  31 CLASSES                                *
+N*                                                                     *
+N*    TYPE CODES -                                                     *
+N*                                                                     *
+N     01 COMMENT  2 FORTRAN    3 CONTINUATION  4 IF
+N     05 THEN     6 ELSE       7 CIF           8 WHILE
+N     09 XWHILE  10 CWHILE    11 FOR          12 XFOR
+N     13 CFOR    14 SELECT    15 CASE         16 OTHER
+N     17 CSELECT 18 UNTIL     19 XREPEAT      20 REPEAT
+N     21 PERFORM 22 READ      23 PROC         24 CPROC
+N     25 RETURN  26 STOP      27 ENTRY        28 END
+N     29 FORMAT  30 CALL      22 OPEN(        22 ENDFILE(
+N     22 INQUIRE 22 WRITE     22 CLOSE(       22 BACKSPACE(
+N     22 REWIND(  7 ENDIF     31 ELSEIF
+N    >=101 ERROR
+N*                                                                     *
+E
+N      K E Y W O R D        CLASS   ENTRY
+N
+N      I F                    4       1
+N      . N Q U I R E (       22     136
+N      T H E N                5       3
+N      E L S E                6       7
+N      . . . . I F           31     153
+N      . N T R Y             27      11
+N      . . D                 28      15
+N      . . . F I L E (       22     131
+N      . . . I F              7     155
+N      C L O S E (           22     121
+N      . A L L               30      17
+N      . . S E               15      20
+N      . I F                  7      22
+N      . W H I L E           10      24
+N      . P R O C             24      29
+N      . F O R               13      33
+N      . S E L E C T         17      36
+N      P E R F O R M         21      42
+N      . R O C               23      49
+N      W H I L E              8      52
+N      . R I T E (           22     143
+N      F O R                 11      57
+N      S E L E C T           14      64
+N      . T O P               26      70
+N      R E P E A T           20      73
+N      . . T U R N           25      79
+N      . . W I N D (         22     148
+N      . . A D (             22      83
+N      X W H I L E            9      85
+N      . F O R               12      91
+N      . R E P E A T         19      94
+N      U N T I L             18     100
+N      O T H E R             16     105
+N      . P E N (             22     127
+N      B A C K S P A C E (   22     111
+N
+E
+      J = 1
+      I = POS
+N                                        SCAN UNTIL END OF LINE
+      WHILE  I .LE. 72
+           CHARI = LTU( NCHAR(I) )
+N                                        CLASSIFY CHARACTER,
+      IF CHARI.EQ.TREE(J)
+           THEN
+N                                        MATCH, TAKE NEXT CHARACTER,
+                     J = MATCH(J)
+                I = I + 1
+           ELSE
+N                                        SKIP BLANKS
+      IF CHARI.EQ.BLANK
+                THEN
+                     I = I + 1
+                ELSE
+N                                        NO MATCH,  TRY AGAIN
+                     J = FAIL(J)
+      CIF
+      CIF
+N                                        IF END OF TREE,
+                IF  J .LE. 0
+                THEN
+N                                        RETURN CLASS VALUE AND STOP
+      KEYWD1=-J
+      XWHILE
+      CIF
+      CWHILE
+N                                        IF AT END OF LINE WHILE END OF
+N                                        TREE NOT YET BEEN REACHED,
+      IF  J .GE. 0
+      THEN
+      IF J.EQ.1.AND.NCHAR(6).EQ.BLANK
+      THEN
+N      BLANK LINE; TREAT AS COMMENT
+      KEYWD1=110
+      ELSE
+N      SCAN REMAINDER OF FAIL POINTERS
+      WHILE J.GT.0
+N      UNTIL STMT CLASSIFIED
+      J=FAIL(J)
+      CWHILE
+      KEYWD1=-J
+      CIF
+      CIF
+N
+N
+      SELECT KEYWD1
+N     THEN,ELSE,CIF,XWHILE,CWHILE,XFOR,CFOR,OTHER,
+      CASE 5,6,7,9,10,12,13,16,17,19,20,24,25,28
+N     CSELECT,XREPEAT,REPEAT,CPROC,RETURN,END,
+      WHILE I.LE.72
+N      ENDIF.
+      CHARI = NCHAR(I)
+      IF CHARI.EQ.BLANK
+      THEN
+      I=I+1
+      ELSE
+      IF KEYWD1.EQ.25.AND.CHARI.NE.OPBRT.AND.CHARI.NE.EQUAL
+      THEN
+N      RETURN NOT FOLLOWED BY'='OR'(': ILLEGAL STMT
+      KEYWD1=101
+      ELSE
+N     ASSUME FORTRAN STMT IF NOT FOLLOWED BY BLANKS
+      KEYWD1=2
+      CIF
+      XWHILE
+      CIF
+      CWHILE
+N     CASE,PERFORM,PROC,STOP,ENTRY
+      CASE 15,21,23,26,27
+      IF I.LE.72
+      THEN
+      FOR J=I,72
+      CHARI=NCHAR(J)
+      IF CHARI.EQ.EQUAL
+      THEN
+      KEYWD1=2
+      XFOR
+      CIF
+      CFOR
+      ELSE
+N     CASE,PERFORM AND PROC MUST BE FOLLOWED BY AT LEAST
+      IF KEYWD1.LE.23
+N     ONE CHARACTER
+      THEN
+      KEYWD1=2
+      CIF
+      CIF
+N     2       4  8     14     18    22    30   11
+N     FORTRAN,IF,WHILE,SELECT,UNTIL,READ(,CALL,FOR
+N     22      22      22     22     22    22
+N     INQUIRE,ENDFILE,CLOSE(,WRITE(,OPEN(,BACKSPACE(
+N      31
+N      ELSEIF
+      OTHER
+      CSELECT
+N
+N                                        RETURN NEXT SCAN POSITION
+      POS = I
+      RETURN
+      END
+N          CLASSIFY STRING OF CHARACTERS AS ONE OF A SET OF
+N     KEYWORDS AFTER END=,ERR= (I/O) OR * (CALL)
+      FUNCTION KEYWD2(POS)
+N
+      CHARACTER*1 NCHAR(80)
+      COMMON /BLINE/NCHAR
+      CHARACTER*1 CHARI
+      CHARACTER*1 BLANK,OPBRT,CLBRT,EQUAL,COMMA
+      INTEGER POS
+      CHARACTER*1 TREE(35)
+      INTEGER MATCH(35),FAIL(35)
+N LOWER TO UPPER FUNCTION
+      CHARACTER*1 LTU
+      DATA BLANK/' '/,OPBRT/'('/,CLBRT/')'/,EQUAL/'='/,COMMA/','/
+E                     1   2   3   4   5   6   7   8   9  10
+N                                        TREE
+      DATA  TREE  / 'X','F','O','R',',',')','W','H','I','L',
+     *              'E',',',')','R','E','T','U','R','N',',',
+     *              ')','S','T','O','P',',',')','R','E','P',
+     *              'E','A','T',',',')'/
+N                                        MATCH POINTERS
+      DATA  MATCH /   2,  3,  4,  5, -3, -3,  8,  9, 10, 11,
+     *               12, -4, -4, 15, 16, 17, 18, 19, 20, -1,
+     *               -1, 23, 24, 25, 26, -2, -2, 29, 30, 31,
+     *               32, 33, 34, -5, -5/
+N                                        FAIL POINTERS
+      DATA  FAIL  /  14,  7, -6, -6,  6, -6, 28, -6, -6, -6,
+     *               -6, 13, -6, 22, -6, -6, -6, -6, -6, 21,
+     *               -6, -6, -6, -6, -6, 27, -6, -6, -6, -6,
+     *               -6, -6, -6, 35, -6/
+N      IN THE FOLLOWING TABLE * STANDS FOR ',' OR ')'
+N
+N      K E Y W O R D    CLASS  ENTRY
+N
+N      X F O R *         3       1
+N      . W H I L E *     4       7
+N      . R E P E A T *   5      28
+N      R E T U R N *     1      14
+N      S T O P *         2      22
+N
+E
+      J = 1
+      I = POS
+N                                        SCAN UNTIL END OF LINE
+      WHILE  I .LE. 72
+           CHARI = LTU( NCHAR(I) )
+N                                        SKIP BLANKS
+      IF CHARI.EQ.BLANK
+           THEN
+                I = I + 1
+           ELSE
+N                                        CLASSIFY CHARACTER,
+      IF CHARI.EQ.TREE(J)
+                THEN
+N                                        MATCH, TAKE NEXT CHARACTER,
+                     J = MATCH(J)
+                     I = I + 1
+                ELSE
+N                                        NO MATCH,  TRY AGAIN
+                     J = FAIL(J)
+      CIF
+N                                        IF END OF TREE,
+                IF  J .LE. 0
+                THEN
+N                                        RETURN CLASS VALUE AND STOP
+      KEYWD2=-J
+      XWHILE
+      CIF
+      CIF
+      CWHILE
+N                                        IF AT END OF LINE WHILE END OF
+N                                        TREE NOT YET BEEN REACHED,
+      IF  J .GE. 0
+      THEN
+N     ASSUME PROCEDURE NAME
+      KEYWD2=6
+      CIF
+N
+N
+N                                        IF NO KEYWORD FOUND, CONTINUE
+      IF  J .EQ. -6
+      THEN
+N                                        SCAN UNTIL , OR )
+           WHILE  I .LE. 72
+                CHARI = NCHAR(I)
+                     I = I + 1
+      IF CHARI.EQ.COMMA .OR. CHARI.EQ.CLBRT
+                THEN
+      XWHILE
+      CIF
+      CWHILE
+      CIF
+N
+N                                        RETURN NEXT SCAN POSITION
+      POS = I
+      RETURN
+      END
+N          DELIM
+N          CLASSIFY CHARACTER AS ONE OF A SET OF DELIMITERS
+N
+      INTEGER FUNCTION  DELIM (CHARI)
+N
+N
+      CHARACTER*1 IDELIM(17),CHARI
+      DATA       IDELIM  / ' ','(',')',',','=','/',' ',
+     1                     '0','1','2','3','4','5','6','7','8','9' /
+      DELIM = 0
+N                                        LOOP OVER ARRAY OF DELIMITERS
+      FOR  I = 1,17
+      IF CHARI.EQ.IDELIM(I)
+           THEN
+N                                        RETURN INDEX AS FUNCTION VALUE
+                DELIM = I
+      XFOR
+      CIF
+      CFOR
+      RETURN
+      END
+N        PARSER
+N          CHECKS THE SYNTAX OF SHELTRAN SOURCE,AND GENERATES
+N     FORTRAN 77 STATEMENTS FOR IT.
+N     THE PARSER IS A FINITE STATE MACHINE
+N
+      SUBROUTINE PARSER
+      SAVE
+N
+N      NUMBER OF TYPES -- NUMBER OF POSSIBLE STATES
+N      -- STACK DEPTH
+      PARAMETER (NTYPES=30,NSTATE=17,NSTACK=32)
+      LOGICAL NEXIT
+      CHARACTER*1 LINE(80),CPARM(66)
+      COMMON /BLINE/LINE
+      COMMON /BPARM/NPARM(66)
+      COMMON/CHPARM/ CPARM
+      INTEGER TYPE
+      COMMON /BPARS/TYPE,NTARGT,NEXIT,NOUT,LUOUT
+N                                        EXIT FLAG
+      LOGICAL RETFL
+      LOGICAL STPFL
+N
+      INTEGER LAB(7)
+N                                        STATE INDICATOR
+      INTEGER   STATE
+N                                        STATE STACK POINTER
+      INTEGER   STPTR
+N                                        STATE STACK
+      INTEGER   STSTK(NSTACK)
+N                                        STATE ACTION TABLE
+      INTEGER ACTAB(NSTATE,NTYPES)
+      INTEGER PART1(NSTATE,15),PART2(NSTATE,NTYPES-15)
+
+      EQUIVALENCE (ACTAB(1,1),PART1(1,1))
+      EQUIVALENCE (ACTAB(1,16),PART2(1,1))
+      DATA RETFL/.TRUE./,STPFL/.TRUE./
+      DATA STATE/1/,STPTR/0/
+N
+N
+      DATA PART1/
+C         1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17
+C
+N      FORTRAN LINE
+     1    7,48,48, 7,48, 7,33, 7,37, 7, 7, 7,28,39, 7, 7,34,
+N      CONTINUATION LINE
+     2    9,48,48, 9,48, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9,
+N     IF
+     3   29,48,48,29,48,29,33,29,37,29,29,29,28,39,29,29,34,
+N     THEN
+     4    0,48,48, 0,48, 0,33, 0,37, 0, 0, 0,28,30, 0, 0,34,
+N     ELSE
+     5    0,48,20, 0,48, 0,33, 0,37, 0, 0, 0,28,39,31, 0,34,
+N     CIF
+     6    0,48,20, 0,48, 0,33, 0,37, 0, 0, 0,28,39,32,32,34,
+N     WHILE
+     7   19,48,48,19,48,19,33,19,37,19,19,19,28,39,19,19,34,
+N     XWHILE
+     8    3,48,48, 0,48, 3,33, 3,37, 3, 3, 3,28,39, 3, 3,34,
+N     CWHILE
+     9    0,48,20, 0,48, 0,33,21,37, 0, 0, 0,28,39, 0, 0,34,
+N     FOR
+     A   17,48,48,17,48,17,33,17,37,17,17,17,28,39,17,17,34,
+N     XFOR
+     1    4,48,48, 0,48, 4,33, 4,37, 4, 4, 4,28,39, 4, 4,34,
+N     CFOR
+     2    0,48,20, 0,48,18,33, 0,37, 0, 0, 0,28,39, 0, 0,34,
+N     SELECT
+     3   22,48,48,22,48,22,33,22,37,22,22,22,28,39,22,22,34,
+N     CASE
+     4    0,48,20, 0,48, 0,33, 0,13,23, 0, 0,28,39, 0, 0,34,
+N     OTHER
+     5    0,48,20, 0,48, 0,33, 0,37,24, 0, 0,28,39, 0, 0,34/
+E
+      DATA PART2/
+C         1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17
+C
+N     CSELECT
+     6    0,48,20, 0,48, 0,33, 0,37, 0,25, 0,28,39, 0, 0,34,
+N     UNTIL
+     7    0,48,20, 0,48, 0,33, 0,37, 0, 0,27,28,39, 0, 0,34,
+N     XREPEAT
+     8    6,48,48, 0,48, 6,33, 6,37, 6, 6, 6,28,39, 6, 6,34,
+N     REPEAT
+     9   26,48,48,26,48,26,33,26,37,26,26,26,28,39,26,26,34,
+N     PERFORM
+     B    1,48,48, 1,48, 1,33, 1,37, 1, 1, 1,28,39, 1, 1,34,
+N     I/O STATEMENT
+     1    2,48,48, 2,48, 2,33, 2,37, 2, 2, 2,28,39, 2, 2,34,
+N     PROC
+     2   12,14,48,40,14, 0,33, 0,37, 0, 0, 0,28,39, 0, 0,34,
+N     CPROC
+     3    0,48,48,15,48, 0,33, 0,37, 0, 0, 0,28,39, 0, 0,34,
+N     RETURN
+     4   11,48,48, 0,48, 5,33, 5,37, 5, 5, 5,28,39, 5, 5,34,
+N     STOP
+     5   11,48,48, 0,48, 5,33, 5,37, 5, 5, 5,28,39, 5, 5,34,
+N     ENTRY
+     6   12,10,48,40,48, 0,33, 0,37, 0, 0, 0,28,39, 0, 0,34,
+N     END
+     7   12,16,20,40,16,41,33,42,37,43,44,45,28,39,46,46,34,
+N     FORMAT
+     8    7, 7, 0, 7, 7, 7,33, 7,37, 7, 7, 7,28,39, 7, 7,34,
+N     'SPECIAL'
+     9    0, 1, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+N     ELSEIF
+     C    0,48,20, 0,48, 0,33, 0,37, 0, 0, 0,28,39,35, 0,34/
+N
+N
+      NEXIT=.FALSE.
+      RETURN
+E
+      ENTRY PARSE
+N
+N
+      WHILE .TRUE.
+      SELECT ACTAB(STATE,TYPE-1)
+      CASE 1
+N                                  ***   PERFORM   STATEMENT
+         CALL PFORM
+      XWHILE
+      CASE 2
+N                                  ***   READ      STATEMENT
+         PERFORM DOREAD
+         PERFORM STACK
+         STATE = 17
+      XWHILE
+      CASE 3
+N                                  ***   XWHILE    STATEMENT
+         PERFORM STACK
+         STATE = 3
+      CALL LEAVE
+      XWHILE
+      CASE 4
+N                                  ***   XFOR      STATEMENT
+         PERFORM STACK
+         STATE = 3
+      CALL DOEXIT
+      XWHILE
+      CASE 5
+N                                  ***   RETURN    STATEMENT
+N                                  ***   STOP      STATEMENT
+         PERFORM STACK
+         STATE = 3
+      CALL CARD
+      XWHILE
+      CASE 6
+N                                   ***  XREPEAT    STATEMENT
+         PERFORM STACK
+         STATE = 3
+      CALL XUNTIL
+      XWHILE
+      CASE 7
+N                                  ***   FORTRAN   STATEMENT
+      CALL CARD
+      XWHILE
+      CASE 9
+N      CONTINUATION LINE
+         CALL CCARD
+      XWHILE
+      CASE 10
+N                                  ***   ENTRY     STATEMENT
+         STATE = 1
+         CALL CARD
+N                                        CLEAR EXIT FLAG
+         NEXIT = .FALSE.
+      XWHILE
+      CASE 11
+N                                  ***   RETURN    STATEMENT
+N                                  ***   STOP      STATEMENT
+         STATE = 2
+         CALL CARD
+      XWHILE
+      CASE 12
+N                                  ***   END AT WRONG PLACE
+N                                        ERROR HANDLING
+      CALL ERRMSG('STOP OR RETURN ARE MISSING                        ')
+         STATE = 2
+      CASE 13
+N                                  ***   STATEMENT  AFTER SELECT
+         STATE = 10
+      CALL CONSEL
+      XWHILE
+      CASE 14
+N                                  ***   PROC      STATEMENT
+         STATE = 4
+      CALL PROC
+      XWHILE
+      CASE 15
+N                                  ***   CPROC      STATEMENT
+         STATE = 5
+      CALL PEND
+      XWHILE
+      CASE 16
+N                                  ***   END       STATEMENT
+         PERFORM END
+      XWHILE
+      CASE 17
+N                                  ***   FOR       STATEMENT
+         PERFORM STACK
+         STATE = 6
+      CALL FOR
+      XWHILE
+      CASE 18
+N                                  ***   CFOR      STATEMENT
+         PERFORM UNSTK
+      CALL NEXT
+      XWHILE
+      CASE 19
+N                                  ***   WHILE     STATEMENT
+         PERFORM STACK
+         STATE = 7
+      CALL DOWHI
+      XWHILE
+      CASE 20
+N                                  ***   AFTER XFOR,XWHILE,RETURN, STOP
+N                                        OR XREPEAT
+         PERFORM UNSTK
+N                                        SET EXIT FLAG
+         NEXIT = .TRUE.
+      CASE 21
+N                                  ***   CWHILE    STATEMENT
+            PERFORM UNSTK
+      CALL REP EAT
+      XWHILE
+      CASE 22
+N                                  ***   SELECT    STATEMENT
+         PERFORM STACK
+         STATE = 9
+      CALL DOSEL
+      XWHILE
+      CASE 23
+N                                  ***   CASE      STATEMENT
+      CALL DOCASE
+N                                        CLEAR EXIT FLAG
+         NEXIT = .FALSE.
+      XWHILE
+      CASE 24
+N                                  ***   OTHER     STATEMENT
+         STATE = 11
+      CALL OTHER
+N                                        CLEAR EXIT FLAG
+         NEXIT = .FALSE.
+      XWHILE
+      CASE 25
+N                                  ***   CSELECT    STATEMENT
+         PERFORM UNSTK
+      CALL REVERT
+      XWHILE
+      CASE 26
+N                                  ***  REPEAT STATEMENT
+         PERFORM STACK
+         STATE = 12
+      CALL C UNTIL
+      XWHILE
+      CASE 27
+N                                  ***  UNTIL STATEMENT
+         STATE = 13
+      CALL DO UNTL
+      XWHILE
+      CASE 28
+N                                   ***  STATEMENT AFTER UNTIL
+         PERFORM UNSTK
+      CALL CO UNTL
+      CASE 29
+N                                  ***   IF        STATEMENT
+         PERFORM STACK
+         STATE = 14
+      CALL DOIF
+      XWHILE
+      CASE 30
+N                                  ***   THEN      STATEMENT
+         STATE = 15
+      CALL THEN
+      XWHILE
+      CASE 31
+N                                  ***   ELSE      STATEMENT
+         STATE = 16
+      CALL ELSE
+N                                        CLEAR EXIT FLAG
+         NEXIT = .FALSE.
+      XWHILE
+      CASE 32
+N                                  ***   CIF       STATEMENT
+         PERFORM UNSTK
+      CALL FIN
+      XWHILE
+      CASE 33
+N                                  ***   STATEMENT AFTER WHILE
+         STATE = 8
+      CALL CWHILE
+N                                  ***   FIRST STATEMENT AFTER READ
+      CASE 34
+         PERFORM UNSTK
+      CALL COREAD
+N      ***   ELSEIF STATEMENT
+      CASE 35
+      STATE=14
+      CALL ELSEIF
+      NEXIT=.FALSE.
+      XWHILE
+N                                  ***   ERROR HANDLING
+N                                        & ERROR RECOVERING
+      CASE 37
+      CALL ERRMSG('SELECT REJECTED, NOT FOLLOWED BY CASE             ')
+      CALL REVERT
+         PERFORM UNSTK
+      CASE 39
+      CALL ERRMSG('IF REJECTED, NOT FOLLOWED BY THEN                 ')
+      CALL FIN
+         PERFORM UNSTK
+      CASE 40
+      CALL ERRMSG('CPROC IS MISSING                                  ')
+         STATE = 5
+      CALL PEND
+      CASE 41
+      CALL ERRMSG('CFOR IS MISSING                                   ')
+         PERFORM UNSTK
+      CALL NEXT
+      CASE 42
+      CALL ERRMSG('CWHILE IS MISSING                                 ')
+      PERFORM UNSTK
+      CALL REP EAT
+      CASE 43
+         STATE = 11
+      CALL ERRMSG('OTHER IS MISSING                                  ')
+      CALL OTHER
+         NEXIT = .FALSE.
+      CASE 44
+      CALL ERRMSG('CSELECT IS MISSING                                ')
+         PERFORM UNSTK
+      CALL REVERT
+      CASE 45
+      CALL ERRMSG('UNTIL IS MISSING                                  ')
+         PERFORM UNSTK
+      CALL CO UNTL
+      CASE 46
+      CALL ERRMSG('CIF IS MISSING                                    ')
+         PERFORM UNSTK
+      CALL FIN
+      CASE 48
+      CALL ERRMSG('STATEMENT CANNOT BE REACHED                       ')
+      STATE=STATE-ACTAB(STATE,29)
+      XWHILE
+      OTHER
+N                                   ***  ERROR
+      STATE=STATE-ACTAB(STATE,29)
+      CALL ERRMSG('ILLEGAL IN THIS CONTEXT                           ')
+      XWHILE
+      CSELECT
+      CWHILE
+      RETURN
+E
+      PROC STACK
+         STPTR = STPTR + 1
+N                                        CHECK STACK OVERFLOW
+         IF STPTR .GT. NSTACK
+         THEN
+      CALL ERRMSG('NESTING TOO DEEP; FATAL ERROR                     ')
+      CALL ABORT
+      CIF
+N                                        ASSIGN NEW STATE
+         STSTK(STPTR) = STATE
+      CPROC
+N
+N                                        UNSTACK STATE
+      PROC UNSTK
+N                                        ASSIGN NEW STATE
+         STATE = STSTK(STPTR)
+         STPTR = STPTR - 1
+N                                        CLEAR EXIT FLAG
+         NEXIT = .FALSE.
+      CPROC
+N
+N                                        END STATEMENT HANDLING
+      PROC END
+         STATE = 1
+N                                        CLEAR THE MACHINES
+         CALL CCLEAR
+         CALL LCLEAR
+         CALL PCLEAR
+         CALL UCLEAR
+         CALL WCLEAR
+N                                        CLEAR EXIT FLAG
+         NEXIT = .FALSE.
+         RETFL = .TRUE.
+         STPFL = .TRUE.
+      STPTR=0
+N                                        PASS STATEMENT TO OUTPUT
+         CALL CARD
+N                                        WRITE SEGMENT TRAILER
+      CALL TRAIL
+      CPROC
+E
+N                    LABEL IN I/O STMT OR CALL
+      PROC DOREAD
+N
+N        MAP OF NPARM
+N        ------------
+N           NPARM(1)        KIND
+N           NPARM(2)        7
+N           NPARM(3)        POSITION OF '=' OR '*'  OR 72
+N           CPARM(4-9)      PROC NAME
+N           NPARM(10)       KIND
+N           NPARM(11)       POSITION OF ',' OR ')'
+N           NPARM(12)       POSITION OF '=' OR '*'  OR 72
+N           CPARM(13-18)    PROC NAME
+N          ETC.
+N           NPARM(64)       0
+N           NPARM(65)       POSITION OF ',' OR ')'
+N           NPARM(66)       72
+N
+N        KIND INDICATION
+N           0     NO EXIT PARAMETER
+N           1     RETURN
+N           2     STOP
+N           3     XFOR
+N           4     XWHILE
+N           5     XREPEAT
+N           6     PROC NAME
+N
+         J = 1
+      JJ=1
+      WHILE NPARM(JJ).GT.0
+      SELECT NPARM(JJ)
+N                                        RETURN
+            CASE 1
+N                                        ASSIGN LABEL
+               LAB(J) = 10 000
+N                                        GENERATE RETURN
+               IF RETFL
+               THEN
+                  RETFL = .FALSE.
+      K=LAB(J)
+      L=K+1
+      CALL GOTO(L)
+      CALL RETRN(K)
+      CALL LABEL(L)
+      CIF
+N                                        STOP
+            CASE 2
+N                                        ASSIGN LABEL
+               LAB(J) = 10 002
+N                                        GENERATE STOP
+               IF STPFL
+               THEN
+                  STPFL = .FALSE.
+      K=LAB(J)
+      L=K+1
+      CALL GOTO(L)
+      CALL STP(K)
+      CALL LABEL(L)
+      CIF
+N                                        XFOR
+            CASE 3
+N                                        ASSIGN LABEL
+               CALL LREAD(LAB(J))
+N                                       XWHILE
+            CASE 4
+N                                        ASSIGN LABEL
+               CALL WREAD(LAB(J))
+N                                       XREPEAT
+            CASE 5
+N                                        ASSIGN LABEL
+               CALL UREAD(LAB(J))
+N                                        PROC NAME
+            CASE 6
+N                                        ASSIGN LABEL
+      CALL PREAD(CPARM(JJ+3),LAB(J))
+            OTHER
+      CSELECT
+            J = J + 1
+      JJ=JJ+9
+      CWHILE
+N                                        GENERATE STATEMENT
+         J = 1
+      JJ=1
+      WHILE NPARM(JJ).GT.0
+            PERFORM GEREAD
+N                                        WRITE LABEL
+            CALL REDLB(LAB(J))
+            J = J + 1
+      JJ=JJ+9
+      CWHILE
+N                                        TAIL OF STATEMENT
+         PERFORM GEREAD
+      CPROC
+N
+N
+      PROC GEREAD
+N                                        COPY PARAMETERS
+         K = J - 1
+      L=NPARM(JJ+1)
+      M=NPARM(JJ+2)
+N          GENERATE PART OF I/O STATEMENT OR CALL
+         CALL REDTX(K,L,M)
+      CPROC
+      END
+N
+N          WRITE A LINE FOR SUBSEQUENT INPUT TO FORTRAN
+N     COMPILER
+N
+      SUBROUTINE WRITER
+N     INCREMENT FOR COMMENT & CONTINUATION
+      PARAMETER (INCCOM=1,INCCON=1)
+N
+      LOGICAL NEXIT
+      CHARACTER*1 LINE(80)
+      COMMON /BLINE/LINE
+      COMMON/BPARS/NTYP,NTARGT,NEXIT,NOUT,LUOUT
+      CHARACTER*1 NAME(6)
+      DIMENSION LABL(*)
+      INTEGER     I,KGB,NEL,NELC
+
+      RETURN
+E
+N      ><  WRITE COMMENT OR CONT. LINE
+      ENTRY CCARD
+      NEL=NELC(LINE,80)
+      WRITE(NTARGT,'(80(A1:))') (LINE(KGB),KGB=1,NEL)
+      CALL ICRISN(INCCON)
+      RETURN
+N
+N      ><  WRITE FORTRAN LINE
+      ENTRY  CARD
+      NEL=NELC(LINE,80)
+      WRITE(NTARGT,'(80(A1:))') (LINE(KGB),KGB=1,NEL)
+      CALL ICRISN(1)
+      RETURN
+N
+N      ><  WRITE DIRECTLY TO TARGET FILE
+      ENTRY FCARD
+      NEL=NELC(LINE(2),79)
+      WRITE(NTARGT,'(80(A1:))') (LINE(KGB+1),KGB=1,NEL)
+      CALL ICRISN(INCCOM)
+      RETURN
+N
+N      ><        IF(.NOT.(
+      ENTRY IFNOT
+      WRITE(NTARGT,'(5X,A)')             ' IF(.NOT.('
+      CALL ICRISN(1)
+      RETURN
+N
+N              ><        GOTO .....
+      ENTRY GOTO(L)
+      IF .NOT. NEXIT
+      THEN
+      WRITE(NTARGT,'(5X,A,I5)')          ' GOTO ',L
+      CALL ICRISN(1)
+      CIF
+      RETURN
+N
+N      ><  ..... CONTINUE
+      ENTRY  LABEL (L)
+      WRITE(NTARGT,'(I5,A)')           L,' CONTINUE'
+      CALL ICRISN(1)
+      RETURN
+N
+N      ><  ..... RETURN
+      ENTRY RETRN(L)
+      WRITE(NTARGT,'(I5,A)')           L,' RETURN'
+      CALL ICRISN(1)
+      RETURN
+N
+N      ><  ..... STOP
+      ENTRY STP(L)
+      WRITE(NTARGT,'(I5,A)')           L,' STOP'
+      CALL ICRISN(1)
+      RETURN
+N
+N      ><  ASSIGN STATEMENT
+      ENTRY ASSGN (L,NAME)
+      WRITE(NTARGT,'(5X,A,I5,A,6A1)')    ' ASSIGN ',L,' TO ',NAME
+      CALL ICRISN(1)
+      RETURN
+N
+N      ><  ASSIGNED GOTO
+      ENTRY AGOTO(NAME)
+      WRITE(NTARGT,'(5X,A,6A1)')       ' GOTO ',NAME
+      CALL ICRISN(1)
+      RETURN
+N
+N      ><  COMPUTED GOTO
+      ENTRY CGOTO(N,LABL)
+      WRITE(NTARGT,'(5X,A)')                ' GOTO('
+      NUM=N
+      PERFORM LABELS
+      WRITE(NTARGT,'(5X,A)')           '-), IZZZSE'
+      CALL ICRISN(1+INCCON)
+      RETURN
+N
+N      ><  TERMINATE GOTO  (AFTER 'IFNOT')
+      ENTRY CLGOTO(L)
+      WRITE(NTARGT,'(5X,A,I5)')          '-))GOTO ',L
+      CALL ICRISN(INCCON)
+      RETURN
+N
+N
+N      ><  REMAINDER OF STMT AS CONT. LINE
+      ENTRY TXT(K)
+      NEL=NELC(LINE(K),73-K)
+      WRITE(NTARGT,'(5X,A,80(A1:))') '-',(LINE(I+K-1),I=1,NEL)
+      CALL ICRISN(INCCON)
+      RETURN
+N
+N      ><  PART OF I/O STMT WITH EXITS
+      ENTRY REDTX(L,K,K1)
+      NEL=K1-K+1
+      WRITE(NTARGT,'(5X,I1.0,80(A1:))') L,(LINE(I),I=K,K1)
+      IF L.EQ.0
+      THEN
+      CALL ICRISN(1)
+      ELSE
+      CALL ICRISN(INCCON)
+      CIF
+      RETURN
+N
+N
+N      ><  EXIT LABEL OF I/O STMT
+      ENTRY  REDLB (L)
+      WRITE(NTARGT,'(5X,A,I5)')       '-',L
+      CALL ICRISN(INCCON)
+      RETURN
+N
+N      ><  DO LOOP
+      ENTRY  DOLP  (L,K)
+      NEL=NELC(LINE(K),68-K)
+      WRITE(NTARGT,'(5X,A,I5,80(A1:))') ' DO ',L,(LINE(I+K-1),I=1,NEL)
+      CALL ICRISN(1)
+      RETURN
+N
+N      ><  BLOCK IF
+      ENTRY BLKIF
+      WRITE(NTARGT,'(5X,A)')             ' IF('
+      CALL ICRISN(1)
+      RETURN
+N
+N      ><  THEN
+      ENTRY BLKTHN
+      WRITE(NTARGT,'(5X,A)')             '-)THEN'
+      CALL ICRISN(INCCON)
+      RETURN
+N
+N      ><  ELSE
+      ENTRY BLKELS
+      WRITE(NTARGT,'(5X,A)')             ' ELSE'
+      CALL ICRISN(1)
+      RETURN
+N
+N      ><  ENDIF
+      ENTRY BLKCIF
+      WRITE(NTARGT,'(5X,A)')             ' ENDIF'
+      CALL ICRISN(1)
+      RETURN
+N
+N      ><  ELSEIF
+      ENTRY BLKEIF
+      WRITE(NTARGT,'(5X,A)')            ' ELSEIF('
+      CALL ICRISN(1)
+      RETURN
+N
+N
+N      WRITE STMT LABELS FOR CGOTO
+      PROC LABELS
+      WRITE(NTARGT,1) (LABL(I),I=1,NUM)
+    1 FORMAT((5X,'-',11(I5,:,',')))
+      CALL ICRISN(((NUM-1)/11+1)*INCCON)
+      CPROC
+      END
+N        IFER
+N
+N          HANDLES EVERY THING CONCERNING THE
+N          IF-THEN-ELSEIF-ELSE-CIF CONSTRUCT
+N
+      SUBROUTINE IFER
+N
+      CHARACTER*1 LINE(80)
+      COMMON /BLINE/LINE
+N LOWER TO UPPER FUNCTION
+      CHARACTER*1 LTU
+
+      RETURN
+E
+N
+N                                        ><  IF STATEMENT
+      ENTRY DOIF
+      CALL BLKIF
+      PERFORM CONDIT
+      RETURN
+N
+N                                        ><  THEN STATEMENT
+      ENTRY THEN
+      CALL BLKTHN
+      RETURN
+N
+N                                        ><  ELSEIF STATEMENT
+      ENTRY ELSEIF
+      CALL BLKEIF
+      PERFORM CONDIT
+      RETURN
+N
+N                                        ><  ELSE STATEMENT
+      ENTRY ELSE
+      CALL BLKELS
+      RETURN
+N
+N          ><  CIF OR ENDIF STATEMENT
+      ENTRY FIN
+      CALL BLKCIF
+      RETURN
+N
+N
+N     WRITE (FIRST LINE OF) CONDITION
+      PROC CONDIT
+         I=7
+         REPEAT
+            I = I + 1
+         UNTIL ( LTU( LINE(I) ) .EQ. 'F' )
+         I=I+1
+         CALL TXT(I)
+      CPROC
+      END
+N        WHILER
+N          HANDLES EVERY THING CONCERNING THE WHILE CONSTRUCT
+N
+      SUBROUTINE WHILER
+      SAVE
+N
+      CHARACTER*1 LINE(80)
+      COMMON /BLINE/LINE
+N                                        WHILE STACK POINTER
+      INTEGER  WHISTP
+N                                        WHILE STACK
+      INTEGER  WHISTK(32)
+N                                        LABEL NUMBER COUNT
+      INTEGER  NXTLAB
+      INTEGER I
+N                                        CHARACTER FOR COMPARISON
+      CHARACTER*1 E
+N LOWER TO UPPER FUNCTION
+      CHARACTER*1 LTU
+
+      DATA WHISTP /0/,NXTLAB /15000/,I /10099/
+      DATA E /'E'/
+      RETURN
+E
+N                                        ><  WHILE STATEMENT
+      ENTRY DOWHI
+N                                        STACK LABEL
+         WHISTP = WHISTP + 1
+         WHISTK(WHISTP) = NXTLAB
+N                                        GENERATE'<LABEL> CONTINUE'
+         CALL  LABEL(NXTLAB)
+         NXTLAB = NXTLAB + 1
+      CALL BLKIF
+      I=10
+         REPEAT
+            I = I + 1
+      UNTIL ( LTU( LINE(I) ) .EQ. E )
+      I=I+1
+      CALL TXT(I)
+      RETURN
+N
+N
+N                                        ><  PRODUCE OBJECT LINE
+N                                        AT END OF WHILE STATEMENT
+      ENTRY CWHILE
+      CALL BLKTHN
+         NXTLAB = NXTLAB + 1
+      RETURN
+N
+N
+N                                       ><  XWHILE STATEMENT
+      ENTRY LEAVE
+         PERFORM NLEAVE
+N                                        GENERATE 'GO TO <LABEL+1>'
+      CALL GOTO(I)
+      RETURN
+N
+N
+N                                       ><  XWHILE IN I/O STMT OR CALL
+      ENTRY WREAD(LAB)
+         PERFORM NLEAVE
+N                                        COPY LABEL
+         LAB = I
+      RETURN
+N
+N
+N                                        ><  CWHILE STATEMENT
+      ENTRY REPEAT
+         I = WHISTK(WHISTP)
+      CALL GOTO(I)
+         I = I + 1
+      CALL BLKCIF
+      CALL LABEL(I)
+N                                        UNSTACK WHILE
+         WHISTP = WHISTP - 1
+      RETURN
+N
+N
+N                                        ><  CLEAR WHILE HANDLER
+      ENTRY WCLEAR
+         WHISTP = 0
+N                                        RESET LABEL COUNT
+         NXTLAB = 15000
+      RETURN
+E
+      PROC NLEAVE
+         IF WHISTP .LE. 0
+         THEN
+      CALL ERRMSG('NO WHILE CONSTRUCT TO LEAVE                       ')
+         ELSE
+            I = WHISTK(WHISTP) + 1
+      CIF
+      CPROC
+      END
+N        CASER
+N          HANDLES EVERYTHING CONCERNING SELECT CONSTRUCTS
+N
+      SUBROUTINE CASER
+      SAVE
+N      NUMBER OF CASE LABELS
+      PARAMETER (NCASL=500)
+N      STACK SIZE
+      PARAMETER (NSELCA=33)
+N
+      CHARACTER*1 LINE(80)
+      COMMON /BLINE/LINE
+      COMMON /BPARM/NCASV(66)
+N                                        LABEL COUNT
+      INTEGER   NXTLAB
+N                                        SELECT STACK POINTER
+      INTEGER  SELPTR
+N                                        CASE LABEL LIST START STACK
+      INTEGER  SELCAS(NSELCA)
+N                                        CASE LABEL LIST
+      INTEGER  CASLAB(NCASL)
+N                                        NR OF CASE LABEL LIST ENTRIES
+      INTEGER  LABMAX
+N                                        FIRST CASE LABEL LIST ENTRY
+      INTEGER  FIRSTC
+N                                        LAST CASE LABEL LIST ENTRY + 1
+      INTEGER LASTC
+N                                        THIS CASE LABEL LIST ENTRY
+      INTEGER  CASENT
+N                                        CASE VALUE MAX
+      INTEGER  VALMAX
+N                                        OTHER LABEL
+      INTEGER  OTHERL
+N                                       CSELECT LABEL
+      INTEGER  REVERL
+      CHARACTER*1 BLANK
+      CHARACTER*1 EQUAL
+N                                        CHARACTER FOR COMPARISON
+      CHARACTER*1 T
+      CHARACTER*1 SELVAR(6)
+N LOWER TO UPPER FUNCTION
+      CHARACTER*1 LTU
+
+      DATA NXTLAB /14000/,SELPTR /1/
+      DATA SELCAS/NSELCA*1/,LABMAX /NCASL/,VALMAX /198/
+      DATA FIRSTC /1/,LASTC /1/
+      DATA EQUAL /'='/,T /'T'/,BLANK /' '/
+      DATA SELVAR /'I','Z','Z','Z','S','E'/
+      RETURN
+E
+N                                        ><  'SELECT' STATEMENT
+      ENTRY DOSEL
+N      GENERATE 'IZZZSE=...'
+      I=11
+         REPEAT
+            I = I + 1
+      UNTIL ( LTU( LINE(I) ) .EQ. T )
+      FOR J=7,I
+      LINE(J)=BLANK
+      CFOR
+      FOR J=1,6
+      LINE(J+6)=SELVAR(J)
+      CFOR
+         LINE(I + 1) = EQUAL
+         CALL CARD
+N                                        ASSIGN OTHER LABEL
+         OTHERL = NXTLAB
+         REVERL = OTHERL + 1
+         NXTLAB = NXTLAB + 3
+N                                        STACK CASE LABEL LIST START
+         SELPTR = SELPTR + 1
+         SELCAS(SELPTR) = LASTC
+N                                        STACK OTHER LABEL
+         CASLAB(LASTC) = OTHERL
+         FIRSTC = LASTC
+         LASTC = LASTC + 1
+      RETURN
+N                                        END OF CONTINUATIONS
+N
+N
+      ENTRY CONSEL
+N                                        GENERATE 'GO TO <SELECT>'
+      CALL GOTO(OTHERL+2)
+N                                        HANDLE CASE
+         PERFORM NEWCAS
+      RETURN
+N
+N                                        ><  'CASE' STATEMENT
+      ENTRY DOCASE
+N                                        GENERATE 'GO TO <CSELECT>'
+      CALL GOTO(REVERL)
+N                                        HANDLE CASE
+         PERFORM NEWCAS
+      RETURN
+N
+N                                        ><  'OTHER' STATEMENT
+      ENTRY OTHER
+N                                        GENERATE 'GO TO <CSELECT>'
+      CALL GOTO(REVERL)
+         I = LASTC - FIRSTC - 1
+      CALL LABEL(OTHERL+2)
+N                                        CHECK FOR EMPTY CASE LABEL LIST
+         IF I .GT. 0
+         THEN
+N                                        GENERATE 'GO TO(-,-,-,-)'
+      CALL CGOTO(I,CASLAB(FIRSTC+1))
+      CIF
+N                                        GENERATE '<OTHER> CONTINUE'
+         CALL LABEL(OTHERL)
+      RETURN
+N
+N                                       ><  'CSELECT' STATEMENT
+      ENTRY REVERT
+N                                        GENERATE '<CSELECT> CONTINUE'
+         CALL LABEL(REVERL)
+N                                        UNSTACK LAST ENTRY
+         LASTC = SELCAS(SELPTR)
+N                                        UNSTACK SELECT
+         SELPTR = SELPTR - 1
+N                                        RESET START ENTRY
+         FIRSTC = SELCAS(SELPTR)
+N                                        RESET OTHER LABEL
+         OTHERL = CASLAB(FIRSTC)
+N                                        RESET CSELECT LABEL
+         REVERL = OTHERL + 1
+      RETURN
+N
+N                                        ><  RESET CASE HANDLER
+      ENTRY CCLEAR
+         FOR I = 1 , SELPTR
+            SELCAS(I) = 1
+      CFOR
+         SELPTR = 1
+         FIRSTC = 1
+         LASTC = 1
+N                                        RESET GENERATION SWITCH
+N                                        RESET LABEL COUNT
+         NXTLAB = 14000
+      RETURN
+E
+      PROC NEWCAS
+         J = 1
+N                                        FOR EACH NEW CASE VALUE
+         WHILE NCASV(J) .GT. 0
+N                                        ASSIGN ENTRY IN CASE LABEL LIST
+            CASENT = FIRSTC + NCASV(J)
+N                                        CHECK RANGE EXTENSION
+            IF CASENT .GE. LASTC
+            THEN
+N                                        CHECK CASE VALUE RANGE
+               IF NCASV(J) .GT. VALMAX
+               THEN
+      CALL ERRMSG('CASE VALUE GREATER THAN 198                       ')
+      XWHILE
+      CIF
+N                                        CHECK ROOM IN CASE LABEL LIST
+               IF CASENT .GE. LABMAX
+               THEN
+      CALL ERRMSG('TOO MANY NESTED CASES; FATAL ERROR                ')
+      CALL ABORT
+      CIF
+N                                        INIT CASE LABELS WITH OTHER
+               FOR I = LASTC , CASENT
+                  CASLAB(I) = OTHERL
+      CFOR
+N                                        INCREMENT LAST CASE POINTER
+               LASTC = CASENT + 1
+      ELSE
+N                                        CHECK DOUBLE CASE VALUE
+            IF CASLAB(CASENT) .NE. OTHERL
+            THEN
+      CALL ERRMSG('DUPLICATE CASE VALUE                              ')
+      XWHILE
+      CIF
+      CIF
+N                                        INIT CASE LABEL ENTRY
+            CASLAB(CASENT) = NXTLAB
+            J = J + 1
+      CWHILE
+N                                        GENERATE '<CASE LABEL>CONTINUE'
+         CALL  LABEL(NXTLAB)
+         NXTLAB = NXTLAB + 1
+      CPROC
+      END
+N        UNTLER
+N        HANDLES EVERYTHING CONCERNING THE REPEAT CONSTRUCT
+N
+      SUBROUTINE UNTILR
+N
+      SAVE
+      CHARACTER*1 LINE(80)
+      COMMON /BLINE/LINE
+N                                        STACK POINTER
+      INTEGER UNTSTP
+N                                        LABEL STACK
+      INTEGER UNTSTK(32)
+N                                        LABEL COUNTER
+      INTEGER NXTLAB
+      INTEGER I
+N                                        COMPARISON CHARACTER
+      CHARACTER*1 L
+N LOWER TO UPPER FUNCTION
+      CHARACTER*1 LTU
+
+      DATA UNTSTP /0/,NXTLAB /16000/,I /10099/
+      DATA L /'L'/
+      RETURN
+E
+N                                        ><  REPEAT  STATEMENT
+      ENTRY C UNTIL
+N                                        STACK LABEL
+         UNTSTP = UNTSTP + 1
+         UNTSTK(UNTSTP) = NXTLAB
+N                                        GENERATE '<LABEL>CONTINUE'
+         CALL LABEL(NXTLAB)
+         NXTLAB = NXTLAB + 2
+      RETURN
+N
+N                                       ><  XREPEAT STATEMENT
+      ENTRY XUNTIL
+         PERFORM NXUNTL
+N                                        GENERATE 'GOTO <LABEL+1>'
+      CALL GOTO(I)
+      RETURN
+N
+N                                       ><  XREPEAT IN I/O STMT OR CALL
+      ENTRY UREAD(LAB)
+N                    OUTPUT LABEL FOR I/O STMT OR CALL
+         PERFORM NXUNTL
+N                                        COPY LABEL
+         LAB = I
+      RETURN
+N
+N                                        ><  UNTIL STATEMENT
+      ENTRY DO UNTL
+      CALL IFNOT
+      I=10
+         REPEAT
+            I = I + 1
+      UNTIL ( LTU( LINE(I) ) .EQ. L )
+      I=I+1
+N                                        PRODUCE OBJECT LINE
+      CALL TXT(I)
+      RETURN
+N
+N                                        ><  STATEMENT AFTER UNTIL
+      ENTRY CO UNTL
+      I=UNTSTK(UNTSTP)
+      CALL CLGOTO(I)
+N                                        GENERATE '<LABEL+1> CONTINUE'
+      CALL LABEL(I+1)
+N                                        UNSTACK UNTIL
+         UNTSTP = UNTSTP - 1
+      RETURN
+N
+N                                        ><  CLEAR UNTIL HANDLER
+      ENTRY UCLEAR
+         UNTSTP = 0
+N                                        RESET LABEL COUNT
+         NXTLAB = 16000
+      RETURN
+E
+N                                        GET EXIT LABEL WHEN PRESENT
+      PROC NXUNTL
+         IF UNTSTP .LE. 0
+         THEN
+      CALL ERRMSG('NO REPEAT CONSTRUCT TO LEAVE                      ')
+         ELSE
+            I = UNTSTK(UNTSTP) + 1
+      CIF
+      CPROC
+      END
+N        LOOPER
+N
+N          HANDLES EVERYTHING CONCERNING THE FOR-CFOR
+N     STRUCTURE
+N
+      SUBROUTINE LOOPER
+      SAVE
+N
+      CHARACTER*1 LINE(80)
+      COMMON /BLINE/LINE
+N                                        FOR STACK POINTER
+      INTEGER FORPTR
+N                                        FOR STACK
+      INTEGER FORSTK(32)
+N                                        R
+      CHARACTER*1 R
+N                                        LABEL NUMBER COUNT
+      INTEGER NXTLAB
+      INTEGER I
+N LOWER TO UPPER FUNCTION
+      CHARACTER*1 LTU
+
+      DATA FORPTR /0/,R /'R'/
+      DATA NXTLAB /13000/,I /10099/
+      RETURN
+E
+N                                        ><  FOR STATEMENT
+      ENTRY FOR
+N                                        GET AND STACK LABEL
+         FORPTR = FORPTR + 1
+         FORSTK(FORPTR) = NXTLAB
+N                                        LOOKUP POSITION OF R IN FOR
+      J=8
+         REPEAT
+            J = J + 1
+      UNTIL ( LTU( LINE(J) ) .EQ. R )
+         J = J + 1
+N                                        GENERATE 'DO <CFOR> -----'
+      CALL DOLP(NXTLAB,J)
+N                                        RESERVE XFOR LABEL
+         NXTLAB = NXTLAB + 2
+      RETURN
+N
+N                                        ><  XFOR STATEMENT
+      ENTRY DOEXIT
+         PERFORM NEXIT
+N                                        GENERATE 'GO TO <XFOR>'
+         CALL  GOTO(I)
+      RETURN
+N
+N                                        ><  XFOR IN I/O STMT OR CALL
+      ENTRY LREAD(LAB)
+N                    OUTPUT LABEL FOR I/O STMT OR CALL
+         PERFORM NEXIT
+N                                        COPY LABEL
+         LAB = I
+      RETURN
+N
+N                                        ><  CFOR STATEMENT
+      ENTRY NEXT
+         I = FORSTK(FORPTR)
+N                                        GENERATE '<CFOR> CONTINUE'
+         CALL  LABEL(I)
+         I = I + 1
+N                                        GENERATE '<XFOR> CONTINUE'
+         CALL  LABEL(I)
+N                                        UNSTACK
+         FORPTR = FORPTR - 1
+      RETURN
+N
+N                                        ><  CLEAR FOR-CFOR HANDLER
+      ENTRY LCLEAR
+         FORPTR = 0
+N                                        RESET LABEL COUNT
+         NXTLAB = 13000
+      RETURN
+N
+N      ><  OBTAIN NESTING DEPTH
+      ENTRY FORDEP(ID)
+      ID=FORPTR
+      RETURN
+E
+      PROC NEXIT
+         IF FORPTR .LE. 0
+         THEN
+      CALL ERRMSG('NO FOR CONSTRUCT TO LEAVE                         ')
+         ELSE
+            I = FORSTK(FORPTR) + 1
+      CIF
+      CPROC
+      END
+N        PROCER
+N
+N          HANDLES EVERYTHING  CONCERNING PROCEDURES
+N
+      SUBROUTINE PROCER
+      SAVE
+N      MAX. NUMBER OF PROCS (MUST BE .LE. 99)
+      PARAMETER (MAXPRC=99)
+N
+      CHARACTER*1 LINE(80)
+      COMMON /BLINE/LINE
+N                                        LABEL COUNT
+      INTEGER NXTLAB
+N                                        TEMP'PROC'NAME IDENTIFIER
+      CHARACTER*1 PROD(31) ,PARM(31)
+N                                        PROC LIST POINTER (LOOK UP)
+      INTEGER   PROPTR
+N                                        PROC LIST POINTER (END STMNT)
+      INTEGER   PROPRT
+N                                        LAST PROC LIST ENTRY POINTER
+      INTEGER   LASTPR
+N                                        CURRENT PROC LIST ENTRY POINTER
+      INTEGER   THISPR,IREV
+N                                        CURRENT PROC POINTER
+      INTEGER  CURPRC
+N                                        PROC NAME
+      CHARACTER*1 PRONAM(31,MAXPRC)
+N                                        PROC LABEL
+      INTEGER PROLAB(MAXPRC)
+N                                        NUMBER OF REFERENCES
+      INTEGER NOFREF(MAXPRC)
+N                                        CHARACTERS FOR NAME COPY
+      CHARACTER*1 XAR
+      CHARACTER*1 DIGIT(0:9)
+      CHARACTER*1 M,C,BLANK
+      CHARACTER*1 INAME(6)
+      INTEGER SAVEP,SAVE(7),PLAB
+N     LOWER TO UPPER FUNCTION
+      CHARACTER*1 LTU
+      LOGICAL OKAY
+      INTEGER KGB
+
+      DATA SAVEP /0/,SAVE /7*0/
+      DATA NXTLAB /17000/,PROD /31*' '/
+      DATA PROPTR /0/,PROPRT /0/,LASTPR /1/
+      DATA PROLAB /MAXPRC*0/,NOFREF /MAXPRC*0/
+      DATA INAME /'I','Z','Z','Z',' ',' '/
+      DATA DIGIT/'0','1','2','3','4','5','6','7','8','9'/
+      DATA M/'M'/,C/'C'/,BLANK/' '/
+      RETURN
+E
+N
+N                                        ><  HANDLE PERFORM
+      ENTRY PFORM
+N                                        GET PROC NAME
+         XAR = M
+         PERFORM COPY
+N                                        ADD NAME TO PROC LIST,GET LABEL
+         PERFORM ADPROC
+N                                        GENERATE 'ASSIGN <L> TO <PROC>'
+         INAME(5)=DIGIT(THISPR/10)
+         INAME(6)=DIGIT(MOD(THISPR,10))
+         CALL ASSGN(NXTLAB,INAME)
+N                                        GENERATE 'GO TO <PROC-LABEL>'
+         CALL  GOTO(IREV)
+N                                        GENERATE '<L> CONTINUE'
+         CALL  LABEL(NXTLAB)
+N      INCREMENT LABEL
+         PERFORM PUTLAB
+N      CHECK WHETHER IN FOR LOOP
+        CALL FORDEP(K)
+**  WARNING DISABLED *****
+**        IF K.GT.0
+**        THEN
+**          CALL WARN(PRONAM(1,THISPR),
+**     - ': PERFORM IN FOR-LOOP CAUSES NON-STANDARD FORTRAN ')
+**        CIF
+      RETURN
+N
+N                                        ><  OPEN PROC DEFINITION
+      ENTRY PROC
+N                                        GET PROC NAME
+         XAR = C
+         PERFORM COPY
+N                                        ADD NAME TO PROC LIST,GET LABEL
+         PERFORM ADPROC
+N                                        GEN '<PROC-LABEL> CONTINUE'
+            CALL  LABEL(IREV)
+N                                        MARK PROC 'DEFINED'
+            PROLAB(THISPR) = - PROLAB(THISPR)
+N                                        SAVE CURRENT PROC POINTER
+         CURPRC = THISPR
+      RETURN
+N
+N                                        ><  CLOSE PROC DEFINITION
+      ENTRY PEND
+N                                        RESTORE CURRENT PROC POINTER
+         THISPR = CURPRC
+N                                        WRITE RETURN GOTO
+         PERFORM GETLAB
+      RETURN
+N
+N      ><  PROC IN I/O STMT OR CALL
+      ENTRY PREAD(PARM,PLAB)
+N                                        COPY PROC NAME
+         FOR K = 1 , 31
+            PROD(K) = PARM(K)
+         CFOR
+N                                        ADD PROC TO DICTIONARY
+         PERFORM ADPROC
+N                                        COPY PROC LABEL
+         PLAB = IREV
+N                                        GENERATE 'ASSIGN <L> TO <PROC>'
+         INAME(5)=DIGIT(THISPR/10)
+         INAME(6)=DIGIT(MOD(THISPR,10))
+         CALL ASSGN(NXTLAB,INAME)
+N                                        SAVE RETURN LABEL
+         SAVEP = SAVEP + 1
+         SAVE(SAVEP) = NXTLAB
+         PERFORM PUTLAB
+      RETURN
+N
+N                    FIRST STATEMENT AFTER I/O STMT OR CALL
+      ENTRY COREAD
+N                                        GENERATE CONTINUE STATEMENTS
+         WHILE SAVEP .GT. 0
+            CALL  LABEL(SAVE(SAVEP))
+            SAVEP = SAVEP - 1
+      CWHILE
+      RETURN
+N
+N                                        ><  CLEAR PROC HANDLER
+      ENTRY PCLEAR
+N                                        GENERATE STUBS FOR LEFT PROC'S
+      PROPRT=1
+      WHILE PROPRT.LE.LASTPR
+N                                        IF NO PROC DEFINED
+            IF PROLAB(PROPRT) .GT. 0 .AND. PROPRT .LT. LASTPR
+N                                        GENERATE STUB
+            THEN
+N                                        GENERATE '<PROC LABEL>CONTINUE'
+      CALL LABEL(PROLAB(PROPRT))
+N                                        WRITE RETURN LABEL LIST
+               THISPR = PROPRT
+               PERFORM GETLAB
+      CALL WARN(PRONAM(1,PROPRT)
+     -,'IS NOT DEFINED                                    ')
+      CIF
+N                                        CLEAR LIST
+            PROLAB(PROPRT) = 0
+      PROPRT=PROPRT+1
+      CWHILE
+N                                        RESET POINTERS
+      NXTLAB=17000
+N                                        RESET LAST PROC COUNT
+         LASTPR = 1
+      RETURN
+E
+N                              ADD NAME TO PROC LIST,GET LABEL
+      PROC ADPROC
+N                                        FOR EACH LIST ENTRY
+         FOR  PROPTR = 1 , LASTPR
+N                                        IF NOT FOUND
+            IF PROPTR .EQ. LASTPR
+            THEN
+              IF LASTPR.GT.MAXPRC
+              THEN
+      CALL ERRMSG('TOO MANY PROCS                                    ')
+                CALL ABORT
+              CIF
+N                                        GET LABEL
+              IREV = NXTLAB
+              NXTLAB = NXTLAB + 1
+N                                        CREATE NEW ENTRY
+              FOR  K = 1 , 31
+                PRONAM(K,PROPTR) = PROD(K)
+              CFOR
+              PROLAB(PROPTR) = IREV
+N                                        INCREMENT LAST ENTRY COUNT
+              LASTPR = LASTPR + 1
+              THISPR = PROPTR
+            XFOR
+          ELSE
+N                                        LOOK FOR MATCH
+      OKAY=.TRUE.
+      FOR KGB=1,31
+      OKAY=(OKAY.AND.(PRONAM(KGB,PROPTR).EQ.PROD(KGB)))
+      CFOR
+      IF (OKAY)
+      THEN
+N     IF MATCH THEN COPY LABEL
+             IREV = IABS(PROLAB(PROPTR))
+N                                        CHECK WHETHER
+             IF PROLAB(PROPTR) .LT. 0
+N                                        PROC IS ALREADY DEFINED
+             THEN
+      CALL ERRMSG('PROC REFERENCED AFTER ITS DEFINITION              ')
+             CIF
+             THISPR = PROPTR
+             XFOR
+           CIF
+         CIF
+        CFOR
+      CPROC
+N
+N
+N      COUNT REFS AND INCREMENT LABEL
+      PROC PUTLAB
+         NOFREF(THISPR) = NOFREF(THISPR) + 1
+         NXTLAB = NXTLAB + 1
+      CPROC
+N
+N
+N                                        WRITE RETURN GOTO
+      PROC GETLAB
+         IREV = NOFREF(THISPR)
+N                                        IF NO REFERENCES
+         IF IREV .LE. 0
+         THEN
+N                                        THEN GIVE WARNING
+      CALL WARN(PRONAM(1,THISPR)
+     -,'IS NOT REFERENCED                                 ')
+         ELSE
+N                                        GENERATE 'GOTO IZZZ..'
+      INAME(5)=DIGIT(THISPR/10)
+      INAME(6)=DIGIT(MOD(THISPR,10))
+      CALL AGOTO(INAME)
+      CIF
+         NOFREF(THISPR) = 0
+      CPROC
+N
+N
+N                                        COPY PROC NAME
+      PROC COPY
+      J=9
+N                                        LOCATE FIRST POSITION
+         REPEAT
+      J=J+1
+      UNTIL ( LTU( LINE(J) ) .EQ. XAR )
+      J=J+1
+N                                        BLANK FIELD
+         FOR I = 1 , 31
+            PROD(I) = BLANK
+      CFOR
+         I = 0
+N                                        COPY CHARACTERS
+      FOR K=J,72
+N                                        WHEN NOT BLANK
+      IF LINE(K).NE.BLANK
+            THEN
+               I = I + 1
+               IF I .GT. 31
+               THEN
+      CALL ERRMSG('PROC NAME TOO LONG                                ')
+      XFOR
+               ELSE
+                     PROD(I) = LTU(LINE(K))
+      CIF
+      CIF
+      CFOR
+      CPROC
+      END
+E
+N RTAB
+N
+N TRANSLATE TAB CHARACTERS TO BLANKS
+N CAN BE AN EMPTY SUBROUTINE IF TABS DO NOT OCCUR
+N
+       SUBROUTINE RTAB(LINE,NCH)
+      CHARACTER*1 TAB,BLANK
+N      ITAB IS INTERNAL CHARACTER VALUE OF TAB
+       PARAMETER (LB=80,ITAB=9,NTAB=8,BLANK=' ')
+       CHARACTER*1 LINE(NCH),TBUF(LB)
+
+N      CONVERT INTERNAL CHAR.VALUE TO TYPE CHARACTER*1
+      CALL CVIC(ITAB,TAB)
+       IF NCH.GT.LB
+       THEN
+N      CANNOT HAPPEN WHEN CALLED FROM SHELTR
+       STOP 4711
+       ELSE
+       II=0
+       IO=0
+       REPEAT
+       II=II+1
+       IF LINE(II).EQ.TAB
+       THEN
+       NSP=NTAB-MOD(IO,NTAB)
+       FOR I=1,NSP
+       IO=IO+1
+       TBUF(IO)=BLANK
+       IF IO.EQ.NCH
+       THEN
+       XREPEAT
+       CIF
+       CFOR
+       ELSE
+       IO=IO+1
+       TBUF(IO)=LINE(II)
+       CIF
+       UNTIL IO.EQ.NCH
+       FOR I=1,NCH
+       LINE(I)=TBUF(I)
+       CFOR
+       CIF
+       RETURN
+      END
+N     CONVERT INTERNAL TO CHARACTER
+      SUBROUTINE CVIC(I,C)
+      INTEGER I
+      CHARACTER*1 C
+      C=CHAR(I)
+      RETURN
+      END
+N     FATAL TRANSLATION HANDLER
+      SUBROUTINE ABORT
+      STOP 999
+      END
+N     CONVERT A LOWERCASE CHARACTER TO IT'S UPPERCASE EQUIVALENT
+      CHARACTER*1 FUNCTION LTU( CH )
+      CHARACTER*1  CH
+      IPOS = INDEX('abcdefghijklmnopqrstuvwxyz',CH)
+      SELECT IPOS
+      CASE 1
+        LTU = 'A'
+      CASE 2
+        LTU = 'B'
+      CASE 3
+        LTU = 'C'
+      CASE 4
+        LTU = 'D'
+      CASE 5
+        LTU = 'E'
+      CASE 6
+        LTU = 'F'
+      CASE 7
+        LTU = 'G'
+      CASE 8
+        LTU = 'H'
+      CASE 9
+        LTU = 'I'
+      CASE 10
+        LTU = 'J'
+      CASE 11
+        LTU = 'K'
+      CASE 12
+        LTU = 'L'
+      CASE 13
+        LTU = 'M'
+      CASE 14
+        LTU = 'N'
+      CASE 15
+        LTU = 'O'
+      CASE 16
+        LTU = 'P'
+      CASE 17
+        LTU = 'Q'
+      CASE 18
+        LTU = 'R'
+      CASE 19
+        LTU = 'S'
+      CASE 20
+        LTU = 'T'
+      CASE 21
+        LTU = 'U'
+      CASE 22
+        LTU = 'V'
+      CASE 23
+        LTU = 'W'
+      CASE 24
+        LTU = 'X'
+      CASE 25
+        LTU = 'Y'
+      CASE 26
+        LTU = 'Z'
+      OTHER
+        LTU=CH
+      CSELECT
+      RETURN
+      END
+E     SHLTRN - Function NELC
+      INTEGER FUNCTION NELC(A,N)
+      CHARACTER*1 A(*)
+      INTEGER     N,NEL
+      NEL=N
+      WHILE (NEL.GT.0)
+        IF (A(NEL).EQ.' ')
+        THEN
+          NEL=NEL-1
+        ELSE
+          XWHILE
+        CIF
+      CWHILE
+      NELC=NEL
+      RETURN
+      END
+#<
+
+#!ELSE
+
+#>    sheltran.f
+      PROGRAM SHLANS
+      LOGICAL      FOPERR
+      CHARACTER*80 INPUT, TARGET, LIST, INCDIR
+      INTEGER      LO, LPP
+      CALL GETCOM(INPUT,TARGET,LIST,INCDIR,LO,LPP )
+      FOPERR=.FALSE.
+      ASSIGN 17001 TO IZZZ01
+      OPEN(UNIT=1,FILE=INPUT,STATUS='OLD',ERR=
+     -17000
+     1)                   
+17001 CONTINUE
+      IF(
+     - FOPERR
+     -)THEN
+      WRITE(*,*) 'Cannot open source'
+      CALL EXITF(1)
+      ENDIF
+      IF(
+     - TARGET.EQ.'0'
+     -)THEN
+      OPEN(UNIT=2,STATUS='SCRATCH')
+      ELSE
+      FOPERR=.FALSE.
+      ASSIGN 17002 TO IZZZ01
+      OPEN(UNIT=2,FILE=TARGET,STATUS='NEW',ERR=
+     -17000
+     1)                  
+17002 CONTINUE
+      IF(
+     - (FOPERR)
+     -)THEN
+      OPEN(UNIT=2,FILE=TARGET,STATUS='OLD')
+      ENDIF
+      ENDIF
+      IF(
+     - LIST.EQ.'0'
+     -)THEN
+      OPEN(UNIT=3,STATUS='SCRATCH')
+      ELSE
+      FOPERR=.FALSE.
+      ASSIGN 17003 TO IZZZ01
+      OPEN(UNIT=3,FILE=LIST,STATUS='NEW',ERR=
+     -17000
+     1)                    
+17003 CONTINUE
+      IF(
+     - (FOPERR)
+     -)THEN
+      OPEN(UNIT=3,FILE=LIST,STATUS='OLD')
+      ENDIF
+      ENDIF
+      REWIND 2
+      CALL SHELTR(LO,LPP,1,2,3,NERR,4,10,INCDIR)
+      IF(
+     - NERR.EQ.0
+     -)THEN
+      REWIND 2
+      ELSE
+      CLOSE(UNIT=2,STATUS='DELETE')
+      ENDIF
+      IF(
+     - (NERR.EQ.0)
+     -)THEN
+         CALL EXITF(0)
+      ELSE
+         WRITE(*,*) NERR, ' ERROR(S)'
+         CALL EXITF(1)
+      ENDIF
+      STOP
+17000 CONTINUE
+      FOPERR=.TRUE.
+      GOTO IZZZ01
+      END
+      SUBROUTINE GETCOM(SOURCE,TARGET,LISTER,INCDIR,LO,LPP)
+      CHARACTER*(*) SOURCE,TARGET,LISTER,INCDIR
+      INTEGER       LO,LPP
+#!IF	UNIX
+      CHARACTER*80  ARGV,NAME
+      INTEGER       IARGC,IARG
+      NARG=IARGC( )
+      IARG=0
+      SOURCE='0'
+      TARGET='1'
+      LISTER='0'
+      INCDIR='0'
+      LO=1
+      LPP=57
+15000 CONTINUE
+      IF(
+     - (IARG.LE.NARG)
+     -)THEN
+#!IF	HPUX
+#!IF    F2C
+         CALL GETARG(IARG,ARGV)
+#!ELSE
+         CALL IGETARG(IARG,ARGV,LEN(ARGV))
+#!ENDIF
+#!ELSE
+         CALL GETARG(IARG,ARGV )
+#!ENDIF
+      IF(
+     - (IARG.EQ.0)
+     -)THEN
+            NAME=ARGV
+      ELSE
+      IF(
+     - (ARGV(1:3).EQ.'-ln')
+     -)THEN
+               LPP=0
+               I=4
+15002 CONTINUE
+      IF(
+     - (ARGV(I:I).GE.'0'.AND.ARGV(I:I).LE.'9')
+     -)THEN
+                  LPP=10*LPP+ICHAR(ARGV(I:I))-ICHAR('0')
+                  I=I+1
+      GOTO 15002
+      ENDIF
+15003 CONTINUE
+      ELSEIF(
+     - (ARGV(1:2).EQ.'-l')
+     -)THEN
+               LISTER='1'
+      IF(
+     - (ARGV(3:3).GE.'0'.AND.ARGV(3:3).LE.'3')
+     -)THEN
+                  LO=ICHAR(ARGV(3:3))-ICHAR('0')
+      ENDIF
+      ELSEIF(
+     - (ARGV.EQ.'-f')
+     -)THEN
+               TARGET='0'
+      ELSEIF(
+     - (ARGV(1:2).EQ.'-I')
+     -)THEN
+               INCDIR=ARGV(3:)
+      ELSEIF(
+     - (INDEX(ARGV,'.shl').NE.0)
+     -)THEN
+               SOURCE=ARGV
+      ELSE
+               WRITE(*,*) 'Unknown option on command line'
+               CALL EXITF(1)
+      ENDIF
+      ENDIF
+         IARG=IARG+1
+      GOTO 15000
+      ENDIF
+15001 CONTINUE
+      IF(
+     - (NARG.EQ.0)
+     -)THEN
+         N=INDEX(NAME,' ')
+         WRITE(*,*) NAME(:N),
+     #'source [-I<dir>] [-f] [-l[<lo>] [-ln<lpp>]]'
+         CALL EXITF(1)
+      ENDIF
+      N=INDEX(SOURCE,'.shl')
+      IF(
+     - (N.EQ.0)
+     -)THEN
+         WRITE(*,*) 'No Source file specified!'
+         CALL EXITF(1)
+      ELSE
+      IF(
+     - (LISTER.NE.'0')
+     -)THEN
+            LISTER=SOURCE(:N)//'sls'
+      ENDIF
+      IF(
+     - (TARGET.NE.'0')
+     -)THEN
+            TARGET=SOURCE(:N)//'f'
+      ENDIF
+      ENDIF
+#!ELIF	VMS
+      CHARACTER*256 ARGS
+      CALL LIB$GET_FOREIGN(ARGS)
+      LENC=INDEX(ARGS,' ')
+      IF(
+     - (ARGS.EQ.' ')
+     -)THEN
+         WRITE(*,*) 'SHELTRAN SOURCE.SHL[/LIST][/INCLUDE=<DIR>'//
+     #   '[/LPP=<N>][/LO=<M>]][/NOFOR]'
+         CALL EXITF(1)
+      ELSE
+         TARGET='1'
+         LISTER='0'
+         LO=1
+         LPP=57
+         NL=INDEX(ARGS,'/LIST')
+      IF(
+     - (NL.NE.0)
+     -)THEN
+            LISTER='1'
+            ARGS(NL:NL+4)=' '
+      ENDIF
+         NL=INDEX(ARGS,'/NOFOR')
+      IF(
+     - (NL.NE.0)
+     -)THEN
+            TARGET='0'
+            ARGS(NL:NL+5)=' '
+      ENDIF
+         NL=INDEX(ARGS,'/INCLUDE=')
+      IF(
+     - (NL.NE.0)
+     -)THEN
+            ARGS(NL:NL+8)=' '
+            NL=NL+9
+            I=0
+15000 CONTINUE
+      IF(
+     - (ARGS(NL:NL).NE.'/'.AND.ARGS(NL:NL).NE.' ')
+     -)THEN
+               I=I+1
+               INCDIR(I:I)=ARGS(NL:NL)
+               ARGS(NL:NL)=' '
+               NL=NL+1
+      GOTO 15000
+      ENDIF
+15001 CONTINUE
+      ENDIF
+         NL=INDEX(ARGS,'/LO=')
+      IF(
+     - (NL.NE.0)
+     -)THEN
+            ARGS(NL:NL+3)=' '
+            NL=NL+4
+      IF(
+     - (ARGS(NL:NL).GE.'0'.AND.ARGS(NL:NL).LE.'3')
+     -)THEN
+               LO=ICHAR(ARGS(NL:NL))-ICHAR('0')
+               ARGS(NL:NL)=' '
+      ENDIF
+      ENDIF
+         NL=INDEX(ARGS,'/LPP=')
+      IF(
+     - (NL.NE.0)
+     -)THEN
+            ARGS(NL:NL+4)=' '
+            NL=NL+5
+            LPP=0
+15002 CONTINUE
+      IF(
+     - (ARGS(NL:NL).GE.'0'.AND.ARGS(NL:NL).LE.'9')
+     -)THEN
+               LPP=10*LPP+ICHAR(ARGS(NL:NL))-ICHAR('0')
+               ARGS(NL:NL)=' '
+               NL=NL+1
+      GOTO 15002
+      ENDIF
+15003 CONTINUE
+      ENDIF
+         NL=INDEX(ARGS,'.SHL')
+      IF(
+     - (NL.NE.0)
+     -)THEN
+            NE=NL+3
+            NL=NL-1
+15004 CONTINUE
+      IF(
+     - (NL.GT.0.AND.ARGS(NL:NL).NE.' ')
+     -)THEN
+               NL=NL-1
+      GOTO 15004
+      ENDIF
+15005 CONTINUE
+            SOURCE=ARGS(NL+1:NE)
+            ARGS(NL+1:NE)=' '
+      ENDIF
+      IF(
+     - (ARGS.NE.' ')
+     -)THEN
+            WRITE(*,*) 'Unknown option(s) on command line'
+            CALL EXITF(1)
+      ENDIF
+      ENDIF
+      N=INDEX(SOURCE,'.SHL')
+      IF(
+     - (N.EQ.0)
+     -)THEN
+         WRITE(*,*) 'No Source file specified!'
+         CALL EXITF(1)
+      ELSE
+      IF(
+     - (LISTER.NE.'0')
+     -)THEN
+            LISTER=SOURCE(:N)//'SLS'
+      ENDIF
+      IF(
+     - (TARGET.NE.'0')
+     -)THEN
+            TARGET=SOURCE(:N)//'F'
+      ENDIF
+      ENDIF
+#!ENDIF
+      RETURN
+      END
+      SUBROUTINE SHELTR(N1,N2,N3,N4,N5,N6,INCBEG,INCMAX,INCDIR)
+      LOGICAL LNRPRT,CONPRT
+      PARAMETER(LNRPRT=.TRUE.,CONPRT=.TRUE.)
+      CHARACTER*80 INCDIR
+      CHARACTER*160 INCNAM
+      LOGICAL NEXIT,ENDINP
+      CHARACTER*1 LINE(80),CPARM(66)
+      CHARACTER*80 CLINE
+      INTEGER POS
+      COMMON /BLINE/LINE
+      COMMON /BLIST/POS,LSTOPT,LINEPP,NPRINT
+      COMMON /BPARM/NPARM(66)
+      COMMON/CHPARM/ CPARM
+      COMMON /BPARS/NTYPE,NTARGT,NEXIT,NOUT,LUOUT
+       COMMON /ERR/ NERROR,NWARN
+      INTEGER SOURC
+      INTEGER LEVEL,STEP
+      CHARACTER*1 BLANK,ZERO
+      CHARACTER*1 SPCHAR(6),FORMT(7)
+      INTEGER SUBTYP
+      CHARACTER*1  LTU
+      EQUIVALENCE (LINE,CLINE)
+      DATA ENDINP/.FALSE./
+      DATA LEVEL/0/,STEP/3/
+      DATA BLANK/' '/,ZERO/'0'/
+      DATA SPCHAR/'C','E','N','*','F','I'/
+      DATA FORMT/'F','O','R','M','A','T','('/
+      LSTOPT=N1
+      LINEPP=N2
+      SOURC=N3
+      NPRINT=N5
+      NTARGT=N4
+      CALL LISTER
+      CALL PARSER
+15000 CONTINUE
+      IF(
+     - .TRUE.
+     -)THEN
+ 100    FORMAT(80A1)
+      ASSIGN 17001 TO IZZZ01
+      READ (SOURC,100,END=
+     -17000
+     1) LINE                                  
+17001 CONTINUE
+      IF(
+     - ENDINP
+     -)THEN
+      GOTO 15001
+      ENDIF
+       CALL RTAB(LINE,80)
+      ASSIGN 17003 TO IZZZ02
+      GOTO 17002
+17003 CONTINUE
+      IZZZSE=POS
+      GOTO 14002
+14003 CONTINUE
+      ASSIGN 17005 TO IZZZ03
+      GOTO 17004
+17005 CONTINUE
+      IZZZSE=SUBTYP
+      GOTO 14006
+14007 CONTINUE
+      NTYPE=110
+      GOTO 14005
+14008 CONTINUE
+      NTYPE=100
+      CALL HEADER
+      GOTO 14005
+14009 CONTINUE
+      NTYPE=100
+      CALL PNOTE
+      GOTO 14005
+14010 CONTINUE
+      NTYPE=110
+      CALL FCARD
+      GOTO 14005
+14011 CONTINUE
+      NTYPE=110
+      IF(
+     - SOURC.EQ.N3
+     -)THEN
+      SOURC=INCBEG
+      ELSEIF(
+     - SOURC.LT.INCMAX
+     -)THEN
+      SOURC=SOURC+1
+      ELSE
+      NTYPE=105
+      ENDIF
+      IF(
+     - NTYPE.EQ.110
+     -)THEN
+      ASSIGN 17007 TO IZZZ04
+      GOTO 17006
+17007 CONTINUE
+      ASSIGN 17009 TO IZZZ05
+      OPEN(UNIT=SOURC,FILE=INCNAM,STATUS='OLD',ERR=
+     -17008
+     1)               
+17009 CONTINUE
+      ENDIF
+      GOTO 14005
+14006 CONTINUE
+      GOTO(
+     -14007,14008,14009,14007,14010,14011
+     -), IZZZSE
+14004 CONTINUE
+      NTYPE=102
+      ASSIGN 17011 TO IZZZ06
+      GOTO 17010
+17011 CONTINUE
+      IF(
+     - NTYPE.EQ.29
+     -)THEN
+      ASSIGN 17013 TO IZZZ07
+      GOTO 17012
+17013 CONTINUE
+      IF(
+     - POS.EQ.6
+     -)THEN
+      NTYPE=103
+      ENDIF
+      ENDIF
+14005 CONTINUE
+      GOTO 14001
+14012 CONTINUE
+      NTYPE=102
+      ASSIGN 17014 TO IZZZ06
+      GOTO 17010
+17014 CONTINUE
+      GOTO 14001
+14013 CONTINUE
+      IF(
+     - LINE(6).NE.ZERO
+     -)THEN
+      NTYPE=3
+      ELSE
+      CALL CLASS(NTYPE,POS)
+      ENDIF
+      GOTO 14001
+14002 CONTINUE
+      GOTO(
+     -14003,14012,14012,14012,14012,14013
+     -), IZZZSE
+14000 CONTINUE
+      CALL CLASS(NTYPE,POS)
+14001 CONTINUE
+      IF(
+     - NTYPE.LT.100
+     -)THEN
+      IZZZSE=NTYPE
+      GOTO 14016
+14017 CONTINUE
+      GOTO 14015
+14018 CONTINUE
+      IF(
+     - LEVEL.EQ.0
+     -)THEN
+      CALL PRINTC(CONPRT)
+      ELSE
+      CALL PRINT(LEVEL,CONPRT)
+      ENDIF
+      GOTO 14015
+14019 CONTINUE
+      CALL PRINT(LEVEL,LNRPRT)
+      LEVEL=LEVEL+STEP
+      GOTO 14015
+14020 CONTINUE
+      LEVEL=LEVEL-STEP
+      CALL PRINT(LEVEL,LNRPRT)
+      LEVEL=LEVEL+STEP
+      GOTO 14015
+14021 CONTINUE
+      LEVEL=LEVEL-STEP
+      CALL PRINT(LEVEL,LNRPRT)
+      GOTO 14015
+14022 CONTINUE
+      LEVEL=0
+      CALL PRINT(LEVEL,LNRPRT)
+      GOTO 14015
+14023 CONTINUE
+      CALL PRINTC(LNRPRT)
+      GOTO 14015
+14016 CONTINUE
+      GOTO(
+     -14017,14014,14018,14019,14020,14020,14021,14019,14014,14021,14019,
+     -14014,14021,14019,14020,14020,14021,14021,14014,14019,14014,14014,
+     -14019,14021,14014,14014,14022,14022,14023,14014,14020
+     -), IZZZSE
+14014 CONTINUE
+      CALL PRINT(LEVEL,LNRPRT)
+14015 CONTINUE
+      CALL PARSE
+      ELSEIF(
+     - NTYPE.GT.100
+     -)THEN
+      CALL PRINTC(.FALSE.)
+      IZZZSE=NTYPE-100
+      GOTO 14026
+14027 CONTINUE
+      CALL ERRMSG('INVALID CASE OR RETURN STATEMENT                  ')
+      GOTO 14025
+14028 CONTINUE
+      CALL ERRMSG('INVALID CHARACTER OR ILLEGAL STATEMENT NUMBER     ')
+      GOTO 14025
+14029 CONTINUE
+      CALL ERRMSG('FORMAT LABEL GREATER THAN 9999                    ')
+      GOTO 14025
+14030 CONTINUE
+      CALL ERRMSG('MORE THAN 7 *-PARAMETERS                          ')
+      GOTO 14025
+14031 CONTINUE
+      CALL ERRMSG('INCLUDE FILE MAXIMUM NESTING DEPTH EXCEEDED       ')
+      GOTO 14025
+14032 CONTINUE
+      CALL ERRMSG('INCLUDE FILE OPEN ERROR                           ')
+      GOTO 14025
+14026 CONTINUE
+      GOTO(
+     -14027,14028,14029,14030,14031,14032
+     -), IZZZSE
+14024 CONTINUE
+14025 CONTINUE
+      ENDIF
+      GOTO 15000
+      ENDIF
+15001 CONTINUE
+      CALL FINAL
+       N6=NERROR
+      RETURN
+17004 CONTINUE
+      SUBTYP=0
+      DO 13000 I=1,6
+      IF(
+     - ( LTU( LINE(1) ) .EQ. SPCHAR(I) )
+     -)THEN
+          SUBTYP=I
+      GOTO 13001
+      ENDIF
+13000 CONTINUE
+13001 CONTINUE
+      GOTO IZZZ03
+17000 CONTINUE
+      ENDINP=SOURC.EQ.N3
+      CLOSE(UNIT=SOURC)
+      IF(
+     - SOURC.EQ.INCBEG
+     -)THEN
+      SOURC=N3
+      ELSE
+      SOURC=SOURC-1
+      ENDIF
+      CLINE='* END OF INCLUDE <<<<<<<<<<<<<<<<<'
+      GOTO IZZZ01
+17008 CONTINUE
+      IF(
+     - SOURC.EQ.INCBEG
+     -)THEN
+      SOURC=N3
+      ELSE
+      SOURC=SOURC-1
+      ENDIF
+      NTYPE=106
+      GOTO IZZZ05
+17002 CONTINUE
+      POS=0
+16000 CONTINUE
+      POS=POS+1
+      IF(.NOT.(
+     - LINE(POS).NE.BLANK.OR.POS.EQ.7
+     -))GOTO 16000
+16001 CONTINUE
+      GOTO IZZZ02
+17012 CONTINUE
+      POS=1
+16002 CONTINUE
+      POS=POS+1
+      IF(.NOT.(
+     - LINE(POS).EQ.BLANK.OR.POS.EQ.6
+     -))GOTO 16002
+16003 CONTINUE
+      GOTO IZZZ07
+17010 CONTINUE
+      J=1
+      I=7
+15002 CONTINUE
+      IF(
+     - I.LE.72
+     -)THEN
+      IF(
+     - LINE(I).EQ.BLANK
+     -)THEN
+      I=I+1
+      ELSE
+      IF(
+     - ( LTU( LINE(I) ) .EQ. FORMT(J)  )
+     -)THEN
+      I=I+1
+      J=J+1
+      IF(
+     - J.EQ.8
+     -)THEN
+      NTYPE=29
+      GOTO 15003
+      ENDIF
+      ELSE
+      GOTO 15003
+      ENDIF
+      ENDIF
+      GOTO 15002
+      ENDIF
+15003 CONTINUE
+      GOTO IZZZ06
+17006 CONTINUE
+        INCNAM=' '
+        LNAM = 0
+      IF(
+     - INCDIR.NE.'0'
+     -)THEN
+      DO 13002 I=1,80
+      IF(
+     - INCDIR(I:I).NE.' '
+     -)THEN
+              LNAM=LNAM+1
+              INCNAM(LNAM:LNAM)=INCDIR(I:I)
+      ENDIF
+13002 CONTINUE
+13003 CONTINUE
+      ENDIF
+      DO 13004 I=2,80
+      IF(
+     - CLINE(I:I).NE.' '
+     -)THEN
+            LNAM=LNAM+1
+            INCNAM(LNAM:LNAM)=CLINE(I:I)
+      ENDIF
+13004 CONTINUE
+13005 CONTINUE
+      GOTO IZZZ04
+      END
+      SUBROUTINE LISTER
+      SAVE
+      PARAMETER (LODEF=1,LPPDEF=50)
+      CHARACTER*1 LINE(80)
+      COMMON /BLINE/LINE
+      COMMON /BLIST/IPOS(1),LSTOPT,LINEPP,NPRINT
+       COMMON /ERR/ ERROR,NWARN
+      INTEGER CHARPL
+      INTEGER START
+      INTEGER COMCON
+      INTEGER PAGENO,LINENO
+      INTEGER SEQNO,LINTOT,ERROR,ERRTOT,WRNTOT
+      INTEGER POS
+      INTEGER I
+      INTEGER NEL, NELC
+      CHARACTER*1 BLLINE(72),POINTR,BLANK
+      INTEGER LEV,LEVEL,INIT,LAST,LENG
+      LOGICAL NOTE
+      LOGICAL LNRPRT,LNOPRT
+      CHARACTER*1 TITLSV(66),TITLE(66)
+      CHARACTER*10 FORSEQ(4),NBRING
+      CHARACTER*5 SOURCE
+      CHARACTER*1 OUT(124)
+      CHARACTER*(*) TEXT
+      CHARACTER*1 TEXT2(6)
+      DATA SEQNO,LINTOT/0,0/
+      DATA ERRTOT,WRNTOT/0,0/
+       DATA TITLE/66*' '/
+      DATA OUT/124*' '/
+      DATA BLANK/' '/
+      DATA NOTE/.FALSE./
+       DATA START/1/
+      DATA BLLINE/72*' '/
+      DATA POINTR/'^'/
+      DATA FORSEQ/
+     - 'FORT + SEQ',
+     - '   FORTRAN',
+     - '   FORTRAN',
+     - 'SEQUENTIAL'/
+  200 FORMAT(' ***ERROR***',10X,A)
+  201 FORMAT(1X)
+  202 FORMAT(' ..WARNING..',10X,6A1,1X,A)
+  203 FORMAT(7X,'*ERROR IN FOLLOWING LINE WITH SOURCE SEQ.NO :',I4,'*')
+  400 FORMAT('0END OF SEGMENT')
+  401 FORMAT('0  OPTIONS IN EFFECT - LINECOUNT=',I2,', LINEWIDTH=',I3,
+     - ', ',A,'URCE, ',A,' NUMBERING')
+  406 FORMAT('0',I4,' ERROR(S)',11X,I4,' TARGET STATEMENTS')
+  500 FORMAT('0END OF PROGRAM')
+  600 FORMAT(I4,'  SHELTRAN ERROR(S)')
+  601 FORMAT(I4,' WARNING MESSAGE(S)')
+      IF(
+     - LSTOPT.LT.0.OR.LSTOPT.GT.3
+     -)THEN
+      LSTOPT=LODEF
+      ENDIF
+      IF(
+     - LINEPP.LE.0
+     -)THEN
+      LINEPP=LPPDEF
+      ENDIF
+      SOURCE='   SO'
+      CHARPL=79
+      NBRING=FORSEQ(LSTOPT+1)
+      IZZZSE=LSTOPT
+      GOTO 14002
+14003 CONTINUE
+      CHARPL=131
+      GOTO 14001
+14004 CONTINUE
+      GOTO 14001
+14002 CONTINUE
+      GOTO(
+     -14003,14004,14004
+     -), IZZZSE
+14000 CONTINUE
+      SOURCE='NO SO'
+14001 CONTINUE
+      DO 13000 I=1,66
+      TITLSV(I)=TITLE(I)
+13000 CONTINUE
+13001 CONTINUE
+      ASSIGN 17001 TO IZZZ01
+      GOTO 17000
+17001 CONTINUE
+      RETURN
+      ENTRY WARN(TEXT2,TEXT)
+      ASSIGN 17003 TO IZZZ02
+      GOTO 17002
+17003 CONTINUE
+      ASSIGN 17005 TO IZZZ03
+      GOTO 17004
+17005 CONTINUE
+         WRITE (NPRINT,202) TEXT2,TEXT(:NEL)
+         NWARN=NWARN+1
+      RETURN
+      ENTRY ERRMSG(TEXT)
+      POS = IPOS(1)
+      IF(
+     - POS.GE.73
+     -)THEN
+      POS=72
+      ENDIF
+      ERROR = ERROR + 1
+      IF(
+     - LSTOPT.EQ.0
+     -)THEN
+      COMCON=COMCON+4
+      ASSIGN 17006 TO IZZZ02
+      GOTO 17002
+17006 CONTINUE
+      WRITE (NPRINT,203) SEQNO
+      NEL=NELC(LINE,80)
+      WRITE (NPRINT,'(1X,I4,3X,80(A1:))') LINENO,(LINE(KGB),KGB=1,NEL)
+      ELSE
+      COMCON = COMCON + 2
+      ASSIGN 17007 TO IZZZ02
+      GOTO 17002
+17007 CONTINUE
+      ENDIF
+      IF(
+     - LSTOPT.NE.1
+     -)THEN
+      BLLINE(POS) = POINTR
+      NEL=NELC(BLLINE,72)
+      WRITE(NPRINT,'(8X,72(A1:))') (BLLINE(KGB),KGB=1,NEL)
+      BLLINE(POS) = BLANK
+      ELSE
+      WRITE (NPRINT,201)
+      ENDIF
+      ASSIGN 17008 TO IZZZ03
+      GOTO 17004
+17008 CONTINUE
+      WRITE(NPRINT,200) TEXT(:NEL)
+      WRITE(NPRINT,201)
+      RETURN
+      ENTRY ICRISN(INCR)
+         LINENO = LINENO + INCR
+      RETURN
+      ENTRY PRINT(LEV,LNRPRT)
+      LNOPRT=LNRPRT
+      IZZZSE=LSTOPT
+      GOTO 14007
+14008 CONTINUE
+      IF(
+     - LEV.LE.30.AND.LEV.GE.0
+     -)THEN
+      LEVEL=LEV+7
+      ELSE
+      IF(
+     - LEV.LT.0
+     -)THEN
+      LEVEL=7
+      ELSE
+      LEVEL=37
+      ENDIF
+      ENDIF
+      ASSIGN 17010 TO IZZZ04
+      GOTO 17009
+17010 CONTINUE
+      IF(
+     - LEVEL+LENG.GT.73.AND.NOTE
+     -)THEN
+      COMCON=COMCON+1
+      ASSIGN 17011 TO IZZZ02
+      GOTO 17002
+17011 CONTINUE
+      NEL=NELC(OUT,124)
+      WRITE(NPRINT,'(8X,124(A1:))') (OUT(KGB),KGB=1,NEL)
+      ASSIGN 17013 TO IZZZ05
+      GOTO 17012
+17013 CONTINUE
+      ELSE
+      ASSIGN 17014 TO IZZZ02
+      GOTO 17002
+17014 CONTINUE
+      ENDIF
+      OUT(6)=LINE(6)
+      ASSIGN 17016 TO IZZZ06
+      GOTO 17015
+17016 CONTINUE
+      GOTO 14006
+14009 CONTINUE
+      ASSIGN 17018 TO IZZZ07
+      GOTO 17017
+17018 CONTINUE
+      GOTO 14006
+14010 CONTINUE
+      ASSIGN 17020 TO IZZZ08
+      GOTO 17019
+17020 CONTINUE
+      GOTO 14006
+14007 CONTINUE
+      GOTO(
+     -14008,14009,14010
+     -), IZZZSE
+14005 CONTINUE
+      SEQNO=SEQNO+1
+14006 CONTINUE
+      RETURN
+      ENTRY PRINTC(LNRPRT)
+      LNOPRT=LNRPRT
+      IZZZSE=LSTOPT
+      GOTO 14013
+14014 CONTINUE
+      LEVEL=1
+      INIT=1
+      LAST=72
+      ASSIGN 17021 TO IZZZ02
+      GOTO 17002
+17021 CONTINUE
+      ASSIGN 17022 TO IZZZ06
+      GOTO 17015
+17022 CONTINUE
+      GOTO 14012
+14015 CONTINUE
+      ASSIGN 17023 TO IZZZ07
+      GOTO 17017
+17023 CONTINUE
+      GOTO 14012
+14016 CONTINUE
+      ASSIGN 17024 TO IZZZ08
+      GOTO 17019
+17024 CONTINUE
+      GOTO 14012
+14013 CONTINUE
+      GOTO(
+     -14014,14015,14016
+     -), IZZZSE
+14011 CONTINUE
+      SEQNO=SEQNO+1
+14012 CONTINUE
+      RETURN
+      ENTRY PNOTE
+      IZZZSE=LSTOPT
+      GOTO 14019
+14020 CONTINUE
+      IF(
+     - NOTE
+     -)THEN
+      ASSIGN 17025 TO IZZZ02
+      GOTO 17002
+17025 CONTINUE
+      NEL=NELC(OUT,124)
+      WRITE(NPRINT,'(8X,124(A1:))') (OUT(KGB),KGB=1,NEL)
+      ASSIGN 17026 TO IZZZ05
+      GOTO 17012
+17026 CONTINUE
+      ENDIF
+      ASSIGN 17027 TO IZZZ04
+      GOTO 17009
+17027 CONTINUE
+      ASSIGN 17029 TO IZZZ09
+      GOTO 17028
+17029 CONTINUE
+      IF(
+     - LENG.GT.50
+     -)THEN
+      LAST=INIT+49
+      ENDIF
+      LEVEL=75
+      ASSIGN 17031 TO IZZZ10
+      GOTO 17030
+17031 CONTINUE
+      NOTE=.TRUE.
+      GOTO 14018
+14021 CONTINUE
+      ASSIGN 17032 TO IZZZ02
+      GOTO 17002
+17032 CONTINUE
+      NEL=NELC(LINE,80)
+      WRITE(NPRINT,'(8X,80(A1:))') (LINE(KGB),KGB=1,NEL)
+      GOTO 14018
+14022 CONTINUE
+      ASSIGN 17033 TO IZZZ08
+      GOTO 17019
+17033 CONTINUE
+      GOTO 14018
+14019 CONTINUE
+      GOTO(
+     -14020,14021,14022
+     -), IZZZSE
+14017 CONTINUE
+      SEQNO=SEQNO+1
+14018 CONTINUE
+      RETURN
+      ENTRY HEADER
+      ASSIGN 17034 TO IZZZ04
+      GOTO 17009
+17034 CONTINUE
+      ASSIGN 17035 TO IZZZ09
+      GOTO 17028
+17035 CONTINUE
+      IF(
+     - LENG.NE.0.AND.LSTOPT.NE.0
+     -)THEN
+      DO 13002 I=1,66
+      TITLSV(I)=LINE(I+6)
+13002 CONTINUE
+13003 CONTINUE
+      ENDIF
+      IZZZSE=LSTOPT
+      GOTO 14025
+14026 CONTINUE
+      ASSIGN 17037 TO IZZZ11
+      GOTO 17036
+17037 CONTINUE
+      GOTO 14024
+14027 CONTINUE
+      COMCON=COMCON-1
+      ASSIGN 17038 TO IZZZ08
+      GOTO 17019
+17038 CONTINUE
+      ASSIGN 17039 TO IZZZ11
+      GOTO 17036
+17039 CONTINUE
+      GOTO 14024
+14025 CONTINUE
+      GOTO(
+     -14026,14026,14027
+     -), IZZZSE
+14023 CONTINUE
+      SEQNO=SEQNO+1
+14024 CONTINUE
+      RETURN
+      ENTRY TRAIL
+      COMCON=COMCON+5+MIN(1,NWARN)
+      ASSIGN 17040 TO IZZZ02
+      GOTO 17002
+17040 CONTINUE
+         WRITE(NPRINT,400)
+      ASSIGN 17042 TO IZZZ12
+      GOTO 17041
+17042 CONTINUE
+         LINTOT = LINTOT + LINENO - START
+         ERRTOT = ERRTOT + ERROR
+      WRNTOT = WRNTOT + NWARN
+      ASSIGN 17043 TO IZZZ01
+      GOTO 17000
+17043 CONTINUE
+      RETURN
+      ENTRY FINAL
+      ASSIGN 17044 TO IZZZ02
+      GOTO 17002
+17044 CONTINUE
+         WRITE(NPRINT,500)
+      IF(
+     - LINENO .GT. START
+     -)THEN
+      WRITE (NPRINT,201)
+      WRITE (NPRINT,200) 'END STATEMENT IS MISSING'
+      LINTOT=LINTOT+LINENO+1-START
+            ERRTOT = ERRTOT + ERROR + 1
+      ENDIF
+      LINENO=LINTOT+START-1
+         ERROR = ERRTOT
+      NWARN = WRNTOT
+      ASSIGN 17045 TO IZZZ12
+      GOTO 17041
+17045 CONTINUE
+      SEQNO=0
+      LINTOT=0
+      ERRTOT=0
+      NOTE=.FALSE.
+      RETURN
+17000 CONTINUE
+         PAGENO = 0
+         ERROR = 0
+      NWARN=0
+         LINENO = START
+      COMCON=LINEPP
+      DO 13004 I=1,66
+      TITLSV(I)=TITLE(I)
+13004 CONTINUE
+13005 CONTINUE
+      GOTO IZZZ01
+17009 CONTINUE
+      INIT=6
+16000 CONTINUE
+      INIT=INIT+1
+      IF(.NOT.(
+     - LINE(INIT).NE.BLANK.OR.INIT.EQ.73
+     -))GOTO 16000
+16001 CONTINUE
+      IF(
+     - INIT.NE.73
+     -)THEN
+      LAST=73
+16002 CONTINUE
+      LAST=LAST-1
+      IF(.NOT.(
+     - LINE(LAST).NE.BLANK
+     -))GOTO 16002
+16003 CONTINUE
+      LENG=LAST-INIT+1
+      ELSE
+      INIT=7
+      LAST=7
+      LENG=0
+      ENDIF
+      GOTO IZZZ04
+17015 CONTINUE
+      ASSIGN 17046 TO IZZZ10
+      GOTO 17030
+17046 CONTINUE
+      IF(
+     - LNOPRT
+     -)THEN
+      NEL=NELC(OUT,124)
+      WRITE (NPRINT,'(1X,I4,3X,124(A1:))') LINENO,(OUT(KGB),KGB=1,NEL)
+      ELSE
+      NEL=NELC(OUT,124)
+      WRITE(NPRINT,'(8X,124(A1:))') (OUT(KGB),KGB=1,NEL)
+      ENDIF
+      ASSIGN 17047 TO IZZZ05
+      GOTO 17012
+17047 CONTINUE
+      NOTE =.FALSE.
+      GOTO IZZZ06
+17017 CONTINUE
+      ASSIGN 17048 TO IZZZ02
+      GOTO 17002
+17048 CONTINUE
+      IF(
+     - LNOPRT
+     -)THEN
+      NEL=NELC(LINE,80)
+      WRITE (NPRINT,'(1X,I4,3X,80(A1:))') LINENO,(LINE(KGB),KGB=1,NEL)
+      ELSE
+      NEL=NELC(LINE,80)
+      WRITE(NPRINT,'(8X,80(A1:))') (LINE(KGB),KGB=1,NEL)
+      ENDIF
+      GOTO IZZZ07
+17019 CONTINUE
+      SEQNO=SEQNO+1
+      ASSIGN 17049 TO IZZZ02
+      GOTO 17002
+17049 CONTINUE
+      NEL=NELC(LINE,80)
+      WRITE (NPRINT,'(1X,I4,3X,80(A1:))') SEQNO,(LINE(KGB),KGB=1,NEL)
+      GOTO IZZZ08
+17002 CONTINUE
+         COMCON = COMCON + 1
+      IF(
+     - COMCON .GE. LINEPP
+     -)THEN
+      ASSIGN 17050 TO IZZZ11
+      GOTO 17036
+17050 CONTINUE
+      ENDIF
+      GOTO IZZZ02
+17004 CONTINUE
+      NEL=LEN(TEXT)
+15000 CONTINUE
+      IF(
+     - (NEL.GT.0)
+     -)THEN
+      IF(
+     - (TEXT(NEL:NEL).EQ.' ')
+     -)THEN
+      NEL=NEL-1
+      ELSE
+      GOTO 15001
+      ENDIF
+      GOTO 15000
+      ENDIF
+15001 CONTINUE
+      GOTO IZZZ03
+17036 CONTINUE
+      COMCON = 0
+      PAGENO = PAGENO + 1
+      WRITE(NPRINT,'(''1VERSION 5.5 (OCT. 88)'',T58,''SHELTRAN-77'',
+     :T122,''PAGE'',I4)') PAGENO
+      NEL=NELC(TITLSV,66)
+      IF(
+     - LSTOPT.LE.2
+     -)THEN
+      WRITE(NPRINT,'(''0TARGET'',7X,66(A1:))') (TITLSV(KGB),KGB=1,NEL)
+      WRITE(NPRINT,'(/'' STM.NO''/)')
+      ELSE
+      WRITE(NPRINT,'(''0SOURCE'',7X,66(A1:))') (TITLSV(KGB),KGB=1,NEL)
+      WRITE(NPRINT,'(/'' SEQ.NO''/)')
+      ENDIF
+      GOTO IZZZ11
+17041 CONTINUE
+      WRITE (NPRINT,401) LINEPP,CHARPL,SOURCE,NBRING
+      LINENO=LINENO+1-START
+      WRITE (NPRINT,406) ERROR,LINENO -1
+      IF(
+     - NWARN.GT.0
+     -)THEN
+      WRITE(NPRINT,601) NWARN
+      ENDIF
+      GOTO IZZZ12
+17030 CONTINUE
+      DO 13006 I=INIT,LAST
+      OUT(LEVEL)=LINE(I)
+      LEVEL=LEVEL+1
+13006 CONTINUE
+13007 CONTINUE
+      GOTO IZZZ10
+17012 CONTINUE
+      DO 13008 I=1,124
+      OUT(I)=BLANK
+13008 CONTINUE
+13009 CONTINUE
+      GOTO IZZZ05
+17028 CONTINUE
+      DO 13010 I=6,2,-1
+      IF(
+     - LINE(I).NE.BLANK
+     -)THEN
+      INIT=I
+      ENDIF
+13010 CONTINUE
+13011 CONTINUE
+      LENG=LAST-INIT+1
+      GOTO IZZZ09
+      END
+      SUBROUTINE CLASS
+      SAVE
+      CHARACTER*1 NCHAR(80) ,CPARM(66)
+      COMMON /BLINE/NCHAR
+      COMMON /BPARM/NPARM(66)
+      COMMON/CHPARM/ CPARM
+      COMMON /BLIST/NPOS,LSTOPT,LINEPP,NPRINT
+       LOGICAL NEXIT
+      COMMON /BPARS/NTYPE,NTARGT,NEXIT,NOUT,LUOUT
+      INTEGER SUM, KGB
+      CHARACTER*1 CHARI
+      CHARACTER*1 BLANK,OPBRT,CLBRT
+      CHARACTER*1 COMMA,AMPST,EQUAL
+      INTEGER POSIT(8),DELIM
+      CHARACTER*1 KW(4,2)
+      CHARACTER*1 LTU
+      LOGICAL COMFLG
+      DATA BLANK/' '/,OPBRT/'('/,CLBRT/')'/
+      DATA COMMA/','/
+      DATA AMPST/'*'/,EQUAL/'='/
+      DATA KW/'E','R','R','=','E','N','D','='/
+      NPOS = 7
+      NTYPE = KEYWD1(NPOS)
+      DO 13000 I=1,66
+         NPARM(I) = 0
+13000 CONTINUE
+13001 CONTINUE
+      IZZZSE=NTYPE
+      GOTO 14002
+14003 CONTINUE
+         SUM = 0
+         J = 1
+      DO 13002 N = NPOS,72
+            IN = DELIM (NCHAR(N))
+      IZZZSE      =IN
+      GOTO 14006
+14007 CONTINUE
+      GOTO 14005
+14008 CONTINUE
+      IF(
+     - SUM.EQ.0
+     -)THEN
+      NTYPE=101
+      GOTO 13003
+      ELSE
+               NPARM(J) = SUM
+               J = J + 1
+               SUM = 0
+      ENDIF
+      GOTO 14005
+14009 CONTINUE
+               SUM = 10 * SUM + IN - 8
+      GOTO 14005
+14006 CONTINUE
+      GOTO(
+     -14007,14004,14004,14008,14004,14004,14004,14009,14009,14009,14009,
+     -14009,14009,14009,14009,14009,14009
+     -), IZZZSE
+14004 CONTINUE
+               NTYPE = 101
+      GOTO 13003
+14005 CONTINUE
+13002 CONTINUE
+13003 CONTINUE
+      NPARM(J)=SUM
+         NPOS = N
+      GOTO 14001
+14010 CONTINUE
+16000 CONTINUE
+      NPOS=NPOS+1
+      CHARI=NCHAR(NPOS)
+      IF(.NOT.(
+     - CHARI.EQ.EQUAL.OR.CHARI.EQ.OPBRT.OR.NPOS.GE.70
+     -))GOTO 16000
+16001 CONTINUE
+      IF(
+     - CHARI.EQ.EQUAL.AND.NPOS.LE.70
+     -)THEN
+      KGB=0
+16002 CONTINUE
+      NPOS=NPOS+1
+      CHARI=NCHAR(NPOS)
+      IF(
+     - CHARI.EQ.OPBRT
+     -)THEN
+      KGB=KGB+1
+      ELSEIF(
+     - CHARI.EQ.CLBRT
+     -)THEN
+      KGB=KGB-1
+      ENDIF
+      IF(.NOT.(
+     - (CHARI.EQ.COMMA.AND.KGB.EQ.0).OR.(NPOS.GE.72)
+     -))GOTO 16002
+16003 CONTINUE
+      IF(
+     - CHARI.NE.COMMA.OR.KGB.NE.0
+     -)THEN
+      NTYPE=2
+      ENDIF
+      ELSE
+      NTYPE=2
+      ENDIF
+      GOTO 14001
+14011 CONTINUE
+      N1=0
+      NKW=0
+16004 CONTINUE
+      NKW=NKW+1
+      ASSIGN 17001 TO IZZZ01
+      GOTO 17000
+17001 CONTINUE
+      IF(
+     - KWIND.EQ.5
+     -)THEN
+      N1=N1+1
+      POSIT(N1)=NPER
+      ENDIF
+      IF(.NOT.(
+     - NKW.EQ.2
+     -))GOTO 16004
+16005 CONTINUE
+      IF(
+     - N1.EQ.0
+     -)THEN
+      NTYPE=2
+      ELSE
+      IF(
+     - N1.EQ.2 .AND. POSIT(1).GT.POSIT(2)
+     -)THEN
+      POSIT(3)=POSIT(1)
+      POSIT(1)=POSIT(2)
+      POSIT(2)=POSIT(3)
+      ENDIF
+      ASSIGN 17003 TO IZZZ02
+      GOTO 17002
+17003 CONTINUE
+      ENDIF
+      GOTO 14001
+14012 CONTINUE
+      N1=0
+      COMFLG=.TRUE.
+16006 CONTINUE
+      NPOS=NPOS+1
+      CHARI = NCHAR(NPOS)
+      IF(.NOT.(
+     - CHARI.EQ.OPBRT.OR.NPOS.GE.70
+     -))GOTO 16006
+16007 CONTINUE
+16008 CONTINUE
+      NPOS=NPOS+1
+      CHARI = NCHAR(NPOS)
+      IF(
+     - CHARI.EQ.AMPST.AND.NPOS.LE.70
+     -)THEN
+      IF(
+     - COMFLG
+     -)THEN
+      N1=N1+1
+      POSIT(N1)=NPOS
+      COMFLG=.FALSE.
+      ENDIF
+      ELSE
+      IF(
+     - CHARI.NE.BLANK.AND.COMFLG
+     -)THEN
+      COMFLG=.FALSE.
+      ELSE
+      IF(
+     - CHARI.EQ.COMMA
+     -)THEN
+      COMFLG=.TRUE.
+      ENDIF
+      ENDIF
+      ENDIF
+      IF(.NOT.(
+     - N1.EQ.8.OR.NPOS.GE.70
+     -))GOTO 16008
+16009 CONTINUE
+      IZZZSE=N1
+      GOTO 14015
+14016 CONTINUE
+      ASSIGN 17004 TO IZZZ02
+      GOTO 17002
+17004 CONTINUE
+      NTYPE=22
+      GOTO 14014
+14017 CONTINUE
+      NTYPE=104
+      GOTO 14014
+14015 CONTINUE
+      GOTO(
+     -14016,14016,14016,14016,14016,14016,14016,14017
+     -), IZZZSE
+14013 CONTINUE
+      NTYPE=2
+14014 CONTINUE
+      GOTO 14001
+14002 CONTINUE
+      GOTO(
+     -14000,14000,14000,14000,14000,14000,14000,14000,14000,14000,14010,
+     -14000,14000,14000,14003,14000,14000,14000,14000,14000,14000,14011,
+     -14000,14000,14000,14000,14000,14000,14000,14012
+     -), IZZZSE
+14000 CONTINUE
+14001 CONTINUE
+      RETURN
+17000 CONTINUE
+      KWIND=1
+      NPER=NPOS
+16010 CONTINUE
+      NPER=NPER+1
+      IF(
+     - NCHAR(NPER).EQ.OPBRT
+     -)THEN
+      KWIND=1
+16012 CONTINUE
+      NPER=NPER+1
+      IF(.NOT.(
+     - NCHAR(NPER).EQ.CLBRT.OR.NPER.GE.70
+     -))GOTO 16012
+16013 CONTINUE
+      ELSE
+      IF(
+     - NCHAR(NPER).NE.BLANK
+     -)THEN
+      IF(
+     - ( LTU( NCHAR(NPER) ) .EQ. KW(KWIND,NKW) )
+     -)THEN
+      KWIND=KWIND+1
+      ELSE
+      KWIND=1
+      ENDIF
+      ENDIF
+      ENDIF
+      IF(.NOT.(
+     - KWIND.EQ.5.OR.NPER.GE.70
+     -))GOTO 16010
+16011 CONTINUE
+      GOTO IZZZ01
+17002 CONTINUE
+         I = 8
+      DO 13004 N=1,N1
+      J=(N-1)*9
+      I=I-1
+      NPARM(J+2)=I
+      NPARM(J+3)=POSIT(N)
+      I=POSIT(N)+1
+            L = I - 4
+            M = KEYWD2(I)
+      NPARM(J+1)=M
+      IF(
+     - M.EQ.6
+     -)THEN
+               K = 4
+15000 CONTINUE
+      IF(
+     - K .LE. 34
+     -)THEN
+      IF(
+     - K .LT. I - L - 1
+     -)THEN
+      CHARI = LTU( NCHAR(K+L) )
+      IF(
+     - CHARI.NE.BLANK
+     -)THEN
+      CPARM(J+K)=CHARI
+      ELSE
+                        K = K - 1
+                        L = L + 1
+      ENDIF
+      ELSE
+      CPARM(J+K)=BLANK
+      ENDIF
+                  K = K + 1
+      GOTO 15000
+      ENDIF
+15001 CONTINUE
+      ENDIF
+13004 CONTINUE
+13005 CONTINUE
+      J=J+9
+      NPARM(J+1)=0
+      NPARM(J+2)=I-1
+      NPARM(J+3)=72
+         NPOS = I
+      GOTO IZZZ02
+      END
+      FUNCTION KEYWD1(POS)
+      CHARACTER*1 NCHAR(80)
+      COMMON /BLINE/NCHAR
+      CHARACTER*1 CHARI
+      CHARACTER*1 BLANK,OPBRT,CLBRT,EQUAL,COMMA
+      INTEGER POS
+      CHARACTER*1 TREE(156)
+      INTEGER MATCH(156),FAIL(156)
+      CHARACTER*1 LTU
+      DATA BLANK/' '/,OPBRT/'('/,CLBRT/')'/,EQUAL/'='/,COMMA/','/
+     0DATA  TREE  / 'I','F','T','H','E','N','E','L','S','E',
+     1              'N','T','R','Y','D',' ','A','L','L','S',
+     2              'E','I','F','W','H','I','L','E','P','R',
+     3              'O','C','F','O','R','S','E','L','E','C',
+     4              'T','P','E','R','F','O','R','M','R','O',
+     5              'C','W','H','I','L','E','F','O','R',' ',
+     6              ' ',' ','(','S','E','L','E','C','T','T',
+     7              'O','P','R','E','P','E','A','T','T','U',
+     8              'R','N','A','D','X','W','H','I','L','E',
+     9              'F','O','R','R','E','P','E','A','T','U',
+     A              'N','T','I','L','O','T','H','E','R',' ',
+     B              'B','A','C','K','S','P','A','C','E','(',
+     C              'C','L','O','S','E','(','P','E','N','(',
+     D              'F','I','L','E','(','N','Q','U','I','R',
+     E              'E','(','R','I','T','E','(','W','I','N',
+     F              'D','(','I','F','I','F'/
+     0DATA  MATCH /   2,110,  4,  5,  6, -5,  8,  9, 10,155,
+     1               12, 13, 14,-27,131,000, 18, 19,-30, 21,
+     2              -15, 23, -7, 25, 26, 27, 28,-10, 30, 31,
+     3               32,-24, 34, 35,-13, 37, 38, 39, 40, 41,
+     4              -17, 43, 44, 45, 46, 47, 48,-21, 50, 51,
+     5              -23, 53, 54, 55, 56, 60, 58, 59,-11, -8,
+     6              -14,-18,-22, 65, 66, 67, 68, 69, 61, 71,
+     7               72,-26, 74, 75, 76, 77, 78,-20, 80, 81,
+     8               82,-25, 84, 63, 86, 87, 88, 89, 90, -9,
+     9               92, 93,-12, 95, 96, 97, 98, 99,-19,101,
+     A              102,103,104, 62,106,107,108,109,-16, -4,
+     B              112,113,114,115,116,117,118,119,120,-22,
+     C              122,123,124,125,126,-22,128,129,130,-22,
+     D              132,133,134,135,-22,137,138,139,140,141,
+     E              142,-22,144,145,146,147,-22,149,150,151,
+     F              152,-22,154, -7,156,-31/
+     0DATA  FAIL  /   3,136,  7, -2, -2, -2,121, 11, -2, -2,
+     1               -2, 15, -2, -2, -2,000, 22, 20, -2, -2,
+     2               -2, 24, -2, 29, -2, -2, -2, -2, 33, -2,
+     3               -2, -2, 36, -2, -2, -2, -2, -2, -2, -2,
+     4               -2, 52, 49, -2, -2, -2, -2, -2, -2, -2,
+     5               -2, 57,143, -2, -2, -2, 64, -2, -2, -2,
+     6               -2, -2, -2, 73, 70, -2, -2, -2, -2, -2,
+     7               -2, -2, 85, -2, 79, -2, -2, -2, 83, -2,
+     8               -2, -2,148, -2,100, 91, -2, -2, -2, -2,
+     9               94, -2, -2, -2, -2, -2, -2, -2, -2,105,
+     A               -2, -2, -2, -2,111,127, -2, -2, -2, -2,
+     B               -2, -2, -2, -2, -2, -2, -2, -2, -2, -2,
+     C               42, 17, -2, -2, -2, -2, -2, -2, -2, -2,
+     D              153, -2, -2, -2, -2, -2, -2, -2, -2, -2,
+     E               -2, -2, -2, -2, -2, -2, -2, -2, -2, -2,
+     F               -2, -2,-28, -2, -6, -2/
+      J = 1
+      I = POS
+15000 CONTINUE
+      IF(
+     -  I .LE. 72
+     -)THEN
+           CHARI = LTU( NCHAR(I) )
+      IF(
+     - CHARI.EQ.TREE(J)
+     -)THEN
+                     J = MATCH(J)
+                I = I + 1
+      ELSE
+      IF(
+     - CHARI.EQ.BLANK
+     -)THEN
+                     I = I + 1
+      ELSE
+                     J = FAIL(J)
+      ENDIF
+      ENDIF
+      IF(
+     -  J .LE. 0
+     -)THEN
+      KEYWD1=-J
+      GOTO 15001
+      ENDIF
+      GOTO 15000
+      ENDIF
+15001 CONTINUE
+      IF(
+     -  J .GE. 0
+     -)THEN
+      IF(
+     - J.EQ.1.AND.NCHAR(6).EQ.BLANK
+     -)THEN
+      KEYWD1=110
+      ELSE
+15002 CONTINUE
+      IF(
+     - J.GT.0
+     -)THEN
+      J=FAIL(J)
+      GOTO 15002
+      ENDIF
+15003 CONTINUE
+      KEYWD1=-J
+      ENDIF
+      ENDIF
+      IZZZSE=KEYWD1
+      GOTO 14002
+14003 CONTINUE
+15004 CONTINUE
+      IF(
+     - I.LE.72
+     -)THEN
+      CHARI = NCHAR(I)
+      IF(
+     - CHARI.EQ.BLANK
+     -)THEN
+      I=I+1
+      ELSE
+      IF(
+     - KEYWD1.EQ.25.AND.CHARI.NE.OPBRT.AND.CHARI.NE.EQUAL
+     -)THEN
+      KEYWD1=101
+      ELSE
+      KEYWD1=2
+      ENDIF
+      GOTO 15005
+      ENDIF
+      GOTO 15004
+      ENDIF
+15005 CONTINUE
+      GOTO 14001
+14004 CONTINUE
+      IF(
+     - I.LE.72
+     -)THEN
+      DO 13000 J=I,72
+      CHARI=NCHAR(J)
+      IF(
+     - CHARI.EQ.EQUAL
+     -)THEN
+      KEYWD1=2
+      GOTO 13001
+      ENDIF
+13000 CONTINUE
+13001 CONTINUE
+      ELSE
+      IF(
+     - KEYWD1.LE.23
+     -)THEN
+      KEYWD1=2
+      ENDIF
+      ENDIF
+      GOTO 14001
+14002 CONTINUE
+      GOTO(
+     -14000,14000,14000,14000,14003,14003,14003,14000,14003,14003,14000,
+     -14003,14003,14000,14004,14003,14003,14000,14003,14003,14004,14000,
+     -14004,14003,14003,14004,14004,14003
+     -), IZZZSE
+14000 CONTINUE
+14001 CONTINUE
+      POS = I
+      RETURN
+      END
+      FUNCTION KEYWD2(POS)
+      CHARACTER*1 NCHAR(80)
+      COMMON /BLINE/NCHAR
+      CHARACTER*1 CHARI
+      CHARACTER*1 BLANK,OPBRT,CLBRT,EQUAL,COMMA
+      INTEGER POS
+      CHARACTER*1 TREE(35)
+      INTEGER MATCH(35),FAIL(35)
+      CHARACTER*1 LTU
+      DATA BLANK/' '/,OPBRT/'('/,CLBRT/')'/,EQUAL/'='/,COMMA/','/
+      DATA  TREE  / 'X','F','O','R',',',')','W','H','I','L',
+     *              'E',',',')','R','E','T','U','R','N',',',
+     *              ')','S','T','O','P',',',')','R','E','P',
+     *              'E','A','T',',',')'/
+      DATA  MATCH /   2,  3,  4,  5, -3, -3,  8,  9, 10, 11,
+     *               12, -4, -4, 15, 16, 17, 18, 19, 20, -1,
+     *               -1, 23, 24, 25, 26, -2, -2, 29, 30, 31,
+     *               32, 33, 34, -5, -5/
+      DATA  FAIL  /  14,  7, -6, -6,  6, -6, 28, -6, -6, -6,
+     *               -6, 13, -6, 22, -6, -6, -6, -6, -6, 21,
+     *               -6, -6, -6, -6, -6, 27, -6, -6, -6, -6,
+     *               -6, -6, -6, 35, -6/
+      J = 1
+      I = POS
+15000 CONTINUE
+      IF(
+     -  I .LE. 72
+     -)THEN
+           CHARI = LTU( NCHAR(I) )
+      IF(
+     - CHARI.EQ.BLANK
+     -)THEN
+                I = I + 1
+      ELSE
+      IF(
+     - CHARI.EQ.TREE(J)
+     -)THEN
+                     J = MATCH(J)
+                     I = I + 1
+      ELSE
+                     J = FAIL(J)
+      ENDIF
+      IF(
+     -  J .LE. 0
+     -)THEN
+      KEYWD2=-J
+      GOTO 15001
+      ENDIF
+      ENDIF
+      GOTO 15000
+      ENDIF
+15001 CONTINUE
+      IF(
+     -  J .GE. 0
+     -)THEN
+      KEYWD2=6
+      ENDIF
+      IF(
+     -  J .EQ. -6
+     -)THEN
+15002 CONTINUE
+      IF(
+     -  I .LE. 72
+     -)THEN
+                CHARI = NCHAR(I)
+                     I = I + 1
+      IF(
+     - CHARI.EQ.COMMA .OR. CHARI.EQ.CLBRT
+     -)THEN
+      GOTO 15003
+      ENDIF
+      GOTO 15002
+      ENDIF
+15003 CONTINUE
+      ENDIF
+      POS = I
+      RETURN
+      END
+      INTEGER FUNCTION  DELIM (CHARI)
+      CHARACTER*1 IDELIM(17),CHARI
+      DATA       IDELIM  / ' ','(',')',',','=','/',' ',
+     1                     '0','1','2','3','4','5','6','7','8','9' /
+      DELIM = 0
+      DO 13000  I = 1,17
+      IF(
+     - CHARI.EQ.IDELIM(I)
+     -)THEN
+                DELIM = I
+      GOTO 13001
+      ENDIF
+13000 CONTINUE
+13001 CONTINUE
+      RETURN
+      END
+      SUBROUTINE PARSER
+      SAVE
+      PARAMETER (NTYPES=30,NSTATE=17,NSTACK=32)
+      LOGICAL NEXIT
+      CHARACTER*1 LINE(80),CPARM(66)
+      COMMON /BLINE/LINE
+      COMMON /BPARM/NPARM(66)
+      COMMON/CHPARM/ CPARM
+      INTEGER TYPE
+      COMMON /BPARS/TYPE,NTARGT,NEXIT,NOUT,LUOUT
+      LOGICAL RETFL
+      LOGICAL STPFL
+      INTEGER LAB(7)
+      INTEGER   STATE
+      INTEGER   STPTR
+      INTEGER   STSTK(NSTACK)
+      INTEGER ACTAB(NSTATE,NTYPES)
+      INTEGER PART1(NSTATE,15),PART2(NSTATE,NTYPES-15)
+      EQUIVALENCE (ACTAB(1,1),PART1(1,1))
+      EQUIVALENCE (ACTAB(1,16),PART2(1,1))
+      DATA RETFL/.TRUE./,STPFL/.TRUE./
+      DATA STATE/1/,STPTR/0/
+      DATA PART1/
+     1    7,48,48, 7,48, 7,33, 7,37, 7, 7, 7,28,39, 7, 7,34,
+     2    9,48,48, 9,48, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9,
+     3   29,48,48,29,48,29,33,29,37,29,29,29,28,39,29,29,34,
+     4    0,48,48, 0,48, 0,33, 0,37, 0, 0, 0,28,30, 0, 0,34,
+     5    0,48,20, 0,48, 0,33, 0,37, 0, 0, 0,28,39,31, 0,34,
+     6    0,48,20, 0,48, 0,33, 0,37, 0, 0, 0,28,39,32,32,34,
+     7   19,48,48,19,48,19,33,19,37,19,19,19,28,39,19,19,34,
+     8    3,48,48, 0,48, 3,33, 3,37, 3, 3, 3,28,39, 3, 3,34,
+     9    0,48,20, 0,48, 0,33,21,37, 0, 0, 0,28,39, 0, 0,34,
+     A   17,48,48,17,48,17,33,17,37,17,17,17,28,39,17,17,34,
+     1    4,48,48, 0,48, 4,33, 4,37, 4, 4, 4,28,39, 4, 4,34,
+     2    0,48,20, 0,48,18,33, 0,37, 0, 0, 0,28,39, 0, 0,34,
+     3   22,48,48,22,48,22,33,22,37,22,22,22,28,39,22,22,34,
+     4    0,48,20, 0,48, 0,33, 0,13,23, 0, 0,28,39, 0, 0,34,
+     5    0,48,20, 0,48, 0,33, 0,37,24, 0, 0,28,39, 0, 0,34/
+      DATA PART2/
+     6    0,48,20, 0,48, 0,33, 0,37, 0,25, 0,28,39, 0, 0,34,
+     7    0,48,20, 0,48, 0,33, 0,37, 0, 0,27,28,39, 0, 0,34,
+     8    6,48,48, 0,48, 6,33, 6,37, 6, 6, 6,28,39, 6, 6,34,
+     9   26,48,48,26,48,26,33,26,37,26,26,26,28,39,26,26,34,
+     B    1,48,48, 1,48, 1,33, 1,37, 1, 1, 1,28,39, 1, 1,34,
+     1    2,48,48, 2,48, 2,33, 2,37, 2, 2, 2,28,39, 2, 2,34,
+     2   12,14,48,40,14, 0,33, 0,37, 0, 0, 0,28,39, 0, 0,34,
+     3    0,48,48,15,48, 0,33, 0,37, 0, 0, 0,28,39, 0, 0,34,
+     4   11,48,48, 0,48, 5,33, 5,37, 5, 5, 5,28,39, 5, 5,34,
+     5   11,48,48, 0,48, 5,33, 5,37, 5, 5, 5,28,39, 5, 5,34,
+     6   12,10,48,40,48, 0,33, 0,37, 0, 0, 0,28,39, 0, 0,34,
+     7   12,16,20,40,16,41,33,42,37,43,44,45,28,39,46,46,34,
+     8    7, 7, 0, 7, 7, 7,33, 7,37, 7, 7, 7,28,39, 7, 7,34,
+     9    0, 1, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+     C    0,48,20, 0,48, 0,33, 0,37, 0, 0, 0,28,39,35, 0,34/
+      NEXIT=.FALSE.
+      RETURN
+      ENTRY PARSE
+15000 CONTINUE
+      IF(
+     - .TRUE.
+     -)THEN
+      IZZZSE=ACTAB(STATE,TYPE-1)
+      GOTO 14002
+14003 CONTINUE
+         CALL PFORM
+      GOTO 15001
+14004 CONTINUE
+      ASSIGN 17001 TO IZZZ01
+      GOTO 17000
+17001 CONTINUE
+      ASSIGN 17003 TO IZZZ02
+      GOTO 17002
+17003 CONTINUE
+         STATE = 17
+      GOTO 15001
+14005 CONTINUE
+      ASSIGN 17004 TO IZZZ02
+      GOTO 17002
+17004 CONTINUE
+         STATE = 3
+      CALL LEAVE
+      GOTO 15001
+14006 CONTINUE
+      ASSIGN 17005 TO IZZZ02
+      GOTO 17002
+17005 CONTINUE
+         STATE = 3
+      CALL DOEXIT
+      GOTO 15001
+14007 CONTINUE
+      ASSIGN 17006 TO IZZZ02
+      GOTO 17002
+17006 CONTINUE
+         STATE = 3
+      CALL CARD
+      GOTO 15001
+14008 CONTINUE
+      ASSIGN 17007 TO IZZZ02
+      GOTO 17002
+17007 CONTINUE
+         STATE = 3
+      CALL XUNTIL
+      GOTO 15001
+14009 CONTINUE
+      CALL CARD
+      GOTO 15001
+14010 CONTINUE
+         CALL CCARD
+      GOTO 15001
+14011 CONTINUE
+         STATE = 1
+         CALL CARD
+         NEXIT = .FALSE.
+      GOTO 15001
+14012 CONTINUE
+         STATE = 2
+         CALL CARD
+      GOTO 15001
+14013 CONTINUE
+      CALL ERRMSG('STOP OR RETURN ARE MISSING                        ')
+         STATE = 2
+      GOTO 14001
+14014 CONTINUE
+         STATE = 10
+      CALL CONSEL
+      GOTO 15001
+14015 CONTINUE
+         STATE = 4
+      CALL PROC
+      GOTO 15001
+14016 CONTINUE
+         STATE = 5
+      CALL PEND
+      GOTO 15001
+14017 CONTINUE
+      ASSIGN 17009 TO IZZZ03
+      GOTO 17008
+17009 CONTINUE
+      GOTO 15001
+14018 CONTINUE
+      ASSIGN 17010 TO IZZZ02
+      GOTO 17002
+17010 CONTINUE
+         STATE = 6
+      CALL FOR
+      GOTO 15001
+14019 CONTINUE
+      ASSIGN 17012 TO IZZZ04
+      GOTO 17011
+17012 CONTINUE
+      CALL NEXT
+      GOTO 15001
+14020 CONTINUE
+      ASSIGN 17013 TO IZZZ02
+      GOTO 17002
+17013 CONTINUE
+         STATE = 7
+      CALL DOWHI
+      GOTO 15001
+14021 CONTINUE
+      ASSIGN 17014 TO IZZZ04
+      GOTO 17011
+17014 CONTINUE
+         NEXIT = .TRUE.
+      GOTO 14001
+14022 CONTINUE
+      ASSIGN 17015 TO IZZZ04
+      GOTO 17011
+17015 CONTINUE
+      CALL REP EAT
+      GOTO 15001
+14023 CONTINUE
+      ASSIGN 17016 TO IZZZ02
+      GOTO 17002
+17016 CONTINUE
+         STATE = 9
+      CALL DOSEL
+      GOTO 15001
+14024 CONTINUE
+      CALL DOCASE
+         NEXIT = .FALSE.
+      GOTO 15001
+14025 CONTINUE
+         STATE = 11
+      CALL OTHER
+         NEXIT = .FALSE.
+      GOTO 15001
+14026 CONTINUE
+      ASSIGN 17017 TO IZZZ04
+      GOTO 17011
+17017 CONTINUE
+      CALL REVERT
+      GOTO 15001
+14027 CONTINUE
+      ASSIGN 17018 TO IZZZ02
+      GOTO 17002
+17018 CONTINUE
+         STATE = 12
+      CALL C UNTIL
+      GOTO 15001
+14028 CONTINUE
+         STATE = 13
+      CALL DO UNTL
+      GOTO 15001
+14029 CONTINUE
+      ASSIGN 17019 TO IZZZ04
+      GOTO 17011
+17019 CONTINUE
+      CALL CO UNTL
+      GOTO 14001
+14030 CONTINUE
+      ASSIGN 17020 TO IZZZ02
+      GOTO 17002
+17020 CONTINUE
+         STATE = 14
+      CALL DOIF
+      GOTO 15001
+14031 CONTINUE
+         STATE = 15
+      CALL THEN
+      GOTO 15001
+14032 CONTINUE
+         STATE = 16
+      CALL ELSE
+         NEXIT = .FALSE.
+      GOTO 15001
+14033 CONTINUE
+      ASSIGN 17021 TO IZZZ04
+      GOTO 17011
+17021 CONTINUE
+      CALL FIN
+      GOTO 15001
+14034 CONTINUE
+         STATE = 8
+      CALL CWHILE
+      GOTO 14001
+14035 CONTINUE
+      ASSIGN 17022 TO IZZZ04
+      GOTO 17011
+17022 CONTINUE
+      CALL COREAD
+      GOTO 14001
+14036 CONTINUE
+      STATE=14
+      CALL ELSEIF
+      NEXIT=.FALSE.
+      GOTO 15001
+14037 CONTINUE
+      CALL ERRMSG('SELECT REJECTED, NOT FOLLOWED BY CASE             ')
+      CALL REVERT
+      ASSIGN 17023 TO IZZZ04
+      GOTO 17011
+17023 CONTINUE
+      GOTO 14001
+14038 CONTINUE
+      CALL ERRMSG('IF REJECTED, NOT FOLLOWED BY THEN                 ')
+      CALL FIN
+      ASSIGN 17024 TO IZZZ04
+      GOTO 17011
+17024 CONTINUE
+      GOTO 14001
+14039 CONTINUE
+      CALL ERRMSG('CPROC IS MISSING                                  ')
+         STATE = 5
+      CALL PEND
+      GOTO 14001
+14040 CONTINUE
+      CALL ERRMSG('CFOR IS MISSING                                   ')
+      ASSIGN 17025 TO IZZZ04
+      GOTO 17011
+17025 CONTINUE
+      CALL NEXT
+      GOTO 14001
+14041 CONTINUE
+      CALL ERRMSG('CWHILE IS MISSING                                 ')
+      ASSIGN 17026 TO IZZZ04
+      GOTO 17011
+17026 CONTINUE
+      CALL REP EAT
+      GOTO 14001
+14042 CONTINUE
+         STATE = 11
+      CALL ERRMSG('OTHER IS MISSING                                  ')
+      CALL OTHER
+         NEXIT = .FALSE.
+      GOTO 14001
+14043 CONTINUE
+      CALL ERRMSG('CSELECT IS MISSING                                ')
+      ASSIGN 17027 TO IZZZ04
+      GOTO 17011
+17027 CONTINUE
+      CALL REVERT
+      GOTO 14001
+14044 CONTINUE
+      CALL ERRMSG('UNTIL IS MISSING                                  ')
+      ASSIGN 17028 TO IZZZ04
+      GOTO 17011
+17028 CONTINUE
+      CALL CO UNTL
+      GOTO 14001
+14045 CONTINUE
+      CALL ERRMSG('CIF IS MISSING                                    ')
+      ASSIGN 17029 TO IZZZ04
+      GOTO 17011
+17029 CONTINUE
+      CALL FIN
+      GOTO 14001
+14046 CONTINUE
+      CALL ERRMSG('STATEMENT CANNOT BE REACHED                       ')
+      STATE=STATE-ACTAB(STATE,29)
+      GOTO 15001
+14002 CONTINUE
+      GOTO(
+     -14003,14004,14005,14006,14007,14008,14009,14000,14010,14011,14012,
+     -14013,14014,14015,14016,14017,14018,14019,14020,14021,14022,14023,
+     -14024,14025,14026,14027,14028,14029,14030,14031,14032,14033,14034,
+     -14035,14036,14000,14037,14000,14038,14039,14040,14041,14042,14043,
+     -14044,14045,14000,14046
+     -), IZZZSE
+14000 CONTINUE
+      STATE=STATE-ACTAB(STATE,29)
+      CALL ERRMSG('ILLEGAL IN THIS CONTEXT                           ')
+      GOTO 15001
+14001 CONTINUE
+      GOTO 15000
+      ENDIF
+15001 CONTINUE
+      RETURN
+17002 CONTINUE
+         STPTR = STPTR + 1
+      IF(
+     - STPTR .GT. NSTACK
+     -)THEN
+      CALL ERRMSG('NESTING TOO DEEP; FATAL ERROR                     ')
+      CALL ABORT
+      ENDIF
+         STSTK(STPTR) = STATE
+      GOTO IZZZ02
+17011 CONTINUE
+         STATE = STSTK(STPTR)
+         STPTR = STPTR - 1
+         NEXIT = .FALSE.
+      GOTO IZZZ04
+17008 CONTINUE
+         STATE = 1
+         CALL CCLEAR
+         CALL LCLEAR
+         CALL PCLEAR
+         CALL UCLEAR
+         CALL WCLEAR
+         NEXIT = .FALSE.
+         RETFL = .TRUE.
+         STPFL = .TRUE.
+      STPTR=0
+         CALL CARD
+      CALL TRAIL
+      GOTO IZZZ03
+17000 CONTINUE
+         J = 1
+      JJ=1
+15002 CONTINUE
+      IF(
+     - NPARM(JJ).GT.0
+     -)THEN
+      IZZZSE=NPARM(JJ)
+      GOTO 14049
+14050 CONTINUE
+               LAB(J) = 10 000
+      IF(
+     - RETFL
+     -)THEN
+                  RETFL = .FALSE.
+      K=LAB(J)
+      L=K+1
+      CALL GOTO(L)
+      CALL RETRN(K)
+      CALL LABEL(L)
+      ENDIF
+      GOTO 14048
+14051 CONTINUE
+               LAB(J) = 10 002
+      IF(
+     - STPFL
+     -)THEN
+                  STPFL = .FALSE.
+      K=LAB(J)
+      L=K+1
+      CALL GOTO(L)
+      CALL STP(K)
+      CALL LABEL(L)
+      ENDIF
+      GOTO 14048
+14052 CONTINUE
+               CALL LREAD(LAB(J))
+      GOTO 14048
+14053 CONTINUE
+               CALL WREAD(LAB(J))
+      GOTO 14048
+14054 CONTINUE
+               CALL UREAD(LAB(J))
+      GOTO 14048
+14055 CONTINUE
+      CALL PREAD(CPARM(JJ+3),LAB(J))
+      GOTO 14048
+14049 CONTINUE
+      GOTO(
+     -14050,14051,14052,14053,14054,14055
+     -), IZZZSE
+14047 CONTINUE
+14048 CONTINUE
+            J = J + 1
+      JJ=JJ+9
+      GOTO 15002
+      ENDIF
+15003 CONTINUE
+         J = 1
+      JJ=1
+15004 CONTINUE
+      IF(
+     - NPARM(JJ).GT.0
+     -)THEN
+      ASSIGN 17031 TO IZZZ05
+      GOTO 17030
+17031 CONTINUE
+            CALL REDLB(LAB(J))
+            J = J + 1
+      JJ=JJ+9
+      GOTO 15004
+      ENDIF
+15005 CONTINUE
+      ASSIGN 17032 TO IZZZ05
+      GOTO 17030
+17032 CONTINUE
+      GOTO IZZZ01
+17030 CONTINUE
+         K = J - 1
+      L=NPARM(JJ+1)
+      M=NPARM(JJ+2)
+         CALL REDTX(K,L,M)
+      GOTO IZZZ05
+      END
+      SUBROUTINE WRITER
+      PARAMETER (INCCOM=1,INCCON=1)
+      LOGICAL NEXIT
+      CHARACTER*1 LINE(80)
+      COMMON /BLINE/LINE
+      COMMON/BPARS/NTYP,NTARGT,NEXIT,NOUT,LUOUT
+      CHARACTER*1 NAME(6)
+      DIMENSION LABL(*)
+      INTEGER     I,KGB,NEL,NELC
+      RETURN
+      ENTRY CCARD
+      NEL=NELC(LINE,80)
+      WRITE(NTARGT,'(80(A1:))') (LINE(KGB),KGB=1,NEL)
+      CALL ICRISN(INCCON)
+      RETURN
+      ENTRY  CARD
+      NEL=NELC(LINE,80)
+      WRITE(NTARGT,'(80(A1:))') (LINE(KGB),KGB=1,NEL)
+      CALL ICRISN(1)
+      RETURN
+      ENTRY FCARD
+      NEL=NELC(LINE(2),79)
+      WRITE(NTARGT,'(80(A1:))') (LINE(KGB+1),KGB=1,NEL)
+      CALL ICRISN(INCCOM)
+      RETURN
+      ENTRY IFNOT
+      WRITE(NTARGT,'(5X,A)')             ' IF(.NOT.('
+      CALL ICRISN(1)
+      RETURN
+      ENTRY GOTO(L)
+      IF(
+     - .NOT. NEXIT
+     -)THEN
+      WRITE(NTARGT,'(5X,A,I5)')          ' GOTO ',L
+      CALL ICRISN(1)
+      ENDIF
+      RETURN
+      ENTRY  LABEL (L)
+      WRITE(NTARGT,'(I5,A)')           L,' CONTINUE'
+      CALL ICRISN(1)
+      RETURN
+      ENTRY RETRN(L)
+      WRITE(NTARGT,'(I5,A)')           L,' RETURN'
+      CALL ICRISN(1)
+      RETURN
+      ENTRY STP(L)
+      WRITE(NTARGT,'(I5,A)')           L,' STOP'
+      CALL ICRISN(1)
+      RETURN
+      ENTRY ASSGN (L,NAME)
+      WRITE(NTARGT,'(5X,A,I5,A,6A1)')    ' ASSIGN ',L,' TO ',NAME
+      CALL ICRISN(1)
+      RETURN
+      ENTRY AGOTO(NAME)
+      WRITE(NTARGT,'(5X,A,6A1)')       ' GOTO ',NAME
+      CALL ICRISN(1)
+      RETURN
+      ENTRY CGOTO(N,LABL)
+      WRITE(NTARGT,'(5X,A)')                ' GOTO('
+      NUM=N
+      ASSIGN 17001 TO IZZZ01
+      GOTO 17000
+17001 CONTINUE
+      WRITE(NTARGT,'(5X,A)')           '-), IZZZSE'
+      CALL ICRISN(1+INCCON)
+      RETURN
+      ENTRY CLGOTO(L)
+      WRITE(NTARGT,'(5X,A,I5)')          '-))GOTO ',L
+      CALL ICRISN(INCCON)
+      RETURN
+      ENTRY TXT(K)
+      NEL=NELC(LINE(K),73-K)
+      WRITE(NTARGT,'(5X,A,80(A1:))') '-',(LINE(I+K-1),I=1,NEL)
+      CALL ICRISN(INCCON)
+      RETURN
+      ENTRY REDTX(L,K,K1)
+      NEL=K1-K+1
+      WRITE(NTARGT,'(5X,I1.0,80(A1:))') L,(LINE(I),I=K,K1)
+      IF(
+     - L.EQ.0
+     -)THEN
+      CALL ICRISN(1)
+      ELSE
+      CALL ICRISN(INCCON)
+      ENDIF
+      RETURN
+      ENTRY  REDLB (L)
+      WRITE(NTARGT,'(5X,A,I5)')       '-',L
+      CALL ICRISN(INCCON)
+      RETURN
+      ENTRY  DOLP  (L,K)
+      NEL=NELC(LINE(K),68-K)
+      WRITE(NTARGT,'(5X,A,I5,80(A1:))') ' DO ',L,(LINE(I+K-1),I=1,NEL)
+      CALL ICRISN(1)
+      RETURN
+      ENTRY BLKIF
+      WRITE(NTARGT,'(5X,A)')             ' IF('
+      CALL ICRISN(1)
+      RETURN
+      ENTRY BLKTHN
+      WRITE(NTARGT,'(5X,A)')             '-)THEN'
+      CALL ICRISN(INCCON)
+      RETURN
+      ENTRY BLKELS
+      WRITE(NTARGT,'(5X,A)')             ' ELSE'
+      CALL ICRISN(1)
+      RETURN
+      ENTRY BLKCIF
+      WRITE(NTARGT,'(5X,A)')             ' ENDIF'
+      CALL ICRISN(1)
+      RETURN
+      ENTRY BLKEIF
+      WRITE(NTARGT,'(5X,A)')            ' ELSEIF('
+      CALL ICRISN(1)
+      RETURN
+17000 CONTINUE
+      WRITE(NTARGT,1) (LABL(I),I=1,NUM)
+    1 FORMAT((5X,'-',11(I5,:,',')))
+      CALL ICRISN(((NUM-1)/11+1)*INCCON)
+      GOTO IZZZ01
+      END
+      SUBROUTINE IFER
+      CHARACTER*1 LINE(80)
+      COMMON /BLINE/LINE
+      CHARACTER*1 LTU
+      RETURN
+      ENTRY DOIF
+      CALL BLKIF
+      ASSIGN 17001 TO IZZZ01
+      GOTO 17000
+17001 CONTINUE
+      RETURN
+      ENTRY THEN
+      CALL BLKTHN
+      RETURN
+      ENTRY ELSEIF
+      CALL BLKEIF
+      ASSIGN 17002 TO IZZZ01
+      GOTO 17000
+17002 CONTINUE
+      RETURN
+      ENTRY ELSE
+      CALL BLKELS
+      RETURN
+      ENTRY FIN
+      CALL BLKCIF
+      RETURN
+17000 CONTINUE
+         I=7
+16000 CONTINUE
+            I = I + 1
+      IF(.NOT.(
+     - ( LTU( LINE(I) ) .EQ. 'F' )
+     -))GOTO 16000
+16001 CONTINUE
+         I=I+1
+         CALL TXT(I)
+      GOTO IZZZ01
+      END
+      SUBROUTINE WHILER
+      SAVE
+      CHARACTER*1 LINE(80)
+      COMMON /BLINE/LINE
+      INTEGER  WHISTP
+      INTEGER  WHISTK(32)
+      INTEGER  NXTLAB
+      INTEGER I
+      CHARACTER*1 E
+      CHARACTER*1 LTU
+      DATA WHISTP /0/,NXTLAB /15000/,I /10099/
+      DATA E /'E'/
+      RETURN
+      ENTRY DOWHI
+         WHISTP = WHISTP + 1
+         WHISTK(WHISTP) = NXTLAB
+         CALL  LABEL(NXTLAB)
+         NXTLAB = NXTLAB + 1
+      CALL BLKIF
+      I=10
+16000 CONTINUE
+            I = I + 1
+      IF(.NOT.(
+     - ( LTU( LINE(I) ) .EQ. E )
+     -))GOTO 16000
+16001 CONTINUE
+      I=I+1
+      CALL TXT(I)
+      RETURN
+      ENTRY CWHILE
+      CALL BLKTHN
+         NXTLAB = NXTLAB + 1
+      RETURN
+      ENTRY LEAVE
+      ASSIGN 17001 TO IZZZ01
+      GOTO 17000
+17001 CONTINUE
+      CALL GOTO(I)
+      RETURN
+      ENTRY WREAD(LAB)
+      ASSIGN 17002 TO IZZZ01
+      GOTO 17000
+17002 CONTINUE
+         LAB = I
+      RETURN
+      ENTRY REPEAT
+         I = WHISTK(WHISTP)
+      CALL GOTO(I)
+         I = I + 1
+      CALL BLKCIF
+      CALL LABEL(I)
+         WHISTP = WHISTP - 1
+      RETURN
+      ENTRY WCLEAR
+         WHISTP = 0
+         NXTLAB = 15000
+      RETURN
+17000 CONTINUE
+      IF(
+     - WHISTP .LE. 0
+     -)THEN
+      CALL ERRMSG('NO WHILE CONSTRUCT TO LEAVE                       ')
+      ELSE
+            I = WHISTK(WHISTP) + 1
+      ENDIF
+      GOTO IZZZ01
+      END
+      SUBROUTINE CASER
+      SAVE
+      PARAMETER (NCASL=500)
+      PARAMETER (NSELCA=33)
+      CHARACTER*1 LINE(80)
+      COMMON /BLINE/LINE
+      COMMON /BPARM/NCASV(66)
+      INTEGER   NXTLAB
+      INTEGER  SELPTR
+      INTEGER  SELCAS(NSELCA)
+      INTEGER  CASLAB(NCASL)
+      INTEGER  LABMAX
+      INTEGER  FIRSTC
+      INTEGER LASTC
+      INTEGER  CASENT
+      INTEGER  VALMAX
+      INTEGER  OTHERL
+      INTEGER  REVERL
+      CHARACTER*1 BLANK
+      CHARACTER*1 EQUAL
+      CHARACTER*1 T
+      CHARACTER*1 SELVAR(6)
+      CHARACTER*1 LTU
+      DATA NXTLAB /14000/,SELPTR /1/
+      DATA SELCAS/NSELCA*1/,LABMAX /NCASL/,VALMAX /198/
+      DATA FIRSTC /1/,LASTC /1/
+      DATA EQUAL /'='/,T /'T'/,BLANK /' '/
+      DATA SELVAR /'I','Z','Z','Z','S','E'/
+      RETURN
+      ENTRY DOSEL
+      I=11
+16000 CONTINUE
+            I = I + 1
+      IF(.NOT.(
+     - ( LTU( LINE(I) ) .EQ. T )
+     -))GOTO 16000
+16001 CONTINUE
+      DO 13000 J=7,I
+      LINE(J)=BLANK
+13000 CONTINUE
+13001 CONTINUE
+      DO 13002 J=1,6
+      LINE(J+6)=SELVAR(J)
+13002 CONTINUE
+13003 CONTINUE
+         LINE(I + 1) = EQUAL
+         CALL CARD
+         OTHERL = NXTLAB
+         REVERL = OTHERL + 1
+         NXTLAB = NXTLAB + 3
+         SELPTR = SELPTR + 1
+         SELCAS(SELPTR) = LASTC
+         CASLAB(LASTC) = OTHERL
+         FIRSTC = LASTC
+         LASTC = LASTC + 1
+      RETURN
+      ENTRY CONSEL
+      CALL GOTO(OTHERL+2)
+      ASSIGN 17001 TO IZZZ01
+      GOTO 17000
+17001 CONTINUE
+      RETURN
+      ENTRY DOCASE
+      CALL GOTO(REVERL)
+      ASSIGN 17002 TO IZZZ01
+      GOTO 17000
+17002 CONTINUE
+      RETURN
+      ENTRY OTHER
+      CALL GOTO(REVERL)
+         I = LASTC - FIRSTC - 1
+      CALL LABEL(OTHERL+2)
+      IF(
+     - I .GT. 0
+     -)THEN
+      CALL CGOTO(I,CASLAB(FIRSTC+1))
+      ENDIF
+         CALL LABEL(OTHERL)
+      RETURN
+      ENTRY REVERT
+         CALL LABEL(REVERL)
+         LASTC = SELCAS(SELPTR)
+         SELPTR = SELPTR - 1
+         FIRSTC = SELCAS(SELPTR)
+         OTHERL = CASLAB(FIRSTC)
+         REVERL = OTHERL + 1
+      RETURN
+      ENTRY CCLEAR
+      DO 13004 I = 1 , SELPTR
+            SELCAS(I) = 1
+13004 CONTINUE
+13005 CONTINUE
+         SELPTR = 1
+         FIRSTC = 1
+         LASTC = 1
+         NXTLAB = 14000
+      RETURN
+17000 CONTINUE
+         J = 1
+15000 CONTINUE
+      IF(
+     - NCASV(J) .GT. 0
+     -)THEN
+            CASENT = FIRSTC + NCASV(J)
+      IF(
+     - CASENT .GE. LASTC
+     -)THEN
+      IF(
+     - NCASV(J) .GT. VALMAX
+     -)THEN
+      CALL ERRMSG('CASE VALUE GREATER THAN 198                       ')
+      GOTO 15001
+      ENDIF
+      IF(
+     - CASENT .GE. LABMAX
+     -)THEN
+      CALL ERRMSG('TOO MANY NESTED CASES; FATAL ERROR                ')
+      CALL ABORT
+      ENDIF
+      DO 13006 I = LASTC , CASENT
+                  CASLAB(I) = OTHERL
+13006 CONTINUE
+13007 CONTINUE
+               LASTC = CASENT + 1
+      ELSE
+      IF(
+     - CASLAB(CASENT) .NE. OTHERL
+     -)THEN
+      CALL ERRMSG('DUPLICATE CASE VALUE                              ')
+      GOTO 15001
+      ENDIF
+      ENDIF
+            CASLAB(CASENT) = NXTLAB
+            J = J + 1
+      GOTO 15000
+      ENDIF
+15001 CONTINUE
+         CALL  LABEL(NXTLAB)
+         NXTLAB = NXTLAB + 1
+      GOTO IZZZ01
+      END
+      SUBROUTINE UNTILR
+      SAVE
+      CHARACTER*1 LINE(80)
+      COMMON /BLINE/LINE
+      INTEGER UNTSTP
+      INTEGER UNTSTK(32)
+      INTEGER NXTLAB
+      INTEGER I
+      CHARACTER*1 L
+      CHARACTER*1 LTU
+      DATA UNTSTP /0/,NXTLAB /16000/,I /10099/
+      DATA L /'L'/
+      RETURN
+      ENTRY C UNTIL
+         UNTSTP = UNTSTP + 1
+         UNTSTK(UNTSTP) = NXTLAB
+         CALL LABEL(NXTLAB)
+         NXTLAB = NXTLAB + 2
+      RETURN
+      ENTRY XUNTIL
+      ASSIGN 17001 TO IZZZ01
+      GOTO 17000
+17001 CONTINUE
+      CALL GOTO(I)
+      RETURN
+      ENTRY UREAD(LAB)
+      ASSIGN 17002 TO IZZZ01
+      GOTO 17000
+17002 CONTINUE
+         LAB = I
+      RETURN
+      ENTRY DO UNTL
+      CALL IFNOT
+      I=10
+16000 CONTINUE
+            I = I + 1
+      IF(.NOT.(
+     - ( LTU( LINE(I) ) .EQ. L )
+     -))GOTO 16000
+16001 CONTINUE
+      I=I+1
+      CALL TXT(I)
+      RETURN
+      ENTRY CO UNTL
+      I=UNTSTK(UNTSTP)
+      CALL CLGOTO(I)
+      CALL LABEL(I+1)
+         UNTSTP = UNTSTP - 1
+      RETURN
+      ENTRY UCLEAR
+         UNTSTP = 0
+         NXTLAB = 16000
+      RETURN
+17000 CONTINUE
+      IF(
+     - UNTSTP .LE. 0
+     -)THEN
+      CALL ERRMSG('NO REPEAT CONSTRUCT TO LEAVE                      ')
+      ELSE
+            I = UNTSTK(UNTSTP) + 1
+      ENDIF
+      GOTO IZZZ01
+      END
+      SUBROUTINE LOOPER
+      SAVE
+      CHARACTER*1 LINE(80)
+      COMMON /BLINE/LINE
+      INTEGER FORPTR
+      INTEGER FORSTK(32)
+      CHARACTER*1 R
+      INTEGER NXTLAB
+      INTEGER I
+      CHARACTER*1 LTU
+      DATA FORPTR /0/,R /'R'/
+      DATA NXTLAB /13000/,I /10099/
+      RETURN
+      ENTRY FOR
+         FORPTR = FORPTR + 1
+         FORSTK(FORPTR) = NXTLAB
+      J=8
+16000 CONTINUE
+            J = J + 1
+      IF(.NOT.(
+     - ( LTU( LINE(J) ) .EQ. R )
+     -))GOTO 16000
+16001 CONTINUE
+         J = J + 1
+      CALL DOLP(NXTLAB,J)
+         NXTLAB = NXTLAB + 2
+      RETURN
+      ENTRY DOEXIT
+      ASSIGN 17001 TO IZZZ01
+      GOTO 17000
+17001 CONTINUE
+         CALL  GOTO(I)
+      RETURN
+      ENTRY LREAD(LAB)
+      ASSIGN 17002 TO IZZZ01
+      GOTO 17000
+17002 CONTINUE
+         LAB = I
+      RETURN
+      ENTRY NEXT
+         I = FORSTK(FORPTR)
+         CALL  LABEL(I)
+         I = I + 1
+         CALL  LABEL(I)
+         FORPTR = FORPTR - 1
+      RETURN
+      ENTRY LCLEAR
+         FORPTR = 0
+         NXTLAB = 13000
+      RETURN
+      ENTRY FORDEP(ID)
+      ID=FORPTR
+      RETURN
+17000 CONTINUE
+      IF(
+     - FORPTR .LE. 0
+     -)THEN
+      CALL ERRMSG('NO FOR CONSTRUCT TO LEAVE                         ')
+      ELSE
+            I = FORSTK(FORPTR) + 1
+      ENDIF
+      GOTO IZZZ01
+      END
+      SUBROUTINE PROCER
+      SAVE
+      PARAMETER (MAXPRC=99)
+      CHARACTER*1 LINE(80)
+      COMMON /BLINE/LINE
+      INTEGER NXTLAB
+      CHARACTER*1 PROD(31) ,PARM(31)
+      INTEGER   PROPTR
+      INTEGER   PROPRT
+      INTEGER   LASTPR
+      INTEGER   THISPR,IREV
+      INTEGER  CURPRC
+      CHARACTER*1 PRONAM(31,MAXPRC)
+      INTEGER PROLAB(MAXPRC)
+      INTEGER NOFREF(MAXPRC)
+      CHARACTER*1 XAR
+      CHARACTER*1 DIGIT(0:9)
+      CHARACTER*1 M,C,BLANK
+      CHARACTER*1 INAME(6)
+      INTEGER SAVEP,SAVE(7),PLAB
+      CHARACTER*1 LTU
+      LOGICAL OKAY
+      INTEGER KGB
+      DATA SAVEP /0/,SAVE /7*0/
+      DATA NXTLAB /17000/,PROD /31*' '/
+      DATA PROPTR /0/,PROPRT /0/,LASTPR /1/
+      DATA PROLAB /MAXPRC*0/,NOFREF /MAXPRC*0/
+      DATA INAME /'I','Z','Z','Z',' ',' '/
+      DATA DIGIT/'0','1','2','3','4','5','6','7','8','9'/
+      DATA M/'M'/,C/'C'/,BLANK/' '/
+      RETURN
+      ENTRY PFORM
+         XAR = M
+      ASSIGN 17001 TO IZZZ01
+      GOTO 17000
+17001 CONTINUE
+      ASSIGN 17003 TO IZZZ02
+      GOTO 17002
+17003 CONTINUE
+         INAME(5)=DIGIT(THISPR/10)
+         INAME(6)=DIGIT(MOD(THISPR,10))
+         CALL ASSGN(NXTLAB,INAME)
+         CALL  GOTO(IREV)
+         CALL  LABEL(NXTLAB)
+      ASSIGN 17005 TO IZZZ03
+      GOTO 17004
+17005 CONTINUE
+        CALL FORDEP(K)
+      RETURN
+      ENTRY PROC
+         XAR = C
+      ASSIGN 17006 TO IZZZ01
+      GOTO 17000
+17006 CONTINUE
+      ASSIGN 17007 TO IZZZ02
+      GOTO 17002
+17007 CONTINUE
+            CALL  LABEL(IREV)
+            PROLAB(THISPR) = - PROLAB(THISPR)
+         CURPRC = THISPR
+      RETURN
+      ENTRY PEND
+         THISPR = CURPRC
+      ASSIGN 17009 TO IZZZ04
+      GOTO 17008
+17009 CONTINUE
+      RETURN
+      ENTRY PREAD(PARM,PLAB)
+      DO 13000 K = 1 , 31
+            PROD(K) = PARM(K)
+13000 CONTINUE
+13001 CONTINUE
+      ASSIGN 17010 TO IZZZ02
+      GOTO 17002
+17010 CONTINUE
+         PLAB = IREV
+         INAME(5)=DIGIT(THISPR/10)
+         INAME(6)=DIGIT(MOD(THISPR,10))
+         CALL ASSGN(NXTLAB,INAME)
+         SAVEP = SAVEP + 1
+         SAVE(SAVEP) = NXTLAB
+      ASSIGN 17011 TO IZZZ03
+      GOTO 17004
+17011 CONTINUE
+      RETURN
+      ENTRY COREAD
+15000 CONTINUE
+      IF(
+     - SAVEP .GT. 0
+     -)THEN
+            CALL  LABEL(SAVE(SAVEP))
+            SAVEP = SAVEP - 1
+      GOTO 15000
+      ENDIF
+15001 CONTINUE
+      RETURN
+      ENTRY PCLEAR
+      PROPRT=1
+15002 CONTINUE
+      IF(
+     - PROPRT.LE.LASTPR
+     -)THEN
+      IF(
+     - PROLAB(PROPRT) .GT. 0 .AND. PROPRT .LT. LASTPR
+     -)THEN
+      CALL LABEL(PROLAB(PROPRT))
+               THISPR = PROPRT
+      ASSIGN 17012 TO IZZZ04
+      GOTO 17008
+17012 CONTINUE
+      CALL WARN(PRONAM(1,PROPRT)
+     -,'IS NOT DEFINED                                    ')
+      ENDIF
+            PROLAB(PROPRT) = 0
+      PROPRT=PROPRT+1
+      GOTO 15002
+      ENDIF
+15003 CONTINUE
+      NXTLAB=17000
+         LASTPR = 1
+      RETURN
+17002 CONTINUE
+      DO 13002  PROPTR = 1 , LASTPR
+      IF(
+     - PROPTR .EQ. LASTPR
+     -)THEN
+      IF(
+     - LASTPR.GT.MAXPRC
+     -)THEN
+      CALL ERRMSG('TOO MANY PROCS                                    ')
+                CALL ABORT
+      ENDIF
+              IREV = NXTLAB
+              NXTLAB = NXTLAB + 1
+      DO 13004  K = 1 , 31
+                PRONAM(K,PROPTR) = PROD(K)
+13004 CONTINUE
+13005 CONTINUE
+              PROLAB(PROPTR) = IREV
+              LASTPR = LASTPR + 1
+              THISPR = PROPTR
+      GOTO 13003
+      ELSE
+      OKAY=.TRUE.
+      DO 13006 KGB=1,31
+      OKAY=(OKAY.AND.(PRONAM(KGB,PROPTR).EQ.PROD(KGB)))
+13006 CONTINUE
+13007 CONTINUE
+      IF(
+     - (OKAY)
+     -)THEN
+             IREV = IABS(PROLAB(PROPTR))
+      IF(
+     - PROLAB(PROPTR) .LT. 0
+     -)THEN
+      CALL ERRMSG('PROC REFERENCED AFTER ITS DEFINITION              ')
+      ENDIF
+             THISPR = PROPTR
+      GOTO 13003
+      ENDIF
+      ENDIF
+13002 CONTINUE
+13003 CONTINUE
+      GOTO IZZZ02
+17004 CONTINUE
+         NOFREF(THISPR) = NOFREF(THISPR) + 1
+         NXTLAB = NXTLAB + 1
+      GOTO IZZZ03
+17008 CONTINUE
+         IREV = NOFREF(THISPR)
+      IF(
+     - IREV .LE. 0
+     -)THEN
+      CALL WARN(PRONAM(1,THISPR)
+     -,'IS NOT REFERENCED                                 ')
+      ELSE
+      INAME(5)=DIGIT(THISPR/10)
+      INAME(6)=DIGIT(MOD(THISPR,10))
+      CALL AGOTO(INAME)
+      ENDIF
+         NOFREF(THISPR) = 0
+      GOTO IZZZ04
+17000 CONTINUE
+      J=9
+16000 CONTINUE
+      J=J+1
+      IF(.NOT.(
+     - ( LTU( LINE(J) ) .EQ. XAR )
+     -))GOTO 16000
+16001 CONTINUE
+      J=J+1
+      DO 13008 I = 1 , 31
+            PROD(I) = BLANK
+13008 CONTINUE
+13009 CONTINUE
+         I = 0
+      DO 13010 K=J,72
+      IF(
+     - LINE(K).NE.BLANK
+     -)THEN
+               I = I + 1
+      IF(
+     - I .GT. 31
+     -)THEN
+      CALL ERRMSG('PROC NAME TOO LONG                                ')
+      GOTO 13011
+      ELSE
+                     PROD(I) = LTU(LINE(K))
+      ENDIF
+      ENDIF
+13010 CONTINUE
+13011 CONTINUE
+      GOTO IZZZ01
+      END
+       SUBROUTINE RTAB(LINE,NCH)
+      CHARACTER*1 TAB,BLANK
+       PARAMETER (LB=80,ITAB=9,NTAB=8,BLANK=' ')
+       CHARACTER*1 LINE(NCH),TBUF(LB)
+      CALL CVIC(ITAB,TAB)
+      IF(
+     - NCH.GT.LB
+     -)THEN
+       STOP 4711
+      ELSE
+       II=0
+       IO=0
+16000 CONTINUE
+       II=II+1
+      IF(
+     - LINE(II).EQ.TAB
+     -)THEN
+       NSP=NTAB-MOD(IO,NTAB)
+      DO 13000 I=1,NSP
+       IO=IO+1
+       TBUF(IO)=BLANK
+      IF(
+     - IO.EQ.NCH
+     -)THEN
+      GOTO 16001
+      ENDIF
+13000 CONTINUE
+13001 CONTINUE
+      ELSE
+       IO=IO+1
+       TBUF(IO)=LINE(II)
+      ENDIF
+      IF(.NOT.(
+     - IO.EQ.NCH
+     -))GOTO 16000
+16001 CONTINUE
+      DO 13002 I=1,NCH
+       LINE(I)=TBUF(I)
+13002 CONTINUE
+13003 CONTINUE
+      ENDIF
+       RETURN
+      END
+      SUBROUTINE CVIC(I,C)
+      INTEGER I
+      CHARACTER*1 C
+      C=CHAR(I)
+      RETURN
+      END
+      SUBROUTINE ABORT
+      STOP 999
+      END
+      CHARACTER*1 FUNCTION LTU( CH )
+      CHARACTER*1  CH
+      IPOS = INDEX('abcdefghijklmnopqrstuvwxyz',CH)
+      IZZZSE=IPOS
+      GOTO 14002
+14003 CONTINUE
+        LTU = 'A'
+      GOTO 14001
+14004 CONTINUE
+        LTU = 'B'
+      GOTO 14001
+14005 CONTINUE
+        LTU = 'C'
+      GOTO 14001
+14006 CONTINUE
+        LTU = 'D'
+      GOTO 14001
+14007 CONTINUE
+        LTU = 'E'
+      GOTO 14001
+14008 CONTINUE
+        LTU = 'F'
+      GOTO 14001
+14009 CONTINUE
+        LTU = 'G'
+      GOTO 14001
+14010 CONTINUE
+        LTU = 'H'
+      GOTO 14001
+14011 CONTINUE
+        LTU = 'I'
+      GOTO 14001
+14012 CONTINUE
+        LTU = 'J'
+      GOTO 14001
+14013 CONTINUE
+        LTU = 'K'
+      GOTO 14001
+14014 CONTINUE
+        LTU = 'L'
+      GOTO 14001
+14015 CONTINUE
+        LTU = 'M'
+      GOTO 14001
+14016 CONTINUE
+        LTU = 'N'
+      GOTO 14001
+14017 CONTINUE
+        LTU = 'O'
+      GOTO 14001
+14018 CONTINUE
+        LTU = 'P'
+      GOTO 14001
+14019 CONTINUE
+        LTU = 'Q'
+      GOTO 14001
+14020 CONTINUE
+        LTU = 'R'
+      GOTO 14001
+14021 CONTINUE
+        LTU = 'S'
+      GOTO 14001
+14022 CONTINUE
+        LTU = 'T'
+      GOTO 14001
+14023 CONTINUE
+        LTU = 'U'
+      GOTO 14001
+14024 CONTINUE
+        LTU = 'V'
+      GOTO 14001
+14025 CONTINUE
+        LTU = 'W'
+      GOTO 14001
+14026 CONTINUE
+        LTU = 'X'
+      GOTO 14001
+14027 CONTINUE
+        LTU = 'Y'
+      GOTO 14001
+14028 CONTINUE
+        LTU = 'Z'
+      GOTO 14001
+14002 CONTINUE
+      GOTO(
+     -14003,14004,14005,14006,14007,14008,14009,14010,14011,14012,14013,
+     -14014,14015,14016,14017,14018,14019,14020,14021,14022,14023,14024,
+     -14025,14026,14027,14028
+     -), IZZZSE
+14000 CONTINUE
+        LTU=CH
+14001 CONTINUE
+      RETURN
+      END
+      INTEGER FUNCTION NELC(A,N)
+      CHARACTER*1 A(*)
+      INTEGER     N,NEL
+      NEL=N
+15000 CONTINUE
+      IF(
+     - (NEL.GT.0)
+     -)THEN
+      IF(
+     - (A(NEL).EQ.' ')
+     -)THEN
+          NEL=NEL-1
+      ELSE
+      GOTO 15001
+      ENDIF
+      GOTO 15000
+      ENDIF
+15001 CONTINUE
+      NELC=NEL
+      RETURN
+      END
+#<
+
+#!ENDIF

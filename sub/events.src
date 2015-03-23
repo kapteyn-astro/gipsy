@@ -1,0 +1,905 @@
+events.src
+
+        Copyright (c) Kapteyn Laboratorium Groningen 1999
+        All Rights Reserved.
+
+Name:         events.src
+Creator:      terlouw
+Host:         magellan
+Date:         Aug 4, 1999
+Contents:     Makeevents AttachXt.dc2 DescheduleAll.dc3 ScheduleTimer.dc3 ConnectTk.dc3
+              MainLoop.dc2 ScheduleWrite.dc3 Deschedule.dc3 ScheduleRead.dc3 ScheduleX.dc2
+              events.dc3 events.h eventsxt.h eventcom.H events.c
+              eventsxt.c BreakMainLoop.dc2
+
+#>            Makeevents
+#
+# Makeevents
+#
+# Utility makefile for generating events.src :
+#       make -f Makeevents pack
+
+SHELL   = /bin/sh
+
+pack::
+	$$gip_sys/pack.csh events.src Makeevents \
+	AttachXt.dc2       DescheduleAll.dc3  ScheduleTimer.dc3 \
+	ConnectTk.dc3      MainLoop.dc2       ScheduleWrite.dc3 \
+	Deschedule.dc3     ScheduleRead.dc3   ScheduleX.dc2 \
+	events.dc3         events.h           eventsxt.h \
+	eventcom.H         events.c           eventsxt.c \
+	BreakMainLoop.dc2
+#<
+
+#>            AttachXt.dc2
+Function:     AttachXt
+
+Purpose:      Delegate event handling to X Toolkit.
+
+Category:     SYSTEM
+
+File:         events.src
+
+Author:       J.P. Terlouw
+
+Use:          #include "eventsxt.h"
+              AttachXt(app_context);
+
+              XtAppContext *app_context - an X Toolkit application context.
+
+Description:  AttachXt delegates event handling and registration of
+              functions to the corresponding Xt routines. It should be
+              called before any of the other routines in this source.
+              (See list of related documents)
+              When AttachXt has been called, MainLoop can be called
+              instead of XtAppMainLoop.
+
+Related Docs: events.dc3, ScheduleX.dc2, ScheduleRead.dc3, ScheduleWrite.dc3,
+              ScheduleTimer.dc3, Deschedule.dc3, DescheduleAll.dc3,
+              MainLoop.dc2.
+
+Updates:      Apr  8, 1997: JPT Document created.
+
+#<
+
+#>            DescheduleAll.dc3
+Function:     DescheduleAll
+
+Purpose:      De-register all functions registered previously by one of the
+              functions ScheduleRead, ScheduleWrite or ScheduleTimer.
+
+Category:     SYSTEM
+
+File:         events.src
+
+Author:       J.P. Terlouw
+
+Use:          #include "events.h"
+              DescheduleAll();
+
+Description:  DescheduleAll removes all registrations of functions which have
+              been registered by one of the routines ScheduleRead(),
+              ScheduleWrite() or ScheduleTimer().
+              This normally causes MainLoop to return, except in the case
+              when event handling has been delegated to the X Toolkit by
+              calling AttachXt.
+
+Related Docs: events.dc3, ScheduleRead.dc3, ScheduleWrite.dc3,
+              ScheduleTimer.dc3, Deschedule.dc3, DescheduleAll.dc3,
+              MainLoop.dc2, AttachXt.dc2.
+
+Updates:      Apr 8, 1997: JPT Document created.
+#<
+
+#>            ScheduleTimer.dc3
+Function:     ScheduleTimer
+
+Purpose:      Register a function to be called  whenever a specified time
+              interval has elapsed.
+
+Category:     SYSTEM
+
+File:         events.src
+
+Author:       J.P. Terlouw
+
+Use:          #include "events.h"
+              ident id;
+              id = ScheduleTimer(proc, interval, arg);
+
+              void(*proc)()   -  pointer to function.
+              int interval    -  time interval in milliseconds.
+              void *arg       -  'client' data
+
+Description:  ScheduleTimer registers a function to be called by MainLoop
+              whenever a specified interval in milliseconds has expired.
+              Until it is descheduled, 'proc' will be called every 'interval'
+              milliseconds. In the call 'arg' is passed as an argument.
+              The return value is a unique identification code corresponding
+              with the registration, which will also be passed as an
+              argument to 'proc'.
+ 
+              The prototype of 'proc' is:
+                  void proc(ident id, void arg);
+
+              The header file contains a number of convenient
+              definitions for units of time, e.g., "5 MINUTES" is equivalent
+              to 300000 milliseconds. See events.h.
+
+Warning:      this software resembles the old Patriot missile control software: 
+              24 days, 20 hours, 31 minutes and 23.647 seconds after starting
+              MainLoop, the internal timer will overflow.
+
+
+Related Docs: events.dc3, ScheduleWrite.dc3, ScheduleRead.dc3, Deschedule.dc3,
+              DescheduleAll.dc3, MainLoop.dc2, AttachXt.dc2.
+
+Updates:      Apr 8, 1997: JPT Document created.
+#<
+
+#>            ConnectTk.dc3
+Function:     ConnectTk
+
+Purpose:      Connect toolkit to event handling.
+
+Category:     SYSTEM
+
+File:         events.src
+
+Author:       J.P. Terlouw
+
+Use:          Private. Not to be called from outside events.src.
+
+Updates:      Apr 8, 1997: JPT Document created.
+#<
+
+#>            MainLoop.dc2
+Function:     MainLoop
+
+Purpose:      Dispatcher for event-driven programs.
+
+Category:     SYSTEM
+
+File:         events.src
+
+Author:       J.P. Terlouw
+
+Use:          #include "events.h"
+              MainLoop();
+
+Description:  MainLoop serves as the nucleus of event-driven programs.
+              Whenever necessary it calls the functions which have been
+              registered before by ScheduleRead(), ScheduleWrite() or 
+              ScheduleTimer().
+              Normally it returns when all registered functions have been
+              descheduled. This is not the case when event handling has been
+              delegated to the X Toolkit by calling AttachXt. In this case
+              MainLoop() can be forced to return when BreakMainLoop() is
+              called. This is only useful when MainLoop() was called
+              recursively.
+              
+
+Related Docs: events.dc3, ScheduleRead.dc3, ScheduleWrite.dc3,
+              ScheduleTimer.dc3, Deschedule.dc3, DescheduleAll.dc3,
+              AttachXt.dc2, BreakMainLoop.dc2.
+
+Updates:      Apr 8, 1997: JPT Document created.
+#<
+
+#>            ScheduleWrite.dc3
+Function:     ScheduleWrite
+
+Purpose:      Register a function to be called  whenever data can be written
+              to a specified file descriptor.
+
+Category:     SYSTEM
+
+File:         events.src
+
+Author:       J.P. Terlouw
+
+Use:          #include "events.h"
+              ident id;
+              id = ScheduleWrite(proc, fd, arg);
+
+              void(*proc)()   -  pointer to function.
+              int fd          -  file descriptor.
+              void *arg       -  'client' data
+
+Description:  ScheduleWrite registers a function to be called by MainLoop
+              whenever data can be written to file descriptor 'fd'.
+              In this call, 'arg' will be passed to 'proc'.
+              The return value is a unique identification code corresponding
+              with the registration, which will also be passed as an
+              argument to 'proc'.
+
+              The prototype of 'proc' is:
+                  void proc(ident id, int fd, void *arg);
+
+              This function can be used when the calling program should not
+              "block" when data cannot immediately be written, e.g., when
+              writing a large amount of data to a socket when it is not sure
+              that the receiving process immediately can accept it.
+
+Related Docs: events.dc3, ScheduleRead.dc3, ScheduleTimer.dc3, Deschedule.dc3,
+              DescheduleAll.dc3, MainLoop.dc2, AttachXt.dc2.
+
+Updates:      Apr 8, 1997: JPT Document created.
+#<
+
+#>            Deschedule.dc3
+Function:     Deschedule
+
+Purpose:      De-register a function registered previously by one of the
+              functions ScheduleRead, ScheduleWrite or ScheduleTimer.
+
+Category:     SYSTEM
+
+File:         events.src
+
+Author:       J.P. Terlouw
+
+Use:          #include "events.h"
+              ident id;
+              Deschedule(&id);
+
+Description:  The function associated with 'id' is descheduled and 'id' is
+              set to zero. (Note that the argument is a pointer to 'id'.)
+
+Related Docs: events.h ScheduleRead.dc3, ScheduleWrite.dc3, ScheduleTimer.dc3,
+              DescheduleAll.dc3, MainLoop.dc2, AttachXt.dc2.
+
+Updates:      Apr 8, 1997: JPT Document created.
+#<
+
+#>            ScheduleRead.dc3
+Function:     ScheduleRead
+
+Purpose:      Register a function to be called  whenever data is available
+              on a specified file descriptor.
+
+Category:     SYSTEM
+
+File:         events.src
+
+Author:       J.P. Terlouw
+
+Use:          #include "events.h"
+              ident id;
+              id = ScheduleRead(proc, fd, arg);
+
+              void(*proc)()   -  pointer to function.
+              int fd          -  file descriptor.
+              void *arg       -  'client' data
+
+Description:  ScheduleRead registers a function to be called by MainLoop
+              whenever data can be read from file descriptor 'fd'.
+              In this call, 'arg' will be passed to 'proc'.
+              The return value is a unique identification code corresponding
+              with the registration, which will also be passed as an
+              argument to 'proc'.
+
+              The prototype of 'proc' is:
+                  void proc(ident id, int fd, void *arg);
+
+
+Related Docs: events.dc3, ScheduleWrite.dc3, ScheduleTimer.dc3, Deschedule.dc3,
+              DescheduleAll.dc3, MainLoop.dc2, AttachXt.dc2.
+
+Updates:      Apr 8, 1997: JPT Document created.
+#<
+
+#>            ScheduleX.dc2
+Function:     ScheduleX
+
+Purpose:      Register or de-register function receiving X events.
+
+Category:     SYSTEM
+
+File:         events.src
+
+Author:       J.P. Terlouw
+
+Use:          #include "eventsxt.h"
+              ScheduleX(handler);
+
+              handler  -  the function to receive the events, or NULL if
+                          a function is to be de-registered.
+                          Prototype: void handler(XEvent *event);
+
+Description:  This function enables the programmer to receive X11 events
+              which are not dispatched by the X Toolkit, e.g. events
+              from a separate window not managed by Xt.
+
+Related Docs: events.dc3, AttachXt.dc2, ScheduleRead.dc3, ScheduleWrite.dc3,
+              ScheduleTimer.dc3, Deschedule.dc3, DescheduleAll.dc3,
+              MainLoop.dc2.
+
+Updates:      Apr 22, 1997: JPT Document created.
+
+#<
+
+#>            events.dc3
+Document:     events
+
+Purpose:      Describes routines for event-driven programs.
+
+Category:     SYSTEM
+
+File:         events.src
+
+Author:       J.P. Terlouw
+
+Description:  The eventhandler routines allow a program to specify ("schedule")
+              one or more functions to be called when a specified event
+              occurs. An event can be one of the following:
+              - data can be read from a specified file descriptor;
+              - data can be written to a specified file descriptor;
+              - a specified period of time has elapsed.
+
+              The following elementary routines are available:
+
+                ScheduleRead  -  Schedule function for reading. 
+                ScheduleWrite -  Schedule function for writing.
+                ScheduleTimer -  Schedule function to be called periodically.
+                Deschedule    -  Deschedule function.
+                DescheduleAll -  Deschedule all scheduled functions.
+                MainLoop      -  Wait for events and call scheduled functions.
+                BreakMainLoop -  Terminate current MainLoop invocation.
+
+              The following function is related to the X toolkit:
+
+                AttachXt      -  Required when program uses the X toolkit.
+
+              Each routine is described in the appropriate document.
+
+Example:      The following program writes every second a dash to the screen.
+              It does this 10 times. During the same time it also reads
+              characters from the keyboard and writes these to the screen.
+              When a dot has been typed, it stops looking for more characters.
+
+          #include "stddef.h"
+          #include "stdio.h"
+          #include <fcntl.h>   
+          #include <sgtty.h>
+          #include "events.h"
+          
+          void timefun(ident id, void *arg)
+          {
+             static int count=10;
+             
+             write(1,(char*)arg,1);
+             count--;
+             if (!count) Deschedule(&id);   /* deschedule after 10 dashes */
+          }
+
+          void readfun(ident id, int fd, void *arg)
+          {
+             char c;
+              
+             read(0,&c,1);
+             if (c=='.') Deschedule(&id);   /* deschedule when dot seen   */
+             write(1,&c,1);                 /* echo character read        */
+          }
+          
+          void main(void)
+          {
+             struct sgttyb tt;
+          
+             ioctl(0,TIOCGETP,&tt);
+             tt.sg_flags |=  RAW;
+             tt.sg_flags &= ~ECHO;
+             ioctl(0,TIOCSETP,&tt);       /* set modes for keyboard input  */
+          
+             (void)ScheduleRead(readfun, 0, NULL);     /* read from stdin  */
+             (void)ScheduleTimer(timefun, 1000, "-");  /* every 1000 ms    */
+             MainLoop();                               /* handle events    */
+             write(1,"\n",1); /* all functions descheduled - MainLoop returns */
+          }
+
+Related Docs: ScheduleRead.dc3, ScheduleWrite.dc3, ScheduleTimer.dc3,
+              Deschedule.dc3, DescheduleAll.dc3, MainLoop.dc2
+              BreakMainLoop.dc2, AttachXt.dc2, ScheduleX.dc2
+
+Still to do:  This software would also be a logical place to handle signals
+              and exceptional conditions on file descriptors.
+
+Updates:      Apr  8, 1997: JPT, Document created.
+              Apr 22, 1997: JPT, ScheduleX added.
+              Aug  4, 1999: JPT, BreakMainLoop added.
+#<
+
+#>            events.h
+#if !defined(_events_h_)
+#define _events_h_
+
+#define MS        *1
+#define SECONDS   *1000 MS
+#define MINUTES   *60 SECONDS
+#define HOURS     *60 MINUTES
+#define DAYS      *24 HOURS
+#define WEEKS     *7  DAYS  
+#define SECOND SECONDS
+#define MINUTE MINUTES
+#define HOUR   HOURS
+#define DAY    DAYS
+#define WEEK   WEEKS
+
+typedef void *ident;
+extern void  MainLoop(void);
+extern ident ScheduleRead(void(*)(),int,void*);
+extern ident ScheduleWrite(void(*)(),int,void*);
+extern ident ScheduleTimer(void(*)(),int,void*);
+extern void  Deschedule(ident*);
+extern void  DescheduleAll(void);
+extern void  BreakMainLoop(void);
+#endif
+#<
+
+#>            eventsxt.h
+#if !defined(_eventsxt_h_)
+#define _eventsxt_h_
+#include "events.h"
+#include <X11/Intrinsic.h>
+extern void AttachXt(XtAppContext *app_context);
+extern void ScheduleX(void(*)());
+#endif
+#<
+
+#>            eventcom.H
+#define INVALID 0
+#define READ    1
+#define WRITE   2
+#define TIMER   3
+
+#define New(type) ((type *)calloc(1,sizeof(type)))
+#define NNew(n,type) ((type *)calloc(n,sizeof(type)))
+#define Delete(x)  {free(x); x=NULL;}
+
+#define Milliseconds(x) (x.tv_sec*1000+x.tv_usec/1000)
+
+typedef struct _Callback {
+   unsigned long tkident;             /* (X-) toolkit-supplied ident */
+   int       type;                    /* service type */
+   int       fd;                      /* file descriptor */
+   int       interval;                /* interval for periodic tasks (ms) */
+   int       calltime;                /* 'absolute' time for next call (ms) */
+   void     (*proc)();                /* procedure pointer */
+   void      *arg;                    /* argument to procedure */
+   struct _Callback *next;            /* link to next entry */
+} *Callback, _Callback;
+
+typedef struct {
+   void (*schedule)(Callback cb);
+   void (*deschedule)(Callback cb);
+   void (*mainloop)(void);
+} *TkConnection, _TkConnection;
+
+extern void ConnectTk(TkConnection);
+#<
+
+#>            events.c
+/* events.c
+                              COPYRIGHT (c) 1997
+                        Kapteyn Astronomical Institute
+         University of Groningen  -  9700 AV Groningen, The Netherlands
+
+Author: J.P. Terlouw.
+*/
+#include "stddef.h"
+
+#include <sys/types.h>
+#if     defined(__aix__)
+#include <sys/select.h>
+#endif
+#include <sys/time.h>
+
+#include "events.h"
+#include "eventcom.H"
+
+#define PERIOD (1 WEEK)                                    /* default delay */
+
+static Callback cb_active=NULL;
+static fd_set readfds, writefds;
+static int maxfds=0;
+static int n_active=0;
+static int delay=PERIOD;
+static int secstart=0;
+static TkConnection connection=NULL;           /* connection to (X-) toolkit */
+
+static ident Schedule(int type, void(*proc)(), int fd, int interval, void *arg);
+
+/* ========================================================================== */
+/*                            ConnectTk                                       */
+/* -------------------------------------------------------------------------- */
+/*
+ *  ConnectTk registers a toolkit-provided struct containing pointers to
+ *  functions which take over the responsibility of scheduling timer actions
+ *  and actions on file descriptors. It is currently only used to connect
+ *  the X-toolkit to Mainloop.
+ */
+extern void ConnectTk(TkConnection c)
+{
+   connection = c;
+}
+
+/* ========================================================================== */
+/*                             MainLoop                                       */
+/* -------------------------------------------------------------------------- */
+/*
+ *  MainLoop serves as the nucleus of event-driven programs.
+ *  Whenever necessary it calls the functions which have been registered
+ *  before by ScheduleRead(), ScheduleWrite() or ScheduleTimer().
+ */
+extern void MainLoop(void)
+{
+   Callback cb, *cbp, *next;
+   struct timeval timeout, now;
+   int    msnow;
+
+   if (connection) {
+      connection->mainloop();
+      return;
+   }
+
+   while (n_active) {
+      timeout.tv_sec  = delay/1000;
+      timeout.tv_usec = delay%1000*1000;
+      while (select(maxfds+1,(void*)&readfds,
+                             (void*)&writefds,NULL,&timeout)==-1) {;}
+      delay = PERIOD;                          /* set next timeout to maximum */
+      for (cbp=&cb_active; *cbp; cbp=next) {
+         cb = *cbp;
+         next = &cb->next;
+
+         if (cb->type==INVALID) {
+            next = cbp;                        /* invalidated block; delete */
+            *cbp = cb->next;
+            Delete(cb);
+
+         } else if (cb->type==READ) {
+            if (FD_ISSET(cb->fd,&readfds)) {
+               cb->proc(cb,cb->fd,cb->arg);    /* file descriptor callback */
+            }
+            if (cb->type!=INVALID) 
+               FD_SET(cb->fd,&readfds);           /* re-set if still valid */
+
+         } else if (cb->type==WRITE) {
+            if (FD_ISSET(cb->fd,&writefds)) {
+               cb->proc(cb,cb->fd,cb->arg);    /* file descriptor callback */
+            }
+            if (cb->type!=INVALID) 
+               FD_SET(cb->fd,&writefds);          /* re-set if still valid */
+
+         } else {
+            gettimeofday(&now,NULL);
+            now.tv_sec -= secstart;            /* avoid overflow in ms int's  */
+            msnow = Milliseconds(now);
+            if (msnow >= cb->calltime) {
+               cb->proc(cb,cb->arg);                     /* timer callback */
+               if (cb->type!=INVALID) {
+                  cb->calltime = msnow + cb->interval;
+                  if (delay > cb->interval) delay = cb->interval;    /* trim */
+               }
+            } else if (delay > (cb->calltime-msnow)) {
+               delay = cb->calltime - msnow;                         /* trim */
+            }
+         }
+      }
+   }
+}
+
+/* ========================================================================== */
+/*                            ScheduleRead                                    */
+/* -------------------------------------------------------------------------- */
+/*
+ *  ScheduleRead registers a function to be called by MainLoop whenever
+ *  data can be read from file descriptor 'fd'. In this call, 'arg' will be
+ *  passed to 'proc'. The return value is a unique identification code
+ *  corresponding with the registration, which will also be passed as an
+ *  argument to 'proc'.
+ *
+ *  The prototype of 'proc' is:
+ *      void proc(ident id, int fd, void *arg);
+ */
+extern ident ScheduleRead(void(*proc)(), int fd, void *arg)
+{
+   return Schedule(READ,proc,fd,0,arg);
+}
+
+/* ========================================================================== */
+/*                            ScheduleWrite                                   */
+/* -------------------------------------------------------------------------- */
+/*
+ *  ScheduleWrite registers a function to be called by MainLoop whenever
+ *  data can be written to file descriptor 'fd'. In this call, 'arg' will be
+ *  passed to 'proc'. The return value is a unique identification code
+ *  corresponding with the registration, which will also be passed as an
+ *  argument to 'proc'.
+ *
+ *  The prototype of 'proc' is:
+ *      void proc(ident id, int fd, void *arg);
+ */
+extern ident ScheduleWrite(void(*proc)(), int fd, void *arg)
+{
+   return Schedule(WRITE,proc,fd,0,arg);
+}
+
+/* ========================================================================== */
+/*                            ScheduleTimer                                   */
+/* -------------------------------------------------------------------------- */
+/*  ScheduleTimer registers a function to be called by MainLoop whenever
+ *  a specified interval in milliseconds has expired. Until it is descheduled,
+ *  'proc' will be called every 'interval' milliseconds. In the call 'arg' is
+ *  passed as an argument. The return value is a unique identification code
+ *  corresponding with the registration, which will also be passed as an
+ *  argument to 'proc'.
+ *
+ *  The prototype of 'proc' is:
+ *      void proc(ident id, void *arg);
+ *
+ *  WARNING: this software resembles the old Patriot missile control software:
+ *  24 days, 20 hours, 31 minutes and 23.647 seconds after starting MainLoop,
+ *  the internal timer will overflow.
+ */
+extern ident ScheduleTimer(void(*proc)(), int interval, void *arg)
+{
+   return Schedule(TIMER,proc,0,interval,arg);
+}
+
+/* ========================================================================== */
+/*                            Deschedule                                      */
+/* -------------------------------------------------------------------------- */
+/*  Deschedule removes the registration of a function which has been
+ *  registered by one of the routines ScheduleRead(), ScheduleWrite() or
+ *  ScheduleTimer(). The ident to which the argument points is set to NULL.
+ */
+extern void Deschedule(ident *id)
+{
+   Callback cb=(Callback)*id;                /* convert id to callback pointer*/
+
+   if (!*id) return;                         /* not scheduled: no-op          */
+   *id = NULL;
+   if (cb->type==READ) {
+      FD_CLR(cb->fd,&readfds);               /* clear fd flag                 */
+   }else if (cb->type==WRITE) {
+      FD_CLR(cb->fd,&writefds);              /* clear fd flag                 */
+   }
+   if (connection) {
+      connection->deschedule(cb);
+      Delete(cb);
+      /* The callback block is deleted immediately. This is possible because
+       * there is no linked list traversal when a toolkit is connected.
+       */
+   } else {
+      cb->type = INVALID;                    /* invalidate for MainLoop       */
+   }
+   n_active--;
+}
+
+/* ========================================================================== */
+/*                           DescheduleAll                                    */
+/* -------------------------------------------------------------------------- */
+/*  DescheduleAll removes all registrations of functions which have been
+ *  registered by one of the routines ScheduleRead(), ScheduleWrite() or
+ *  ScheduleTimer(). This causes MainLoop to return.
+ */
+extern void DescheduleAll(void)
+{
+   Callback cb;
+
+   if (connection) return;                  /* no-op when Xt is used */
+   
+   for (cb=cb_active; cb; cb=cb->next) {
+      if (cb->type != INVALID) {
+         if (cb->type==READ) {
+            FD_CLR(cb->fd,&readfds);
+         }else if (cb->type==WRITE) {
+            FD_CLR(cb->fd,&writefds);
+         }
+         cb->type = INVALID;
+         n_active--;
+      }
+   }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 Schedule                                   */
+/* -------------------------------------------------------------------------- */
+/*  Schedule() registers any kind of function. Its first argument is the   
+ *  kind of registration that is wanted.
+ */
+static ident Schedule(int type, void(*proc)(), int fd, int interval, void *arg)
+{
+   Callback cb;
+
+   cb = New(_Callback);          /* allocate a new entry */
+
+   cb->next= cb_active;
+   cb_active = cb;
+   cb->type  = type;
+   cb->fd    = fd;               /* store parameters */
+   cb->interval = interval;
+   cb->proc = proc;
+   cb->arg = arg;
+   if (fd>maxfds) maxfds=fd;     /* update maximum file descriptor value */
+   if (type==READ) {
+      FD_SET(fd,&readfds);       /* set flag in select() structure */
+   } else if (type==WRITE) {
+      FD_SET(fd,&writefds);
+   } else {
+      struct timeval  now;
+      gettimeofday(&now,NULL);
+      if (!secstart) {
+         secstart = now.tv_sec;
+      }
+      now.tv_sec -= secstart;
+      cb->calltime = Milliseconds(now) + interval;
+      if (delay>interval) delay = interval;
+   }
+   n_active++;
+   if (connection) connection->schedule(cb);
+   return (ident)cb;             /* use pointer to callback entry as ID */
+}
+#<
+
+#>            eventsxt.c
+/* eventsxt.c -X
+                              COPYRIGHT (c) 1997
+                        Kapteyn Astronomical Institute
+         University of Groningen  -  9700 AV Groningen, The Netherlands
+*/
+
+#include <X11/Intrinsic.h>
+#include "eventcom.H"
+#include "eventsxt.h"
+
+static XtAppContext *context;
+static void (*XHandler)()=NULL;  /* handler for non-Xt events */
+static int depth=0;              /* mainloop recursion depth */
+
+/* -------------------------------------------------------------------------- */
+/*                                 icbproc                                    */
+/* -------------------------------------------------------------------------- */
+/*  X Toolkit input callback function.
+ */
+static void icbproc(XtPointer arg, int *fd, XtInputId *id)
+{
+   Callback cb=(Callback)arg;
+    
+   cb->proc(cb,cb->fd,cb->arg);
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 tcbproc                                    */
+/* -------------------------------------------------------------------------- */
+/*  X Toolkit timeout callback function.
+ */
+static void tcbproc(XtPointer arg, XtIntervalId *id)
+{
+   Callback cb=(Callback)arg;
+
+   cb->tkident = XtAppAddTimeOut(*context, cb->interval, tcbproc, arg);
+   cb->proc(cb, cb->arg);
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 schedule                                   */
+/* -------------------------------------------------------------------------- */
+/*  X Toolkit compatible replacement for mainloop schedule function.
+ */
+static void schedule(Callback cb)
+{
+   if (cb->type==READ) {
+      cb->tkident = XtAppAddInput(*context, cb->fd, (XtPointer)XtInputReadMask,
+                                  icbproc, (XtPointer)cb);
+   } else if (cb->type==WRITE) {
+      cb->tkident = XtAppAddInput(*context, cb->fd, (XtPointer)XtInputWriteMask,
+                                  icbproc, (XtPointer)cb);
+   } else {
+      cb->tkident = XtAppAddTimeOut(*context, cb->interval,
+                                    tcbproc, (XtPointer)cb);
+   }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 deschedule                                 */
+/* -------------------------------------------------------------------------- */
+/*  X Toolkit compatible replacement for mainloop deschedule function.
+ */
+static void deschedule(Callback cb)
+{
+   if (cb->type==TIMER) {
+      XtRemoveTimeOut(cb->tkident);
+   } else {
+      XtRemoveInput(cb->tkident);
+   }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 mainloop                                   */
+/* -------------------------------------------------------------------------- */
+/*  X Toolkit compatible replacement for mainloop.
+ */
+static void mainloop(void)
+{
+   XEvent event;
+   int    curdep;
+
+   curdep = ++depth;
+   
+   while (curdep==depth) {
+      XtAppNextEvent(*context, &event);
+      if (!XtDispatchEvent(&event) && XHandler) {
+         XHandler(&event);
+      }
+   }
+} 
+
+/* ========================================================================== */
+/*                                 AttachXt                                   */
+/* -------------------------------------------------------------------------- */
+/*  Attach X Toolkit to event handler.
+ */
+extern void AttachXt(XtAppContext *app_context)
+{
+   static TkConnection connection=NULL;
+   
+   if (connection) return;                     /* redundant attach: no-op */
+   
+   context = app_context;
+   connection = New(_TkConnection);
+   connection->schedule   = schedule;
+   connection->deschedule = deschedule;
+   connection->mainloop   = mainloop;
+
+   ConnectTk(connection);
+}
+
+/* ========================================================================== */
+/*                                 ScheduleX                                  */
+/* -------------------------------------------------------------------------- */
+/*  Register function to receive events not dispatched by the X Toolkit.
+ */
+extern void ScheduleX(void(*handler)())
+{
+   XHandler = handler;
+}
+
+/* ========================================================================== */
+/*                                 BreakMainLoop                              */
+/* -------------------------------------------------------------------------- */
+/*  Decrement recursion depth, eventually causing mainloop() to return.
+ */
+extern void BreakMainLoop(void)
+{
+   depth--;
+}
+
+
+#<
+
+#>            BreakMainLoop.dc2
+Function:     BreakMainLoop
+
+Purpose:      Terminate invocation of MainLoop()
+
+Category:     SYSTEM
+
+File:         events.src
+
+Author:       J.P. Terlouw
+
+Use:          #include "events.h"
+              BreakMainLoop();
+
+Description:  BreakMainLoop causes the current, possibly recursive,
+              invocation of MaiLoop() to be terminated.
+              This only works when event handling has been delegated
+              to the X Toolkit, which is always the case for programs
+              using GIPSY's graphical user interface (Ggi).
+
+Related Doc:  MainLoop.dc2
+
+Updates:      Aug  4, 1999: JPT Document created.
+#<

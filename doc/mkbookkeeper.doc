@@ -1,0 +1,16 @@
+
+Script:       mkbookkeeper
+
+Purpose:      Creates bookkeeper file from scratch.
+
+Category:     MANAGEMENT
+
+File:         mkbookkeeper.csh
+
+Author:       K.G. Begeman
+
+Use:          mkbookkeeper creates file bookkeeper.new with all
+              sources out of date.
+
+Updates:      Sep 18, 1991: KGB, document created.
+

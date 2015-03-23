@@ -1,0 +1,19 @@
+
+Document:     Ellint
+
+Purpose:      A supplement to the dc1 document.
+
+Category:     DOCUMENTATION
+
+File:         ellint.tex
+
+Author:       M. Vogelaar
+
+Description:  ellint.tex is a supplement to the existing 
+              ellint.dc1 document. It contains more detailed
+              information (supported by formulas) than the dc1
+              document.
+              Run latex $gip_doc/ellint.tex to get the dvi file.
+
+Updates:      Feb 16, 1996: VOG, document created.
+

@@ -1,0 +1,130 @@
+pycheck.src
+
+        Copyright (c) Kapteyn Astronomical Institute, Groningen 2014
+        All Rights Reserved.
+
+Name:         pycheck.src
+Creator:      hans
+Host:         sokoban2
+Date:         Dec 30, 2014
+Contents:     pycheck.make pycheck.py pycheck.dc1
+
+#>            pycheck.make
+#
+# pycheck.make
+#
+
+SHELL   = /bin/sh
+
+default:: pycheck
+
+pycheck : pycheck.py
+	cp pycheck.py pycheck
+	chmod +x pycheck
+
+pack::
+	$$gip_sys/pack.csh pycheck.src pycheck.make pycheck.py \
+	pycheck.dc1
+#<
+
+#>            pycheck.py
+#!/usr/bin/env python
+
+versions = {
+   'kapteyn'    : '',
+   'matplotlib' : '',
+   'numpy'      : '',
+#   'pyfits'     : '',
+   'PyQt4'      : '',
+   'vtk'        : ''
+}
+
+import sys
+
+try:
+   from gipsy import *
+except:
+   print 'GIPSY has no Python module'
+   sys.exit(-1)
+
+from distutils import version
+
+warned = False
+
+def warn(message):
+   global warned
+   if not warned:
+      anyout(
+"""
+==============================================================
+         ***** Python package/module warning(s) *****
+--------------------------------------------------------------
+""")
+      warned = True
+   anyout(message)
+
+init()
+
+for package in versions:
+   current   = versions[package]
+   try:
+      present   = __import__(package)
+      try:
+         installed = present.__version__
+         try:
+            older = version.StrictVersion(installed)<version.StrictVersion(current)
+         except:
+            older = version.LooseVersion(installed)<version.LooseVersion(current)
+         if older:
+            warn('Package/module %s version %s is not up to date:' %
+                 (package, installed) )
+            warn('-- current version is %s.\n ' % current)
+      except:
+         if current:
+            warn('Package/module %s,  version unspecified, is not up to date:' %
+                  package )
+            warn('-- current version is %s.\n ' % current)
+   except:
+      warn('Package/module %s is not available.\n ' % package)
+
+try:
+   import pyfits
+except:
+   try:
+      import astropy.io.fits
+   except:
+      warn('Package pyfits or astropy.io.fits is not available.\n ')
+
+if warned:
+   anyout(
+"""--------------------------------------------------------------
+For more information please refer to the Requirements
+section in the Download and Installation Guide:
+http://www.astro.rug.nl/~gipsy/installation/installation.html
+--------------------------------------------------------------
+""")
+
+finis()
+#<
+
+#>            pycheck.dc1
+Program:      PYCHECK
+
+Purpose:      Python packages and modules checker
+
+Category:     UTILITY
+
+File:         pycheck.src
+
+Author:       J.P. Terlouw
+
+Description:  This program checks the availability and version numbers
+              of the Python packages and modules on which GIPSY tasks
+              may depend.
+               
+Updates:      Feb 20, 2009: JPT Document created.
+              Jan 15, 2010: JPT First try to check 'strict', then 'loose'.
+              Jun 17, 2010: JPT Added packages vtk and PyQt4.
+              Dec 30, 2014: JPT Allow astropy.io.fits as alternative for pyfits;
+                                version checking disabled.
+#<

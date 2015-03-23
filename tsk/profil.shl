@@ -1,0 +1,653 @@
+C
+C#>            profil.dc1
+C
+CProgram:      PROFIL
+C
+CPurpose:      Creates an integrated line profile over a selected
+C	       area of an input data cube
+C
+CCategory:     COMBINATION
+C
+CFile:         profil.shl
+C
+CAuthor:       C. G. De Pree (resp. M. Vogelaar)
+C              Adapted from the aid.shl file, and the
+C              PROFIL program created by M. Goss.
+C
+CKeywords:
+C
+C    INSET=    Input set (and subsets). Maximum number of subsets
+C              is 2048. In general this is the LINE data set.
+C
+C    BOX=      Frame for input subsets.            [entire subset]
+C
+C    SETX=     Set name and subset(s) which operate on the input set.
+C              This is in general the CONTINUUM data set.
+C
+C    BOXX=     The axis sizes of the subset box of 'SET' have to be
+C              equal to the axis sizes of the subset box of 'SETX'.
+C              If using comparable subsets (i.e. same axis names,
+C              same grids and origins), this keyword is hidden.
+C
+C    OUTSET=   Output set and subset(s) for the result.
+C              The output set has the size of the selected BOX.
+C              The result of PROFIL is placed in the lower
+C              left hand corner of the OUTSET box.
+C
+C    WTYPE=    The weighting type chosen by the user.  Line data may
+C   	       be weighted in the following ways:
+C              [0] No weighting. Creates an integrated profile
+C                  in the specified box
+C              [1] Continuum weighting. Creates an integrated
+C                  profile in the specified box weighted by the
+C                  continuum image.
+C              [2] Continuum squared. As above, but with weighting
+C                  by the square of the continuum.
+C              [3] Mean. Creates a mean line profile in the
+C                  specified box.
+C              For all of the weighting types, a continuum
+C              cutoff may be specified.
+C
+C    LC=       [Y/N] For weight types 1, 2, and 3, user may request
+C              that a line to continuum ratio profile be generated.
+C              If LC=N, then PROFIL will simply print a line to continuum
+C              ratio normalization factor (appropriate to the weighting
+C              selected) to the HERMES window at the completion of the PROFIL
+C              task.  Then the peak value may be divided by this factor
+C              to simply derive line to continuum ratio.
+C
+C    MASK=     [Y/N] User may request that the line profile
+C              only be integrated in regions above a specified
+C              threshold level in the continuum image.
+C
+C    THRESHOLD=
+C              User specified threshold level (Jy) of the
+C              continuum image.  The line profile is integrated
+C              only in pixels that have continuum flux density
+C              above the specified cutoff.
+C
+CDescription:
+C
+C              PROFIL is a task designed to generate integrated
+C              line profiles over a specified box in a data cube.
+C              The user enters a LINE image, a CONTINUUM image,
+C              and a box in which to integrate. PROFIL then requests
+C              a weighting type (see above) and whether or not the
+C              user wants to use a continum threshold.  If a continuum
+C              threshold is requested, PROFIL asks for a cutoff
+C              level (in Jy) that should be used.  The pixels
+C              tested for cutoff are in the continuum image.  PROFIL
+C              then generates an integrated line profile and places
+C              the result in the lower left hand corner pixel of the
+C              output data set. The OUTSET has the size of the requested
+C              box, with the number of channels of the INSET. This
+C              output set can then be viewed with PPLOT (by specifying
+C              the lower left corner pixel), or fit with PROFIT.
+C
+CRemarks:
+C              Input and file combination routines are
+C              adapted from the aid.shl file
+C              Original PROFIL program created by W.M. Goss
+C
+CUpdates:      June 23, 1994: Document created.
+C
+C              July 1, 1994: Documentation added
+C              Mar 10, 1998, VOG: Replaced constant 1 in gdsd_write
+C                                 by variable.
+C              Jul 15, 2002, VOG: Repaired bug in wtype prompt. Changed
+C                                 usertext by userlog.
+C                    
+C
+C
+E     ***** Program PROFIL*****
+      PROGRAM PROFIL
+
+C     Declaration of parameters:
+
+      CHARACTER*(*)  ident
+      PARAMETER    ( ident = ' Version 1.0  Jun 22, 1994 ' )
+      INTEGER        maxsubsets
+      PARAMETER    ( maxsubsets = 2048 )
+      INTEGER        maxaxes
+      PARAMETER    ( maxaxes = 10 )
+N     Default options for use in USERxxx() routines
+      INTEGER        none, request, hidden
+      PARAMETER    ( none    = 0 )
+      PARAMETER    ( request = 1 )
+      PARAMETER    ( hidden  = 2 )
+N     Buffer size for I/O
+      INTEGER        maxIObuf
+      PARAMETER    ( maxIObuf = 4096 )
+N     Remove with 'WMINMAX' old minmax descriptors
+      INTEGER        remove
+      PARAMETER    ( remove = 1 )
+
+C     Declarations for GDSINP:
+
+      INTEGER        GDSINP
+N     Array containing subset coordinate words
+      INTEGER        subsets1( maxsubsets ), subsetsX( maxsubsets )
+N     Number of subsets in first and second set
+      INTEGER        nsubs1, nsubsX
+      INTEGER        dfault
+N     Number of output device [0..16]
+      INTEGER        devicenum
+      CHARACTER*80   setname1, setnameX
+      CHARACTER*10   keyword
+      CHARACTER*40   message
+      INTEGER        axperm1(  maxaxes ), axpermX(  maxaxes )
+      INTEGER        axcount1( maxaxes ), axcountX( maxaxes )
+      INTEGER        class
+      INTEGER        dimofsubsets
+
+C     Declarations for GDSBOX:
+
+N     Grid vectors of sub frames
+      INTEGER        BedgeLO1( maxaxes ), BedgeHI1( maxaxes )
+      INTEGER        BedgeLOX( maxaxes ), BedgeHIX( maxaxes )
+N     Grid vectors of entire frames
+      INTEGER        FedgeLO1( maxaxes ), FedgeHI1( maxaxes )
+      INTEGER        FedgeLOX( maxaxes ), FedgeHIX( maxaxes )
+      INTEGER        FedgeLOO( maxaxes ), FedgeHIO( maxaxes )
+      INTEGER        floO( maxaxes), fhiO(maxaxes)
+N     What's the default in GDSBOX
+      INTEGER        option
+
+C     Declarations for GDSOUT:
+
+      INTEGER        GDSOUT
+      INTEGER        nsubsO
+      INTEGER        subsetsO( maxsubsets )
+      INTEGER        axpermO(  maxaxes )
+      INTEGER        axcountO( maxaxes )
+      CHARACTER*80   setnameO
+
+C     Functions:
+
+N     Returns dimension of a set
+      INTEGER        GDSC_NDIMS
+N     Extracts grid coordinate from coord. word
+      INTEGER        GDSC_GRID
+N     Returns coordinate word
+      INTEGER        GDSC_FILL
+N     Returns .TRUE. if inside defined sub frame
+      LOGICAL        OUTSIDEPTR
+N     Returns .TRUE. if outside defined sub frame
+      LOGICAL        INSIDEPTR
+N     Determine length of string
+      INTEGER        NELC
+N     Obtain the name under which a GIPSY task runs
+      CHARACTER*9    MYNAME
+
+C     Variables for the algorithms:
+
+      INTEGER        m
+N     There are totpixels in one subset
+      INTEGER        totpixels
+N     Transfer identifications for read/write
+      INTEGER        tidX( maxsubsets )
+N     Array version of transfer id's
+      INTEGER        tids1(  maxsubsets )
+      INTEGER        tidsO(  maxsubsets )
+      INTEGER        mcount( maxsubsets )
+      INTEGER        ptrcount
+      INTEGER        stilltowrite
+N     Coordinate words for total & sub frame
+      INTEGER        BcwloX( maxsubsets ), BcwhiX( maxsubsets )
+N     Array version of Bcwlo1, Bcwhi1
+      INTEGER        Bcwlo1( maxsubsets ), Bcwhi1( maxsubsets )
+N     Array version of FcwloO, FcwhiO
+      INTEGER        FcwloO( maxsubsets ), FcwhiO( maxsubsets )
+N     For use in INSIDEPTR/OUTSIDEPTR
+      INTEGER        bufptr
+N     Length of the pointer buffer
+      INTEGER        ptrbuflen
+N     # of pixels inside ptr buf. & sub frame
+      INTEGER        totinside
+N     Number of elements inside/outside sub frame
+      INTEGER        numin
+      INTEGER        numout
+      INTEGER        pixelsdone
+      INTEGER        donepixels
+      INTEGER        start
+N     How far we proceeded, used in mode A
+      INTEGER        curval
+N     For updating number of blanks
+      INTEGER        nblanks( maxsubsets )
+N     For updating minimum and maximum of subset
+      REAL           minval(  maxsubsets  ), maxval( maxsubsets )
+      REAL           data1(   maxIObuf  ), dataX(  maxIObuf )
+N     User input
+      REAL           USERREAL
+      INTEGER        USERINT
+
+C     Declarations for the counters in the summation loop
+
+      REAL           cbuff
+      REAL           cbuffsq
+      REAL    	     cbuffc
+      REAL           cavg
+      REAL	     csum
+      REAL	     fudge
+      INTEGER        count, n
+      INTEGER	     ctr
+      REAL           lsum(maxsubsets)
+      REAL 	     prof(maxsubsets)
+C     Continuum threshold level
+      REAL           thresh
+      INTEGER        wtype
+
+C     Miscellaneous:
+
+      INTEGER        dimofset
+N     Error codes for Range and Grid routines
+      INTEGER        Rerror, Gerror
+N     Coordinate words to determine total range
+      INTEGER        cwlo, cwhi
+N     One of the names SUB, ADD, MUL or DIV
+      CHARACTER*9    task
+N     Is .TRUE. if one 'SETX' subset was given
+      LOGICAL        onesubsx
+N     True when grids of input edges are equal
+      LOGICAL        equalgrids
+      LOGICAL        agreed, lc, mask
+
+E     Main
+      CALL INIT
+N     Get task name
+      task = MYNAME()
+
+N     Show task and version number
+      CALL ANYOUT( 8, ( task( :NELC(task) ) // ident) )
+
+N     This requests the type of weighting from the user
+      NEL = USERINT(wtype, 1, 0, 'WTYPE=',
+     # 'Weighting: [0] None [1] Cont Lin [2] Cont Sq [3] Mean')
+
+N     This requests if the user wants to also calculate a line to continuum
+N     ratio
+      if (wtype .ne. 0)
+      then
+         lc = .false.
+         CALL USERLOG( lc, 1,1, 'LC=', 
+     # 'Calculate line to continuum ratio?   Y/[N]')
+
+N        NEL = USERTEXT(message, 1, 'LC=', 'Calculate line to
+N     #  continuum ratio? Y/[N]')
+N          if (message(:1) .eq. 'Y' .or. message(:1) .eq. 'y')
+N          then
+N            lc = .true.
+N          cif
+      cif
+N     Prepare for GDSINP for first set
+      dfault       = none
+      keyword      ='INSET='
+      message      ='Give the LINE input set, subsets: '
+N     Application repeats operation for each subset
+      class        = 1
+      dimofsubsets = 0
+      devicenum    = 3
+      nsubs1 = GDSINP( setname1, subsets1, maxsubsets, dfault,
+     #                 keyword, message, devicenum, axperm1,
+     #                 axcount1, maxaxes, class,
+     #                 dimofsubsets )
+
+N     Determine the edges of this set
+C     The size of the input set will be copied to the output set.
+C     It is possible to work on a smaller area. Therefore we need
+C     the grid coordinates of the frame ('Fedge') and
+C     the coordinates of the user defined box ('Bedge').
+
+      Rerror = 0
+      Gerror = 0
+      totpixels = 1
+      CALL GDSC_RANGE( setname1, 0, cwlo, cwhi, Rerror )
+      FOR m = 1, dimofsubsets
+        FedgeLO1(m) = GDSC_GRID( setname1, axperm1(m), cwlo, Gerror )
+        FedgeHI1(m) = GDSC_GRID( setname1, axperm1(m), cwhi, Gerror )
+N       Calculate number of pixels per subset
+        totpixels   = totpixels * ( FedgeHI1(m) - FedgeLO1(m) + 1 )
+      CFOR
+
+C     Options in GDSBOX:
+C     1 box may exceed subset size
+C     2 default is in BLO
+C     4 default is in BHI
+C     8 box restricted to size defined in BHI
+C     These codes work additive.
+
+N     Prepare for a frame for first set
+      dfault    = request
+      keyword   = 'BOX='
+      message   = ' '
+N     Default is entire subset
+      option    = 0
+      devicenum = 3
+      CALL GDSBOX( BedgeLO1, BedgeHI1, setname1, subsets1,
+     #             dfault, keyword, message, devicenum, option )
+
+N     Prepare for GDSINP for second set
+      dfault = request
+N     Application repeats operation for each subset
+      class  = 1
+N    'dimofsubsets' has value of previous GDSINP
+      message ='Give CONTINUUM input set, subsets: '
+      REPEAT
+        onesubsx  =.TRUE.
+        keyword   ='SETX='
+N       nsubsX <= nsubsX
+        devicenum = 3
+        nsubsX     = GDSINP( setnameX, subsetsX, nsubs1,
+     #                       dfault, keyword,
+     #                       message, devicenum, axpermX,
+     #                       axcountX, maxaxes, class,
+     #                       dimofsubsets )
+        IF ( nsubsX .EQ. nsubs1 ) .OR.
+     #     ( nsubsX .EQ. 1 )
+        THEN
+          agreed = .TRUE.
+          IF ( nsubsX .NE. 1 )
+          THEN
+N           Then operate in mode B
+            onesubsx = .FALSE.
+          CIF
+        ELSE
+N         Output to terminal only
+          devicenum = 1
+          agreed  = .FALSE.
+          message =' Number of subsets has to be equal to 1'
+          CALL ANYOUT( devicenum, message )
+          message = ' or eq. to first number of input subsets'
+          CALL ANYOUT( devicenum, message )
+          CALL CANCEL( keyword )
+          message = ' Try again; set, subsets: '
+        CIF
+      UNTIL agreed
+
+      Rerror = 0
+      Gerror = 0
+      CALL GDSC_RANGE( setnameX, 0, cwlo, cwhi, Rerror )
+      FOR m = 1, dimofsubsets
+        Gerror = 0
+        FedgeLOX(m) = GDSC_GRID( setnameX, axpermX(m), cwlo, Gerror )
+        Gerror = 0
+        FedgeHIX(m) = GDSC_GRID( setnameX, axpermX(m), cwhi, Gerror )
+      CFOR
+
+N     Are first and second subsets comparable?
+      equalgrids = .TRUE.
+      FOR m = 1, dimofsubsets
+        equalgrids = ( equalgrids .AND.
+     #                 ( FedgeLOX(m) .EQ. FedgeLO1(m) ) .AND.
+     #                 ( FedgeHIX(m) .EQ. FedgeHI1(m) )
+     #               )
+      CFOR
+
+N     Prepare for a frame for second set
+      IF equalgrids
+      THEN
+N       Fill arrays with GRIDS for GDSBOX
+        FOR m = 1, dimofsubsets
+          BedgeHIX(m) = BedgeHI1(m)
+          BedgeLOX(m) = BedgeLO1(m)
+        CFOR
+        dfault = hidden
+N       Defaults in BedgeHIX/LOX
+        option = 6
+      ELSE
+N       Fill arrays with SIZES for GDSBOX
+        FOR m = 1, dimofsubsets
+          BedgeHIX(m) = BedgeHI1(m) - BedgeLO1(m) + 1
+        CFOR
+        dfault = request
+N       GDSBOX has a special option for sizes
+        option = ( 8 + 4 )
+      CIF
+
+      keyword   ='BOXX='
+      message   =' '
+      devicenum = 3
+N     Box restricted to size defined in BedgeHI
+      CALL GDSBOX( BedgeLOX, BedgeHIX, setnameX, subsetsX,
+     #             dfault, keyword, message, devicenum, option )
+
+N     Get new subset size from user
+      CALL GDSBOX( floO,
+     #             fhiO,
+     #             setname1,
+     #             subsets1,
+     #             1,
+     #             'BOX=',
+     #             'Enter 0, 0',
+     #             11,
+     #             1)
+
+N     Assign GDSINP buffer to GDSOUT
+N     Output set will get same coordinate-
+N     system as first input set (i.e. the line data...)
+      keyword  ='OUTSET='
+      dimofset = GDSC_NDIMS( setname1, 0 )
+
+      CALL GDSASN( 'INSET=', keyword, class )
+N     GDSCSS will assign the specified BOX size as the size
+N     of each channel of the output set.
+      call gdscss('OUTSET=', floO, floO)
+      dfault    = none
+      message   ='Give output set (and subsets):'
+      devicenum = 3
+      nsubsO    = GDSOUT( setnameO, subsetsO, nsubs1,
+     #                    dfault, keyword, message, devicenum,
+     #                    axpermO, axcountO, maxaxes )
+
+      Rerror = 0
+      Gerror = 0
+      CALL GDSC_RANGE( setnameO, 0, cwlo, cwhi, Rerror )
+      FOR m = 1, dimofsubsets
+        FedgeLOO(m) = GDSC_GRID( setnameO, axpermO(m), cwlo, Gerror )
+        FedgeHIO(m) = GDSC_GRID( setnameO, axpermO(m), cwhi, Gerror )
+      CFOR
+
+N     Input the continuum mask level
+      mask = .false.
+      CALL USERLOG( mask, 1, 1, 'MASK=',
+     # 'Do you want a continuum mask:  Y/[N]?')
+      
+N      NEL = USERTEXT(message, 1, 'MASK=',
+N     #              'Do you want a continuum mask Y/[N]?')
+N        if (message(:1) .eq. 'Y' .or. message(:1) .eq. 'y')
+      IF (mask)
+      THEN
+
+          NEL = USERREAL(thresh, 1, 0, 'THRESHOLD=',
+     #               'Enter the continuum mask level [Jy]')
+      ELSE
+N     If no threshold is set, just give it some negative
+N     number to always be greater than
+          thresh = -1000.0
+      CIF
+
+N     cw=coordinate word, lo=lower, hi=upper
+N     F=Frame, B=Box
+      FOR m = 1, nsubsO
+        tids1( m) = 0
+        tidsO( m) = 0
+        tidX(  m) = 0
+        mcount(m) = 0
+        Bcwlo1(m) = GDSC_FILL( setname1, subsets1(m), BedgeLO1 )
+        Bcwhi1(m) = GDSC_FILL( setname1, subsets1(m), BedgeHI1 )
+        FcwloO(m) = GDSC_FILL( setnameO, subsetsO(m), FedgeLOO )
+        FcwhiO(m) = GDSC_FILL( setnameO, subsetsO(m), FedgeHIO )
+        IF onesubsx
+        THEN
+           BcwloX(m) = GDSC_FILL( setnameX, subsetsX(1), BedgeLOX )
+           BcwhiX(m) = GDSC_FILL( setnameX, subsetsX(1), BedgeHIX )
+        ELSE
+           BcwloX(m) = GDSC_FILL( setnameX, subsetsX(m), BedgeLOX )
+           BcwhiX(m) = GDSC_FILL( setnameX, subsetsX(m), BedgeHIX )
+        CIF
+      CFOR
+
+
+      ptrcount  = 0
+      stilltowrite = totpixels
+      count = 0
+      csum = 0
+      REPEAT
+N       Update needed for STABAR
+        curval = totpixels - stilltowrite
+N       Bufferlength never exceeds len. of write buf.
+        ptrbuflen = MIN( maxIObuf, stilltowrite )
+        stilltowrite  = stilltowrite - ptrbuflen
+N       Only scan in the first subset of SET
+        CALL INITPTR( FedgeLO1, FedgeHI1, BedgeLO1, BedgeHI1,
+     #                dimofsubsets, ptrbuflen, ptrcount )
+
+        totinside = 0
+        WHILE ( INSIDEPTR( bufptr, numin ) )
+N         Find # in pointer buffer & inside subframe
+          totinside = totinside + numin
+        CWHILE
+N       Set profile sum for LCR to zero
+        profsum = 0
+N       Step through each channel of the line data
+        FOR m = 1, nsubsO
+N         Prepare a message about how far we proceeded
+          CALL STABAR( 0.0, FLOAT( totpixels ),
+     #                 FLOAT( curval + ( m/nsubsO ) * ptrbuflen ) )
+          WHILE ( OUTSIDEPTR( bufptr, numout ) )
+N           Fill array with blanks
+N            CALL SETNFBLANK( dataO( bufptr+1 ), numout )
+          CWHILE
+          IF ( totinside .GT. 0 )
+          THEN
+            CALL GDSI_READ( setname1, Bcwlo1(m), Bcwhi1(m),
+     #                      data1, totinside, totinside, tids1(m) )
+            CALL GDSI_READ( setnameX, BcwloX(m), BcwhiX(m),
+     #                      dataX, totinside, totinside, tidX(m) )
+            start = 0
+            WHILE ( INSIDEPTR( bufptr, numin ) )
+N               bufptr is an offset, start is an index!
+              for n = 1, numin
+N         Checks to see if continuum data at this position is
+N         greater than cutoff
+                if (dataX(n+start) .gt. thresh)
+                then
+N		For no weighting, integrated line profile
+                  if (wtype .eq. 0)
+                  then
+                    lsum(m) = lsum(m) + data1(n+start)
+N		For continuum weighting
+                  elseif (wtype .eq. 1)
+                  then
+                    lsum(m) = lsum(m) + data1(n+start)*dataX(n+start)
+N		For weighting by the square of the continuum
+                  elseif (wtype .eq. 2)
+                  then
+                    lsum(m) = lsum(m) + data1(n+start)*dataX(n+start)**2
+N		For the mean line profile over the specified box
+                  elseif (wtype .eq. 3)
+                  then
+                    lsum(m) = lsum(m) + data1(n+start)
+                  cif
+N               Do this part only once (i.e. the continuum data
+N               sums and the number of pixels counter)
+                  if (m .eq. 1)
+                  then
+                    ctr = ctr + 1
+                    cbuff = cbuff + dataX(n+start)
+                    cbuffsq = cbuffsq + dataX(n+start)**2
+                    cbuffc = cbuffc + dataX(n+start)**3
+                  cif
+                cif
+              cfor
+              start = start + numin
+            CWHILE
+            start = 0
+          CIF
+          pixelsdone = ptrbuflen
+          if (lsum(m) .gt. lsum(m-1))
+          then
+            profsum=profsum+lsum(m)
+          cif
+
+        CFOR
+
+      UNTIL ( stilltowrite .EQ. 0 )
+
+N         Now output the continuum sum and mean
+      cavg = cbuff / ctr
+      WRITE(message, '(f12.4)') cbuff
+      call anyout(0, 'Sum in the BOX='//message(1:12))
+      WRITE(message, '(f12.4)') cavg
+      call anyout(0, 'Mean in the BOX='//message(1:12))
+      WRITE(message, '(i10,1x:)') ctr
+      call anyout(0, 'No. of pixels='//message(1:12))
+      if (wtype .eq. 1)
+        then
+          fudge = cbuffsq / cbuff
+        elseif (wtype .eq. 2)
+        then
+          fudge = cbuffc / cbuffsq
+        elseif (wtype .eq. 3)
+        then
+          fudge = cbuff
+      cif
+
+      if (wtype .ne. 0)
+        then
+          if (.not. lc)
+            then
+              WRITE(message, '(f12.4)') fudge
+              call anyout(0, 'LCR normalization factor'//message(1:12))
+              call anyout(0, '(Divide peak value by
+     # this number to get LCR)')
+          cif
+      cif
+      for m = 1,nsubsO
+        if (wtype .eq. 0)
+        then
+          prof(m) = lsum(m)
+        elseif (wtype .eq. 1)
+        then
+          prof(m) = lsum(m)/cbuff
+        elseif (wtype .eq. 2)
+        then
+          prof(m) = lsum(m)/cbuffsq
+        elseif (wtype .eq. 3)
+        then
+          prof(m) = lsum(m)/ctr
+        cif
+
+N    IF LCR was requested, generate lcr
+      if (lc)
+      then
+        if (wtype .eq. 1)
+        then
+          prof(m) = lsum(m) / cbuffsq
+        elseif (wtype .eq. 2)
+        then
+          prof(m) = lsum(m) / cbuffc
+        elseif (wtype .eq. 3)
+        then
+          prof(m) =  lsum(m) / cbuff
+        cif
+      cif
+
+N    Now write the integrated, weighted line profile to the
+N    lower left hand corner of the output set, channel m
+          CALL GDSI_WRITE( setnameO, FcwloO(m), FcwhiO(m),
+     #                     prof(m), 1, donepixels, tidsO(m) )
+N         For all ssets, you have to store the counter
+          CALL MINMAX3( prof(m), 1 , minval(m), maxval(m),
+     #                  nblanks(m), mcount(m) )
+      cfor
+
+
+N     min max always change, ==> update min, max
+      CALL WMINMAX( setnameO, subsetsO, minval, maxval, nblanks,
+     #              nsubsO, remove )
+
+      CALL FINIS
+
+      STOP
+      END

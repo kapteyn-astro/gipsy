@@ -1,0 +1,792 @@
+f2cvv_aux.src
+
+        Copyright (c) Kapteyn Laboratorium Groningen 1993
+        All Rights Reserved.
+
+Contents: f2cvv_aux.s for alliant architecture.
+          f2cvv_aux.s for mips-ultrix and mips-sgi  architecture.
+          f2cvv_aux.s for ibm aix architecture.
+          f2cvv_aux.s for osf alpha architecture.
+
+#>            f2cvv_aux.dc3
+
+Function:     f2cvv_aux
+
+Purpose:      Auxiliary routines for the Fortran to C interface programme.
+
+Category:     SYSTEM
+
+File:         f2cvv_aux.src
+
+Author:       K.G. Begeman
+
+Use:          For the ALLIANT the following functions are provided:
+
+              A_ALLIANT( ARG )               Input  integer (by value)
+              L_ALLIANT( ARG )               Input  integer (by value)
+              RETURN_COMPLEX_ALLIANT( FIE )  Input  procedure
+              FCALL_VOID_ALLIANT( F1,        Input  procedure
+                                  STACK )    Input  address
+              FCALL_INT_ALLIANT( F2,         Input  procedure
+                                 STACK )     Input  address
+              FCALL_BOOL_ALLIANT( F3,        Input  procedure
+                                  STACK )    Input  address
+              FCALL_FLOAT_ALLIANT( F4,       Input  procedure
+                                   STACK )   Input  address
+              FCALL_DOUBLE_ALLIANT( F5,      Input  procedure
+                                    STACK )  Input  address
+              FCALL_COMPLEX_ALLIANT( F6,     Input  procedure
+                                     STACK ) Input  address
+
+              ARG     Argument number of character argument, 0 indicates
+                      a character function
+              FIE     Complex C function
+              F1      Fortran subroutine
+              F2      Fortran integer function
+              F3      Fortran logical function
+              F4      Fortran real function
+              F5      Fortran double precision function
+              F6      Fortran complex function
+              STACK   Address of argument stack
+
+              The functions a_alliant and l_alliant return resp. the
+              address and length of a fortran character string in a
+              C procedure. The procedure return_complex_alliant calls
+              a complex C function and returns the results to the
+              Fortran calling procedure. The procedures fcall_*_alliant
+              calls a fortran subroutine/function from a C procedure.
+
+              For the mips-ultrix and mips_sgi architectures the following
+              functions are provided:
+
+              RETURN_COMPLEX_MIPS( CCMPLX )  Input  C complex
+              FCALL_COMPLEX_MIPS( FCMPLX )   Input  F complex
+
+              CCMPLX  Complex C struct, used in C code
+              FCMPLX  Fortran complex type, used in Fortran code
+
+              The procedure return_complex_mips has a C complex as
+              argument and returns the argument to the Fortran
+              calling procedure. The procedure fcall_complex_mips
+              has as argument a Fortran complex/double and returns
+              the C complex type.
+
+              For the ibm-aix architecture the following functions
+              are provided:
+
+              RETURN_COMPLEX_AIX( CCMPLX )  Input  C complex
+              FCALL_COMPLEX_AIX( FCMPLX )   Input  F complex pointer
+
+              CCMPLX  Complex C struct, used in C code
+              FCMPLX  Fortran complex type, used in Fortran code
+
+              The procedure return_complex_aix has a C complex as
+              argument and returns the argument to the Fortran
+              calling procedure. The procedure fcall_complex_aix
+              has as argument a Fortran complex/double and returns
+              the C complex type.
+
+              For the osf/alpha architecture the following functions
+              are provided:
+
+              RETURN_COMPLEX_ALPHA( CCMPLX )  Input  C complex
+              FCALL_COMPLEX_ALPHA( FCMPLX )   Input  F complex pointer
+
+              CCMPLX  Complex C struct, used in C code
+              FCMPLX  Fortran complex type, used in Fortran code
+
+              The procedure return_complex_alpha has a C complex as
+              argument and returns the argument to the Fortran
+              calling procedure. The procedure fcall_complex_alpha
+              has as argument a Fortran complex/double and returns
+              the C complex type.
+
+Warning:      Only compilable source code for ALLIANT, MIPS ULTRIX,
+              MIPS SGI, IBM AIX and OSF ALPHA are contained in this
+              source file.
+
+Relared Docs: f2cvv.dc3
+
+Updates:      Jun  5, 1991: KGB Document created.
+              Jun  6, 1991: KGB Interface for IBM AIX implemented.
+              Oct 16, 1991: KGB Interface for Silicon Graphics implemented.
+              Jul 21, 1993: KGB Interface for OSF/Alpha implemented.
+
+#<
+
+#>            a_alliant.dc3
+
+Function:     a_alliant
+
+Purpose:      Fortran to C interface for character arguments on
+              alliant machines.
+
+Category:     SYSTEM
+
+File:         f2cvv_aux.src
+
+Author:       K.G. Begeman
+
+Use:          a_alliant( arg )               Input  integer (by value)
+
+              arg     Argument number of character argument, 0 indicates
+                      a character function
+
+Warning:      Only used on ALLIANT machines.
+
+Updates:      Aug 24, 1991: KGB, Document created.
+
+#<
+
+#>            l_alliant.dc3
+
+Function:     l_alliant
+
+Purpose:      Fortran to C interface for character arguments on
+              alliant machines.
+
+Category:     SYSTEM
+
+File:         f2cvv_aux.src
+
+Author:       K.G. Begeman
+
+Use:          l_alliant( arg )               Input  integer (by value)
+
+              arg     Argument number of character argument, 0 indicates
+                      a character function
+
+Warning:      Only used on ALLIANT machines.
+
+Updates:      Aug 24, 1991: KGB, Document created.
+
+#<
+
+#>            return_complex_alliant.dc3
+
+Function:     return_complex_alliant
+
+Purpose:      C to Fortran interface for complex functions on alliant
+              machines.
+
+Category:     SYSTEM
+
+File:         f2cvv_aux.src
+
+Author:       K.G. Begeman
+
+Use:          return_complex_alliant( fie )  Input  procedure
+
+              fie     Complex C function
+
+Warning:      Only used on ALLIANT machines.
+
+Updates:      Aug 24, 1991: KGB, Document created.
+
+#<
+
+#>            return_complex_aix.dc3
+
+Function:     return_complex_aix
+
+Purpose:      C to Fortran interface for complex functions on aix
+              machines.
+
+Category:     SYSTEM
+
+File:         f2cvv_aux.src
+
+Author:       K.G. Begeman
+
+Use:          complex return_complex_aix( arg )  complex
+
+              return_complex_aix     complex
+              arg                    complex
+
+Warning:      Only used on AIX machines.
+
+Updates:      Sep 29, 1992: KGB, Document created.
+
+#<
+
+#>            return_complex_alpha.dc3
+
+Function:     return_complex_alpha
+
+Purpose:      C to Fortran interface for complex functions on alpha
+              machines.
+
+Category:     SYSTEM
+
+File:         f2cvv_aux.src
+
+Author:       K.G. Begeman
+
+Use:          complex return_complex_alpha( arg )  complex
+
+              return_complex_alpha   complex
+              arg                    complex
+
+Warning:      Only used on ALPHA machines.
+
+Updates:      Jul 21, 1993: KGB, Document created.
+
+#<
+
+#>            fcall_void_alliant.dc3
+
+Function:     fcall_void_alliant
+
+Purpose:      Fortran to C interface for subroutines on alliant
+              machines.
+
+Category:     SYSTEM
+
+File:         f2cvv_aux.src
+
+Author:       K.G. Begeman
+
+Use:          fcall_void_alliant( f1,        Input  procedure
+                                  stack )    Input  address
+
+              f1      Fortran subroutine
+              stack   Address of argument stack
+
+Warning:      Only used on ALLIANT machines.
+
+Updates:      Aug 24, 1991: KGB, Document created.
+
+#<
+
+#>            fcall_int_alliant.dc3
+
+Function:     fcall_int_alliant
+
+Purpose:      Fortran to C interface for integer functions on alliant
+              machines.
+
+Category:     SYSTEM
+
+File:         f2cvv_aux.src
+
+Author:       K.G. Begeman
+
+Use:          fcall_int_alliant( f2,         Input  procedure
+                                 stack )     Input  address
+
+              f2      Fortran integer function
+              stack   Address of argument stack
+
+Warning:      Only used on ALLIANT machines.
+
+Updates:      Aug 24, 1991: KGB, Document created.
+
+#<
+
+#>            fcall_bool_alliant.dc3
+
+Function:     fcall_bool_alliant
+
+Purpose:      Fortran to C interface for logical functions on alliant
+              machines.
+
+Category:     SYSTEM
+
+File:         f2cvv_aux.src
+
+Author:       K.G. Begeman
+
+Use:          fcall_bool_alliant( f3,        Input  procedure
+                                  stack )    Input  address
+
+              f3      Fortran logical function
+              stack   Address of argument stack
+
+Warning:      Only used on ALLIANT machines.
+
+Updates:      Aug 24, 1991: KGB, Document created.
+
+#<
+
+#>            fcall_float_alliant.dc3
+
+Function:     fcall_float_alliant
+
+Purpose:      Fortran to C interface for single precision functions on alliant
+              machines.
+
+Category:     SYSTEM
+
+File:         f2cvv_aux.src
+
+Author:       K.G. Begeman
+
+Use:          fcall_float_alliant( f4,       Input  procedure
+                                   stack )   Input  address
+
+              f4      Fortran real function
+              stack   Address of argument stack
+
+Warning:      Only used on ALLIANT machines.
+
+Updates:      Aug 24, 1991: KGB, Document created.
+
+#<
+
+#>            fcall_double_alliant.dc3
+
+Function:     fcall_double_alliant
+
+Purpose:      Fortran to C interface for double precision functions on alliant
+              machines.
+
+Category:     SYSTEM
+
+File:         f2cvv_aux.src
+
+Author:       K.G. Begeman
+
+Use:          fcall_double_alliant( f5,      Input  procedure
+                                    stack )  Input  address
+
+              f5      Fortran double precision function
+              stack   Address of argument stack
+
+Warning:      Only used on ALLIANT machines.
+
+Updates:      Aug 24, 1991: KGB, Document created.
+
+#<
+
+#>            fcall_complex_alliant.dc3
+
+Function:     fcall_complex_alliant
+
+Purpose:      Fortran to C interface for complex functions on alliant
+              machines.
+
+Category:     SYSTEM
+
+File:         f2cvv_aux.src
+
+Author:       K.G. Begeman
+
+Use:          fcall_complex_alliant( f6,     Input  procedure
+                                     stack ) Input  address
+
+              f6      Fortran complex function
+              stack   Address of argument stack
+
+Warning:      Only used on ALLIANT machines.
+
+Updates:      Aug 24, 1991: KGB, Document created.
+
+#<
+
+#>            fcall_complex_aix.dc3
+
+Function:     fcall_complex_aix
+
+Purpose:      Fortran to C interface for complex functions on aix
+              machines.
+
+Category:     SYSTEM
+
+File:         f2cvv_aux.src
+
+Author:       K.G. Begeman
+
+Use:          double fcall_complex_aix( arg )     complex
+
+              fcall_complex_aix      double precision
+              arg                    complex
+
+Warning:      Only used on AIX machines.
+
+Updates:      Sep 29, 1992: KGB, Document created.
+
+#<
+
+#>            fcall_complex_alpha.dc3
+
+Function:     fcall_complex_alpha
+
+Purpose:      Fortran to C interface for complex functions on alpha
+              machines.
+
+Category:     SYSTEM
+
+File:         f2cvv_aux.src
+
+Author:       K.G. Begeman
+
+Use:          double fcall_complex_alpha( arg )     complex
+
+              fcall_complex_alpha      double precision
+              arg                      complex
+
+Warning:      Only used on ALPHA machines.
+
+Updates:      Jul 21, 1993: KGB, Document created.
+
+#<
+
+#>            return_complex_mips.dc3
+
+Function:     return_complex_mips
+
+Purpose:      C to Fortran interface for complex functions on mips
+              machines.
+
+Category:     SYSTEM
+
+File:         f2cvv_aux.src
+
+Author:       K.G. Begeman
+
+Use:          return_complex_mips( ccmplx )  Input  C complex
+
+              ccmplx  Complex C struct, used in C code
+
+Warning:      Only used on MIPS machines.
+
+Updates:      Aug 24, 1991: KGB, Document created.
+
+#<
+
+#>            fcall_complex_mips.dc3
+
+Function:     fcall_complex_mips
+
+Purpose:      Fortran to C interface for complex functions on mips
+              machines.
+
+Category:     SYSTEM
+
+File:         f2cvv_aux.src
+
+Author:       K.G. Begeman
+
+Use:          fcall_complex_mips( fcmplx )   Input  F complex
+
+              fcmplx  Fortran complex type, used in Fortran code
+
+Warning:      Only used on MIPS machines.
+
+Updates:      Aug 24, 1991: KGB, Document created.
+
+#<
+
+#!IF          ALLIANT
+
+Here is the source of the routines which are necessary to get the
+F2C and C2F interface working on the ALLIANT. Extract this source
+(xfile f2cvv_aux.src) and compile by typing:
+
+as f2cvv_aux.s
+
+The f2cvv_aux.o which is then produced should be put in your library
+for easy use.
+
+#>            f2cvv_aux.s
+|
+| Program section:
+|
+        .data
+        .bss
+E.c:
+        .=.+8
+
+        .text
+|
+| Global references:
+|
+        .globl  _a_alliant, _l_alliant
+        .globl  _fcall_void_alliant, _fcall_bool_alliant, _fcall_complex_alliant
+        .globl  _fcall_int_alliant, _fcall_float_alliant, _fcall_double_alliant
+        .globl  _return_complex_alliant
+|
+| char *a_alliant()
+|
+_a_alliant:
+        link    a6,#-8                  |stack frame
+        movl    a0,a6@(-4)              |save argument pointer
+        movl    a0@,d0                  |argument number
+        cmpl    #0,d0                   |zero, means character function
+        jeq     BA2                     |jump to BA2
+        movl    a6@,a1                  |old frame pointer
+        movl    a1@(-4),a1              |embracing argument pointer
+        lsll    #2,d0                   |shift left two bits
+        subl    #4,d0                   |one position back
+        addl    d0,a1                   |goto correct position in argument list
+        movl    a1@,d0                  |move address of character to d0
+        jmp     BA1                     |jump to BA1
+BA2:    movl    a6@,a1                  |old frame pointer
+        movl    a1@(-4),a1              |embracing argument pointer
+        movw    a1@(-2),d0              |# of arg
+        negw    d0                      |negate
+        lslw    #2,d0                   |shift left 2 bits
+        movl    a1@(-8:b)[d0:w:b],d0    |move address to function result
+BA1:    unlk    a6                      |restore frame
+        rts                             |return
+|
+| int l_alliant()
+|
+_l_alliant:
+        link    a6,#-8                  |stack frame
+        movl    a0,a6@(-4)              |save argument pointer
+        movl    a0@,d1                  |move argument
+        cmpw    #0,d1                   |is argument zero ?
+        jeq     BL2                     |yes, then character function
+        movl    a6@,a1                  |old frame pointer
+        movl    a1@(-4),a1              |embracing argument pointer
+        movw    a1@(-2),d0              |# of arg
+        negw    d0                      |negate number of args
+        addw    d1,d0                   |add offset
+        lslw    #2,d0                   |*4
+        movl    a1@(-8:b)[d0:w:b],a1    |address of descriptor
+        movl    a1@,d0                  |length of character string
+        jmp     BL1                     |we're done
+BL2:    movl    a6@,a1                  |old frame pointer
+        movl    a1@(-4),a1              |embracing argument pointer
+        movw    a1@(-2),d0              |# of arg
+        negw    d0                      |negate number of args
+        lslw    #2,d0                   |*4
+        subw    #4,d0                   |-4
+        movl    a1@(-8:b)[d0:w:b],a1    |address of descriptor
+        movl    a1@,d0                  |length of character string
+BL1:    unlk    a6                      |restore frame
+        rts                             |return
+|
+| void fcall_alliant()
+|
+_fcall_int_alliant:
+_fcall_bool_alliant:
+_fcall_void_alliant:
+_fcall_float_alliant:
+_fcall_double_alliant:
+        link    a6,#-8                  |stack frame
+        movl    a0,a6@(-4)              |save argument pointer
+        movl    a0@+,a1                 |routine address
+        movl    a0@,a0                  |new frame pointer
+        jsr     a1@                     |do the subroutine
+        unlk    a6                      |restore frame
+        rts                             |return
+|
+| complex fcall_complex_alliant()
+|
+_fcall_complex_alliant:
+        link    a6,#-8                  |stack frame
+        movl    a0,a6@(-4)              |save argument pointer
+        movl    a0@+,a1
+        movl    a0@,a0
+        jsr     a1@
+        fmoves  fp0,E.c
+        moveq   #2,d0
+        fmoves  fp1,E.c+0-4:l[d0:l:l]
+        fmoved  E.c,fp0
+        unlk    a6
+        rts
+|
+| void return_complex_alliant()
+|
+_return_complex_alliant:
+        link    a6,#-8                  |stack frame
+        movl    a0,a6@(-4)              |save argument pointer
+        fmoves  a0@+,fp0                |move real part
+        fmoves  a0@,fp1                 |move imaginary part
+        unlk    a6                      |restore frame
+        rts                             |return
+#<
+
+#!ELIF        MIPS SGI
+
+Here is the source of the routines which are necessary to get the
+F2C and C2F interface working on a MIPS machine. Extract this source
+(xfile f2cvv_aux.src) and compile by typing:
+
+cc -c f2cvv_aux.s
+
+The f2cvv_aux.o which is then produced should be put in your library
+for easy use.
+
+#>            f2cvv_aux.s
+        .text
+        .align  2
+        .globl  return_complex_mips
+        .globl  fcall_complex_mips
+        .ent    return_complex_mips 2
+return_complex_mips:
+        .option O1
+        .frame  $sp, 0, $31
+        l.s     $f0, 0($4)
+        l.s     $f2, 4($4)
+        j       $31
+        .end    return_complex_mips
+        .comm   .fcall_complex_mips.0 8
+        .ent    fcall_complex_mips 2
+fcall_complex_mips:
+        .option O1
+        subu    $sp, 8
+        .frame  $sp, 8, $31
+        l.s     $f0, 0($4)
+        s.s     $f0, .fcall_complex_mips.0
+        l.s     $f2, 4($4)
+        s.s     $f2, .fcall_complex_mips.0+4
+        l.d     $f8, .fcall_complex_mips.0
+        s.d     $f8, 0($sp)
+        l.d     $f0, 0($sp)
+        addu    $sp, 8
+        j       $31
+        .end    fcall_complex_mips
+#<
+
+#!ELIF        AIX
+
+Here is the source of the routines which are necessary to get the
+F2C and C2F interface working on a IBM AIX machine. Extract this source
+(xfile f2cvv_aux.src) and compile by typing:
+
+as -o f2cvv_aux.o f2cvv_aux.s
+
+The f2cvv_aux.o which is then produced should be put in your library
+for easy use.
+
+#>            f2cvv_aux.s
+	.toc
+.csect [PR]
+	.align 2
+	.globl return_complex_aix
+	.globl .return_complex_aix
+	.csect return_complex_aix[DS]
+return_complex_aix:
+	.long .return_complex_aix, TOC[tc0], 0
+	.csect [PR]
+.return_complex_aix:
+	st 31,-4(1)
+	stu 1,-32(1)
+	oril 31,1,0
+	st 3,56(31)
+	st 4,60(31)
+	lfs 1,56(31)
+	lfs 2,60(31)
+	b L..1
+L..1:
+	l 1,0(1)
+	l 31,-4(1)
+	br
+LT..return_complex_aix:
+	.long 0
+	.byte 0,0,32,96,128,1,2,1
+	.long 0
+	.long LT..return_complex_aix-.return_complex_aix
+	.short 18
+	.byte "return_complex_aix"
+	.byte 31
+	.align 2
+	.globl fcall_complex_aix
+	.globl .fcall_complex_aix
+	.csect fcall_complex_aix[DS]
+fcall_complex_aix:
+	.long .fcall_complex_aix, TOC[tc0], 0
+	.csect [PR]
+.fcall_complex_aix:
+	st 31,-4(1)
+	stu 1,-40(1)
+	oril 31,1,0
+	st 3,64(31)
+	l 9,64(31)
+	l 11,0(9)
+	l 12,4(9)
+	st 11,24(31)
+	st 12,28(31)
+	lfd 1,24(31)
+	b L..2
+L..2:
+	l 1,0(1)
+	l 31,-4(1)
+	br
+LT..fcall_complex_aix:
+	.long 0
+	.byte 0,0,32,96,128,1,1,1
+	.long 0
+	.long LT..fcall_complex_aix-.fcall_complex_aix
+	.short 17
+	.byte "fcall_complex_aix"
+	.byte 31
+_section_.text:
+.csect .data[RW]
+	.long _section_.text
+#<
+
+#!ELIF	ALPHA
+
+Here is the source of the routines which are necessary to get the
+F2C and C2F interface working on a DEC ALPHA machine. Extract this source
+(xfile f2cvv_aux.src) and compile by typing:
+
+as -o f2cvv_aux.o f2cvv_aux.s
+
+The f2cvv_aux.o which is then produced should be put in your library
+for easy use.
+
+#>            f2cvv_aux.s
+	.set noreorder
+	.set noat
+
+.text
+	.align 3
+	.globl return_complex_alpha
+	.ent return_complex_alpha 0
+return_complex_alpha:
+return_complex_alpha..ng:
+	lda $30,-32($30)
+	.frame $15,32,$26,0
+	stq $26,16($30)
+	stq $15,24($30)
+	.mask 0x4008000,-16
+	bis $30,$30,$15
+	.prologue 0
+	stq $16,0($15)
+	lds $f0,0($15)
+	lds $f1,4($15)
+	br $31,$33
+	.align 4
+$33:
+	bis $15,$15,$30
+	ldq $26,16($30)
+	ldq $15,24($30)
+	lda $30,32($30)
+	ret $31,($26),1
+	.end return_complex_alpha
+	.align 3
+	.globl fcall_complex_alpha
+	.ent fcall_complex_alpha 0
+fcall_complex_alpha:
+fcall_complex_alpha..ng:
+	lda $30,-32($30)
+	.frame $15,32,$26,0
+	stq $26,16($30)
+	stq $15,24($30)
+	.mask 0x4008000,-16
+	bis $30,$30,$15
+	.prologue 0
+	stq $16,0($15)
+	ldq $1,0($15)
+	ldl $2,0($1)
+	stl $2,8($15)
+	ldl $1,4($1)
+	stl $1,12($15)
+	ldt $f0,8($15)
+	br $31,$34
+	.align 4
+$34:
+	bis $15,$15,$30
+	ldq $26,16($30)
+	ldq $15,24($30)
+	lda $30,32($30)
+	ret $31,($26),1
+	.end fcall_complex_alpha
+#<
+
+#!ENDIF

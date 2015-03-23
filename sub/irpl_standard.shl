@@ -1,0 +1,368 @@
+c@ subroutine	irpl_standard ( integer, double precision,
+c@			double precision, integer )
+c@ subroutine	irpl_platecenter ( double precision, double precision, 
+c@			integer, double precision, double precision )
+c@ subroutine irpl_corners ( double precision, double precision )
+
+c#>	irpl_standard.dc2
+c Subroutine:	IRPL_STANDARD
+c
+c Purpose:	Defines standard plate system and delivers parameters.
+c
+c File:		irpl_standard.shl.
+c
+c Author:	86 Apr 25  Wim van Oosterom.
+c 
+c Use: 
+c	call	IRPL_STANDARD (
+c		obsmode  I	integer
+c		plcenter O	doubleprecision(2,nplate)
+c		plsize   O	doubleprecision(2,nplate)
+c		nplate  I/O	integer
+c		)
+c	obsmode 1 for raw data; 2 for splines; 
+c		otherwise no plate system (nplate = 0)
+c	plcenter longitude, latitude of the plate
+c	plsize	lon. and lat. size of the plate
+c	nplate	in: maximum number of plates
+c		out: actual number of plates
+c Description: 
+c	The plate sizes are the same for plates at the same latitude.
+c	They decrease from the ecliptic equator to the ecliptic poles:
+c	  15.30, 15.35, 14.25, 13.62, 12.75, 11.15, 9.62, 8.10, 6.85, 
+c	  5.22, 4.30 for raw data and
+c	  52.5, 45.5, 30.5, 19.5 for splines (All sizes are in degrees). 
+c	The minimum overlap between the plates is 1.5 degree.
+c	The rotation angles of the plates are zero.
+c
+c	The centers and the sizes are valid in any coordinate system;
+c	Both IRAS plate systems though, are defined in the ECLIPTIC
+c	system of epoch 1983.5
+c Externals:
+c	IRPL_PLATECENTER
+c References:
+c	IRPL_PLATE
+c Updates:
+c	90 Jul 12 Do Kester, plate angles are zero by default; add splines
+c	90 May  1 Sjag Steensma; documentation only.
+c#<
+
+	subroutine IRPL_STANDARD( obsmode, plcenter, plsize, nplate )
+
+	integer		obsmode, nplate
+	doubleprecision plcenter(2,nplate), plsize(2,nplate)
+        integer	     	MAXRAW, MAXSPL
+        parameter     	( MAXRAW = 12, MAXSPL = 4 )
+        doubleprecision D2R
+        parameter     	( D2R = 0.01745329252 )
+
+c Input sizes of plates / overlap between them
+        real          	rawsize(MAXRAW), splsize(MAXSPL), overlp
+	doubleprecision radsiz(MAXRAW), radovr
+        integer       	i
+
+c Plate sizes from equator to pole
+        data  rawsize  	/ 15.30, 15.35, 14.25, 13.62, 12.75, 11.15,
+     &    9.62, 8.10, 6.85, 5.22, 4.30, 4.3 /
+	data  splsize  	/ 52.5, 45.5, 30.5, 19.5 /
+c The plate system is set up for 1.0 degree overlap
+c The platesizes will be increased with 0.5 degree in a later stage!!!!
+        data overlp  / 1.0 /
+
+c Select proper sizes and convert to radians
+	if obsmode .eq. 1 
+	then
+c SURVEY data: select survey plate system
+          for i = 1, MAXRAW
+ 	    radsiz(i) = rawsize(i) * D2R
+          cfor
+        else if obsmode .eq. 2
+	then
+c SPLINE data: select spline plate system
+          nplate = 39
+	  for i = 1, MAXSPL
+	    radsiz(i) = splsize(i) * D2R
+	  cfor
+	else
+	  nplate = 0
+	  return
+	cif
+	radovr = overlp * D2R
+
+        call IRPL_PLATECENTER( radsiz, radovr, nplate, 
+     #			plcenter, plsize )
+
+c Increase overlap to 1.5 degree
+        for i = 1, nplate
+	  plsize(1,i) = plsize(1,i) + 0.5 * D2R
+	  plsize(2,i) = plsize(2,i) + 0.5 * D2R
+        cfor
+
+c some fiddling is needed to get the spline plate system properly:
+c  add two pole plates and increase the 31 degree sizes to 31.5.
+	if obsmode .eq. 2
+	then
+	  for i = 1, nplate
+	    plsize(1,i) = max( 31.5 * D2R, plsize(1,i) )
+	    plsize(2,i) = max( 31.5 * D2R, plsize(2,i) )
+	  cfor
+	  plcenter(1,38) =  0.0
+	  plcenter(2,38) = 90.0 * D2R
+	  plsize(1,38) = 20.0 * D2R
+	  plsize(2,38) = 20.0 * D2R
+	  plcenter(1,39) =  0.0
+	  plcenter(2,39) =-90.0 * D2R
+	  plsize(1,39) = 20.0 * D2R
+	  plsize(2,39) = 20.0 * D2R
+	  nplate = 39
+	cif
+
+        return
+	end
+
+
+c#>	irpl_platecenter.dc2
+c Subroutine:	IRPL_PLATECENTER.
+c
+c Purpose:	Delivering plate centres for the celestial sphere.
+c
+c File:		irpl_standard.shl
+c
+c Author: 	85 Aug 23  Wim van Oosterom.
+c
+c Use:
+c	call IRPL_PLATECENTER (
+c		size  	  I	doubleprecision array (*),
+c		overlp    I	doubleprecision,
+c		nplate    I/O	integer,
+c		plcenter  O	doubleprecision array(2,nplate),
+c		plsize	  O	doubleprecision array(2,nplate),
+c		)
+c	size  	Size of a layer of square plates;
+c	overlp  Size of overlap between plates;
+c	nplate  Maximum nr. of plates allowed storage for,
+c		Nr. of plates actually returned;
+c	plcenter longitude and latitude of the plate (in radians)
+c	plsize	lon. and lat. size of the plate (in radian)
+c
+c Description:
+c	IRPL_PLATECENTER starts at the equator with the first SIZE
+c	and goes up to the pole taking for each layer of plates
+c	the next SIZE. IRPL_PLATECENTER stops when the new centre
+c	would lie below the equator. The southern sky will be a symmetric
+c	copy of the northern sky. The caller is responsible to give enough
+c	plate sizes in size.
+c	This subroutine will produce a number of plate centres for the
+c	celestial sphere. The order of plates will be first the plates
+c	at the equator then the plates in layers above the equator fol-
+c	lowed by the plates in the layers below the equator in a symmetric
+c	way.
+c	The centers and the sizes are valid in any coordinate system;
+c	Both IRAS plate systems though are defined in the ECLIPTIC
+c	system of epoch 1983.5
+c Externals:
+c	ERROR, IRPL_CORNERS, IRCO_PLATE, IRCO_TRANSFORM
+c Updates:
+c	90 Jul 12  Do Kester, change in CALL and clean up
+c	90 May  1  Sjag Steensma; documentation only,
+c	89 Jan 09  Timo Prusti, unification of versions,
+c	87 May 11  WvO, Repaired documentation error,
+c	85 Dec 03  WvO, Forgotten declaration added.
+c#<
+
+        subroutine IRPL_PLATECENTER( size, overlp, nplate, 
+     #			plcenter, plsize )
+
+        doubleprecision size(*), overlp
+        doubleprecision plcenter(2,nplate), plsize(2,nplate)
+        integer       	nplate
+
+c Initialization of parameters:
+        integer       	OK, FATAL, MAXEXC, KRADEC
+        doubleprecision PI, HALFPI, TWOPI
+        parameter     ( OK = 0, FATAL = 3, MAXEXC = 3, KRADEC = 1 )
+        parameter     ( PI = 3.14159265358979 )
+	parameter     (	HALFPI = PI/2, TWOPI = 2*PI )
+
+
+	doubleprecision		cursize(2)
+n Nr. of great circle radians for small circle
+        doubleprecision         circle
+n Nr. of great circle radians between plate centres
+        doubleprecision         pldist
+n Nr. of small circle radians between plate centres
+        doubleprecision         newdis
+        integer       ntotpl, platecoor
+n Latitude of plate side nearest to equator
+        doubleprecision          layer
+        integer       ilayer, ipl, npl, iplate, nzero
+        doubleprecision	corner(3, 4), pcorns(3, 4)
+n Storage for coordinates of plate centres (radians)
+        doubleprecision          centre(2), r2d
+        logical       halt
+
+	r2d = 180 / PI
+        centre(1) = 0.0
+        centre(2) = 0.0
+        halt = .false.
+        ntotpl = 0
+	platecoor = 0
+        ilayer = 1
+        repeat
+c Initialize plate corners
+          cursize(1) = size(ilayer)
+          cursize(2) = size(ilayer)
+          call IRPL_CORNERS( cursize, corner )
+c Distance between plate centres
+          pldist = cursize(1) - overlp
+
+          if centre(2) .ge. HALFPI
+          then
+            centre(2) = HALFPI
+	    npl = 1
+          else
+            call IRCO_PLATE( KRADEC, centre,
+     #		'Plate-referenced coordinates', platecoor )
+            call IRCO_TRANSFORM( corner, platecoor, pcorns, KRADEC, 4 )
+            layer = dasin( pcorns(3,3) )
+c Size of circle in great circle radians
+            circle = TWOPI * dcos( layer )
+            npl = int( circle / pldist )
+            if dble( npl ) .ne. circle / pldist
+            then
+              npl = npl + 1
+            cif
+          cif
+          if centre(2) .eq. 0.0
+          then
+            nzero = npl
+          cif
+c Distance between plate centres in small circle radians
+          newdis = circle / npl
+          ipl = 0
+          if ntotpl + npl .gt. nplate
+          then
+            nplate = ntotpl
+	    call ERROR( FATAL, 'Not enough room to store the plates' )
+            return
+          else
+            for iplate = ntotpl + 1, ntotpl + npl
+c Output in radians
+              plcenter(1,iplate) = (ipl * newdis) / circle * TWOPI
+              if plcenter(1,iplate) .gt. PI
+              then
+                plcenter(1,iplate) = plcenter(1,iplate) - TWOPI
+              cif
+              plcenter(2,iplate) = centre(2)
+              plsize(1,iplate) = size(ilayer)
+              plsize(2,iplate) = size(ilayer)
+              ipl = ipl + 1
+            cfor
+            ntotpl = ntotpl + npl
+c	print '(a,i5,4f10.3)', 'plate:', ntotpl, 
+c     #  plcenter(1,ntotpl)*r2d, plcenter(2,ntotpl)*r2d, 
+c     #  plsize(1,ntotpl)*r2d, plsize(2,ntotpl)*r2d
+          cif
+          halt = centre(2) + size(ilayer) / 2.0 - overlp .gt. HALFPI
+c Initialize new layer
+          ilayer = ilayer + 1
+          if centre(2) + cursize(2) / 2.0 .gt. HALFPI
+	  then
+	    centre(2) = HALFPI
+	  else
+c Upper corner of previous plate plus next size
+            centre(2) = max( asin( pcorns(3,1) ), centre(2) )
+     &                   - overlp + size(ilayer) / 2.0
+	  cif
+
+        until halt
+
+        if 2 * ntotpl - nzero .gt. nplate
+        then
+          nplate = ntotpl
+	  call ERROR( FATAL, 'Not enough room to store the plates' )
+        else
+c Copy for southern sky
+	  ipl = ntotpl
+	  for iplate = nzero + 1, ntotpl
+	    ipl = ipl + 1
+            plcenter(1,ipl) = plcenter(1,iplate)
+            plcenter(2,ipl) =-plcenter(2,iplate)
+	    plsize(1,ipl) = plsize(1,iplate)
+	    plsize(2,ipl) = plsize(2,iplate)
+          cfor
+          nplate = ntotpl + ntotpl - nzero
+        cif
+
+	return
+       	end
+
+
+c#>	irpl_corners.dc2
+c Subroutine:	IRPL_CORNERS.
+c
+c Purpose:      Calculate plate corners in plate-referenced coordinates.
+c
+c File:		irpl_standard.shl.
+c
+c Author: 	85 Jul 19 Uwe Peppel.
+c 
+c Use: 
+c	call IRPL_CORNERS (
+c		size     I	doubleprecision(2),
+c		corner   O	doubleprecision(3,4).
+c		)
+c	size	long. and lat. length of a plate edge in radians 
+c		(= great circle angular distance),
+c	corner	xyz of the four corners of the plate in plate-
+c		referenced coordinates.
+c Description: 
+c	The plate-referenced coordinate system is a rectangular
+c       system having the plate center at its x-axis. The y-axis
+c       points to the top of the plate.
+c       IRPL_CORNERS accepts any value for SIZE. In practice the
+c       maximum value for SIZE should be pi/2, which is a plate
+c       covering one half of the whole sky.
+c       The corners are counted anti-clockwise when the x-y-z-system
+c       is taken to be right handed and the plate is seen from outside
+c       the unit-sphere, beginning at the corner with y and z coordinates
+c       both having positive values. With this convention the top
+c       of the plate consists of the corners 1 and 4.
+c
+c Updates:
+c	900501 Sjag Steensma; documentation only.
+c	900926 DK, change plate definition 
+c#<
+
+      	subroutine IRPL_CORNERS( size, corner )
+
+      	doubleprecision	size(2), corner(3,4)
+
+	doubleprecision	s1, s2, x, y, z, p
+
+	s1 = size(1) / 2
+	s2 = size(2) / 2
+	z = sin( s2 )
+	y = sin( s1 )
+	p = cos( s2 ) ** 2 - y ** 2 
+	x = sign( sqrt( abs( p ) ), p )
+
+	corner(1,1) = x
+	corner(2,1) = y
+	corner(3,1) = z
+	corner(1,2) = x
+	corner(2,2) = y
+	corner(3,2) =-z
+	corner(1,3) = x
+	corner(2,3) =-y
+	corner(3,3) =-z
+	corner(1,4) = x
+	corner(2,4) =-y
+	corner(3,4) = z
+
+	return
+	end
+
+
+
+

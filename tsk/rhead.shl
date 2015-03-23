@@ -1,0 +1,539 @@
+E
+C=============================================================================
+C                              rhead.shl
+C-----------------------------------------------------------------------------
+C                           COPYRIGHT (c) 1990
+C         Kapteyn Astronomical Institute - University of Groningen
+C            P.O. box 800,  9700 AV Groningen, The Netherlands
+C
+C#> rhead.dc1
+C
+CProgram:      RHEAD
+C
+CPurpose:      list header elements ( descriptors ) and their level in grids
+C
+CCategory:     HEADER, FITS, UTILITY
+C
+CFile:         rhead.shl
+C
+CAuthor:       W. Zwitser
+C
+CKeywords:
+C
+C   SET=       name of set
+C
+C   KEY=       key[/..], -key[/..], S(izes), A(ll), R(=A-S)
+C
+C              key/key/..  keywords of descriptors to be printed.
+C                          These keywords are seperated by a slash.
+C
+C              -key/key/.. keywords of descriptors which should NOT be
+C                          printed. All other descriptors are printed.
+C                          These keywords are seperated by a slash.
+C
+C              S           print descriptors which have to do with the
+C                          axis size, i.e. NAXIS[n], CRPIXn, CTYPEn.
+C
+C              A           print all descriptors.
+C
+C              R           print relevant descriptors, i.e. all except the
+C                          S descriptors.
+C
+C              Default: program exit.
+C   ALL=       all levels ?
+C              N  the descriptor levels are asked for by the next keywords
+C                 CLOW= and CUPP=.
+C              Y  print descriptors at all levels ( default ).
+C
+C   CLOW=      lower grid coordinates.
+C              This is the lower left corner of the plane where descriptors
+C              are searched. Give a grid value for each axis and an 'u' for
+C              axes with an undefined value.
+C              Default: top level ( = all axes undefined ).
+C
+C   CUPP=      upper grid coordinates.
+C              This is the upper right corner of the plane where descriptors
+C              are searched. Give a grid value for each axis and an 'u' for
+C              axes with an undefined value.
+C              Default: CLOW.
+C
+C   DEV=       output device.
+C              F  write descriptors found in an output file RHEAD.PRT.
+C              S  terminal screen ( default ).
+C
+C              This keyword is prompted if more than 15 descriptors were
+C              found, otherwise the screen is taken.
+C
+C Updates:     May 1, 1990: WZ, installed.
+C              Dec 1, 1992: VOG, Category added.
+C#<
+C
+C-----------------------------------------------------------------------------
+
+	program rhead
+
+	parameter	( max_ax = 20 )
+        parameter       ( max_rec= 1000 )
+        parameter       ( max_siz= 3 )
+        parameter       ( max_sel= 20 )
+        parameter       ( lgrid  = 10 )
+
+        character*80    f_rec
+        character*20    gdsd_find
+        character*20    key_fnd( max_rec ), key_siz( max_siz )
+        character*20    key_sel( max_sel )
+        character*80    key
+	character*100	messge
+        character*2     pdev
+        character*1     separ
+	character*40	set
+        character*(lgrid)  sgrid( max_ax )
+        character*80    slev, selec
+
+	logical		all, exist, gds_exist
+        logical         grid_def( max_ax ), grid_fnd_def( max_ax )
+        logical         grid_low_def( max_ax ), grid_upp_def( max_ax )
+        logical         ok, prt_file
+
+	integer         clow, cupp
+        integer         coord( max_rec )
+	integer         err, recno
+	integer         gdsc_word, gdsc_substruct
+        integer         grid_low( max_ax ), grid_upp( max_ax )
+        integer         grid( max_ax ), grid_fnd( max_ax )
+        integer         nulln
+	integer         userint, userlog, userchar
+
+        common     /noargn/    nulln
+
+N non relevant keywords
+        data        key_siz         / 'NAXIS', 'CRPIX', 'CTYPE' /
+N separator in SELEC
+        data        separ           /'/'/
+
+	call init
+        repeat
+  	l = userchar( set, 1, 0, 'SET=', 'give set name' )
+          call cancel( 'SET=' )
+          exist = gds_exist( set, err )
+          if exist
+          then
+N number of axes specified
+            call gdsd_rint( set, 'NAXIS', 0, naxis, err )
+            if err .lt. 0
+            then
+              call error( 1,
+     -          'set empty or destroyed (no keyword NAXIS)' )
+              naxis = 0
+              err = 0
+            else
+              write( messge, '( i3, ''-D set '', a, '' opened'', a1 )' )
+     -          naxis, set( :nelc( set ) ), 0
+              call anyout( 0, messge )
+            cif
+            call anyout( 16,
+     -        ' output in log file always, on screen in /MODE 2' )
+            call anyout( 16,
+     -	      ' select posibilities:' )
+            call anyout( 16,
+     -	      ' key_1/.../key_n  = only these keywords' )
+            call anyout( 16,
+     -        ' -key_1/.../key_n = all except thes keywords' )
+            call anyout( 16,
+     -        ' S                = size keywords NAXISn,CRPIXn,CTYPEn' )
+            call anyout( 16,
+     -        ' A                = all keywords' )
+            call anyout( 16,
+     -        ' R                = relevant keywords (not NAXISn,etc)' )
+            perform usrinp
+          else
+            call error( 1, 'set does not exist' )
+          cif
+        until exist
+        call finis
+        stop
+
+        proc usrinp
+        while .true.
+          messge = 'key[/..], -key[/..], S(izes), A(ll), R(=A-S) [quit]'
+          l = userchar( selec, 1, 1, 'KEY=', messge )
+          call cancel( 'KEY=' )
+          if l .eq. 0
+          then
+            xwhile
+          cif
+          all = .true.
+          l = userlog( all, 1, 1, 'ALL=', 'all levels ? [Y]' )
+          call cancel( 'ALL=' )
+          if all
+          then
+N read all descriptors
+            perform rd_descr
+          else
+N ask lower left corner
+            nlow = userchar( sgrid, max_ax, 1, 'CLOW=',
+     -         'lower grid coordinates (u = undefined) [top level]' )
+            call cancel( 'CLOW=' )
+            clow = 0
+            for iax = 1, nlow
+              grid_low_def( iax ) = sgrid( iax )( 1:1 ) .ne. 'U'
+              if grid_low_def( iax )
+              then
+                l = nelc( sgrid( iax ) )
+                sgrid( iax )( lgrid+1-l:lgrid ) = sgrid( iax )( 1:l )
+                sgrid( iax )( 1:lgrid-l ) = ' '
+                read( sgrid( iax ), '( i10 )' ) grid_low( iax )
+N make lower left coordinate word CLOW
+                clow = gdsc_word( set, iax, grid_low( iax ), clow, err )
+              cif
+            cfor
+N ask upper right corner
+            nupp = userchar( sgrid, max_ax, 1, 'CUPP=',
+     -        'upper grid coordinates (u = undefined) [lower grids]' )
+            call cancel( 'CUPP=' )
+            cupp = 0
+            if ( nupp .eq. 0 )
+            then
+              nupp = nlow
+            cif
+            for iax = 1, nupp
+              grid_upp_def( iax ) = sgrid( iax )( 1:1 ) .ne. 'U'
+              if grid_upp_def( iax )
+              then
+                l = nelc( sgrid( iax ) )
+                sgrid( iax )( lgrid+1-l:lgrid ) = sgrid( iax )( 1:l )
+                sgrid( iax )( 1:lgrid-l ) = ' '
+                read( sgrid( iax ), '( i10 )' ) grid_upp( iax )
+N make upper right coordinate word CUPP
+                cupp = gdsc_word( set, iax, grid_upp( iax ), cupp, err )
+              cif
+            cfor
+N read all descriptors + select between CLOW and CUPP
+            perform rd_descr
+          cif
+        cwhile
+        cproc
+E RHEAD: procedure RD_DESCR   ( read all descriptors )
+        proc rd_descr
+
+N calculate level of CLOW and CUPP
+        level = gdsc_substruct( set, clow, cupp, err )
+        if level .eq. 0
+        then
+N top level
+          for iax = 1, max_ax
+            grid_def( iax ) = .false.
+          cfor
+        else
+N not top level: unpack LEVEL into grids
+          call expose( set, level, naxis, grid, grid_def, err )
+          err = 0
+        cif
+
+        ndev = 0
+        prt_file = .false.
+        if ( selec( 1:1 ) .eq. 'A' .or. selec( 1:1 ) .eq. 'R' )
+        then
+          nrec = 0
+N count number of requested descriptors
+          perform count
+          if nrec .gt. 15
+N large enough to make a file
+          then
+            pdev = ' '
+            write( messge,
+     -        '( i7,'' records -> File (RHEAD.PRT), [ Screen ] ?'',A1)')
+     -        nrec, 0
+            l = userchar( pdev, 1, 1, 'DEV=', messge )
+            call cancel( 'DEV=' )
+            prt_file = pdev .eq. 'F'
+            if prt_file
+            then
+              lun = 3
+N make a print file
+              open( unit=lun, file='RHEAD.PRT', status='NEW' )
+              write( lun, '('' set='', a, ''   key='', a,
+     -                      4x, i5, '' items'', a1 )' )
+     -        set( :nelc( set ) ), selec( :nelc( selec ) ), nrec, 0
+N write a header with CLOW and CUPP as grids
+              perform wlevel
+            cif
+          cif
+        cif
+        recno = 0
+        repeat
+N read + sort requested descriptors
+          perform store
+N show these descriptors one by one
+          for irec = 1, nrec
+N descriptor key
+            key       = key_fnd( irec )
+N descriptor level
+            level_fnd = coord( irec )
+N unpack LEVEL_FND into grids
+            call expose( set, level_fnd, naxis, grid_fnd, grid_fnd_def,
+     -        err )
+N start position in descriptor record
+            ipos = 1
+            repeat
+              f_rec = ' '
+              err = 0
+              call gdsd_read( set, key, level_fnd, f_rec, 80,
+N read (part of) descriptor
+     -          ipos, nread, err )
+              if err .lt. 0
+              then
+                err = 0
+                xrepeat
+              cif
+N print first part
+              if ipos .eq. 1
+              then
+N store GRID_FND as a string in SLEV
+                perform fndlev
+                write( messge, '( 1x, a, 1x, a18, a1, a30, a1 )' )
+     -            slev( 1:nelc( slev ) ), key( 1:18 ), '=',
+     -            f_rec( 1:30 ), 0
+                if prt_file
+                then
+                  write( lun, '( a )' ) messge( :nelc( messge ) )
+                else
+                  call anyout( ndev, messge )
+                cif
+                if nread .gt. 30
+                then
+                  write( messge, '( 1x, a80, a1 )' ) f_rec( 31:80 ), 0
+                  if prt_file
+                  then
+                    write( lun, '( a )' ) messge( :nelc( messge ) )
+                  else
+                    call anyout( ndev, messge )
+                  cif
+                cif
+N write next part of descriptor
+              else
+                write( messge, '( 1x, a80, a1 )' ) f_rec, 0
+                if prt_file
+                then
+                  write( lun, '( a )' ) messge( :nelc( messge ) )
+                else
+                  call anyout( ndev, messge )
+                cif
+              cif
+              ipos = ipos + nread
+N until the whole descriptor has been read
+            until nread .lt. 80
+          cfor
+N end of descriptor file
+        until recno .eq. 0
+
+        if prt_file
+        then
+          close( unit=lun )
+        cif
+        cproc
+E
+N write a header with CLOW and CUPP as grids
+        proc wlevel
+        slev = ' from '
+        for iax = 1, naxis
+          if grid_low_def( iax )
+          then
+            write( slev, '( a, i5 )' ) slev( 1:nelc( slev ) ),
+     -            grid_low( iax )
+          else
+            slev = slev( 1:nelc( slev ) ) // '    u'
+          cif
+        cfor
+        slev = slev( :nelc( slev ) )//'  to  '
+        for iax = 1, naxis
+          if grid_upp_def( iax )
+          then
+            write( slev, '( a, i5 )' ) slev( 1:nelc( slev ) ),
+     -            grid_upp( iax )
+          else
+            slev = slev( 1:nelc( slev ) ) // '    u'
+          cif
+        cfor
+        write( lun, '( a )' ) slev(:nelc( slev ) )
+        write( lun, '( 1x )' )
+        cproc
+
+N store GRID_FND as a string in SLEV
+        proc fndlev
+        slev = ' '
+        for iax = 1, naxis
+          if grid_fnd_def( iax )
+          then
+            write( slev, '( a, i5 )' ) slev( 1:nelc( slev ) ),
+     -            grid_fnd( iax )
+          else
+            slev = slev( 1:nelc( slev ) ) // '    u'
+          cif
+        cfor
+        cproc
+E
+N read + count all descriptors
+        proc count
+N internal record number
+        recno = 0
+        repeat
+          level_fnd = 0
+N descriptor level is returned in LEVEL_FND
+          key = gdsd_find( set, nulln, recno, level_fnd )
+          if level_fnd .ge. 0
+          then
+            perform fitin
+N level fits within CLOW and CUPP ?
+            if ok
+            then
+              nrec = nrec + 1
+            cif
+          cif
+N end of descriptor file
+        until recno .eq. 0
+        if nrec .gt. max_rec
+        then
+           write( messge,
+     -       '( 1x, i7, '' headers will be printed in blocks of '', i5,
+     -          '' records'', a1 )' ) nrec, max_rec, 0
+           call anyout( 0, messge )
+        cif
+        cproc
+
+N read + sort descriptors
+        proc store
+        nrec = 0
+        repeat
+          level_fnd = 0
+          if all
+          then
+N descriptor level is returned in level_fnd
+             key = gdsd_find( set, nulln, recno, level_fnd )
+          else
+             key = gdsd_find( set, level, recno, level_fnd )
+          endif
+          if level_fnd .ge. 0
+          then
+            perform fitin
+N level fits within clow and cupp ?
+            if ok
+            then
+              lkey = nelc( key )
+              nrec = nrec + 1
+              key_fnd( nrec ) = key( 1:min( 20, lkey ) )
+              coord( nrec )   = level_fnd
+            cif
+          cif
+N end of descriptor file or max. of buffer reached
+        until recno .eq. 0 .or. nrec .eq. max_rec
+        if nrec .gt. 0
+        then
+	for i = 1, nrec
+	lkey = nelc(key_fnd(i))
+	cfor
+N sort descriptors alphabatically
+           call sortc( key_fnd, coord, nrec )
+        cif
+        cproc
+E RHEAD: procedure FITIN
+        proc fitin
+N unpack grids of LEVEL_FND
+        call expose( set, level_fnd, naxis, grid_fnd, grid_fnd_def, err)
+        lkey   = nelc( key )
+        lselec = nelc( selec )
+N all keywords
+        ok = selec( 1:1 ) .eq. 'A'
+        if .not. ok
+        then
+N if relative only:
+          if selec( 1:1 ) .eq. 'R'
+          then
+            ok = .true.
+N exclude KEY_SIZ keywords
+            for i = 1, max_siz
+              lsiz = nelc( key_siz( i ) )
+              lkey = min( lkey ,lsiz )
+              ok = ok .and. key( :lkey ) .ne. key_siz( i ) ( :lsiz )
+            cfor
+          elseif selec( 1:1 ) .eq. 'S'
+          then
+N KEY_SIZ keywords only
+            for i = 1, max_siz
+              lsiz = nelc( key_siz( i ) )
+              lkey = min( lkey ,lsiz )
+              ok  = ok .or. key( :lkey ) .eq. key_siz( i ) ( :lsiz )
+            cfor
+          else
+N first position of KEY in SELEC
+            ikey = index( selec( :lselec ), key( :lkey ) )
+N last     ,,    ,,  ,, ,,   ,,
+            jkey = ikey + lkey - 1
+            if  selec( 1:1 ) .eq. '-'
+            then
+              ok = ikey .eq. 0 .or. ( ikey .gt. 0 .and. .not.
+     -            ( lselec .eq. jkey .or.
+     -              selec( jkey +1 : jkey + 1 ) .eq. separ ) )
+            else
+N + key must  occur in SELEC string
+              ok = ikey .gt. 0 .and.
+     -            ( lselec .eq. jkey .or.
+     -              selec( jkey +1 : jkey + 1 ) .eq. separ )
+N - key   ,, not  ,,,,   ,,     ,,
+            cif
+          cif
+        cif
+        if ok
+N keyword is ok, coordinates also ?
+        then
+N all levels
+          ok = all
+          if .not. ok
+N if CLOW and CUPP are on top level
+          then
+N only descriptors on level 0 are printed
+            ok = level .eq. 0 .and. level_fnd .eq. 0
+          cif
+          if .not. ok
+          then
+            ok = level .gt. 0
+            for iax = 1, naxis
+N grid defined in level_fnd ?
+              if grid_fnd_def( iax )
+              then
+                ok = ok .and. grid_fnd( iax ) .ge. grid_low( iax )
+N - yes: grids must fit within axis range
+     -                  .and. grid_fnd( iax ) .le. grid_upp( iax )
+C              else
+N - no:  grid in level must be undefined also
+C                ok = ok .and. .not. grid_low_def( iax )
+              cif
+            cfor
+          cif
+        cif
+
+        cproc
+        end
+
+        subroutine expose( set, coord, naxis, grid, def, err )
+
+        character*(*)    set
+        integer          coord
+        integer          naxis
+        integer          grid(1)
+        logical          def(1)
+        integer          err
+
+        integer          gdsc_grid, size, err_up
+
+        for iax = 1, naxis
+          err_up = 0
+N unpack grid coord. of axis iax
+          grid( iax ) = gdsc_grid( set, iax, coord, err_up )
+N grid coordinate defined
+          def( iax )  = err_up .ne. -19
+        cfor
+        return
+
+        end
+

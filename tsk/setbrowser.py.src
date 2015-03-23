@@ -1,0 +1,1282 @@
+setbrowser.py.src
+
+        Copyright (c) Kapteyn Astronomical Institute, Groningen 2014
+        All Rights Reserved.
+
+Name:         setbrowser.py.src
+Creator:      vogelaar
+Host:         albirumi.intra.astro.rug.nl
+Date:         mrt 20, 2014
+Contents:     setbrowser.py.make setbrowser.make setbrowser.py.doc QtDataBrowser.dc2 setbrowser.dc1
+              setbrowser.py
+
+#>            setbrowser.py.make
+#----------------------------------------------------------------------
+# Makefile for SETBROWSER (setbrowser.py.make)
+#
+# Pack sources into setbrowser.py.src with: > make -f setbrowser.py.make pack
+# Unpack source files with:                 > $gip_exe/xfile setbrowser.py.src
+# Install source file with:                 > p -reserve setbrowser.py.src
+#                                           > p -install setbrowser.py.src
+#
+# SETBROWSER is a module and it is installed as setbrowser.py
+# A Python module for GIPSY is installed as a task.
+#----------------------------------------------------------------------
+
+
+SHELL   = /bin/sh
+
+DOCUMENTS = setbrowser.py.doc QtDataBrowser.dc2 setbrowser.dc1
+
+SOURCES   = setbrowser.py
+
+default::
+	chmod +x setbrowser.py
+
+pack::
+	$$gip_sys/pack.csh setbrowser.py.src setbrowser.py.make setbrowser.make\
+        $(DOCUMENTS) $(SOURCES)
+
+#<
+
+#>            setbrowser.make
+#----------------------------------------------------------------------
+# Makefile for task(!) SETBROWSER (setbrowser.make)
+#
+# Pack sources into setbrowser.py.src with: > make -f setbrowser.py.make pack
+# Unpack source files with:                 > $gip_exe/xfile setbrowser.py.src
+# Install source file with:                 > p -reserve setbrowser.py.src
+#                                           > p -install setbrowser.py.src
+#
+# SETBROWSER is a module and it is installed as setbrowser.py
+# A Python module for GIPSY is installed as a task.
+# This makefile installs SETBROWSER as a task(!) so we reuse the source
+# from the module to create a GIPSY task
+#----------------------------------------------------------------------
+
+
+SHELL   = /bin/sh
+
+DOCUMENTS = setbrowser.dc1
+
+SOURCES   = setbrowser.py
+
+default:: setbrowser
+
+setbrowser: setbrowser.py
+	cp setbrowser.py setbrowser
+	chmod +x setbrowser
+
+#<
+
+#>            setbrowser.py.doc
+Document:     setbrowser.py
+
+Purpose:      Python module for composing data input including FITS files
+
+Category:     USER IO
+
+File:         setbrowser.py.src
+
+Author:       M.G.R. Vogelaar
+
+Description:  Refer to document QDataBrowser.dc2
+
+Updates:      Feb 21, 2012: VOG, Document created.
+#<
+
+#>            QtDataBrowser.dc2
+Function:     QtDataBrowser
+
+Purpose:      QtDataBrowser is class to provide a graphical interface which enables
+              a user to compose a valid data source input. 
+              It can also deal with (zipped) FITS files and FITS files from the
+              Internet using a valid web address. It recognizes multiple image header
+              data units (HDU's) in a FITS file and it can process so called 
+              'alternative headers'. 
+
+
+Category:     USER IO
+
+Files:        setbrowser.py
+
+Author:       M.G.R. Vogelaar
+
+Use:          browser = QtDataBrowser(parent=None,         # Parent Widget
+                                      GipsyAppClassmes=1,  # Integer
+                                      classDim=2,          # Integer
+                                      missionTxt="",       # Character string
+                                      restrictBox=True,    # Is box restricted to header values?
+                                      maxSubsets=None)     # Max. number of subsetrs in structure
+              
+
+              parent -     A parent Widget or None. From a parent, a group style can be
+                           borrowed.
+
+    
+              GipsyAppClass -
+                           The class (1 or 2) of the GIPSY application which uses
+                           the result of this composer
+                           More documentation about class 1/2 applications can be found in
+                           http://www.astro.rug.nl/~gipsy/gds/memo.gdsinp.pdf
+                           The class is set to 1 by default. If you enter a number other
+                           than 1 or 2, the parameter is set to 1 and a selection for
+                           a class option is provided on the GUI.
+                           If the browser is started from main() in this program,
+                           the class is set to -1. Two extra buttons will appear near
+                           the result fields for set/sussets and box. With this button
+                           one can send the result to Hermes (e.g. to supply a prompted
+                           keyword with content).
+    
+
+              classDim -   If GipsyAppClass=1:
+                           The dimension of the subsets.
+                           The default value is classDim=0 which implies that any dimensionality
+                           is accepted. For images one should specify classDim=2.
+                           If GipsyAppClass=2:
+                           The number of operation axis, i.e. along which an operation
+                           (e.g. mean, sum) is performed. The default value is
+                           classDim=0 which implies that any number of operation axes is allowed.
+                            Note that class 2 applications always need more than 1 subset.
+
+                                
+              missionTxt - A string that will appear on the GUI as a help for the
+                           user to compose the right input. 
+
+
+              restrictBox -
+                           Force user to enter box values within their grid ranges.
+                           Note that some applications allow for a box bigger than
+                           the entire subset.
+    
+
+              maxSubsets -
+                           Maximum number of subsets. See also $gip_sub/gdsinp.dc2
+                           Usually the input is processed by a routine like gdsinp()
+                           which requires an upper bound on the number of subsets.
+                           Note that if your input has many subsets (several thousands),
+                           the process of reading  the input can be slow
+                           (because the creation of so called coordinate words takes time)
+                           By default the parameter is not set and any number of subsets
+                           is allowed. It seems wise to set a value to prevent a user
+                           to enter too many subsets by accident.
+
+
+Methods:      getOpenSet()
+              For a QtDataBrowser object, use this method to pop up the browser/composer.
+              See also the example.
+
+
+Returns:      For valid input, this method returns a tuple with two strings
+              The first string is the Set/subset specification and the 
+              second string is the box. See also the example.
+              If Cancel is pressed, None is returned.
+
+
+Description:  For data sources with more than two axes (dimensions), it is
+              not often clear how to compose the set/subset specification,
+              This method presents a Graphical User Interface with the 
+              functionality of an input composer. It forces the user to 
+              select the right number of axes to match with the required
+              dimension of the data (e.g. 2 for images).
+              It can be used as a stand alone program to inspect your 
+              data on disk as, for example, with task DISK.
+
+
+
+Example:      The composer will be used in the context of a (py)Qt application.
+              In the next example we demonstrate its use. Note that we did
+              not list the necessary import statements.
+
+
+              import gipsy
+              from PyQt4.QtGui import QApplication
+              from setbrowser import QtDataBrowser
+     
+              def main():
+                 gipsy.init()
+                 app = QApplication(sys.argv)
+                 fn = QtDataBrowser(GipsyAppClass=2, classDim=0, maxSubsets=1000).getOpenSet()
+                 if fn:
+                    gipsy.anyout("Set/subset: %s"%(fn[0]))
+                    gipsy.anyout("Box: %s"%(fn[1]))
+                 gipsy.finis()
+
+
+Updates:      Feb 21, 2013: VOG, Document created.
+              
+#<
+
+#>            setbrowser.dc1
+
+Program:       SETBROWSER
+
+Purpose:       Program to compose and send input to Hermes for tasks which
+               need a GIPSY set or FITS file
+
+Category:      UTILITY
+
+File:          setbrowser.src
+
+Author:        M.G.R. Vogelaar
+
+Keywords:      None
+
+
+Description:   This program is the task version of module setbrowser.py
+               The module provides a Qt based composer for set related input.
+               We provided a version as a GIPSY task because it can be a
+               handy utility (e.g. easier to se than task DISK) to explore
+               your data on disk. It recognizes both GDS data and FITS data.
+               It can show a header with meta information for selected data.
+               The composer can be used to create valid input for GIPSY tasks.
+
+Notes:         .......
+
+Example:       .......
+
+Updates:       Feb 07,  2013: VOG, Document created.
+               Mar 24,  2013: VOG, version 0.77 starts file overview in current
+                                   directory, instead of arbitrary location.
+                                   Header info presented in window that does not block.
+                                   Header info button is toggle for pop up.
+#<
+
+#>            setbrowser.py
+#!/usr/bin/env python
+from __future__ import division     # Allow 1/10 = 0.1 for eval()
+#----------------------------------------------------------------------
+# FILE:    setbrowser.py
+# PURPOSE: Composer for input of GDS sets and FITS files
+# AUTHOR:  M.G.R. Vogelaar, University of Groningen, The Netherlands
+# DATE:    February 27, 2013
+# UPDATES: February 27, 2013
+
+
+__version__ = '0.77'
+#
+# (C) University of Groningen
+# Kapteyn Astronomical Institute
+# Groningen, The Netherlands
+# E: gipsy@astro.rug.nl
+#----------------------------------------------------------------------
+from PyQt4.QtCore import Qt, SIGNAL, QString, QSize, QPoint
+from PyQt4.QtGui  import QApplication, QFileDialog, QPushButton, QGroupBox, QGridLayout,\
+                         QLabel, QRadioButton, QFrame, QButtonGroup, QLineEdit,\
+                         QFrame, QDialogButtonBox, QMessageBox, QFont, QCheckBox,\
+                         QPalette, QColor, QDialog, QTextBrowser, QVBoxLayout,\
+                         QHBoxLayout, QWidget, QSizePolicy, QListView, QSplitter
+                         
+import gipsy
+import os, sys
+try:
+   import pyfits
+except:
+   try:
+      from astropy.io import fits as pyfits
+   except:
+      print "Cannot import a version of PyFITS"
+      raise
+
+import warnings
+from string import letters
+
+MAXWIDTH = 100
+
+class QtDataBrowser(QFileDialog):
+    #----------------------------------------------------------------------------
+    # Purpose:   Class to compose the input of a valid data source (FITS files
+    #            or GIPSY sets). It shows a file dialog and for a valid file,
+    #            the axis information is presented with options to change the
+    #            dimensionality of the input. The result can be used if the
+    #            dimensionality of the selected data is equal to the required
+    #            dimensionality ('classDim').
+    #            The composer is developed to be used with GIPSY tasks written
+    #            in Python. Besides GDS data, it can read FITS files. The FITS
+    #            files can be in zipped format and can be read from disk or
+    #            downloaded from the Internet using a valid web address.
+    #            It also supports so called 'alternative headers' (world
+    #            coordinate systems defined by alternative keywords which ends
+    #            on a character [A..Z] like CTYPE1A, CRVAL3A, CROTA2Z etc.).
+    #            The composer distinguishes class 1 and class 2 GIPSY tasks.
+    #
+    #
+    # Input:
+    # parent -
+    #            A parent Widget or None. From a parent, a group style can be
+    #            borrowed.
+    #
+    # GipsyAppClass -
+    #            The class (1 or 2) of the GIPSY application which uses
+    #            the result of this composer
+    #            More documentation about class 1/2 applications can be found in
+    #            http://www.astro.rug.nl/~gipsy/gds/memo.gdsinp.pdf
+    #            The class is set to 1 by default. If you enter a number other
+    #            than 1 or 2, the parameter is set to 1 and a selection for
+    #            a class option is provided on the GUI.
+    #            If the browser is started from main() in this program,
+    #            the class is set to -1. Two extra buttons will appear near
+    #            the result fields for set/sussets and box. With this button
+    #            one can send the result to Hermes (e.g. to supply a prompted
+    #            keyword with content).
+    #
+    # classDim - If GipsyAppClass=1:
+    #            The dimension of the subsets.
+    #            The default value is classDim=0 which implies that any dimensionality
+    #            is accepted. For images one should specify classDim=2.
+    #            If GipsyAppClass=2:
+    #            The number of operation axis, i.e. along which an operation
+    #            (e.g. mean, sum) is performed. The default value is
+    #            classDim=0 which implies that any number of operation axes is allowed.
+    #            Note that class 2 applications always need more than 1 subset. 
+    #            
+    # missionTxt -
+    #            A string that will appear on the GUI as a help for the
+    #            user to compose the right input.
+    #
+    # restrictBox -
+    #            Force user to enter box values within their grid ranges.
+    #            Note that some applications allow for a box bigger than
+    #            the entire subset.
+    #
+    # maxSubsets -
+    #            Maximum number of subsets. See also $gip_sub/gdsinp.dc2
+    #            Usually the input is processed by a routine like gdsinp()
+    #            which requires an upper bound on the number of subsets.
+    #            Note that if your input has many subsets (several thousands),
+    #            the process of reading  the input can be slow
+    #            (because the creation of so called coordinate words takes time)
+    #            By default the parameter is not set and any number of subsets
+    #            is allowed. It seems wise to set a value to prevent a user
+    #            to enter too many subsets by accident.
+    #
+    # directory -
+    #            Directory to start with listing files.
+    #            By default the current working directory is opened.
+    #
+    #
+    # Returns:   A tuple with two strings or None. For a valid data source the first
+    #            string is a set/subset description and the second string is a
+    #            description of the grid limits of the data (box).
+    #
+    #
+    # Notes:     The idea behind this class is to provide a user with a tool to
+    #            compose input for GIPSY applications. This is not always trivial
+    #            because in GIPSY we distinguish applications that work on so called
+    ##            repeat axes and applications that work on operation axes.
+    #            Also the dimensionality of input data can be greater than 2
+    #            which allows a user to extract e.g. two-dimensional data slices
+    #            along different data axes.
+    #
+    #            -Currently, only class 1 GIPSY program input can be composed.
+    #            Class 2 should be added a.s.a.p.
+    #            -The file browser (A QFileDialog object) is set to ReadOnly mode
+    #            to prevent unwanted creation of files and folders which should
+    #            not be delegated to this composer.
+    #
+    # Example:
+    #
+    #   import gipsy
+    #   from PyQt4.QtGui import QApplication
+    #   from setbrowser import QtDataBrowser
+    #
+    #   def main():
+    #   gipsy.init()
+    #   app = QApplication(sys.argv)
+    #   gipsy.qtconnect()    
+    #   fn = QtDataBrowser(GipsyAppClass=2,  classDim=0, maxSubsets=1000).getOpenSet()
+    #   if fn:
+    #      gipsy.anyout("Set/subset: %s"%(fn[0]))
+    #      gipsy.anyout("Box: %s"%(fn[1]))
+    #   else:
+    #      gipsy.anyout("No return value")
+    #   gipsy.finis()
+    #
+    #----------------------------------------------------------------------------
+    def __init__(self, parent=None, GipsyAppClass=1, classDim=0, missionTxt="",
+                 restrictBox=True, maxSubsets=None, directory=None):
+        super(QtDataBrowser, self).__init__(parent)
+        self.result = None
+        self.setReadOnly(True)                         # Prevent creation of new files and/or folders
+        self.setViewMode(0)                            # Set to vertical only detailed file list
+        if directory is None:
+           directory = os.getcwd()
+        self.setDirectory(directory)
+        self.GipsyAppClass = GipsyAppClass
+        if GipsyAppClass not in [1,2]:
+            self.GipsyAppClass = 1
+            self.classOption = True
+        else:
+            self.classOption = False
+        self.classDim = classDim
+            
+        self.missionTxt = self.setdefaultMissionTxt(missionTxt)
+        self.restrictBox  = restrictBox
+        self.maxSubsets = maxSubsets
+        self.groupCheckBox = {}                        # A QButtonGroup for each axis in data
+        self.RangeListEdit = {}                        # A grid range for each axis in data
+
+        self.errorPal = QPalette()
+        self.errorPal.setColor(QPalette.Base, QColor(255, 0,0))
+        self.okPal = QPalette()
+        self.okPal.setColor(QPalette.Base, QColor(255, 255,255))
+        
+        layout = self.layout()
+        self.urlEdit = QLineEdit()
+        self.urlEdit.setToolTip("Enter a web address to get a FITS file from Internet")
+        self.connect(self.urlEdit, SIGNAL('returnPressed()'), self.setChanged)
+        self.allowURL = QCheckBox('URL:')
+        self.allowURL.setToolTip("Check this box to allow entering the web address of your FITS data. You can omit the <tt>http://</tt> part.")
+        self.allowURL.toggle()
+        self.allowURL.stateChanged.connect(self.changeURLmode)
+        self.allowURL.setChecked(False)
+        
+        self.manualEditFrame = QFrame()                # Contains the composed set/box lines        
+        self.manualEditFrame.setFrameShape(QFrame.StyledPanel)
+        self.manualEditFrame.setFrameShadow(QFrame.Raised)
+        self.manualEditFrame.setObjectName("manualEditFrame")
+        self.subsetLine = QLineEdit(self.manualEditFrame)
+        self.subsetLine.setObjectName("subsetLine")    # Contains the composed set/subset line
+        self.boxLine = QLineEdit(self.manualEditFrame) 
+        self.boxLine.setObjectName("boxLine")          # Contains the composed box line
+        self.gridLayoutManualEdit = QGridLayout(self.manualEditFrame)
+        self.gridLayoutManualEdit.addWidget(QLabel("Set/subset(s):"), 0, 0)
+        self.gridLayoutManualEdit.addWidget(self.subsetLine, 0, 1, 1, 1)
+        self.gridLayoutManualEdit.addWidget(QLabel("Box:"), 1, 0)
+        self.gridLayoutManualEdit.addWidget(self.boxLine, 1, 1, 1, 1)
+        self.infowindow = None                         # id of pop up window with header info
+        
+        if self.classOption:
+           self.send1 = QPushButton("Send")
+           mes = "Send line to the GIPSY command line (Hermes)"
+           self.send1.setToolTip(mes)
+           self.send1.setMaximumWidth(50)
+           self.gridLayoutManualEdit.addWidget(self.send1, 0, 2)
+           self.connect(self.send1, SIGNAL("clicked()"), self.sendSet)
+           self.send2 = QPushButton("Send")
+           self.send2.setToolTip(mes)
+           self.send2.setMaximumWidth(50)
+           self.gridLayoutManualEdit.addWidget(self.send2, 1, 2)
+           self.connect(self.send2, SIGNAL("clicked()"), self.sendBox)
+
+        
+        self.setWindowTitle('Data source composer (%s)'%(__version__))
+
+        # Hide Open and Cancel button and label and QLineEdit widget for file name
+        # The line with the file name has no added value.
+        # Open en Cancel are replaced by a QDialogButtonBox
+        for b in self.findChildren(QPushButton):          
+           but = str(b.text()).lower()
+           if 'open' in but or 'cancel' in but:
+              b.hide()              
+        for b in self.findChildren(QLineEdit):           
+           b.hide()
+        for b in self.findChildren(QLabel):
+           if "name" in str(b.text()).lower():
+              b.hide()
+
+        # Try to fix the height of the ListView widget
+        # We know that there is one QSplitter object in QFileDialog
+        b = self.findChildren(QSplitter)[0]        # Take first of list (there is only one)
+        for lv in b.children():                    # Find the QListView object
+           if isinstance(lv, QListView):
+              lv.setMaximumHeight(300)             # Set to fixed size
+              lv.setMinimumHeight(300)
+              break              
+        
+        self.setNameFilters(["GIPSY sets and FITS files (*.image *.fits *.FITS *.fits.gz *.FITS.gz)",
+                             "GIPSY sets (*.image)", "FITS files (*.fits *.FITS *.fits.gz *.FITS.gz)",
+                             "All files (*)"])
+        # Redirect internal signals for selected file names.
+        self.connect(self, SIGNAL('currentChanged(QString)'), self.setChanged)
+        self.connect(self, SIGNAL('fileSelected(QString)'), self.setChanged)
+
+        self.axesdataBox = QGroupBox()
+        self.axesdataBox.setFlat(False)
+        if parent and hasattr(parent, 'groupstyle'):
+           self.axesdataBox.setStyleSheet(parent.groupstyle)
+        self.axesdataLayout = QGridLayout(self.axesdataBox)
+        #self.axesdataBox.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Maximum)        
+        
+        self.allowEdit = QCheckBox('Edit:')
+        self.allowEdit.setToolTip("Check this box to enable manual editing.")
+        self.allowEdit.toggle()
+        self.allowEdit.stateChanged.connect(self.changeEditmode)
+        if self.classOption:
+           # Probably the browser was started from main() in this program.
+           # Then we set the edit fields to checked
+           self.allowEdit.setChecked(True)
+           self.manualEditFrame.setEnabled(True)
+        else:
+           self.allowEdit.setChecked(False)
+           self.manualEditFrame.setEnabled(False)
+
+        #layout.setRowStretch(6, 1)
+        layout.addWidget(self.allowURL, 7, 0)
+        layout.addWidget(self.urlEdit, 7, 1, 1, 2)
+        layout.addWidget(QLabel("Axes data:"), 8, 0, Qt.AlignTop)
+        layout.addWidget(self.axesdataBox, 8, 1, 1, 2)
+        #layout.setRowMinimumHeight(8, 200)
+        layout.setRowStretch(9,1)
+        layout.addWidget(self.allowEdit, 10, 0, Qt.AlignTop)
+        layout.addWidget(self.manualEditFrame, 10, 1, 1, 2)
+        #layout.setRowStretch(10,10)
+
+        # For the header button we want to include a system icon
+        style = QApplication.style()
+        icon = style.standardIcon(style.SP_MessageBoxInformation) # See: http://qt-project.org/doc/qt-4.8/qstyle.html
+        self.headerButn = QPushButton(icon, "Keywords")
+        self.headerButn.setMaximumWidth(90)
+        self.headerButn.setEnabled(False)
+        self.headerButn.setToolTip("<p>Pop up a window with a description of the data in the form keyword=value. Use this button as toggle to pop up and remove the information.</p>")
+        self.headerButn.setCheckable(True)
+        
+        self.connect(self.headerButn, SIGNAL("clicked()"), self.showHeader)
+        
+        layout.addWidget(self.headerButn, 12,1)
+        
+        
+        # Add new OK and Cancel buttons
+        self.OKbuttonBox = QDialogButtonBox(QDialogButtonBox.Ok|
+                                            QDialogButtonBox.Cancel)
+        self.connect(self.OKbuttonBox, SIGNAL("accepted()"), self.setAccepted)
+        self.connect(self.OKbuttonBox, SIGNAL("rejected()"), self.reject)
+        layout.addWidget(self.OKbuttonBox, 12,2)
+        self.OKbuttonBox.button(QDialogButtonBox.Ok).setEnabled(False)
+        #layout.setRowStretch(11,20)
+        # It seems that a setLayout() is not necessary. Probably because we
+        # inherit from an object which has been layout already.
+        
+
+    def updateHdu(self, settrue, name, hduindx, althead, appClass=None):
+       #----------------------------------------------------------------------------
+       # Purpose: This method is called if a FITS file has multiple valid HDU's
+       #          These are header data units which contain image data.
+       #          If a user wants another header than the one that is selected by
+       #          default, then the method setChanged() is called with the selected
+       #          HDU. Then in method setChanged() there is no need to examine the
+       #          current file for multiple HDU's.
+       #----------------------------------------------------------------------------
+       if appClass:
+          self.GipsyAppClass = appClass
+       if settrue:
+          self.setChanged(name, hduindx, althead)
+                 
+
+
+    def setChanged(self, datasrc=None, hduindx=0, althead=""):
+       #----------------------------------------------------------------------------
+       # Purpose: A user selected a file from the browser. For this file we print
+       #          the information of the axes. A file can only be transferred to the
+       #          calling environment if the user selected a dimension which is
+       #          equal to the required dimension.
+       #          This method processes the input in different stages:
+       #          1) Is it a GDS or FITS data source? If FITS then get header
+       #             data units that contain image data.
+       #          2) If multiple HDU's exist, then present a menu with radio buttons
+       #             so that a user can select the required HDU. After a selection,
+       #             the axes information is re-read from the source. This method
+       #             is re-entered but this time with the index of the HDU (hduindx).
+       #----------------------------------------------------------------------------
+       if datasrc is None:
+          # This implies that the method has been called with signal returnpressed()
+          # and therefore its origin must be from the URL line editor.
+          datasrc = str(self.urlEdit.text()).strip()
+          if not datasrc.lower().startswith("http://"):
+             datasrc = "http://" + datasrc
+       else:
+          if self.allowURL.isChecked():
+             self.allowURL.setChecked(False)
+       self.OKbuttonBox.button(QDialogButtonBox.Ok).setEnabled(False)
+       self.headerButn.setEnabled(False)
+       # Clear some fields
+       self.subsetLine.setText("")
+       self.boxLine.setText("")
+       row = 0   
+       hdunum = None                                # Number of HDU with image data in FITS file
+       self.clearAxesLayout(self.axesdataLayout)    # Clean contents of this groupbox with axes info       
+       # Compose a list with information strings per axis
+       # and a list with HDU numbers. Note that these numbers can be arbitrary
+       dataname = str(datasrc)                      # string enters as QString       
+       ext = '.IMAGE'                               # Clean up name if it was a GIPSY set       
+       if dataname.upper().endswith(ext):
+          dataname = dataname[0:-(len(ext))]
+          hduinfo, hdunums = [], []                 # HDU's do not apply for GDS data
+       else:
+          i = 0                                     # Row counter
+          # There is no image data -> nothing to do. Notify user
+          hduinfo, hdunums, alternates = self.gethduList(dataname)
+          if hduinfo is None:
+             # An invalid file, probably a directory
+            return
+          if len(hduinfo) == 0:
+             shortname = os.path.basename(dataname)
+             s = "<font color='red'>Data in FITS file '%s' has no HDU's with image data with at least %d axes</font>"%(shortname, self.classDim)
+             self.axesdataLayout.addWidget(QLabel(s))
+             self.result = None
+             return
+          elif len(hduinfo) == 1 and not alternates[0]:
+             hdunum = hdunums[0]                    # In case there is only one HDU          
+          elif len(hduinfo) > 1 or alternates[i]:
+             # Put a radio button in the GUI for each valid HDU
+             self.gb = QGroupBox()
+             self.gbgrid = QGridLayout()
+             for info in hduinfo:
+                r = QRadioButton(info)
+                self.connect(r,  SIGNAL('toggled(bool)'),
+                   lambda b, name=datasrc, hdunum=i:self.updateHdu(b, name, hdunum, ""))
+                self.gbgrid.addWidget(r, i, 0)
+                # If one sets a radiobutton to 'checked', it generates a signal (which we do not want here)
+                if i == hduindx and not althead:
+                   r.blockSignals(True)
+                   r.setChecked(True)
+                   r.blockSignals(False)
+                j = 1                
+                for alt in alternates[i]:
+                   aw = QRadioButton("Alt. WCS: %s"%(alt))
+                   aw.setToolTip("Alternative header defined by CTYPE1%s, CRVAL1%s etc."%(alt, alt))
+                   self.connect(aw,  SIGNAL('toggled(bool)'),
+                       lambda b, name=datasrc, hdunum=i, althead=alt:self.updateHdu(b, name, hdunum, althead))
+                   self.gbgrid.addWidget(aw, i, j)
+                   if alt == althead:
+                      aw.blockSignals(True)
+                      aw.setChecked(True)
+                      aw.blockSignals(False)
+                   j += 1
+                   
+                i += 1
+             row = i+1
+             hdunum = hdunums[hduindx]          
+             self.gb.setLayout(self.gbgrid)
+             self.axesdataLayout.addWidget(self.gb, 1,0, 1,6)  # Last number is columnspan of layout of axes info
+
+       # So at this stage we have three options:
+       # 1) hdunum = None. This is a GDS set.
+       # 2) hdunum = 0. This is a FITS file with either one HDU or with HDU 0 selected from menu
+       # 3) hdunum > 0. This is a FITS file with an image extension
+
+       self.filename = dataname
+       if not (hdunum is None):                       # Then add hdu number
+          self.filename += '#%d'%(hdunum)
+          if althead:
+             self.filename += '#%s'%(althead)
+
+       shortname = os.path.basename(dataname)
+       # Try to open the data source
+
+       try:
+          warnings.resetwarnings()
+          warnings.filterwarnings('ignore', category=DeprecationWarning, append=True)
+          gipsyset = gipsy.Set(self.filename, create=False, write=False)
+          warnings.resetwarnings()
+          warnings.filterwarnings('always', category=DeprecationWarning, append=True)
+       except:
+          s = "<font color='red'>Data source '%s' is invalid FITS or GDS file</font>"%(shortname)
+          self.axesdataLayout.addWidget(QLabel(s))          
+          return
+
+       # Take care of the situation where a data source does not have enough axes
+       # The situation is the same for both class 1 and class 2 tasks
+       if self.classDim and (gipsyset.naxis < self.classDim):
+          if gipsyset.naxis == 1:
+             a = 'axis'
+          else:
+             a = 'axes'
+          s = "<font color='red'>Data in GIPSY set '%s' has %d %s while at least %d are required</font>"%(shortname, gipsyset.naxis, a, self.classDim)
+          self.axesdataLayout.addWidget(QLabel(s))          
+          return
+
+       self.header = ""
+       keys = []
+       for k, v in gipsyset.items():
+          keys.append(k)
+       keys.sort()
+       for k in keys:
+          v = gipsyset[k]
+          self.header += "%-8s = %+20s\n"%(k, v)
+       self.headerButn.setEnabled(True)
+
+       # Store some (pseudo)set properties so we safely can close the GIPSY set
+       self.axnames = []
+       self.gridrange = []
+       self.naxis = gipsyset.naxis
+       lo, hi = gipsyset.range(0)
+       for i in range(gipsyset.naxis):           
+          axname = gipsyset.axname(i)
+          self.axnames.append(axname.split("-")[0].upper())
+          self.gridrange.append((gipsyset.grid(i, lo), gipsyset.grid(i, hi)))
+       
+       # Create a label for the Groupbox with the name of the selected data source       
+       if gipsyset.fits:
+          filenameLabel = shortname+" (FITS)"
+       else:
+          filenameLabel = shortname+" (GDS)"
+       self.axesdataBox.setTitle(filenameLabel)
+
+       # If no application class was given, we give the user a choice
+       # This situation occurs when the browser is started from main.
+       if self.classOption:         
+          self.classOptionBox = QGroupBox()
+          self.classOptionBox.setMinimumHeight(30)
+          self.classOptiongrid = QGridLayout()
+          r1 = QRadioButton("Class 1")
+          r2 = QRadioButton("Class 2")
+          if self.GipsyAppClass == 1:
+             wid = r1
+          else:
+             wid = r2
+          wid.blockSignals(True)
+          wid.setChecked(True)
+          wid.blockSignals(False)
+                    
+          self.classOptiongrid.addWidget(r1, 0, 0)
+          self.classOptiongrid.addWidget(r2, 0, 1)
+          self.classOptionBox.setLayout(self.classOptiongrid)
+          self.axesdataLayout.addWidget(self.classOptionBox, row, 0, 1, 6, Qt.AlignCenter)
+          self.connect(r1,  SIGNAL('toggled(bool)'),
+                   lambda b, name=datasrc, hdunum=hduindx:self.updateHdu(b, name, hdunum, althead, appClass=1))
+          self.connect(r2,  SIGNAL('toggled(bool)'),
+                   lambda b, name=datasrc, hdunum=hduindx:self.updateHdu(b, name, hdunum, althead, appClass=2))
+          row += 1
+
+       # Create a table with axes properties (axis function and grid range)
+       self.groupCheckBox = {}
+       self.RangeListEdit = {}
+       self.limitLabel = {}
+       if self.GipsyAppClass in [1,2]:
+            #Building the header of the axis table in the composer
+            self.axesdataLayout.addWidget(QLabel("Axis name"), row, 0)
+            self.axesdataLayout.addWidget(QLabel("Box axis"), row, 1)
+            if self.GipsyAppClass == 1:
+               self.axesdataLayout.addWidget(QLabel("Repeat axis"), row, 2)
+            else:
+               self.axesdataLayout.addWidget(QLabel("Operation axis"), row, 2)
+            l=QLabel("Range/List")
+            l.setAlignment(Qt.AlignCenter)
+            self.axesdataLayout.addWidget(l, row, 3)
+            self.axesdataLayout.addWidget(QLabel("Default"), row, 4)
+            frame = QFrame()
+            line = QFrame(frame)
+            line.setFrameShape(QFrame.HLine)
+            line.setFrameShadow(QFrame.Sunken)
+            self.axesdataLayout.addWidget(line, row+1, 0, 1, 5)
+
+            # We want to set a number of axis checked as box axis
+            # but this number depends on the class of the application for which we want to
+            # compose a data source input
+            if self.GipsyAppClass == 1:
+               if self.classDim:
+                  limit = self.classDim
+               else:
+                  limit = 2
+            else:
+               if self.classDim:
+                  limit = gipsyset.naxis - self.classDim
+               else:
+                  # One is free to choose the number of operation axis, but we
+                  # select one as default
+                  limit = gipsyset.naxis - 1            
+            
+            lo, hi = gipsyset.range(0)
+            row += 2
+
+            for i in range(gipsyset.naxis):
+                row += i
+                # Write the axis name in the first column
+                axname = gipsyset.axname(i)
+                axname = "<b>"+axname.split("-")[0].upper()+"</b>"
+                self.axesdataLayout.addWidget(QLabel(QString(axname)), row, 0)
+
+                self.groupCheckBox[i]=QButtonGroup()
+                box=QRadioButton(QString(""))
+                repeat=QRadioButton(QString(""))
+
+                x, y = str(gipsyset.grid(i, lo)), str(gipsyset.grid(i, hi))
+                if (i <limit):
+                    box.setChecked(True)
+                    self.groupCheckBox[i].addButton(box, 0)
+                    self.groupCheckBox[i].addButton(repeat, 1)
+                    self.axesdataLayout.addWidget(box, row, 1)
+                    self.axesdataLayout.addWidget(repeat, row, 2)
+
+                    
+                    lowRange=QLineEdit(x)
+                    self.connect(lowRange, SIGNAL("textChanged(QString)"), self.updateResult)
+                    highRange=QLineEdit(y)
+                    self.connect(highRange, SIGNAL("textChanged(QString)"), self.updateResult)
+                    self.RangeListEdit[i]=(lowRange, highRange)
+                    b = QWidget()
+                    b.setMaximumWidth(MAXWIDTH)
+                    hbox = QHBoxLayout(b)
+                    hbox.setMargin(0)              # Prevent space around box border. Now it occupies as much room as the single RangeListEdit field.
+                    hbox.addWidget(lowRange)
+                    hbox.addStretch(1)
+                    hbox.addWidget(highRange)
+                    self.axesdataLayout.addWidget(b, row, 3)
+                    Label=QLabel(QString(x+", "+y))
+                    self.limitLabel[i]=Label
+                    self.axesdataLayout.addWidget(Label, row, 4)
+                else:
+                    repeat.setChecked(True)
+                    self.groupCheckBox[i].addButton(box, 0)
+                    self.groupCheckBox[i].addButton(repeat, 1)
+                    self.axesdataLayout.addWidget(box, row, 1)
+                    self.axesdataLayout.addWidget(repeat, row, 2)
+
+                    rangelist=QLineEdit()
+                    rangelist.setMaximumWidth(MAXWIDTH)
+                    self.connect(rangelist, SIGNAL("textChanged(QString)"), self.updateResult)
+                    self.RangeListEdit[i]=rangelist
+                    self.axesdataLayout.addWidget(rangelist, row, 3)
+                    Label=QLabel(QString(x+":"+y))
+                    self.limitLabel[i]=Label
+                    self.axesdataLayout.addWidget(Label, row, 4)
+                
+                self.connect(repeat, SIGNAL("toggled(bool)"), lambda c, i=i, row=row: self.rangeToList(c,i, row=row))
+                self.connect(box, SIGNAL("toggled(bool)"), lambda c, i=i, row=row:self.listToRange(c,i,row=row))
+       
+       gipsyset.close()
+       self.missionLab = QLabel("")
+       font = QFont()
+       font.setItalic(True)
+       font.setPointSize(8)
+       self.missionLab.setFont(font)
+       self.missionLab.setWordWrap(True)
+       self.axesdataLayout.addWidget(self.missionLab, row+1, 0, 1, 6)
+
+       # TODO: Seems not necessary:
+       self.axesdataBox.setLayout(self.axesdataLayout)
+       self.updateResult()
+       
+
+    def updateResult(self):
+       #----------------------------------------------------------------------------
+       # Purpose: This method is called if something in data composer is changed.
+       #          A new Set/subset string is stored in attribute 'result', but this
+       #          result can only be transferred to the calling environment if
+       #          the dimensionality is valid. If not, the ok button is disabled.
+       #----------------------------------------------------------------------------
+       subsettext = self.filename
+       boxtext = ""
+       gridlotxt = ""
+       gridhitxt = ""
+       boxaxes = 0
+       numaxes = 0
+       numsubsets = 1
+       inlimits = True
+       inbox = True
+       numSubsetsOk = True
+       correctExpression = True
+       for i, ax in enumerate(self.axnames):
+          group=self.groupCheckBox[i]
+          buttonList=group.button(1) # or repeat axis or operation axis
+          if  buttonList.isChecked():
+             # Is a repeat axis
+             correctExpression = True
+             s = self.RangeListEdit[i].text()
+             subsettext=subsettext+" "+unicode(ax)+" "+unicode(s)
+             if s:
+                wid = self.RangeListEdit[i]                
+                try:
+                   a = gipsy.decodeint(str(s), nmax=100000)
+                   if [x for x in a if x<self.gridrange[i][0] or x>self.gridrange[i][1]]:
+                      l = 0                      
+                      wid.setPalette(self.errorPal)
+                      mes = "One or more values not in allowed range"
+                      wid.setToolTip(mes)
+                      inlimits =  False
+                   else:
+                      self.RangeListEdit[i].setPalette(self.okPal)
+                      self.RangeListEdit[i].setToolTip("")
+                      l = len(a)
+                except Exception, message:
+                   # An expression problem according to the integer parser
+                   wid.setPalette(self.errorPal)
+                   wid.setToolTip(str(message))
+                   correctExpression = False
+                   l = 0
+             else:
+                # Must be the default
+                l = self.gridrange[i][1] - self.gridrange[i][0] + 1
+             numsubsets *= l
+          else:
+             boxaxes += 1
+             gridlo, gridhi = self.RangeListEdit[i]
+             inboxLo = True
+             try:
+                blo = eval(str(gridlo.text()))
+             except:
+                inboxLo = False
+                mes = "Wrong expression"
+             if inboxLo:
+                if blo < self.gridrange[i][0] or blo > self.gridrange[i][1]:
+                   inboxLo = False
+                   mes = "Entered value not in allowed range"
+             if not inboxLo:
+                gridlo.setPalette(self.errorPal)
+                gridlo.setToolTip(mes)
+                inbox = False
+             else:
+                gridlo.setPalette(self.okPal)
+                gridlo.setToolTip("")
+             inboxHi = True
+             try:
+                bhi = eval(str(gridhi.text()))                
+             except:
+                inboxHi = False
+                mes = "Wrong expression"                
+             if inboxHi:
+                if bhi < self.gridrange[i][0] or bhi > self.gridrange[i][1]:
+                   inboxHi = False
+                   mes = "Entered value not in allowed range"
+             if not inboxHi:
+                gridhi.setPalette(self.errorPal)
+                gridhi.setToolTip(mes)                
+                inbox = False
+             else:
+                gridhi.setPalette(self.okPal)
+                gridhi.setToolTip("")
+             gridlotxt += str(gridlo.text()) + " "
+             gridhitxt += str(gridhi.text()) + " "
+          numaxes += 1
+       boxtext = gridlotxt + " " + gridhitxt
+
+       subsetWarning = ""
+       if self.GipsyAppClass == 2:
+          if numsubsets < 2:
+             subsetWarning = "<font color='red'>Note that a class 2 task needs at least 2 subsets!</font>"
+             numSubsetsOk = False
+       if self.maxSubsets is not None and numsubsets > self.maxSubsets:
+          subsetWarning = "<font color='red'>Note that the maximum of subsets is set to %d!</font>"%(self.maxSubsets)
+          numSubsetsOk = False
+             
+       if not self.restrictBox:
+          inbox = True
+       self.subsetLine.setText(subsettext)
+       self.boxLine.setText(boxtext)
+       if self.GipsyAppClass == 1:
+          condition = (boxaxes == self.classDim)
+       else:
+          condition = (boxaxes == self.naxis - self.classDim)
+       if (self.classDim == 0 or condition) and inlimits and inbox and numSubsetsOk and correctExpression:
+          self.OKbuttonBox.button(QDialogButtonBox.Ok).setEnabled(True)
+       else:
+          self.OKbuttonBox.button(QDialogButtonBox.Ok).setEnabled(False)
+       self.result = (subsettext, boxtext)
+
+       if boxaxes == 1:
+          axstr = "axis"
+       else:
+          axstr = "axes"
+       if self.classDim == 0 or boxaxes == self.classDim:
+          an = "<b><font color='green'>"
+       else:
+          an = "<b><font color='red'>"
+       statusline = "You selected %s %d </font></b> box %s and %d subset(s)"%(an, boxaxes, axstr, numsubsets)
+       if self.missionTxt:
+          statusline = self.missionTxt + ". " + statusline + ". " + subsetWarning          
+       self.missionLab.setText(QString(statusline))
+
+   
+    def changeEditmode(self):
+        #----------------------------------------------------------------------------
+        # Purpose: Change mode of output lines so that they can be edited.        
+        #----------------------------------------------------------------------------
+        if self.allowEdit.isChecked():
+           self.manualEditFrame.setEnabled(True)
+        else:
+           self.manualEditFrame.setEnabled(False)
+
+           
+    def changeURLmode(self):
+        #----------------------------------------------------------------------------
+        # Purpose: Change mode of URL input
+        #----------------------------------------------------------------------------
+        if self.allowURL.isChecked():
+           self.urlEdit.setEnabled(True)
+        else:
+           self.urlEdit.setEnabled(False)
+    
+       
+    def rangeToList(self, checked, key, row):
+        #----------------------------------------------------------------------------
+        # Purpose: Rebuild axis info line because user changed axis function
+        #          from box axis to repeat axis
+        #----------------------------------------------------------------------------
+        row = int(row)
+        if checked:
+            axename = self.axnames[key]
+            x = str(self.gridrange[key][0])
+            y = str(self.gridrange[key][1])
+            (lowedit, highedit)=self.RangeListEdit[key]
+            lowedit.hide()
+            highedit.hide()
+            del lowedit
+            del highedit
+            rangelist=QLineEdit()
+            rangelist.setMaximumWidth(MAXWIDTH)
+            self.connect(rangelist, SIGNAL("textChanged(QString)"), self.updateResult)
+            self.RangeListEdit[key]=rangelist
+            self.axesdataLayout.addWidget(rangelist, row, 3)
+            label=self.limitLabel[key]
+            label.hide()
+            del label
+            Label=QLabel(QString(x+":"+y))
+            self.limitLabel[key]=Label
+            self.axesdataLayout.addWidget(Label, row, 4)
+            self.updateResult()
+
+            
+    def listToRange(self, checked, key, row):
+        #----------------------------------------------------------------------------
+        # Purpose: Rebuild axis info line because user changed axis function from
+        #          repeat axis to box axis
+        #----------------------------------------------------------------------------
+        row = int(row)
+        if checked:
+            axename = self.axnames[key]
+            x = str(self.gridrange[key][0])
+            y = str(self.gridrange[key][1])
+
+            lineedit=self.RangeListEdit[key]
+            lineedit.hide()
+            del lineedit
+            lowRange=QLineEdit(x)
+            self.connect(lowRange, SIGNAL("textChanged(QString)"), self.updateResult)
+            highRange=QLineEdit(y)
+            self.connect(highRange, SIGNAL("textChanged(QString)"), self.updateResult)
+            self.RangeListEdit[key]=(lowRange, highRange)
+            b = QWidget()
+            b.setMaximumWidth(MAXWIDTH)
+            hbox = QHBoxLayout(b)
+            hbox.setMargin(0)
+            hbox.addWidget(lowRange)
+            hbox.addStretch(1)
+            hbox.addWidget(highRange)
+            self.axesdataLayout.addWidget(b, row, 3)
+            label=self.limitLabel[key]
+            label.hide()
+            del label
+
+            Label=QLabel(QString(x+", "+y))
+            self.limitLabel[key]=Label
+            self.axesdataLayout.addWidget(Label, row, 4)
+            self.updateResult()
+             
+
+    def setAccepted(self):
+       #----------------------------------------------------------------------------
+       # Purpose:  User pressed OK button and the input of the data source was valid
+       #           then end dialog. Note that control is returned to method
+       #           getOpenSet()
+       #----------------------------------------------------------------------------
+       self.done(0)   # close dialog
+
+        
+    def getOpenSet(self):
+       #------------------------------------------------------------------------
+       # Purpose: This method should be called to start the composer interaction.
+       #          If the composer is available, execute it and return the result
+       #          after accepting the selection.
+       #------------------------------------------------------------------------
+       self.exec_()
+       return self.result
+
+            
+    def accept(self):
+       #----------------------------------------------------------------------------
+       # Purpose: This is a method defined by the QFileDialog class. We want to use
+       #          our own class and therefore we disable this method.
+       #----------------------------------------------------------------------------
+       pass   # Disable standard method. Only setAccepted() may accept.
+
+       
+    def reject(self):
+       #----------------------------------------------------------------------------
+       # Purpose: This method is called after a user pressed 'Cancel'
+       #----------------------------------------------------------------------------
+       self.result = None
+       self.done(0)
+
+       
+    def clearAxesLayout(self, widget):
+       #----------------------------------------------------------------------------
+       # Purpose: Clean up the contents of the current widget. In this application
+       #          it will be the widget that contains the axes information lines.
+       #          For each new file or selected HDU this widget should be refilled.
+       #
+       # Note that connections (our radio buttons for multiple hdu's) are
+       # severed automatically when the signal recipient is deleted
+       #----------------------------------------------------------------------------
+       while widget.count()>0:
+          item=widget.takeAt(0)
+          if item != None:
+             l=item.layout()
+             if l:
+                while l.count()>0:
+                   item2=l.takeAt(0)
+                   if item2 !=None:
+                      w2=item2.widget()
+                      if w2:
+                         w2.deleteLater()
+             else:
+                w=item.widget()
+                if w:
+                   w.deleteLater()
+
+                   
+    def gethduList(self, fitsname):
+       #----------------------------------------------------------------------------
+       # Purpose: For the given fitsfile, find all valid HDU's that contain
+       #          image data
+       #----------------------------------------------------------------------------
+       hduinfo = []                         # A text for the HDU radio buttons 
+       hdunum = []                          # Numbers of valid HDU's
+       alternates = []
+       try:
+          hdulist = pyfits.open(str(fitsname))
+       except:
+          # Probably a directory or some invalid file (not FITS)
+          return None, None, None
+
+       n = len(hdulist)
+       s = ''
+       n = 0
+       for h in hdulist:
+          go_on = True
+          # Images are either Primary or extensions with IMAGE in its name
+          #if h.header.has_key('XTENSION'):
+          if 'XTENSION' in h.header:
+             if not ("IMAGE" in h.header['XTENSION'].upper()):                
+                go_on = False
+          if go_on:
+            naxis = h.header['NAXIS']
+            if naxis > 0 and (self.classDim==0 or naxis>=self.classDim):
+               bitpix = h.header['BITPIX']
+               s = h.name + ": axes: %d"%(naxis) + " bitpix=%d"%(bitpix)
+               hduinfo.append(s)
+               hdunum.append(n)
+               alts = []
+               # There can be more than one alternate headers in one hdu
+               # Look for these alternates by trying to find keyword CRPIXn
+               # followed by a character.
+               for a in letters[:26]:
+                  k = "CRPIX1%c" % a.upper()  # To be sure that it is uppercase
+                  if k in h.header:
+                     alts.append(a.upper())
+               alternates.append(alts)
+          n += 1
+       hdulist.close()
+       return hduinfo, hdunum, alternates
+
+
+    def showHeader(self):
+       #---------------------------------------------------------------------------
+       # Purpose: Pop up a window with header information from the current GIPSY
+       #          set or FITS file (and selected HDU). The 'keywords' button
+       #          is a toggle.
+       #---------------------------------------------------------------------------
+       if not self.headerButn.isChecked():
+          if self.infowindow:
+             self.infowindow.close()
+             self.infowindow = None
+       else:
+          s = os.path.basename(self.filename)
+          # Find upper left corner of current window (setbrowser) and
+          # its size. Position the new pop up at the top right of this window
+          xy = self.mapToGlobal(QPoint(0,0))
+          w = self.size().width()
+          hform = HeaderForm(self.header, title="Header of %s"%s, parent=self)
+          hform.setGeometry(xy.x()+w, xy.y(), 400, 600)          
+          self.infowindow = hform
+          self.infowindow.show()
+
+
+    def setdefaultMissionTxt(self, missionTxt):
+       #---------------------------------------------------------------------------
+       # Purpose: Compose an informative text to be displayed together with the
+       #          axis information of a data source. The text should help a user
+       #          to understand which input is required.
+       #---------------------------------------------------------------------------
+       if missionTxt:
+          return missionTxt
+       if self.classDim == 1:
+          a = "axis"
+       else:
+          a = "axes"
+       if self.GipsyAppClass == 1:
+          if self.classDim:
+             s = "Define a structure with <b>%d</b> box %s."%(self.classDim, a)
+          else:
+             s = "Your structure can have any number of box axes"
+       else:
+          if self.classDim:
+             s = "Define a structure with <b>%d</b> operation %s and at least 2 subsets."%(self.classDim, a)
+          else:
+             s = "Your structure can have any number of operation axes. At least 2 subsets are required"
+       return s
+
+          
+    def sendSet(self):
+       #---------------------------------------------------------------------------
+       # Purpose: Send set/subset info to Hermes
+       #---------------------------------------------------------------------------
+       txt = str(self.subsetLine.text())
+       gipsy.typecli(txt)
+
+
+    def sendBox(self):
+       #---------------------------------------------------------------------------
+       # Purpose: Send box info to Hermes
+       #---------------------------------------------------------------------------
+       txt = str(self.boxLine.text())
+       gipsy.typecli(txt)
+
+       
+    
+class HeaderForm(QDialog):
+    #---------------------------------------------------------------------------
+    # Purpose: A class for showing a window which displays header information
+    #---------------------------------------------------------------------------
+    def __init__(self, text, title=None, parent=None):
+        super(HeaderForm, self).__init__(parent)
+        self.setAttribute(Qt.WA_DeleteOnClose)
+        self.headerButn = parent.headerButn
+        #self.setWindowModality(Qt.NonModal)
+        #self.setWindowFlags(Qt.WindowStaysOnTopHint)
+        self.textBrowser = QTextBrowser()  # The core of this form is a text browser
+        self.textBrowser.setReadOnly(True)        
+        layout = QVBoxLayout()
+        layout.addWidget(self.textBrowser, 1)
+        self.setLayout(layout)
+        self.resize(400, 600)
+        text = "<pre>" + text + "</pre>"   # Make it a fixed width font
+        self.textBrowser.setText(text)
+        if title:
+           self.setWindowTitle(self.tr(title))
+        
+
+    def closeEvent(self, event):
+    #  self.close()
+    #   self.infowindow = None
+       self.headerButn.setChecked(False)
+
+   
+def main():
+    gipsy.init()    
+    app = QApplication(sys.argv)
+    gipsy.qtconnect()
+    #fn = QtDataBrowser(missionTxt="Define a structure with two box axes", classDim=2, maxSubsets=1000).getOpenSet()
+    #fn = QtDataBrowser(GipsyAppClass=2,  classDim=0, maxSubsets=1000).getOpenSet()
+    fn = QtDataBrowser(GipsyAppClass=-1,  classDim=0).getOpenSet()
+    if fn:
+       gipsy.anyout("Set/subset: %s"%(fn[0]))
+       gipsy.anyout("Box: %s"%(fn[1]))
+    else:
+       gipsy.anyout("No return value")
+    gipsy.finis()
+
+if __name__ == '__main__':
+    main()
+
+#<

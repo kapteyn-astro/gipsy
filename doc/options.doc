@@ -1,0 +1,48 @@
+
+Document:     options
+
+Purpose:      Compiler options for some GIPSY source files
+
+Category:     MANAGEMENT
+
+File:         options.mgr
+
+Author:       K.G. Begeman
+
+Description:  Some GIPSY sources do not compile with the default
+              compiler options, usually because of compiler bugs.
+              The file options, which should reside in $gip_loc,
+              contains the options which will be used by `compile'.
+              Each `special' source has a one line entry in the
+              $gip_loc/options file, and each entry constists of
+              6 fields, separated by colons (Each entry (line) may
+              be spread over more than one line by putting a backslash
+              before each newline).
+              The fields have the following meaning:
+
+              Field   Meaning
+              #1      architecure.
+              #2      name of (compilable) source file. If the
+                      it is a compilable generated from the source
+                      file, the source file should be followed by
+                      the name of the generated compilable between
+                      brackets (). I.e. if the source is a sheltran
+                      source, then the generated compilable is a
+                      fortran source.
+                      Example:     prut.shl(prut.f)
+                                   troep.src(rommel.c)
+              #3      Name of the compiler to use. If this field is
+                      empty, the compiler from $gip_loc/setup will be
+                      used.
+              #4      Compiler options for installing. If this field
+                      is empty, the options from $gip_loc/setup will
+                      be used.
+              #5      Compiler options for private use.  If this field
+                      is empty, the options from $gip_loc/setup will
+                      be used.
+              #6      Libraries and loader options. If this field
+                      is empty, the libraries and options from
+                      $gip_loc/setup will be used.
+
+Updates:      May  3, 1993: KGB Document created.
+

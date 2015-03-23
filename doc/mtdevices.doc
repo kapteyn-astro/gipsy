@@ -1,0 +1,41 @@
+
+Document:     mtdevices
+
+Purpose:      The file mtdevices, which resides in the gip_loc directory,
+              describes the available magnetic tape devices.
+
+Category:     SYSTEM SETUP
+
+File:         mtdevices.doc
+
+Author:       K.G. Begeman
+
+Description:  The tape unit description consists of several fields,
+              separated by colons (:). The fields contain the following
+              information:
+              field          information
+                1            Name of host or list of hosts (separated by
+                             comma's) or asterix (*) if device is for
+                             all possible hosts.
+                2            Synonym for tape device.
+                3            Hostname of machine to which the drive is
+                             physically connected.
+                4            Device name of tape device. Must be a
+                             no rewind device.
+                5            Tape density.
+                6            Text describing the tape unit.
+                7            Port number for rmtserver (optional). See
+                             rmtserver.doc.
+
+Example:      *:DAT0:huygens.astro.rug.nl:/dev/rmt/0mn:61000:Dat recorder 0:3198
+              *:DAT1:vega.sron.rug.nl:/dev/rmt/0mn:61000:DAT recorder 1:3198
+              *:EXA0:galilei.astro.rug.nl:/dev/nrst0:54000:EXABYTE 2.5GB:3198
+              *:EXA1:galilei.astro.rug.nl:/dev/nrst8:108000:EXABYTE 5.0GB:3198
+              *:MAG0:rugfx4.astro.rug.nl:/dev/nrxtv00m:1600:1600 BPI 0:3198
+              *:MAG1:rugfx4.astro.rug.nl:/dev/nrxtv00h:6250:6250 BPI 1:3198
+              *:MAG2:guspace.sron.rug.nl:/dev/nrmt0:1600:1600 BPI 2:3198
+              *:MAG3:guspace.sron.rug.nl:/dev/nrmt0:6250:6250 BPI 3:3198
+
+Updates:      Mar  5, 1991: KGB, document created.
+              Jan 18, 1993: KGB, example added to document.
+

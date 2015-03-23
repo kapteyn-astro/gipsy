@@ -1,0 +1,102 @@
+
+c@ integer function irco_number( character, real )
+c
+c#>             irco_number.dc2
+c
+c Subroutine:   IRCO_NUMBER
+c 
+c Purpose:      returns the number of a coordinate system
+c 
+c Category	WORLD COORDINATES, IRAS
+c
+c File:         irco.shl
+c 
+c Author:       Do Kester
+c 
+c Person resp.: Do Kester
+c 
+c Address:      guspace!do or rugfx4!do         (uucp)
+c 
+c Use: integer irco_number(
+c 	name,    I      character*(*)
+c	epoch )	 I	real
+c
+c	IRCO_NUMBER 	the number of the coordinate system
+c			negative if the name corresponds while a
+c			epoch can not be found
+c			0: system is not known
+c	name		the name of the system
+c	epoch		epoch of the system if applicable
+c
+c Description:  
+c 	For the system with NAME and EPOCH the coordinate number 
+c	is returned. EPOCH is disregarded for systems other than
+c	EQUATORIAL, ECLIPTIC or SUN REFERENCED. In the latter case
+c	epoch will be the ecliptic longitude of the sun.
+c
+c	Sunreferenced with epoch 0.0 will always return the standard
+c	SR system. 
+c
+c	For systems with an unknown epoch, the routine will try to 
+c	return the negative number of a system with the same name.
+c
+c	Unknown systems will return a zero
+c
+c Updates:      17 July 1990 DK
+c		12 Sep 1990  DK add EPOCH to the calling sequence
+c		22 Nov 1990  DK corrected real comparison of epochs
+c		26 Nov 1990  DK correction in comparison of names
+c		11 Dec 1990  DK negative numbers
+c#<
+
+        integer function IRCO_NUMBER( name, epoch )
+
+	character*(*)	name
+	real		epoch
+	integer		KONUM, NAMLEN, coor, leng, NELC, cout
+	parameter	( KONUM = 10, NAMLEN = 15 )
+	character*(NAMLEN)	nm, eqname, ecname, srname
+        character*(NAMLEN)      a1, a2, a3, a4
+	real		ep, EPSILON, x, y
+	parameter	( EPSILON = 1.0e-4 )
+	logical		realequal, noepoch
+	save		eqname, ecname, srname
+
+	data	eqname  / 'EQUATORIAL' /
+	data	ecname  / 'ECLIPTIC' /
+	data	srname	/ 'SUN REFERENCED' /
+
+	realequal( x, y ) = abs( x - y ) .le. EPSILON * abs( x + y )
+	noepoch( a1, a2, a3, a4 ) = a1(:leng) .ne. a2(:leng) .and. 
+     #			            a1(:leng) .ne. a3(:leng) .and.
+     #			            a1(:leng) .ne. a4(:leng)
+
+	cout = 0
+	coor = 1
+	leng = min( NELC( name ), NAMLEN )
+	leng = max( 3, leng )
+	call IRCO_NAMEPOCH( coor, nm, ep )
+	while .true.
+	  if nm(:leng) .eq. name(:leng) 
+	  then
+	    cout = -coor
+	    if ( ( realequal( epoch, ep ) .or. 
+     #             noepoch( nm, eqname, ecname, srname ) ) .or.
+     #	         ( realequal( epoch, 0.0 ) .and. 
+     #             name(:leng) .eq. srname(:leng) ) )
+	    then
+	      IRCO_NUMBER = coor
+	      return
+	    cif
+	  else if nm .eq. ' ' .or. coor .ge. KONUM
+	  then
+	    IRCO_NUMBER = cout
+	    return
+	  cif
+	  coor = coor + 1
+	  call IRCO_NAMEPOCH( coor, nm, ep )
+	cwhile
+
+        return
+	end
+

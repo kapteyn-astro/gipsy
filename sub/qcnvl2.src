@@ -1,0 +1,117 @@
+qcnvl2.src
+
+	Copyright (c) Kapteyn Laboratorium Groningen 1991
+	All Rights Reserved.
+
+	This is a packed document. Before compiling, xfile has to
+        be run on this file (xfile qcnvl2.src).
+	The following files will be unpacked by xfile:
+
+	File           Architecture       Contents
+
+	qcnvl2.dc2     all types          Document
+	qcnvl2.opt     ALLIANT            Compiler options
+	qcnvl2.f       ALLIANT            Optimized fortran vector code
+	qcnvl2.f       all other types    Standard fortran code
+
+#>            qcnvl2.dc2
+
+Function:     qcnvl2
+
+Purpose:      Auxiliary routine for CONVOLVE.
+
+Category:     MATH
+
+File:         qcnvl2.src
+
+Author:       K.G. Begeman
+
+Use:          CALL QCNVL2( V1 ,           Input         REAL ARRAY
+                           V2 ,       Input/Output      REAL ARRAY
+                           CF ,           Input         REAL
+                           N )            Input         INTEGER
+
+              V1        Array contains data to be convolved.
+              V2        Array to which CF * V1 is added.
+              CF        Convolving factor.
+              N         Size of V1 and V2.
+
+Notes:        V1 and V2 may contain BLANKS. If this is not the case,
+              use QCNVL1.
+
+Description:  The operation performed by CNVL2 is:
+              IF (V1 .NE. BLANK .AND. V2 .NE. BLANK) THEN
+                 V2 = V2 + CF * V1.
+              ELSE
+                 V2 = BLANK
+              ENDIF
+
+Updates:      Apr 10, 1991: KGB Document created.
+
+#<
+
+#!IF    F2C
+#!ELIF  ALLIANT
+
+#>    qcnvl2.opt
+fortran -c -Ogv qcnvl2.f
+#<
+
+#!ENDIF
+
+#>    qcnvl2.f
+C
+C     C to Fortran interface:
+C
+C@    subroutine qcnvl2( real, real, real, integer )
+C
+      SUBROUTINE QCNVL2( V1 , V2 , CF , N )
+C
+C     Declaration of arguments:
+C
+      REAL    V1(*), V2(*), CF
+      INTEGER N
+C
+C     Local variables:
+C
+      INTEGER I
+      REAL    BLANK
+C
+C     Save statements:
+C
+      SAVE    BLANK
+C
+C     Data statements:
+C
+      DATA    BLANK / 0.0 /
+C
+C     Executable code:
+C
+      IF (BLANK .EQ. 0.0) CALL SETFBLANK( BLANK )
+#!IF    F2C
+      DO 1 I = 1, N
+         IF (V1(I) .NE. BLANK .AND. V2(I) .NE. BLANK) THEN
+            V2(I) = V2(I) + CF * V1(I)
+         ELSE
+            V2(I) = BLANK
+         ENDIF
+    1 CONTINUE
+#!ELIF  ALLIANT
+      WHERE (V1(1:N) .NE. BLANK .AND. V2(1:N) .NE. BLANK)
+         V2(1:N) = V2(1:N) + CF * V1(1:N)
+      ELSEWHERE
+         V2(1:N) = BLANK
+      ENDWHERE
+#!ELSE
+      DO 1 I = 1, N
+         IF (V1(I) .NE. BLANK .AND. V2(I) .NE. BLANK) THEN
+            V2(I) = V2(I) + CF * V1(I)
+         ELSE
+            V2(I) = BLANK
+         ENDIF
+    1 CONTINUE
+#!ENDIF
+C     RETURN TO CALLER
+      RETURN
+      END
+#<

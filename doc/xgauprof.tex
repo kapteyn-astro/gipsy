@@ -1,0 +1,994 @@
+\documentclass[10pt,a4paper]{report}
+%\documentclass[11pt,fleqn]{article}
+\usepackage{graphicx}
+\def\eherm{A{e^{-\frac{1}{2} {\left(\frac{\nu - b}{c}\right)}^2}}}
+\def\epow{A{e^{-\frac{1}{2} {\left(\frac{x - x_0}{\sigma}\right)}^2}}} 
+\def\erf{\rm erf}
+\def\erfc{\rm erfc}
+\def\ampfac{\left(1+c_0\,h_4+c_2\,h_4+3c_4\,h_4\right)}
+
+%\parskip=0.8cm
+
+%\vspace{12pt}
+
+\oddsidemargin=0cm
+\evensidemargin=0cm
+\textwidth=16cm
+
+\begin{document}
+
+\begin{center}
+{\Large XGAUPROF}\\[1.5cm]
+{\large A GIPSY program to fit parameters of a Gauss function, 
+the Gauss-Hermite series or 
+a Voigt line-shape to data from GIPSY sets or ASCII files }\\[1.5cm]
+M.G.R. Vogelaar\\
+May 7,  1999, revision Mar 25, 2012
+\end{center}
+
+\begin{figure}[htb]
+  \centering
+  \includegraphics[width=12cm, angle=0]{gui.pdf}
+  \caption{\it XGAUPROF Graphical User Interface}
+  \label{fig:gui}
+\end{figure}  
+
+
+\begin{flushleft}
+
+
+\chapter{Introduction} 
+
+\section{History}
+An article from 1966 called {\it Computer Analysis of Observed Distributions
+into Gaussian components} by Kaper et al. described a first Kapteyn
+Institute attempt to use a computer to decompose an observed frequency 
+or intensity profile  
+into a superposition of Gaussian components. A least squares method was 
+applied to get a `best fit' to study profiles of the spectral line at 21 cm. 
+The program was implemented on a Stantec ZEBRA, installed in 1956. It had a
+memory of 8192 words of 33 bits. This limited the analysis to 150 data points
+and 6 parameters. The average access time to an address on the ZEBRA was 
+0.005 sec. and one least-squares iteration cycle took about 20 minutes.
+Initial guesses for the parameters were found by sketching a decomposition 
+into Gaussians on a graph of the observed profile. 
+\section{Standard Gauss}
+GIPSY program {\bf \it XGAUPROF} finds best fit parameters for three functions
+given data from file or from a GIPSY set. The base function is a Gauss. 
+The parameters are fitted with a least-squares fit algorithm which needs 
+initial guesses. A special routine automates the procedure of getting
+reasonable estimates for a Gauss and the other functions in the program.
+The user can modify these values by hand
+using a graphical slider. 
+A one component standard Gauss function with background is defined as:
+
+\begin{equation}
+\phi(x) = \epow + Z
+\end{equation}
+
+Usually x is frequency or velocity. $A$ is the amplitude at the center 
+$x = x_0$ 
+and ${\sigma }$ is the dispersion of the profile, i.e. the half width at 
+$\frac{A}{\sqrt{e}}$ and Z is a representation for the background.
+
+
+In {\bf \it XGAUPROF} the background consists of a constant, a linear and 
+a quadratic term and
+is represented by:
+\begin{equation}
+Z = Z_0 + Z_1\, (x-x_0) + Z_2\, (x-x_0)^2
+\end{equation}
+The constant term $Z_0$ is often referred to as 'zero level'. 
+
+
+\section{Gauss-Hermite series}
+
+If your profile deviates from a Gaussian shape (e.g. asymmetric profiles) 
+then you can use the so called {\it Gauss-Hermite} series.
+The lowest order term of the series is a
+Gaussian. The higher order terms are orthogonal to this Gaussian.
+The higher order that we use in our fits are the 
+parameters $h_3$ and $h_4$ measuring asymmetric and symmetric 
+deviations of a Gaussian. 
+The Gauss-Hermite function used in {\bf \it XGAUPROF} is (Van der Marel \& Franx):
+
+
+
+\begin{center} 
+\begin{figure}[htb]
+\begin{minipage}{7cm} 
+  \centering
+  \includegraphics[height=8cm,width=6cm, angle=0]{h3.pdf}
+  \caption{\it Gauss-Hermite $h3 = 0.2$, $h_4 = 0$. } 
+  \label{fig:skewness}
+\end{minipage}
+\begin{minipage}{7cm}
+  \centering
+  \includegraphics[height=8cm,width=6cm, angle=0]{h4.pdf}
+  \caption{\it Gauss-Hermite $h3 = 0$, $h_4 =0.1$. }
+  \label{fig:kurtosis}
+\end{minipage} 
+\end{figure} 
+\end{center}
+
+
+\begin{equation}
+\phi(x) = a\,e^{-\frac{1}{2}y^2} \left\{ 1+\frac{h_3}{\sqrt{6}}
+(2\sqrt{2}y^3-3\sqrt{2}y) + 
+\frac{h_4}{\sqrt{24}}(4y^4-12y^2+3)   \right\} + Z
+\end{equation} 
+
+
+with $y \equiv \frac{x-b}{c}$. 
+Note that the parameters $a$, $b$ and $c$ are equivalent to $A$, $x_0$ and
+$\sigma$ of a Gaussian, only if $h_3 = h_4 = 0$.
+
+
+\section{Voigt profile}
+
+The line-shapes of spectroscopic 
+transitions depend on the broadening mechanisms
+of the initial and final states, and include natural broadening, 
+collisional broadening, power broadening, and
+Doppler broadening. Natural, collisional, and power broadening are 
+homogeneous mechanisms and produce Lorentzian line-shapes. 
+Doppler broadening is a form of inhomogeneous broadening and has a 
+Gaussian line-shape. Combinations of
+Lorentzian and Gaussian line-shapes can be approximated by a Voigt profile. 
+In fact, the Voigt profile is a convolution of these two line-shapes. 
+It has the form:
+
+\begin{equation}
+\phi(\nu) = \frac{A}{\alpha_D }\sqrt{\frac{\ln(2)}{\pi }} \, K(x,y) + Z
+\end{equation}
+
+
+$K(x,y)$ is the {\it Voigt function} and is defined as:
+$$
+K(x,y) = \frac{y}{\pi} \int_{-\infty}^{\infty} \frac{e^{-t^{2}}}{y^{2}+(x-t)^{2}} dt 
+$$
+
+where 
+\begin{equation} 
+y \equiv \frac{\alpha_L}{\alpha_D}\sqrt{\ln(2)} \hspace{0.5cm} and \hspace{0.5cm}
+x \equiv \frac{(\nu-\nu_0)}{\alpha_D} \sqrt{\ln(2)}
+\end{equation}
+
+$y$ is the ratio of Lorentz to Doppler widths and $x$ the frequency 
+scale (in units of the Doppler Line-shape half-width  $\alpha_D$.
+
+
+\chapter{The standard Gauss function}
+\section{Properties of a profile using moments of a distribution}
+
+One way to characterize a distribution is the use of its moments.
+The $k$th-$moment$ of a distribution $\phi(x)$ is:
+$$ \mu_k = \int\limits_{-\infty}^{\infty}{(x-x_0)}^k\,\phi(x) dx $$
+
+With these moments one can calculate more familiar properties of a 
+distribution like the line strength (i.e. area under the curve) 
+$\gamma$, the mean $X_0$,
+the dispersion $\sigma$, the coefficient of skewness
+$\xi_1 \equiv \mu_3/\mu_2^{3/2}$ and the coefficient of kurtosis 
+$\xi_2 \equiv \mu_4/\mu_2^2$. These quantities are calculated from:
+$$\gamma \equiv \int\limits_{-\infty}^{\infty} \phi(x)\, dx
+\hspace{0.5cm} 
+X_0 \equiv \frac{1}{\gamma}\int\limits_{-\infty}^{\infty}x\, \phi(x)\,dx
+\hspace{0.5cm} 
+\sigma^2_0 \equiv \frac{1}{\gamma}\int\limits_{-\infty}^{\infty} 
+{(x-X_0)}^2\,\phi(x)\,dx 
+$$
+\begin{equation}
+\xi_i \equiv \frac{1}{\gamma}\int\limits_{-\infty}^{\infty}
+\left((x-X_0)/\sigma\right)^{2+i}\,\phi(x)\,dx \hspace{1cm} (i=1,2) 
+\end{equation}
+
+{\it Skewness} is a lack of symmetry in a distribution.
+If a distribution is symmetric about its mean it has zero skewness.
+The skewness defined above is called the Fisher Skewness.
+
+{\it Kurtosis} is a measure of how "fat" the tails of a distribution are,
+measured relative to a normal distribution having the same
+standard deviation. A distribution is said to be {\it leptokurtic}
+if its tails are fatter than those of a corresponding normal distribution
+(high peak).
+It is said to be {\it platykurtic} if its tails are thinner than those of the
+normal distribution (flat-topped curve). The Fisher Kurtosis is defined by
+\begin{equation}
+\framebox{$\xi_f = \xi_2 - 3$}  
+\end{equation} 
+From here we will use $\xi_f$ if we talk about kurtosis.
+
+Using the expressions above, one finds for our standard Gaussian:
+
+\medskip
+{\bf The integrated line strength $\gamma $:}
+$$ \gamma = \int\limits_{-\infty}^{\infty} \epow dx =
+ A\,\sigma\, \sqrt{\frac{\pi}{2}}\, 
+\erf {\left(\frac{x-x_0}{\sigma\sqrt{2}}\right)} \Bigr|_{-\infty}^{\infty}$$
+
+$erf$ is the 'error'-function and $\erf (-\infty) = -1$ and $\erf (\infty)= 1.$\\
+Then:
+\begin{equation}
+\framebox{$\gamma = A\sigma\sqrt{2\pi}$}
+\end{equation} 
+
+\vspace{1cm} 
+{\bf The mean abscissa $X_0$:} 
+\begin{eqnarray*}
+X_0 &=& \frac{1}{\gamma}\int\limits_{-\infty}^{\infty} x\epow dx\\
+&=& \frac{1}{\gamma}  \left[ - \epow + 
+    A\sqrt{\frac{\pi}{2}}\,x_0\, \sigma \, 
+    \erf \left(\frac{x-x_0}{\sigma\sqrt{2}}\right) \right]
+                    \biggr|_{-\infty}^{\infty}\\
+&=& \frac{2}{\gamma}A\, \sigma \,\sqrt{\frac{\pi}{2}}\,x_0 = x_0
+\end{eqnarray*} 
+
+\begin{equation}
+\framebox{$X_0 = x_0$}
+\end{equation}
+
+\vspace{1cm} 
+{\bf The dispersion $\sigma_0$:}
+\begin{eqnarray*}
+\sigma^2_0 &=& \frac{1}{\gamma}\int\limits_{-\infty}^{\infty} (x-x_0)^{2}
+\epow dx\\
+&=& \frac{1}{\gamma}  \left[
+-\,(x-x_0)\,\sigma^2\,\epow +
+  A\,{\sqrt{{\frac{\pi }{2}}}}\,
+   {{\sigma }^3}\,\erf ({\frac
+        {x - x_0} {\sigma {\sqrt{2}}  }})
+\right] \biggr|_{-\infty}^{\infty}\\
+&=& \frac{2}{\gamma}A\sigma\, \sqrt{\frac{\pi}{2}} \,\,{\sigma}^2 
+    = \sigma^2
+\end{eqnarray*} 
+
+\begin{equation}
+\framebox{$\sigma_0 = \sigma$}
+\end{equation}
+
+\vspace{1cm} 
+{\bf The Fisher coefficient of Skewness $\xi_1$:}
+\begin{eqnarray*}
+\xi_1 &=& \frac{1}{\gamma}\int\limits_{-\infty}^{\infty} \left({\frac{x-x_0}{\sigma}}\right)^{3}\epow dx\\
+&=& \frac{1}{\gamma} { \epow\,\,
+\frac{  -2\,{{\left( x - x_0 \right)}^2}\, - 
+       4\,{{\sigma }^2} }{2\,\,
+     {{\sigma }}}} \biggr|_{-\infty}^{\infty}\\
+&=& 0
+\end{eqnarray*}
+
+\begin{equation}
+\framebox{$\xi_1 = 0$}
+\end{equation} 
+This is what we expected for a symmetric distribution like a standard Gauss.
+
+\vspace{1cm} 
+{\bf The Fisher coefficient of Kurtosis $\xi_2$:} 
+\begin{eqnarray*}
+\xi_2 &=& \frac{1}{\gamma}\int\limits_{-\infty}^{\infty} \left({\frac{x-x_0}{\sigma}}\right)^{4}Ae^{\frac{-(x-x_0)^2}{2\sigma^2}}dx\\
+&=& \frac{1}{\gamma} \left[ {A\,{e^{{-\frac{{{\left( x - x_0 \right) }^2}}
+      {2\,{{\sigma }^2}}}}}\,\,
+\frac{  {{-\left( x - x_0 \right)}^3}\, - 
+       3\,\left( x - x_0 \right){{\sigma }^2} }{\,
+     {{\sigma }^2}}} +
+3\,A\,{\sqrt{{\frac{\pi }{2}}}}\,\,
+   {\sigma}\,\erf \left({\frac
+        {x - x_0} {{\sqrt{2}}\,
+        \sigma }}\right) \right]
+\Biggr|_{-\infty}^{\infty}\\
+&=& 3
+\end{eqnarray*}
+
+\begin{equation}
+\framebox{$\xi_2 = 3$}
+\end{equation} 
+\begin{equation}
+\framebox{$\xi_f = 0$}
+\end{equation} 
+
+
+\section{Partial derivatives of the standard Gauss function}
+The standard Gauss is represented by the formula:
+$$\phi(x)=\epow + Z$$
+The partial derivatives used in the least squares routine to fit the parameters
+are:
+\begin{eqnarray}
+\frac{\partial\phi(x)}{\partial A} &=& e^{-\frac{1}{2} {\left(\frac{x - x_0}{\sigma}\right)}^2} \\
+\frac{\partial\phi(x)}{\partial x_0} &=& \epow \frac{(x-x_0)}{\sigma^2}\\
+\frac{\partial\phi(x)}{\partial \sigma} &=& \epow \frac{{(x-x_0)}^2}{\sigma^3} 
+\end{eqnarray}
+
+the derivatives for the background $Z = Z_0 + Z_1\, (x-x_0) + Z_2\, (x-x_0)^2$
+are:
+
+\begin{eqnarray}
+\frac{\partial\phi(x)}{\partial Z_0} &=& 1\\
+\frac{\partial\phi(x)}{\partial Z_1} &=& x - x_0\\ 
+\frac{\partial\phi(x)}{\partial Z_2} &=& {(x - x_0)}^2\\
+\end{eqnarray}
+
+
+
+\section{Relation between FWHM and dispersion of a Gauss}
+
+Consider a standard Gauss function without any offset and symmetric around
+$x_0 = 0$:
+$$f(x) = A{e^{-\frac{1}{2} {(\frac{x}{\sigma})}^2}} $$
+To find a width at certain height given the dispersion, 
+find a $x_\lambda$ with $0< \lambda < 1$ for which:
+ 
+$$A\,e^{\frac{-x^2}{2\sigma^2}} = \lambda\,A   \longrightarrow
+x^2_\lambda = 2 \sigma^2 \ln{\frac{1}{\lambda}}$$
+
+\begin{center}
+\framebox {$x_ \lambda = {\sigma \sqrt{2 Ln {\frac {1}{\lambda}}}}$}
+\end{center}
+
+A frequently used measure of profile width is the the Full Width at Half Maximum 
+$fwhm$. This width can be expressed in $\sigma$ by substitution of
+$\lambda = {\frac {1}{2}}$ and multiplication of the solution by 2
+because the dispersion is a half width!
+
+\begin{center}
+
+$$fwhm = 2 \sigma\, \sqrt{2 \ln{ \frac{1}{\frac{1}{2}} } }
+= 2 \sigma\, \sqrt{2\ln{2}} \approx 2.355\, \sigma  $$
+
+
+\framebox {$fwhm = 2\sigma\, \sqrt { 2 \ln{2}}$}
+\end{center} 
+Note that the error in the fitted width at any height, increases or decreases with the same factor.
+
+
+\chapter{The Gauss-Hermite series}
+
+The Gauss-Hermite $(GH)$ series in {\bf \it XGAUPROF} with 
+$y \equiv \frac{x-b}{c}$ is represented by:
+$$
+\phi(x) = a\,e^{-\frac{1}{2}y^2} \left\{ 1+\frac{h_3}{\sqrt{6}}
+(2\sqrt{2}y^3-3\sqrt{2}y) + 
+\frac{h_4}{\sqrt{24}}(4y^4-12y^2+3)   \right\} + Z
+$$
+
+Simplify this equation further:
+
+$$\phi(x) = a\,E\,\left\{1+h_3(c_1y+c_3y^3)+h_4(c_0+c_2y^2+c_4y^4)\right\}$$
+or:
+$$\phi(x) =  a\,E\,Q$$
+with  $E \equiv e^{-\frac{1}{2}y^2}$,
+$Q = \left\{1+h_3(c_1y+c_3y^3)+h_4(c_0+c_2y^2+c_4y^4)\right\}$ and further:
+
+$$c_0 = \frac{1}{4}\sqrt{6}\hspace{0.4cm}
+c_1 = -\sqrt{3}\hspace{0.4cm}
+c_2 = -\sqrt{6}\hspace{0.4cm}
+c_3 = \frac{2}{3}\sqrt{3}\hspace{0.4cm}
+c_4 = \frac{1}{3}\sqrt{6}\hspace{0.4cm}
+$$
+
+Then the partial derivatives used in the least-squares fit routine are:
+\begin{eqnarray}
+\frac{\partial\phi(x)}{\partial a} &=& E\,Q\\
+\frac{\partial\phi(x)}{\partial b} &=& a\,E\,\frac{1}{c}
+\left[
+h_3(-c_1-3c_3y^2)+h_4(-2c_2y-4c_4y^3)+y\,Q
+\right]\\
+\frac{\partial\phi(x)}{\partial c} &=& a\,E\,\frac{1}{c}
+\left[
+h_3(-c_1y-3c_3y^3)+h_4(-2c_2y^2-4c_4y^4)+y^2\,Q 
+\right] = 
+y\,\frac{\partial\phi(x)}{\partial b}\\
+\frac{\partial\phi(x)}{\partial h_3} &=& a\,E\,(c_1y+c_3y^3)\\
+\frac{\partial\phi(x)}{\partial h_4} &=& a\,E\,(c_0+c_2y^2+c_4y^4)
+\end{eqnarray}
+
+
+Note that $\frac{\partial\phi(x)}{\partial x} = -\frac{\partial\phi(x)}{\partial b}$.
+We will need this expression if we want to calculate the position of
+the maximum of the $GH$ series. This position is only equal to parameter $b$
+if $h_3=h_4=0$!
+To find the real maximum, solve:
+
+$$
+\frac{\partial\phi(x)}{\partial x} = -a\,E\,\frac{1}{c}
+\left[
+h_3(-c_1-3c_3y^2)+h_4(-2c_2y-4c_4y^3)+y\,Q
+\right] = 0
+$$
+which means solving:
+$$
+h_3(-c_1-3c_3y^2)+h_4(-2c_2y-4c_4y^3)+y\,
+\left\{1+h_3(c_1y+c_3y^3)+h_4(c_0+c_2y^2+c_4y^4)\right\} = 0
+$$
+After rearranging the equation above we get:
+\begin{equation}
+\lambda_5y^5+\lambda_4y^4+\lambda_3y^3+\lambda_2y^2+\lambda_1y+\lambda_0=0
+\end{equation}
+with coefficients equal to:
+\begin{eqnarray*}
+\lambda_0 &=&-h_3\,c_1\\
+\lambda_1 &=& h_4\,(c_0-2c_2)+1\\
+\lambda_2 &=& h_3\,(c_1-3c_3)\\
+\lambda_3 &=& h_4\,(c_2-4c_4)\\
+\lambda_4 &=& h_3\,c_3\\
+\lambda_5 &=& h_4\,c_4
+\end{eqnarray*}
+We applied a bisection to solve the equation. For initial limits we use
+$x_1 = b-\frac{1}{2}c$ and $x_2 = b+\frac{1}{2}c$ which for the 
+bisection equation is the same as 
+$y_1 = -\frac{1}{2}$ and $y_2 = \frac{1}{2}$.
+
+
+\section{Moments of the $GH$ series}
+As stated before, in the function:
+$$\phi(x) = a\,e^{-\frac{1}{2}y^2},\left\{1+h_3(c_1y+c_3y^3)+h_4(c_0+c_2y^2+c_4y^4)\right\}$$
+with:
+$$y \equiv \frac{x-b}{c}$$
+the parameters $a$, $b$ and $c$  are only equal to $A$, $x_0$ and $\sigma$ of
+a standard Gaussian, if $h_3=h_4=0$. If we want to compare these parameters 
+for $h_3$ and/or $h_4$ unequal to $0$ then we have to calculate the  profile properties using the moments of the
+GH distribution:
+
+\medskip
+{\bf The integrated line strength $\gamma $:}
+$$
+\gamma = \int\limits_{-\infty}^{\infty} \phi(x) dx =
+ a\,c\, \sqrt{2\pi} \ampfac
+= a\,c\, \sqrt{2\pi} (1+\frac{1}{4}\sqrt{6}\,h_4)
+$$
+\begin{equation}
+\framebox{$\gamma = a\,c\, \sqrt{2\pi} (1+\frac{1}{4}\sqrt{6}\,h_4)$}
+\end{equation}
+
+\vspace{1cm}
+{\bf The mean abscissa $X_0$:}
+\begin{eqnarray*}
+X_0 &=& \frac{1}{\gamma}\int\limits_{-\infty}^{\infty} x \phi(x) dx\\
+&=& \frac{1}{\gamma}  a\,c\, \sqrt{2\pi}\ 
+(b+c\, c_1\,h_3+3c\,c_3\,h_3+b\,c_0\,h_4+b\,c_2\,h_4+3b\,c_4\,h_4)\\
+&=& \frac{1}{\gamma}  a\,c\, \sqrt{2\pi}
+\left[
+b\, (1+\frac{1}{4}\sqrt{6}\,h_4)+c\, (\sqrt{3}\,h_3)
+\right]\\
+&=& b + c\,\frac{\sqrt{3}\,h_3}{1+\frac{1}{4}\sqrt{6}\,h_4}\\
+&\approx & b + c\,\left[\sqrt{3}\,h_3\,(1-\frac{1}{4}\sqrt{6}\,h_4)\right]
+\end{eqnarray*} 
+
+The last step is an approximation. Remember that 
+${(1+\alpha\,x)}^\beta \approx 1-\alpha\,\beta\,x$ for small $x$.
+If we include only the lowest order terms in $h_3$ and $h_4$, then:
+
+\begin{equation} 
+\framebox{$X_0 \approx b + \sqrt{3}\,h_3\,c$}
+\end{equation}
+
+\vspace{1cm}
+{\bf The dispersion $\sigma_0$:}
+\begin{eqnarray*}
+\sigma^2_0 &=& \frac{1}{\gamma}\int\limits_{-\infty}^{\infty} (x-X_0)^{2}
+\phi(x) dx\\
+&\approx & \frac{1}{\gamma}\,a\,c\, \sqrt{2\pi}\, c^2\,\, 
+\frac{
+\left( 
+1+3c_0\,h_4+5c_2\,h_4+21c_4\,h4
+\right)
+}
+{ \ampfac^2 } \\ 
+&=& c^2\, \frac{\left(1+3c_0\,h_4+5c_2\,h_4+21c_4\,h4 \right) }
+{\ampfac^3 }\\
+&=& c^2\,
+\frac{1+2\frac{3}{4}\sqrt{6}\,h_4}{{\left(1+\frac{1}{4}\sqrt{6}\,h_4\right)}^3}\\
+&\approx & c^2\,(1+2\sqrt{6}\,h_4)
+\end{eqnarray*} 
+
+\begin{equation}
+\framebox{$\sigma_0 \approx c\sqrt{1+2\sqrt{6}\,h_4} \approx c\,(1+\sqrt{6}\,h_4)$}
+\end{equation}
+
+\vspace{1cm}
+{\bf The Fisher coefficient of Skewness $\xi_1$:}\\
+A set of observations that is not symmetrically distributed is said to be skewed.
+If the distribution has a longer tail less than the maximum,
+the function has {\it negative skewness}. Otherwise, it has
+{\it positive skewness}.
+\begin{eqnarray*}
+\xi_1 &=& \frac{1}{\gamma}\int\limits_{-\infty}^{\infty} \left({\frac{x-x_0}{\sigma}}\right)^{3} \phi(x) dx\\
+&\approx & \frac{1}{\gamma}\,\,\frac{ 2a\,c\, \sqrt{2\pi}\,c^3\,3\,c_3h_3}
+{\ampfac^3 {\left(\frac{c^2\left(1+h_4\,(3c_0+5c_2+21c_4)\right)}{\ampfac^3} \right)}^\frac{3}{2} }\\ 
+&=& \frac{6\,c_3\,h_3\, \ampfac^\frac{1}{2} }
+{{\left(1+h_4\,(3c_0+5c_2+21c_4)\right)}^\frac{3}{2}}\\
+&=& \frac{4\sqrt{3}\,h_3\, {(1+\frac{1}{4}\sqrt{6}\,h_4)}^\frac{1}{2}}
+{{\left(1+2\frac{3}{4}\sqrt{6}\,h_4\right)}^\frac{3}{2}}
+\end{eqnarray*} 
+
+\begin{equation}
+\framebox{$\xi_1 \approx 4\sqrt{3}\,h_3$}
+\end{equation} 
+
+This is what we could have expected because $h_3$ is the parameter that
+measures asymmetric deviations.
+
+\vspace{1cm}
+{\bf The Fisher coefficient of Kurtosis $\xi_2$:}
+\begin{eqnarray*}
+\xi_2 &=& \frac{1}{\gamma}\int\limits_{-\infty}^{\infty} \left({\frac{x-X_0}{\sigma}}\right)^{4} \phi(x) dx\\
+&\approx & \frac{1}{\gamma}\,\, \frac{-3ac\,\sqrt{2\pi}\,{\left(1+c_0h_4+c_2h_4+3c_4h_4 \right)}^2
+ \left(-1-5c_0h_4-9c_2h_4-47c_4h_4\right)}
+{{\left(1+3c_0h_4+5c_2h_4+21c_4h_4 \right)}^2}\\
+&=& \frac{3\,(1+h_4\,(c_0+c_2+3c_4)(1+h_4\,(5c_0+9c_2+47c_4)}
+{{\left(1+h_4\,(3c_0+5c_2+21c_4)\right)}^2}\\
+&=& \frac{3(1+\frac{1}{4}\sqrt{6}\,h_4)(1+\frac{95}{12}\sqrt{6}\,h_4)}
+{{\left(1+2\frac{3}{4}\sqrt{6}\,h_4\right)}^2}
+\end{eqnarray*}
+
+\begin{equation}
+\framebox{$\xi_2 \approx 3 + 8\sqrt{6}\,h_4$}
+\end{equation} 
+\begin{equation}
+\framebox{$\xi_f \approx 8\sqrt{6}\,h_4$}
+\end{equation} 
+
+The initial guesses for the $h_3$ and $h_4$ parameters in the least-squares
+fit, are set to zero because we expect that the profile will still resemble
+the standard Gaussian. If a fit is successful,
+the profile parameters $\gamma$, $X_0$ and $\sigma$, skewness and
+kurtosis are calculated from
+$a$,$b$, $c$, $h_3$ and $h_4$ using the formulas above.
+For the errors in these parameters we derived:
+\begin{eqnarray}
+\Delta \gamma &=& \frac{1}{\gamma}\, 
+\sqrt{{\left(\frac{\Delta a}{a}\right)}^2+
+      {\left(\frac{\Delta c}{c}\right)}^2+ 
+      {\left(\frac{1}{\frac{2}{3}\sqrt{6}+h_4}\right) }^2 
+      {\left(\frac{\Delta h_4}{h_4}\right)}^2 }\\
+\Delta X_0 &=& 
+\sqrt{ {(\Delta b)}^2 + 3h_3^2{(\Delta c)}^2 +
+       3c^2 {(\Delta h_3)}^2 }\\
+\Delta \sigma_0 &=& 
+\sqrt{{(1+\sqrt{6}\,h_4)}^2\, {(\Delta c)}^2 + 6c^2{(\Delta h_4)}^2  }\\
+\Delta \xi_1 &=&  4\sqrt{3}\,\Delta h_3\\
+\Delta \xi_2 &=&  8\sqrt{6}\,\Delta h_4
+\end{eqnarray}
+
+
+
+\chapter{The Voigt profile} 
+
+The Voigt profile is a line-shape which results form a convolution of Lorentzian and Doppler line broadening mechanisms:
+\begin{equation}
+ \phi_{Lorentz}(\nu)=\frac{1}{\pi} \frac{\alpha_L}{(\nu-\nu_0)^2 + \alpha_L^2}
+\end{equation} 
+\begin{equation} 
+ \phi_{Doppler}(\nu)=\frac{1}{\alpha_D} \sqrt{\frac{\ln{2}}{\pi}} e^{-\ln{2} \frac{(\nu-\nu_0)^2}{\alpha_D^2}}
+\end{equation}
+
+Both functions are normalized. {\bf $\alpha_D$ and $\alpha_L$ are half widths
+at half maximum}.
+Convolution is given by the relation 
+$$ f(\nu) \star g(\nu)=\int\limits_{-\infty}^\infty {f(\nu - t ) g(t) dt} $$\\
+Define the ratio of Lorentz to Doppler widths as 
+
+\begin{equation}
+ \label{eq:y}
+ y \equiv \frac{\alpha_L}{\alpha_D} \sqrt{\ln{2}}
+\end{equation} 
+
+and the frequency scale (in units of the Doppler Line-shape half-width  $\alpha_D$ )
+ 
+\begin{equation}
+ \label{eq:x}
+ x \equiv \frac{\nu-\nu_0}{\alpha_D} \sqrt{\ln{2}} 
+\end{equation}
+then:
+\[ \phi_L(\nu) = \frac{1}{\pi} \frac{\sqrt{\ln{2}}}{\alpha_D} \frac{y}{x^2+y^2} \]
+and
+\[ \phi_D(\nu) = \frac{1}{\alpha_D} \sqrt{\frac{\ln{2}}{\pi}} e^{-x^2} \]
+The convolution:
+\[ \phi_L(\nu)\star\phi_D(\nu)=\int\limits_{-\infty}^\infty {\frac{1}{\pi} \frac{\sqrt{\ln{2}}}{\alpha_D} \frac{y}{(x-t')^2 + y^2} \frac{1}{\alpha_D} \frac{\sqrt{\ln{2}}}{\sqrt{\pi}} e^{-t'^2} dt}\]
+
+If you replace $\nu$ by $\nu-t$  in the expression for $x$, then 
+\[ x-t'=\frac{\nu-t}{\alpha_D}\sqrt{\ln{2}}-\frac{\nu_0}{\alpha_D}\sqrt{\ln{2}}=
+\frac{\nu-\nu_0}{\alpha_D}\sqrt{\ln{2}}-t\frac{\sqrt{\ln{2}}}{\alpha_D}=
+x-\frac{\sqrt{\ln{2}}}{\alpha_D}t \]
+and we conclude that $ t'=\frac{\sqrt{\ln{2}}}{\alpha_D}t $ and
+$ dt'=\frac{\sqrt{\ln{2}}}{\alpha_D}dt 
+\Leftrightarrow dt=\frac{\alpha_D}{\sqrt{\ln{2}}}dt' $
+
+\[ \phi_L(\nu)\star\phi_D(\nu)=\frac{1}{\alpha_D}\frac{\sqrt{\ln{2}}}{\alpha_D}
+\frac{\sqrt{\ln{2}}}{\sqrt{\pi}}\frac{\alpha_D}{\sqrt{\ln{2}}}\, \,
+\frac{y}{\pi}\int\limits_{-\infty}^\infty {\frac{e^{-t'^2}}{(x-t')^2+y^2}dt'} \]
+
+Replace $t'$ by $t$ to obtain:
+
+\begin{equation} 
+\phi_\nu(\nu)=\phi_L(\nu)\star\phi_D(\nu)=
+\frac{1}{\alpha_D}\sqrt{\frac{\ln{2}}{\pi}}\, \frac{y}{\pi}\int\limits_{-\infty}^\infty {\frac{e^{-t^2}}{(x-t)^2+y^2}dt}\,
+\rightarrow
+\label{Voigtprofile}
+\end{equation} 
+
+
+\begin{equation}
+\phi_\nu(\nu)=
+\frac{1}{\alpha_D}\sqrt{\frac{\ln{2}}{\pi}}\,
+\frac{1}{\pi}\,
+\frac{\alpha_L}{\alpha_D} \sqrt{\ln{2}}\,
+\int\limits_{-\infty}^\infty {\frac{e^{-t^2}}{\left(\frac{\nu-\nu_0}{\alpha_D} \sqrt{\ln{2}}-t\right)^2+\,
+\left({\frac{\alpha_L}{\alpha_D} \sqrt{\ln{2}}}\right)^2}dt}\,
+\rightarrow
+\label{Voigtprofile_ex1}
+\end{equation} 
+
+\fbox{
+ \addtolength{\linewidth}{-2\fboxsep}%
+ \addtolength{\linewidth}{-2\fboxrule}%
+ \begin{minipage}{\linewidth}
+
+\begin{equation}
+\phi_\nu(\nu)=
+\frac{\alpha_L}{\alpha_D^2}
+\frac{\ln{2}} {\pi^{\frac{3}{2}}}
+\int\limits_{-\infty}^\infty {\frac{e^{-t^2}}{\left(\frac{\nu-\nu_0}{\alpha_D} \sqrt{\ln{2}}-t\right)^2+\,
+\left({\frac{\alpha_L}{\alpha_D} \sqrt{\ln{2}}}\right)^2}dt}
+\label{Voigtprofile_ex2}
+\end{equation}
+
+ \end{minipage}
+}
+
+\vspace{5 mm}
+Note that $\alpha_L$ and $\alpha_D$ are both {\bf half-width} and not FWHM's.
+As we will see in the next section: 
+$ \int\limits_{-\infty}^\infty {\phi_\nu(\nu)d\nu} = 1 $
+so the Voigt profile (eq.\ref{Voigtprofile} or eq.\ref{Voigtprofile_ex2}) is also normalized.
+
+
+
+\section{The Voigt function $K(x,y)$} 
+
+Part of the expression for the Voigt line-shape is the Voigt function.
+The formula for this function is:
+
+\[
+K(x,y) = \frac{y}{\pi} {\int\limits_{- \infty} ^{\infty}} \frac{e^{-t^{2}}}{y^2 + {(x - t)}^2} dt
+\]
+
+Rewrite the Voigt function using the integral:
+
+\begin{displaymath}
+\int\limits_{0}^{\infty}
+e^{-yv}\cos{\left( (x-t)v\right)}dv = 
+\frac{y}{(x-t)^2+y^2}
+\end{displaymath}
+
+Then:
+
+\begin{eqnarray*} 
+K(x,y) &=& 
+\frac{1}{\pi}
+\int\limits_{-{\infty}}^{+{\infty}}
+\frac{ye^{-t^2}}{(x-t)^2+y^2}\,dt\\
+&=&
+\frac{1}{\pi}
+\int\limits_{-{\infty}}^{+{\infty}}
+e^{-t^2}
+\int\limits_{0}^{\infty}
+e^{-yv}\cos{\left((x-t)v \right)}\,dv\,dt\\
+&=&
+\frac{1}{\pi}
+\int\limits_{0}^{\infty}
+e^{-yv}
+\int\limits_{-{\infty}}^{+{\infty}}
+e^{-t^2}\cos{\left( (x-t)v\right)}\, dt\,dv\\
+&=&
+\frac{1}{\pi}
+\int\limits_{0}^{\infty}
+e^{-yv} \cos{xv}
+\int\limits_{-{\infty}}^{+{\infty}}
+e^{-t^2}\cos{tv}\, dt\,dv
+\end{eqnarray*}  
+
+where we used the relation:
+
+\begin{displaymath}
+\cos(a-b) = \cos a\cos b + \sin a \sin b
+\end{displaymath}
+
+and the fact that the sine part of the intergral evaluate to zero.
+
+To continue, we use another well known integral:
+ 
+
+\begin{displaymath}
+\int\limits_{-{\infty}}^{+{\infty}}
+e^{-t^2}\cos{(tv)}dt =
+\sqrt{{\pi}}e^{-{\frac{v^2}{4}}} \rightarrow
+\end{displaymath}
+
+\begin{eqnarray*} 
+K(x,y) &=& 
+\frac{1}{\sqrt{\pi}}
+\int\limits_{0}^{\infty}
+e^{-{\frac{v^2}{4}}}e^{-yv}\cos(xv)\,dv\\
+&=&
+\frac{1}{2{\sqrt{\pi}}}
+\int\limits_{0}^{\infty}
+e^{-{\frac{v^2}{4}}-yv}
+(e^{ixv}+e^{-ixv})dv \\
+&=&
+\frac{1}{2{\sqrt{\pi}}}
+\int\limits_{0}^{\infty}
+(e^{-{\frac{v^2}{4}}-(y-ix)v}+e^{-{\frac{v^2}{4}}-(y+ix)v})dv
+\end{eqnarray*}  
+
+Let $z = x + iy$, then $iz = -(y-ix)$, i${\overline{z}} = (y +ix)$
+then the Voigt function is:
+
+\begin{displaymath}
+K(x,y) = 
+\frac{1}{2{\sqrt{\pi}}}
+\int\limits_{0}^{\infty}
+(e^{-({\frac{v}{2}}-iz)^2-z^2}+
+e^{-({\frac{v}{2}}+i{\overline{z}})^2-{\overline{z}}^2})dv
+\end{displaymath}
+
+with:
+
+\begin{displaymath}
+\framebox{$z = x + iy$}
+\end{displaymath}
+
+and $x$ and $y$ from equations \ref{eq:x} and \ref{eq:y}.
+
+
+Let $u1=v/2 - iz$ and $u_2 = v/2 + iz$:
+
+\[
+K(x,y) = \frac{1}{\sqrt{\pi}} \ e^{-z^2} {\int\limits _{- iz} ^{\infty}} {e^{-{u_1}^{2}}} d{u_1} \ + \ \frac{1}{\sqrt{\pi}} {e^{- \bar{z} ^2}} {\int\limits _{i \bar{z}} ^{\infty}} {e^{-{u_2}^{2}}} d{u_2}
+\]
+
+According to Abramowitz \& Stegun (AS): 
+$\erfc (z) \equiv \frac{2}{\sqrt{\pi}} {\int\limits _{z} ^{\infty}} {e^{-t^{2}}} dt $
+so that: 
+
+\begin{equation}  
+K(x,y) = \frac{1}{2} \ \left({e^{-z^{2}}}  \erfc (-iz) \ + {e^{- \bar{z}^{2}}} \erfc (i \bar{z})\right)\
+\end{equation}
+
+In AS we find the function $\omega(z)$ defined as: 
+\begin{equation}
+\omega(z) = e^{-z^2} \erfc (-iz)
+\end{equation}
+
+With the relations above one recognizes 
+the relation $ \omega( \bar{z}) \ = \ \overline{\omega(-z)} $.
+If we write the Voigt function in terms of function $w$ then:
+
+
+$$
+ K(x,y)  = \frac{1}{2} \{ \omega(z) + \omega(- \bar{z} ) \} = 
+\frac{1}{2} \{ \omega(z) + \overline{\omega(z)} \} = \Re \{ \omega(z) \}
+$$
+\begin{equation}
+\framebox{$K(x,y) = \Re \{\omega(z)\}$ } 
+\end{equation}
+
+\newpage
+
+
+
+\section {Area under the Voigt Line-shape}
+Remember the Voigt line-shape  was given by:\\
+\begin{equation}
+\phi (\nu) = \frac {A} {\alpha_D} \sqrt{\frac {\ln 2} {\pi}} \frac {y} {\pi} \int\limits_{t=-\infty}^{t=\infty} \frac {e^{-t^2}} {y^2+(x-t)^2} dt \end{equation}\\
+
+We want to evaluate 
+$\int \limits_{-\infty}^{\infty} \phi (\nu) d\nu.$
+By changing the integration order, one can write:
+$$
+\int\limits_{\nu=-\infty}^{\nu=\infty} \phi (\nu) d\nu = \frac {A} {\alpha_D} \sqrt{\frac {\ln 2} {\pi}} \int\limits_{t=-\infty}^{t=\infty} \frac {y} {\pi} \left \{\int\limits_{\nu=-\infty}^{\nu=\infty} \frac {e^{-t^2}} {y^2+(x-t)^2} d\nu \right \} dt
+$$
+Because $x \equiv \frac {\nu - \nu_0} {\alpha_D} \sqrt{\ln 2}$, we derive $d\nu = \frac {\alpha_D} {\sqrt{\ln2}} dx$
+$$
+\int\limits_{-\infty}^{\infty} \phi (\nu) d\nu = \frac {A} {\alpha_D} 
+\sqrt{\frac {\ln 2} {\pi}}  \frac {\alpha_D} {\sqrt{\ln2}} 
+\int\limits_{-\infty}^{\infty} \frac {y} {\pi} 
+\left \{ \int\limits_{-\infty}^{\infty} \frac {e^{-t^2}} {y
+^2+(x-t)^2} dx \right \} dt
+$$
+The inner integral $\int\limits_{-\infty}^{\infty} \frac {1} {y^2+(x-t)^2} dx = \frac {1} {y} \arctan \Bigl(\frac {x-t} {y} \Bigr) \Bigr |_{-\infty}^{\infty} = \frac {\pi} {y}$
+so that: 
+$$
+\int\limits_{-\infty}^{\infty} \phi (\nu) d\nu = \frac {A} {\sqrt{\pi}} \int\limits_{-\infty}^{\infty} e^{-t^2} dt 
+= {\frac {A} {\sqrt{\pi}} \cdot \sqrt{\pi}}  =  A
+$$
+
+This proves what we already expected. Besides the area scaling factor $A$ 
+(which is a fit parameter in the least-squares fit) 
+the area of the convolution of the two functions 
+(Lorentzian and Doppler line-shapes) is normalized.
+The amplitude is found at $\nu=\nu_0$. Then according to its definition
+$x=0$ and the relation between the amplitude and area is 
+$amp=\phi (\nu_0)$:
+
+
+\begin{equation}
+\framebox {$
+amp = \frac {A} {\alpha_D} \sqrt{\frac {\ln 2} {\pi}} K(0,y) 
+$}
+\end{equation}
+The error in the amplitude is then:
+
+
+\begin{eqnarray*}
+\Delta amp &=& \sqrt{\frac {\ln 2}{\pi}} \, K(0,y)\,  
+\sqrt{\Bigl(\frac {\partial} {\partial\alpha_D} 
+\frac {A} {\alpha_D} \Delta \alpha_D \Bigr)^2 + 
+\Bigl(\frac {\partial} {\partial A} \frac {A} {\alpha_D} \Delta A \Bigr)^2}\\
+&=& \sqrt{\frac {\ln 2} {\pi}} \, K(0,y)\,
+\sqrt{  { \left( \frac{A}{\alpha_D ^2}\Delta\alpha_D^2\right)}^2+
+        {\left(\frac{1}{\alpha_D ^2}\Delta A \right)}^2 }
+\end{eqnarray*} 
+
+\begin{equation}
+\framebox {$ \Delta amp =
+amp\, \sqrt{ {\left(\frac{\Delta\alpha_D}{\alpha_D}\right)}^2 + 
+                {\left(\frac{\Delta A}{A} \right) }^2  }
+$}
+\end{equation}
+
+
+\section{Partial derivatives of the Voigt Function}
+Consider the relations $z=x+iy$ and $-\bar{z}=-x+iy$. Then:
+\[\frac{\partial\omega}{\partial x}=\frac{\partial z}{\partial x}\frac{\partial\omega}{\partial z}=\frac{\partial(x+iy)}{\partial x}\frac{\partial\omega}{\partial z}=\frac{\partial\omega}{\partial z}\]
+\[\frac{\partial\omega}{\partial x}=\frac{\partial(-\bar{z})}{\partial x}\frac{\partial\omega}{\partial(-\bar{z})}=\frac{\partial(-x+iy)}{\partial x}\frac{\partial\omega}{\partial(-\bar{z})}=\frac{-\partial\omega}{\partial(-\bar{z})}\]
+\[\frac{\partial\omega}{\partial y}=\frac{\partial z}{\partial y}\frac{\partial\omega}{\partial z}=\frac{\partial(x+iy)}{\partial y}\frac{\partial\omega}{\partial z}=i\frac{\partial\omega}{\partial z}\]
+\[\frac{\partial\omega}{\partial y}=\frac{\partial(-\bar{z})}{\partial y}\frac{\partial\omega}{\partial(-\bar{z})}=\frac{\partial(-x+iy)}{\partial y}\frac{\partial\omega}{\partial(-\bar{z})}=i\frac{-\partial\omega}{\partial(-\bar{z})}\]
+Now it is necessary to find $\frac{\partial\omega(z)}{\partial z}$. In Abramowitz \& Stegun we find the relation $\frac{\partial\omega(z)}{\partial z}=-2z\omega(z)+\frac{2i}{\sqrt{\pi}}$. Then:
+\begin{eqnarray*}
+\frac{\partial K(x,y)}{\partial x}&=&\frac{\partial}{\partial x}\left\{ \frac{1}{2} \left( \omega(z)+\omega(-\bar{z})\right)\right\}\\
+&=&\frac{1}{2}\left\{\frac{\partial\omega(z)}{\partial x}+\frac{\partial\omega(-\bar{z})}{\partial x}\right\}\\
+&=&\frac{1}{2}\left\{\frac{\partial}{\partial z}\omega(z)-\frac{\partial}{\partial(-\bar{z})}\omega(-\bar{z})\right\}\\
+&=&\frac{1}{2}\left\{-2z\omega(z)+\frac{2i}{\sqrt{\pi}}-\left(-2(-\bar{z})\omega(-\bar{z})+\frac{2i}{\sqrt{\pi}}\right)\right\}\\
+&=&-\left(z\omega(z)+\bar{z}\omega(-\bar{z})\right)\\
+\mbox{with }\omega(-\bar{z})=\overline{\omega(z)}\mbox{:}&&\\
+&=&-\left(z\omega(z)+\overline{z\omega(z)}\right)\\
+&=&-2\Re\left\{z\omega(z)\right\} 
+\end{eqnarray*}
+
+
+
+In the same way we write:
+
+\begin{eqnarray*}
+\frac{\partial K(x,y)}{\partial y} 
+&=& \frac{\partial}{\partial y} \left\{ \frac{1}{2}
+\left( \omega(z)+\omega(-\bar{z})\right) \right\}\\
+&=&\frac{1}{2}\left\{\frac{\partial\omega(z)}{\partial y}+\frac{\partial\omega(-\bar{z})}{\partial y}\right\}\\
+&=& {i\over 2}\left\{ {\partial \omega(z)\over \partial z} + i{\partial \omega(-\overline{z})\over \partial (-\overline{z})}\right\} \\
+&=& {i\over 2}\left\{-2z\omega(z) + {2i\over \sqrt{\pi}} +  -z(-\overline{z})\omega(-\overline{z}) + {2i\over \sqrt{\pi}}\right\}\\
+&=& -{2\over \sqrt{\pi}} -i\left\{z\omega(z) - \overline{z}\omega(-\overline{z})\right\}\\
+&=& -{2\over \sqrt{\pi}} -i\{z\omega(z) - \overline{z\omega(z)}\} 
+\hspace{1cm} (because\,\, \omega(-\overline{z}) = \overline{\omega(z)})\\
+&=& -{2\over \sqrt{\pi}} + 2 \Im\{z\omega(z)\}
+\end{eqnarray*}
+
+To summarize:
+\begin{equation}
+\framebox {$ {\partial K(x,y)\over \partial y} = -2 \Re\{z\omega(z)\} $}
+\end{equation}
+\begin{equation}
+\framebox {${\partial k(x,y)\over \partial y} = -{2\over \sqrt{\pi}} + 2 \Im\{z\omega(z)\}  $}
+\end{equation}
+
+
+\section{Partial derivatives of the Voigt Line-shape}
+Lets start to recall some definitions:
+$$
+\phi \left( v \right)={A \over {\alpha_D}}\sqrt {{{\ln{2}} \over
+\pi }}K\left( {x,y} \right) \hspace{1cm}
+K\left( {x,y} \right)=\Re \left\{ {\omega \left( z
+\right)} \right\}
+$$
+with:
+$$
+x={{v-v_0} \over {\alpha_D}}\sqrt {\ln{2}} \hspace{1cm}
+y={{\alpha_L} \over {\alpha_D}}\sqrt {\ln{2}}
+$$
+$$
+  {\partial  \over {\partial x}}K\left( {x,y} \right)=-2\Re \left\{ {z\omega
+\left( z \right)} \right\},\,\, {\partial  \over {\partial y}}K\left( {x,y}
+\right)=-{2 \over {\sqrt \pi }}+2\Im \left\{ {z\omega \left( z \right)}
+\right\}
+$$
+
+Then:
+\begin{eqnarray}
+{{\partial \phi } \over {\partial A}} &=& {1 \over {\alpha_D}}\sqrt {{{\ln{2}}
+\over \pi }}K\left( {x,y} \right)={1 \over {\alpha_D}}\sqrt {{{\ln{2}} \over
+\pi }}\,\Re \left\{ {\omega \left( z \right)} \right\}\\
+{{\partial \phi } \over {\partial v_0}} &=& {A \over {\alpha_D}}\sqrt {{{\ln{2}}
+\over \pi }}{\partial  \over {\partial x}}K\left( {x,y} \right){{\partial x}
+\over {\partial v}}={A \over {\alpha_D}}\sqrt {{{\ln{2}} \over
+\pi }}\biggl\{ -2\Re \left\{ {z\omega \left( z \right)} \right\}\biggr\}{{-1} \over
+{\alpha_D}}\sqrt {\ln{2}}\\
+{{\partial \phi } \over {\partial \alpha_L}} &=& {A \over {\alpha_D}}\sqrt
+{{{\ln{2}} \over \pi }}{\partial  \over {\partial y}}K\left( {x,y}
+\right){{\partial y} \over {\partial v}}={A \over {\alpha_D}}\sqrt {{{\ln{2}}
+\over \pi }}\left\{ {-{2 \over {\sqrt \pi }}+2\Im \left\{ {z\omega \left( z
+\right)} \right\}} \right\}{1 \over {\alpha_D}}\sqrt {\ln{2}}\\
+{{\partial \phi } \over {\partial \alpha_D}} & = & K\left( {x,y}
+\right){\partial  \over {\partial \alpha_D}}\left\{ {{A \over {\alpha
+_D}}\sqrt {{{\ln{2}} \over \pi }}} \right\}+{A \over {\alpha_D}}\sqrt {{{\ln{2}}
+\over \pi }}{\partial  \over {\partial \alpha_D}}K\left( {x,y} \right) \nonumber\\
+& = & A\sqrt {{{\ln{2}} \over \pi }}\left( {-{{K\left( {x,y} \right)} \over
+{\alpha_D^2}}+{1 \over {\alpha_D}}\left\{ { {\partial \over {\partial
+x}}K\left( {x,y} \right){\partial  \over {\partial \alpha_D
+}}\left[ {{{v-v_0} \over {\alpha_D}}\sqrt {\ln{2}}} \right]+
+{\partial \over
+{\partial y}}K\left( {x,y} \right){\partial  \over {\partial \alpha
+_D}}\left[ {{{\alpha _L} \over {\alpha_D}}\sqrt {\ln{2}}} \right]} \right\}}
+\right) \nonumber\\
+& = & A\sqrt {{{\ln{2}} \over \pi }}\left( {-{{K\left( {x,y} \right)} \over
+{\alpha_D^2}}+{1 \over {\alpha_D}}\left\{ {-{{v-v_0} \over {\alpha
+_D^2}}\sqrt {\ln{2}}{\partial  \over {\partial x}}K\left( {x,y}
+\right)-{{\alpha_L} \over {\alpha_D^2}}\sqrt {\ln{2}}{\partial  \over
+{\partial y}}K\left( {x,y} \right)} \right\}} \right) \nonumber\\ 
+& = & {A \over {\alpha_D}}\sqrt {{{\ln{2}} \over \pi }}{1 \over {\alpha
+_D}}\left( {-K\left( {x,y} \right)+\left\{ {-x{\partial  \over {\partial
+x}}K\left( {x,y} \right)-y{\partial  \over {\partial y}}K\left( {x,y}
+\right)} \right\}} \right)\nonumber\\ 
+& = &  -{A \over {\alpha_D}}\sqrt {{{\ln{2}} \over \pi }}{1 \over {\alpha
+_D}}\left( {K\left( {x,y} \right)+x{\partial  \over {\partial x
+}}K\left( {x,y} \right)+y{\partial  \over {\partial y}}K\left( {x,y}\right)} \right) 
+\end{eqnarray}
+
+
+\chapter{Initial estimates}
+
+We automated calculating initial estimates using a method described by 
+Schwarz (1968) called the {\it gauest} method. A second-order polynomial is 
+fitted at each pixel  position $x_k$ using $2Q+1$ points distributed 
+symmetrically around $x_k$. 
+The value at $x_k$ is {\it not} the profile value at that point, but
+the median of that value and the two neighbours. Outliers that are not 
+filtered with this median filter can be masked in the plot with the 
+left mouse button. 
+In $XGAUPROF$ the factor $Q$ is called the smoothing factor.
+The coefficient of the second-order term of the polynomial is an
+approximation of the second derivative of the observed profile. Assuming
+that the observed profile can be approximated by the sum of a few (standard)
+Gaussian functions, the parameters $x_0$ and $\sigma_0$ are calculated
+from the main minima of the second derivative. The amplitude is derived
+from the observed profile. Tests using different threshold values make
+it possible to discriminate against spurious components; the threshold values 
+depend on Q and the r.m.s. noise of the observed profile. The Gaussian
+components are then subtracted from the observed profile, and the residual 
+profile, mainly the sum of a few remaining broader components, is handled 
+in the same way as the original.
+Profiles with a maximum amplitude smaller than a user given value and
+profiles with a dispersion smaller than a user given value are discarded.
+The initial values for these filters are set to zero.
+Blanks in the profile and points that are masked by the user are set to 
+the value of the zero level. If you did not fix a certain zero level, then
+the median of the profile is used as an estimate. If you did not fix
+the r.m.s. noise of the observed profile, the distance between the quartiles
+of the profile is used as an estimate.
+\chapter{References}
+
+
+\item Abramowitz, M. and Stegun, C. A. (Eds.). {\it Handbook of Mathematical 
+Functions with Formulas, Graphs, and Mathematical Tables}, 9th printing. New York: Dover, p. 928, 1972. 
+\item Armstrong, B.H., {\it Spectrum Line Profiles: The Voigt Function}. J. Quant. Spectrosc. Radiat. Transfer {\bf 7}, 61-88, 1967\\
+\item Kaper, H.G., Smits, D.W., Schwarz, U.J., Takabuko, K., Woerden, H. van,
+{Computer Analysis of Observed Distributions into Gaussian components},
+Bull. Astr. Inst. Netherlands, {\bf 18} 465-487, 1966 
+\item Marel, P. van der, Franx, M.,\,\,{\it A new method for the identification of non-gaussian
+line profiles in elliptical galaxies}. A.J., {\bf 407} 525-539, 1993 April 20\\
+\item Schwarz, U.J., {\it Analysis of an observed function into components
+using its second derivative}, Bull. Astr. Inst. Netherlands, {\bf 19} 405-413, 1968
+\end{flushleft}
+\end{document}
+
+
+

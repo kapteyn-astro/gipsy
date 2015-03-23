@@ -1,0 +1,124 @@
+GIPSY
+
+Description
+
+GIPSY is an acronym of Groningen Image Processing SYstem. It is a
+highly interactive software system for the reduction and
+display of astronomical data. It was designed originally for the
+reduction of interferometric data from the Westerbork Synthesis Radio
+Telescope, but over the last 20 years it has grown to a system capable
+of handling data from many different instruments. The UNIX version of 
+GIPSY can be installed on many different architectures.
+
+
+Starting GIPSY
+                
+At the Kapteyn institute, GIPSY is supported runs on:
+
+                Alliant FX80           
+                DECstations            
+                HP 300 series          
+                HP 700 series          
+                Sun 4 systems          
+                Convex C2 and C3
+                IBM RS/6000
+
+From a "standard" environment, you start a GIPSY session by typing: gipsy
+This will start Hermes, the user interface of GIPSY. 
+
+
+Hermes
+
+Hermes is the user interface of GIPSY. It enables users to do multi-tasking 
+in an organized fashion. Users have direct control over the application 
+programs (tasks) they run: a running task can be suspended or aborted with a 
+simple command; various settings can be changed while a task is running.
+Parameters for a task can be specified at any time; if a task needs information
+that has not been specified yet, the user is prompted.
+Context-sensitive help about tasks is provided at a single keystroke.
+Tasks keep the user informed in two ways: they write in a log file
+in which the user can page and search and they can provide a one-line status
+message, which can be frequently updated.
+
+Hermes cannot be started directly by the user, but is started by a shell 
+script (gipsy.csh) which prepares a number of settings before starting Hermes.
+
+Examples of control keys used by Hermes:
+<TAB> or <ctrl> I  : pop help screen up or down
+<ctrl> C           : abort task
+<ctrl> P           : enter or leave Common Output Area (COA) page mode
+<ctrl> V           : page forward in, help display or keyword display
+<ctrl> Z           : page back in, help display or keyword display
+
+
+Exit from Hermes
+
+You quit hermes by typing: END, QUIT, <ctrl> Q, or <esc> Z
+Before the session can be closed you get the prompt: Quit? Press: Y
+
+If you press Y and there are still tasks running, you get the message 
+'Wait for tasks to finish...'. Tasks can be aborted with ^C
+
+
+Help
+
+Pressing <TAB> in Hermes, will display information about Hermes when
+no task is involved (no task name on the command line). If you type the 
+name of a task, pressing <TAB> will display information about that task. 
+The task HELP can display or print a list of available tasks together with
+their purpose lines. It provides also an introduction to the input syntax for
+keywords. There are a couple of LaTex files (manual.tex, hermes.tex) in 
+the directory $gip_doc, which need to be processed before they can be printed. 
+
+
+GIDS
+
+GIDS ( Groningen Image Display Server ) is the server you need to
+display your 2-dimensional (sub)sets. It can be started with the task
+INIDISPLAY or with VIEW (which needs a (sub)set). The use of GIDS is 
+very simple. With your mouse (and one of its buttons) you select actions 
+(zooming, scaling etc.) in the window with the menu bars.
+Move the mouse pointer in one of the menu boxes and click one of the
+mouse buttons. An action is initiated or a sub menu appears.
+
+
+Hardware
+
+Applications which need access to a printer or a tape device, can generate
+a list of available devices on request. This list can be different on 
+different machines.
+
+
+Installation
+
+Documentation about installation can be found in the file README 
+using anonymous ftp: 
+>ftp kapteyn.astro.rug.nl
+name: anonymous
+password: <ident as password> 
+ftp> cd gipsy
+ftp> get README
+ftp> quit
+
+
+==============================================================================
+
+
+                            COPYRIGHT (c) 1992
+                      Kapteyn Astronomical Institute
+                University of Groningen, The Netherlands
+                           All Rights Reserved.
+
+
+
+Document:     gopher
+
+Purpose:      GIPSY starters document for Gopher
+
+Category:     DOCUMENTATION
+
+File:         gopher.doc
+
+Author:       M.G.R. Vogelaar
+
+Updates:      Mar 27, 1993: VOG, Document created.

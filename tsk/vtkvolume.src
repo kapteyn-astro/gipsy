@@ -1,0 +1,518 @@
+vtkvolume.src
+
+        Copyright (c) Kapteyn Laboratorium Groningen 2010
+        All Rights Reserved.
+
+Name:         vtkvolume.src
+Creator:      terlouw
+Host:         azarquiel
+Date:         Jun 16, 2010
+Contents:     vtkvolume.make vtkvolume.py vtkvolume.dc1
+
+#>            vtkvolume.make
+#
+# vtkvolume.make
+#
+
+SHELL   = /bin/sh
+
+default:: vtkvolume
+
+vtkvolume : vtkvolume.py
+	cp vtkvolume.py vtkvolume
+	chmod +x vtkvolume
+
+pack::
+	$$gip_sys/pack.csh vtkvolume.src vtkvolume.make vtkvolume.py vtkvolume.dc1
+
+#<
+
+#>            vtkvolume.py
+#!/usr/bin/env python
+
+from gipsy import *
+from vtk import *
+
+# ========================= global variables =================================
+
+global imgmin, imgmax
+
+# ----------------------------------------------------------------------------
+#                                  newsflash
+# ----------------------------------------------------------------------------
+def newsflash(message, time=5.0):
+   def remover(cb):
+      cb.message.setLabel(' ')
+      cb.deschedule()
+   label = msglabel
+   label.setLabel('>> %s ' % message)
+   TimeCallback(remover, time, message=label)
+
+# ----------------------------------------------------------------------------
+#                                  hardcopy_cb
+# ----------------------------------------------------------------------------
+#   JPEG and PostScript ("hardcopy) menu entry handler
+#
+def hardcopy_cb(cb):
+   GgiBase.base.Prompter("ACCEPT", '')
+   filename = usertext(cb.key)
+   if not filename:
+      return
+   renlarge = vtkRenderLargeImage()
+   renlarge.SetInput(renderer)
+   renlarge.SetMagnification(1)
+   writer = cb.writer
+   writer.SetInputConnection(renlarge.GetOutputPort())
+   writer.SetFileName(filename)
+   writer.Write()
+   newsflash('%s file written: %s' % (cb.kind, filename))
+
+# ----------------------------------------------------------------------------
+#                                  file_cb
+# ----------------------------------------------------------------------------
+#   File menu handler
+#
+def file_cb(cb):
+   choice = userint(cb.key, defval=-1)
+   if choice == 0:      # open inset
+      insetwindow = GgiBase.base.Inset('SETNAME=', 'SET=', 'BOX=').ndims(3)  
+      insetwindow.closeOnOK()
+   elif choice==1:
+      GgiBase.base.Prompter('JPEG=', 'JPEG output filename')
+   elif choice==2:
+      GgiBase.base.Prompter('PS=', 'PostScript output filename')
+   elif choice == 3:    # exit program
+      if GgiBase().verify('Exit program?', 'Yes', 'No'):
+         finis()
+
+# ----------------------------------------------------------------------------
+#                                  opacity_cb
+# ----------------------------------------------------------------------------
+#   Opacity handler
+#
+def opacity_cb(cb):
+   try:
+      values = userreal(cb.key, nmax=100)
+      gdsOpacity.RemoveAllPoints()
+      nelms = len(values)
+      element = 0
+      for value in values:
+         gdsOpacity.AddPoint(element,  value)
+         element = element + 255/(nelms-1)
+      renwin.Render()
+   except:
+      pass
+
+# ----------------------------------------------------------------------------
+#                                  factor_cb
+# ----------------------------------------------------------------------------
+#   Factor handler
+#
+def factor_cb(cb):
+   try:
+      facval = userreal(cb.key)*255.0/(imgmax-imgmin)
+      gdsMath2.SetConstantK(facval)
+      renwin.Render()
+   except:
+      error(1, "bad factor")
+
+# ----------------------------------------------------------------------------
+#                                  thresh_cb
+# ----------------------------------------------------------------------------
+#   Threshold handler
+#
+def thresh_cb(cb):
+   thresh = userreal(cb.key)
+   gdsThresh.ThresholdByUpper(thresh)
+   renwin.Render()
+
+# ----------------------------------------------------------------------------  
+#                                  istyle_cb
+# ----------------------------------------------------------------------------  
+#   Interaction style menu handler
+#
+def istyle_cb(cb):
+   choice = userint(cb.key, defval=-1)
+   if choice == 0:
+      iren.SetInteractorStyle(vtkInteractorStyleTrackballCamera())
+   elif choice==1:
+      iren.SetInteractorStyle(vtkInteractorStyleTerrain())
+
+# ----------------------------------------------------------------------------  
+#                                  box_cb
+# ----------------------------------------------------------------------------  
+#   Box handler
+#
+def box_cb(cb):
+   try:
+      boxstr = usertext(cb.key)
+      if not boxstr:
+         boxstr = ' '
+      set.setbox(boxstr)
+      vlo = map(lambda x,y,z: min(max(x,y),z), set.blo, set.slo, set.shi)
+      vhi = map(lambda x,y,z: max(min(x,y),z), set.bhi, set.shi, set.slo)
+      vlo = map(lambda x,y: x-y, vlo, set.slo)
+      vhi = map(lambda x,y: x-y, vhi, set.slo)
+      gdsRead.SetDataVOI(vlo[0], vhi[0], vlo[1], vhi[1], vlo[2], vhi[2], )
+# Axes:
+      sizes = map(lambda x,y: x-y+1, vhi, vlo)
+      axActor.SetTotalLength(sizes[0], sizes[1], sizes[2])
+      textActorx.SetPosition(sizes[0]/10.0, -min(sizes)/10.0, 0.0)
+      textActorx.SetScale(max(sizes)/20.0)
+
+      textActory.SetPosition(-min(sizes)/10.0 , sizes[0]/10.0, 0.0)
+      textActory.SetScale(max(sizes)/20.0)
+
+      textActorz.SetPosition(0.0, -min(sizes)/10.0 , sizes[0]/10.0)
+      textActorz.SetScale(max(sizes)/20.0)
+      renwin.Render()
+   except:
+      reject(cb.key, 'problem with box')
+
+# ----------------------------------------------------------------------------  
+#                                  setname_cb
+# ----------------------------------------------------------------------------  
+#   Set name handler
+#
+def setname_cb(cb):
+   global set, imgmin, imgmax
+   setname = usertext(cb.key)
+   try:
+      set = Set(setname)
+      if set.naxis != 3:
+         reject(cb.key, 'Can only handle 3-D sets')
+         del set
+         return
+   except:
+      reject(cb.key, 'Cannot open set')
+      return
+   gdsRead.SetFileName(setname + '.image')
+   slo = set.slo
+   shi = set.shi 
+   gdsRead.SetDataExtent(0, shi[0]-slo[0], 0, shi[1]-slo[1], 0, shi[2]-slo[2])
+   try:
+      imgmin = set['DATAMIN']
+      imgmax = set['DATAMAX']
+   except:
+      error(1, 'DATAMIN and DATAMAX missing - obtained from data ')
+      imgmin = set.image.min()
+      imgmax = set.image.max()
+   imgshape = set.image.shape
+
+# Threshold:
+   cb.gauge.setRange(imgmin, imgmax)
+   gdsThresh.ThresholdByUpper(imgmin)
+   gdsThresh.SetOutValue(imgmin)
+   gdsMath1.SetConstantC(-imgmin)
+   gdsMath2.SetConstantK(255.0/(imgmax-imgmin))
+
+# Axes:
+   axActor.SetTotalLength(imgshape[2], imgshape[1], imgshape[0])
+   atextx.SetText(set['CTYPE1'])
+   textActorx.SetPosition(imgshape[0]/10.0, -min(imgshape)/10.0, 0.0)
+   textActorx.SetScale(max(imgshape)/20.0)
+
+   atexty.SetText(set['CTYPE2'])
+   textActory.SetPosition(-min(imgshape)/10.0 , imgshape[0]/10.0, 0.0)
+   textActory.SetScale(max(imgshape)/20.0)
+
+   atextz.SetText(set['CTYPE3'])
+   textActorz.SetPosition(0.0, -min(imgshape)/10.0 , imgshape[0]/10.0)
+   textActorz.SetScale(max(imgshape)/20.0)
+
+   if set.image.dtype.str=='>f4':
+      gdsRead.SetDataByteOrderToBigEndian()
+   else:
+      gdsRead.SetDataByteOrderToLittleEndian()
+
+
+# ============================================================================
+#                              Program Start
+# ----------------------------------------------------------------------------
+
+init()
+base = GgiBase()
+
+# ----------------------------------------------------------------------------
+#                            viewports and layout
+# ----------------------------------------------------------------------------
+width   = userint(keyword='WIDTH=',  defval=800)
+height  = userint(keyword='HEIGHT=', defval=600)
+topform = base.Viewport('topform', width, 31)
+vtkform = base.Viewport('vtkform', width, height)
+botform = base.Viewport('botform', width, 75)
+topform.setPosition(0, None, 0, None)
+vtkform.setPosition(0, None, 0, topform)
+botform.setPosition(0, None, 0, vtkform)
+
+filemenu = topform.Menu('FILE=', 'File menu',
+                    ['Input set', 'JPEG output', 'PostScript output', 'Exit'])
+helpmenu = topform.HelpMenu('HELP=', 'HELP', 'VTKVOLUME documentation',
+                            ['Overview', 'User Interface', 'About'],
+                            ['vtkvolume.dc1#overview',
+                             'vtkvolume.dc1#userinterface',
+                             'vtkvolume.dc1#about'])
+boxtext  = topform.TextField('BOX=', 'Volume of interest', 30).setLabel('Box:')
+filemenu.setPosition(0, None, 0, None)
+boxtext.setPosition(0, filemenu, 0, None)
+helpmenu.setPosition(topform.width-helpmenu.width-15, None, 0, None)
+
+vtkfield = vtkform.VtkField('VTK', width-8, height-8)
+vtkfield.setPosition(0, None, 0, None)
+
+factext  = botform.TextField('FACTOR=', 'Intensity factor', 4)
+factext.setLabel('Factor:')
+thrgauge = botform.Gauge('THRESH=',  'Render threshold', 200, 0.0, 1.0)
+thrgauge.setLabel('Threshold:')
+thrtext  = botform.TextField('THRESH=', 'Render threshold', 10).setLabel(' ')
+ismenu   = botform.Menu('ISTYLE=', 'Interactor style', ['Trackball', 'Terrain'])
+ismenu.setLabel('Interaction')
+msglabel  = botform.Label(' ')
+logo      = botform.Logo()
+factext.setPosition(0, None, 0, None)
+thrgauge.setPosition(0, factext, 0, None)
+thrtext.setPosition(0, thrgauge, 0, None)
+ismenu.setPosition(0, thrtext, 0, None)
+msglabel.setPosition(0, None, 0, factext)
+logo.setPosition(width-logo.width-10, None, 0, None)
+
+base.realize()   
+
+# ----------------------------------------------------------------------------  
+#                            event handler registration
+# ----------------------------------------------------------------------------  
+KeyCallback(setname_cb, 'SET=', gauge=thrgauge)
+KeyCallback(file_cb,    'FILE=')
+KeyCallback(box_cb,     'BOX=')
+KeyCallback(hardcopy_cb, 'JPEG=', kind='JPEG', writer=vtkJPEGWriter())
+KeyCallback(hardcopy_cb, 'PS=', kind='PostScript', writer=vtkPostScriptWriter())
+KeyCallback(factor_cb,  'FACTOR=')
+KeyCallback(thresh_cb,  'THRESH=')
+KeyCallback(istyle_cb,  'ISTYLE=')
+KeyCallback(opacity_cb, 'OPACITY=')
+
+# ----------------------------------------------------------------------------  
+#                             Ggi-VTK initialisation
+# ----------------------------------------------------------------------------  
+vtkfield.open()
+renwin = vtkfield.RenderWindow()
+iren = vtkfield.Interactor()
+
+# ----------------------------------------------------------------------------  
+#                             VTK pipeline
+# ----------------------------------------------------------------------------  
+renderer = vtkRenderer()
+renderer.SetBackground(0.0, 0.0, 0.0)
+
+renwin.AddRenderer(renderer)
+
+gdsRead = vtkImageReader()
+gdsRead.SetFileName('/dev/zero')
+gdsRead.SetHeaderSize(0)
+gdsRead.SetDataScalarTypeToFloat()
+gdsRead.SetFileDimensionality(3)
+gdsRead.FileLowerLeftOn()
+gdsRead.SetDataExtent(0, 0, 0, 0, 0, 0)
+
+gdsThresh = vtkImageThreshold()
+gdsThresh.ThresholdByUpper(0.0)
+gdsThresh.SetInput(gdsRead.GetOutput())
+gdsThresh.SetReplaceOut(1)
+gdsThresh.SetOutValue(0.0)
+
+gdsMath1 = vtkImageMathematics()
+gdsMath1.SetConstantC(0.0)
+gdsMath1.SetOperationToAddConstant()
+gdsMath1.SetInput(gdsThresh.GetOutput())
+
+gdsMath2 = vtkImageMathematics()
+gdsMath2.SetConstantK(1.0)
+gdsMath2.SetOperationToMultiplyByK()
+gdsMath2.SetInput(gdsMath1.GetOutput())
+
+gdsCast = vtkImageCast()
+gdsCast.SetOutputScalarTypeToUnsignedShort()
+gdsCast.SetInput(gdsMath2.GetOutput())
+
+gdsMapper = vtkVolumeTextureMapper2D()
+gdsMapper.SetInput(gdsCast.GetOutput())
+
+gdsOpacity = vtkPiecewiseFunction()
+gdsOpacity.AddPoint(0,   0.0)
+gdsOpacity.AddPoint(255, 0.2)
+
+gdsColor = vtkColorTransferFunction()
+gdsColor.AddRGBPoint(  0, 0.0, 0.0, 1.0)
+gdsColor.AddRGBPoint( 50, 0.0, 0.5, 0.5)
+gdsColor.AddRGBPoint(100, 1.0, 0.5, 0.0)
+gdsColor.AddRGBPoint(150, 1.0, 1.0, 0.0)
+gdsColor.AddRGBPoint(175, 1.0, 1.0, 0.5)
+gdsColor.AddRGBPoint(200, 1.0, 1.0, 1.0)
+
+gdsProperty = vtkVolumeProperty()
+gdsProperty.SetColor(gdsColor)
+gdsProperty.SetScalarOpacity(gdsOpacity)
+
+gdsVolume = vtkVolume()
+gdsVolume.PickableOff()
+gdsVolume.SetMapper(gdsMapper)
+gdsVolume.SetProperty(gdsProperty)
+
+renderer.AddViewProp(gdsVolume)
+
+axActor = vtkAxesActor()
+axActor.SetTotalLength(100.0, 100.0, 100.0)
+axActor.SetConeRadius(axActor.GetConeRadius()*0.25)
+
+xprop = axActor.GetXAxisCaptionActor2D().GetTextActor().GetTextProperty()
+yprop = axActor.GetYAxisCaptionActor2D().GetTextActor().GetTextProperty()
+zprop = axActor.GetZAxisCaptionActor2D().GetTextActor().GetTextProperty()
+
+#axActor.SetXAxisLabelText('') # empty labels: replaced by 3D annotation
+#axActor.SetYAxisLabelText('')
+#axActor.SetZAxisLabelText('')
+axActor.SetAxisLabels(False)   # suppress label drawing; use 3D annotation
+
+xprop.SetBold(0)
+xprop.SetFontFamily(VTK_TIMES)
+xprop.ItalicOff()
+
+yprop.SetBold(0)
+yprop.SetFontFamily(VTK_TIMES)
+yprop.ItalicOff()
+
+zprop.SetBold(0)
+zprop.SetFontFamily(VTK_TIMES)
+zprop.ItalicOff()
+
+#  3D annotation
+atextx = vtkVectorText()
+atextx.SetText('')
+textMapperx = vtkPolyDataMapper()
+textMapperx.SetInputConnection(atextx.GetOutputPort())
+textActorx = vtkFollower()
+textActorx.SetMapper(textMapperx)
+textActorx.GetProperty().SetColor(1.0, 0.0, 0.0)
+textActorx.PickableOff()
+
+atexty = vtkVectorText()
+atexty.SetText('')
+textMappery = vtkPolyDataMapper()
+textMappery.SetInputConnection(atexty.GetOutputPort())
+textActory = vtkFollower()
+textActory.SetMapper(textMappery)
+textActory.GetProperty().SetColor(0.0, 1.0, 0.0)
+textActory.PickableOff()
+textActory.RotateZ(90.0)
+
+atextz = vtkVectorText()
+atextz.SetText('')
+textMapperz = vtkPolyDataMapper()
+textMapperz.SetInputConnection(atextz.GetOutputPort())
+textActorz = vtkFollower()
+textActorz.SetMapper(textMapperz)
+textActorz.GetProperty().SetColor(0.0, 1.0, 1.0)
+textActorz.PickableOff()
+textActorz.RotateY(-90.0)
+
+renderer.AddViewProp(axActor)
+renderer.AddViewProp(textActorx)
+renderer.AddViewProp(textActory)
+renderer.AddViewProp(textActorz)
+renderer.ResetCamera()
+
+style = vtkInteractorStyleTrackballCamera()
+iren.SetInteractorStyle(style)
+renwin.Render()
+      
+# ----------------------------------------------------------------------------
+#                             pre-specified keywords
+# ----------------------------------------------------------------------------
+def triggerkey(key, value=None):
+   value = usertext(key, default=2, defval=value)
+   if value:
+      wkey("%s%s" % (key, value))
+
+triggerkey('SET=')
+triggerkey('BOX=')
+triggerkey('FACTOR=')
+triggerkey('THRESH=')
+triggerkey('ISTYLE=')
+
+# ----------------------------------------------------------------------------
+#                              Action!
+# ----------------------------------------------------------------------------
+mainloop()
+#<
+
+#>            vtkvolume.dc1
+Program:       VTKVOLUME
+
+
+#begin section overview
+                                  OVERVIEW
+                                  ========
+
+VTKVOLUME is an experimental program which demonstrates the use of VTK
+for visualizing data cubes.
+
+To start VTKVOLUME on a TrueColor display,
+type on the Hermes command line:
+
+    vtkvolume ggiopt=fixcol   
+
+If you omit the ggiopt= keyword, then you may start the application in
+direct color which may cause color flashing between windows.
+
+#end section overview
+
+#begin section userinterface
+                                  USER INTERFACE
+                                  ==============
+
+Menu "FILE"
+-----------
+  Input Set:         Load datacube or datacube section
+
+  JPEG output:       save image in JPEG format
+
+  PostScript output: save image in PostScript format
+
+  Exit:              terminate program
+
+
+Input field "BOX"
+-----------------
+  adjust extent of datacube section
+
+Input field "Factor"
+--------------------
+  multipy pixel values before display
+
+Slider "Threshold"
+------------------
+  cut-off value before display
+
+Menu "Interaction"
+------------------
+  choose between VTK 'trackball' and 'terrain' interaction modes
+
+#end section userinterface
+
+#begin section about
+Purpose:       simple experimental volume viewer based on VTK
+
+Category:      ANALYSIS, DISPLAY
+
+File:          vtkvolume.src
+
+Author:        J.P. Terlouw
+
+Version:       0.2
+
+Updates:       Jan 11, 2008: JPT, Document created.
+               May 22, 2008: JPT, Header access adjusted to new pygipsy.
+               Jun 15, 2010: JPT, Suppress vtkAxesActor's axis labeling.
+
+#end section about
+#<

@@ -1,0 +1,1169 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage{graphicx}
+
+\newcommand{\sinb}[1]{\sin \left( #1 \right)}
+\newcommand{\cosb}[1]{\cos \left( #1 \right)}
+\newcommand{\cosbb}[1]{\cos^2 \left( #1 \right)}
+\newcommand{\tanb}[1]{\tan \left( #1 \right)}
+\newcommand{\asinb}[1]{\arcsin \left( #1 \right)}
+\newcommand{\atanb}[1]{\arctan \left( #1 \right)}
+
+\newcommand{\boxedeqn}[1]{%
+  \[\fbox{%
+      \addtolength{\linewidth}{-2\fboxsep}%
+      \addtolength{\linewidth}{-2\fboxrule}%
+      \begin{minipage}{\linewidth}%
+      \begin{equation}#1\end{equation}%
+      \end{minipage}%
+    }\]%
+}
+
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{10pt}
+
+%%\parskip=0.8cm
+
+
+\begin{document}
+
+\begin{center}
+{\Large INSPECTOR}\\[1.5cm]
+{\large Compares radial HI velocities, obtained from fitted 'tilted ring' 
+circular velocities, with velocities in data slices}\\[1.5cm]
+Nov 19,  1999\\
+Last update: Mar 16, 2006
+\end{center}
+
+%\vspace*{\fill}
+%\tableofcontents
+%\clearpage
+
+\section{The tilted ring model}
+Mass distributions in spiral galaxies can be studied by measuring the
+{\it circular velocity} $V_C$ as function of distance $R$ to the centre. 
+A plot of $V_{C}(R)$ is called a rotation curve. These velocities cannot be
+obtained directly because we only observe the line-of-sight velocities. 
+A map with the line-of-sight velocities as function of position
+on the sky is called a {\it radial velocity field}. If one assumes
+that gas is rotating symmetrically in a disk, a number of {\it tilted ring}
+model parameters define the observed velocity field of a galaxy. The 
+{\it tilted ring} model, as 'inspected' with {\it INSPECTOR\ }, consists of a 
+set of concentric rings characterized by:
+
+Geometrical components:
+
+$\bullet$ $X_0,Y_0$: sky coordinates of the rotation centre of the galaxy\\
+$\bullet$ $i(R)$: the inclination, the angle between the normal to the plane of 
+          the galaxy and the line-of-sight.\\
+$\bullet$ $\phi(R)$: the position angle of the major axis of a ring projected
+          onto the sky (i.e. an ellipse). This is an angle taken in 
+          anti-clockwise direction
+          between the north direction on the sky and the major axis
+          of the receding half of the galaxy (Rots 1975, astron, astrophys 45, 43.)\\
+
+Kinematical components:
+
+$\bullet$ $V_{sys}$: the velocity of the centre of the galaxy with respect
+          to the sun, the so called {\it systemic velocity}.\\
+$\bullet$ $V_{C}(R)$: the circular velocity at distance $R$ from the 
+          centre. This velocity is assumed to be constant in a ring.\\
+
+
+Programs that allow you to fit  $V_{C}(R)$, $i(R)$ and $\phi(R)$ 
+to the data (like {\bf GIPSY} progam {\it ROTCUR}) produce best fit parameters
+for each defined ring. Program {\it INSPECTOR\ } 
+enables one to inspect (by eye) the fit while displaying either
+a position-velocity map or a channel map. 
+ 
+\begin{figure}[h]
+\centering
+\begin{tabular}{cc}
+
+\begin{minipage}{6cm}
+\centering
+\includegraphics[height=6cm,width=6cm]{fig7a.ps}
+\end{minipage}
+&
+\begin{minipage}{6cm}
+\centering
+\includegraphics[height=6cm,width=6cm]{fig7b.ps}   
+\end{minipage}
+\\ a) & b)
+\\
+\begin{minipage}{6cm}
+\centering
+\includegraphics[height=6cm,width=6cm]{fig7c.ps}
+\end{minipage}
+\\ c)
+\end{tabular}
+\caption{\it a) A set of tilted rings seen from an arbitrary location in space.
+b) Same set of rings, but projected onto the sky (viewed from below).
+c) Same set of rings, but viewed perpendicular to central ring.}
+\label{fig:fig7abc}
+\end{figure}
+\pagebreak
+
+
+\section{Position-Velocity (XV) maps}
+A position-velocity (or XV) map shows image values extracted along a {\it slice line}
+with arbitrary angle through your galaxy per channel map.. 
+If you repeat this extraction for every channel map in your 
+HI data cube (i.e. a set of channel maps), 
+you get a plot with spatial offsets (usually in arcsec) along the x axis
+and velocities corresponding to the velocity of the channel maps along
+the y axis. 
+On such a map one can plot a set of radial velocities
+obtained from the circular velocities, position angles and inclinations in your
+tilted ring parameter set. 
+The convention is that offsets at the left side of the $X$ axis are negative and
+to the right side they are positive. The velocity should increase along the +$Y$ axis.
+For a slice along the position angle of a galaxy we expect a plot where we can
+find the highest velocities at the positive offset side.
+If your data cube has channel maps with decreasing velocity (e.g. WSRT cubes),
+than the default XV maps will have decreasing velocities along the +$Y$ axis. If you want 
+XV maps to plot in the conventional way enter channel maps in inverted order
+(e.g. {\it INSET=AURORA FREQ 36:-19:-1})
+
+\section{Slices}
+For a position-velocity diagram, you need to define a slice line.
+A slice line in a physical system, is a line through a center location
+(selected by the user) with an constant angle (selected 
+by the user) in space, along which samples are taken that are all separated by the
+same distance in physical coordinates (usually arcsec). The angle follows the
+convention of position angles for galaxies as explained before. 
+The end point on the slice corresponding to this position will be the last sample
+and will have a positive offset with respect to the origin of the slice.
+Note that the central location of the slice needs not to be the same as the central 
+location of the galaxy. In a later section it is explained how sample points are
+extracted exactly.
+
+Slice angles usually are defined in the sky, the $XY$ plane. {\it INSPECTOR} allows
+input of slice angles defined in the plane of the galaxy. You have to enter the 
+position angle and inclination of the disk that represents this plane ($xy$ plane).
+The slice angles are  translated to 'sky' angles and will appear immediately in the
+graphical interface in the input field for 'sky' angles.
+\pagebreak
+
+\section{Description of {\it INSPECTOR\ }}
+{\it INSPECTOR} allows you to
+change the parameters $V_{C}(R)$, $i(R)$ and $\phi(R)$ interactively using the
+mouse. The markers on the channel map or XV map will be changed accordingly.
+The results of the manual adjustments of the tilted ring parameters 
+can be written to an Ascii file
+on disk. Also the extracted XV images can be stored on disk. At any time you can 
+create a hardcopy (a PostScript file) of the actual plot.
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[height=12cm,width=14cm,angle=90]{overview1.ps}
+  \caption{\it Screendump of the INSPECTOR panels showing the XV diagrams,
+   the tilted ring parameters (right) and the buttons to control the 
+   program }
+  \label{fig:overview}
+\end{figure}
+
+ 
+You will need a GDS (GIPSY) data cube with dimension $>= 3$
+The program works with physical coordinates (i.e. if it can translate
+degrees to grids) only if the subset axes are spatial and the profile 
+axis is  a velocity type axis (FREQ or VELO). Otherwise calculations
+and plotting is done in grid coordinates.
+With such a cube you are able   
+to display slices through data in the selected subsets in so called   
+XV diagrams.
+In {\it INSPECTOR\ }, these diagrams are images extracted 
+from your cube. The colours in these images are controlled
+by a colour map editor which allows you to modify the colour map and
+the colour of the blanks in the data.
+The main {\it INSPECTOR\ } window has a colour window for images and a 
+panel with
+mouse and button controls (figure~\ref{fig:overview}). 
+You can change its default size with keyword XYSIZE= which must be
+specified before the graphical interface is displayed 
+(e.g. start the program on the Hermes command line with {\it INSPECTOR XYSIZE=500 600}).
+If the program is running, the graphical interface is not resizeable.
+If you have data that describes a tilted ring 
+model for a galaxy ($V_{C}(R)$, $i(R)$, $\phi(R)$, the velocity, 
+inclination and position angle as a function of radius)
+then this program calculates the line-of-sight velocities
+and marks those velocities in your XV maps or on your channel maps 
+and displays the tilted ring parameters in three plots. 
+The tilted ring parameters can be changed using the mouse.
+An extra pair of plots show tilted ring parameters coupled to position angle and
+inclination, but connected to the disk (ring with the smallest radius).
+Later we derive the mathematical relations between these parameters ($\beta$, $\theta$)
+and the position angle and inclination.
+
+It is important that before you start using the program, you have a 
+reasonable value for the systemic velocity and for the central position of the galaxy.
+
+
+\section{Coordinate systems}
+In this section we will discuss a mathematical transformation of 
+coordinates defined in the plane of the sky and coordinates 
+defined in the plane of a tilted ring. The resulting formulas 
+are used, but are not necessary to the derive the relations used in the program.
+However, they were essential in
+plotting the figures in this document. With these figures, we 
+had an extra check of the reliability of the geometry used in 
+{\it INSPECTOR\ }.
+
+ 
+The central part of a galaxy can be described by constant $i$ en $\phi$, i.e.
+a disk. Note that measuring $i$ en $\phi$ does not fix the orientation
+of a galaxy in space. Without extra information, we don't know what the front 
+or back is of a galaxy. Therefore, angles $i$ en $\phi$
+allow two directions of the spin vector of the disk. 
+
+\begin{figure}
+   \centering
+   \includegraphics[bb=130 270 486 603]{fig1.ps}
+   \caption{\it Relation between coordinate system of observation ($X,Y,Z$) and the 
+    system $\vec p, \vec q, \vec s$ which defines the central disk of a galaxy in 
+    terms of inclination $i$ and position angle $ \alpha = \pi /2 - \phi$. Angle 
+    $\theta$ (defined in the system of the galaxy) is the angle between the 
+    major axis and a slice. $V_c$ is the circular velocity in a ring with 
+    angles $i$ and $\alpha$. $Z$ is line-of-sight. The symbol below the plot shows
+    the location of the observer who is observing the data in the $XY$ plane from
+    below.}
+   \label{fig:fig1}
+\end{figure}
+
+Define a coordinate system coupled to the observations. 
+The $XY$ plane is the plane of the sky. The $Z$ axis is the line-of-sight. 
+The $Y$ axis is directed to the north (upwards if seen from under) and the 
+$X$ axis to 
+the east (i.e. to the left). We use capitals for this coordinate system 
+and lower case characters $x,y,z$ for a system corresponding to 
+the tilted-ring. Spin vector $\vec s$ is the unit vector along the rotation
+axis of a ring.
+For the central disk: ${\vec s} = {\vec s}_0$. In a physical system, $\phi$
+is the angle between the north and the major axis of the galaxy. In this
+chapter we want to derive some formulas that connect a position in the $xyz$ 
+system to a position in the $XYZ$ system vv. In this mathematical system,
+the angles are counted {\bf counter-clocwise}!
+We define the equivalent of a position angle as an 
+angle measured from the $X$ axis, called $\alpha$:
+$$ \alpha = \pi /2 \; - \; \phi. $$
+
+\begin{figure}
+   \centering
+   \includegraphics[bb=130 270 486 603]{fig2.ps}
+   \caption{\it Determine the line-of-sight component $V_Z(X,Y)$ in terms of the 
+     circular velocity $V_C$ (in the $xy$ plane), inclination $i$ 
+     and azimuth $\beta$. $R$ is the radius in the plane of the galaxy and $R'$
+     is the projection of $R$ onto the plane of the sky ($X,Y$).}
+   \label{fig:fig2}
+\end{figure}
+
+Next formula's are derived in the appendix about coordinate systems.
+For a point P($x,y,z$) in the tilted ring system the $X,Y,Z$
+coordinates are:
+($ x \vec e_x + y \vec e_y +z \vec e_z
+=  X \vec e_X + Y \vec e_Y +Z \vec e_Z $):
+\begin{equation}
+\begin{array} {rclclcl}
+X & = & x \cos \alpha _0 & - & y \sin \alpha _0 \cos i_0
+                         & + & z \sin \alpha _0 \sin i_0 \nonumber \\
+Y & = & x \sin \alpha _0 & + & y \cos \alpha _0 \cos i_0
+                         & - & z \cos \alpha _0 \sin i_0 \\
+Z & = &                  &   & y \sin i_0
+                         & + & z \cos i_0 \nonumber
+\end{array}
+\end{equation}
+ 
+For a point P($X,Y,Z$) in the system of observation, the tilted ring 
+coordinates $x,y,z$ are:
+\begin{equation}
+\begin{array} {rclllllll}
+x & = &+& X \cos \alpha _0          & + & Y \sin \alpha _0          &   & \nonumber \\
+y & = &-& X \sin \alpha _0 \cos i_0 & + & Y \cos \alpha _0 \cos i_0 & + & Z \sin i_0\\
+z & = &+& X \sin \alpha _0 \sin i_0 & - & Y \cos \alpha _0 \sin i_0 & + & Z \cos i_0 \nonumber\\
+\label{xyzXYZ}
+\end{array}
+\end{equation}
+ 
+
+\section{Relation between radial velocity and circular velocity}
+ 
+In INSPECTOR slices are defined by an angle in the sky and an offset w.r.t. a point that 
+we call grid 0,0.
+This offset is entered in grids or in physical coordinates. The angles follow
+the definition of position angles in the sky i.e. they are measured w.r.t.  the 
+north in the direction of the east.
+
+For $n$ tilted ring radii we have $n$ (circular) velocities, 
+position angles and inclinations. 
+The position angle and inclination determine the geometry of the tilted ring in 
+the XYZ coordinate system.
+For all these parameter data we want to know what the corresponding 
+(radial) velocity and offset in radius in the position-velocity (XV) map is. 
+Lets start with the velocity.
+
+Vector $\vec V_C$ represents the circular velocity in a tilted ring.
+$\vec V_C$ is perpendicular to the ring and has a component in $x$ and 
+$y$ direction (fig.\ref{fig:fig2}). If $\theta$ is the azimuthal angle in the plane of the galaxy,
+then:
+\begin{equation}
+\begin{array} {rcl}
+V_x & = & V_c \sin \theta \nonumber \\
+V_y & = & V_c \cos \theta \nonumber 
+\end{array}
+\end{equation}
+$V_x$ is parallel to the $XY$ plane and has no component in the $Z$ direction.
+However, $V_y$ has a component in the $Z$ direction: $V_Z = V_y \sin i$. This is
+the observed radial velocity that we observe at a point $X,Y$. 
+It must be corrected for the systemic (line-of-sight) velocity $V_{sys}$.
+The relation between the radial velocity and the circular velocity becomes:
+\boxedeqn{
+V_Z(X,Y) = V_{sys} + V_C \sinb{i} \cosb{\theta}
+\label{Vz}
+}
+The inclination $i$ is known, but the value of $\theta$, which depends on
+$i$ and $\alpha$ must be calculated. In the next chapter we 
+will demonstrate how to do this.
+
+
+\section{The azimuthal angle in the plane of the galaxy ($\theta$)}
+ 
+Angle $\theta$ depends on inclination $i$ and the angle between 
+the major axis in the $XY$ plane and a line that connects 
+$X_0,Y_0$ with $R'$ (the projection
+of $R$ onto the $XY$ plane). Call this angle $\beta$. 
+A slice through the projected galaxy ($XY$ plane) has a centre position
+$X_s,Y_s$ and angle $\beta$ with the $X$ axis. Distinguish two situations:
+\begin{enumerate}
+\item $X_s,Y_s = X_0,Y_0$. The slice angle is equal to $\beta$.
+\item $X_s,Y_s \ne X_0,Y_0$. Angle $\beta$ can be derived from 
+the central position and the angle of the slice after intersecting the
+slice with the ellipse which is a projection of the ring onto the $XY$ plane.
+\end{enumerate}
+In situation 1 there is a simple relation. Suppose the tilted ring coordinates
+of $R$ are $x,y$, then $tan \theta = y/x$ and $tan \beta = {y cos i}/x$ and 
+we have the relation:
+\boxedeqn{
+\theta = \atanb{ {{\tanb{\beta}}\over{\cosb{i}}} }
+}
+For the radii $R$ and $R'$ we have $R \cos \theta = R' \cos \beta$. The length 
+of the projected radius $R'$ is then:
+\boxedeqn{
+R' = R {{\cosb{\theta}}\over{\cosb{\beta}}}
+}
+
+\begin{figure}
+   \centering
+   \includegraphics[bb=130 270 486 603]{fig3.ps}
+   \caption{\it Situation where a slice in the $XYZ$ plane has 
+    centre $C$ which is not the centre of the projected ellipse. 
+    Define $\gamma$ as an angle between this slice and the $X$ axis.}
+   \label{fig:fig3}
+\end{figure}
+ 
+Situation 2 is more complicated. Plots of slices with shifted origins can reveal 
+valuable information about the position of the rotation center of a galaxy.
+In these cases angle $\beta$ can be calculated if we 
+know at which point(s) the slice intersects the projected ring in the
+$XY$ plane. There are two methods to calculate these intersection. Here we show 
+a method based on the relation between the systems $xyz$ and $XYZ$.
+For a ring characterized by $R$, $\alpha$ and $i$, each point
+on the ring must satisfy the equations $x^2+y^2=R^2$ and $z=0$. 
+According to (\ref{xyzXYZ}):
+$$
+\begin{array} {rllllllll}
+x & = &+&X \cos \alpha        & + & Y \sin \alpha            &   & \nonumber \\
+y & = &-&X \sin \alpha \cos i & + & Y \cos \alpha \cos i & + & Z \sin i\nonumber\\
+0 & = &+&X \sin \alpha \sin i & - & Y \cos \alpha \sin i & + & Z \cos i \nonumber\\
+\end{array}
+$$
+The last equation sets a constraint on $Z$:
+$$
+Z = {{-X\sin \alpha \sin i + Y\cos \alpha \sin i}\over{\cos i}}
+$$
+Substituting this expression for $Z$ in the expression for $y$ gives the 
+relations for $x$ and $y$ in terms of the projected values $X$ and $Y$:
+$$
+\begin{array} {rllllll}
+x & = & + & X \cos \alpha          & + & Y \sin \alpha  \nonumber\\
+y & = & - & X \sin \alpha / \cos i & + & Y \cos \alpha / \cos i \nonumber\\
+\end{array}
+$$
+The circle $x^2+y^2=R^2$ can be expressed in $X$ and $Y$:
+\begin{equation}
+{(X \cos \alpha + Y \sin \alpha)}^2 
++ { \left({{-X \sin \alpha  + Y \cos \alpha}\over{\cos i}}\right) }^2 = R^2
+\label{projectedring}
+\end{equation}
+which is a rotated ellipse in the $XY$ plane:
+\begin{equation}
+A X^2 + B XY + C Y^2 = R^2
+\end{equation}
+with:
+\begin{equation}
+\begin{array} {rllll}
+A & = & {\cos}^2 \alpha + {\sin}^2 \alpha / {\cos}^2 i  \nonumber\\
+B & = & -2 \cos \alpha \sin \alpha \ {\tan}^2 i\\
+C & = & {\sin}^2 \alpha + {\cos}^2 \alpha / {\cos}^2 i  \nonumber\\
+\end{array}
+\end{equation}
+(for $\alpha=0$ the result is obvious: $X^2+{Y^2\over{\cos i}}= R^2$\\
+so we could have started with this formula and insert the rotation 
+expressions.)
+
+
+ 
+If the angle between the slice and the $X$ axis is $\gamma$ and the central
+position $C$ of the slice has coordinates $X_s,Y_s$, then the line can 
+be represented by $Y = mX + b$, \  $b = Y_s - m X_s$ and  
+$m = \tan \gamma$.
+Substitution of $Y = mX + b$ in (12) results in two solutions:
+$$
+X_{1,2} = {{-q \pm \sqrt{q^2-4pr}} \over{2p}}, \ \ \ \  Y_{1,2} = mX_{1,2} + b
+$$
+with $p,q,r$ equal to
+\begin{equation}
+\begin{array} {rllll}
+p & = & A + Bm + C m^2  \nonumber\\
+q & = & Bb + 2mbC\\
+r & = & Cb^2 - R^2 \nonumber\\
+\end{array}
+\end{equation}
+and $m = \tan \gamma$,  $b = Y_s - mX_S$.
+We were looking for an expression for $\beta$: 
+\begin{equation}
+\tan \beta_{1,2} = {Y_{1,2}\over{X_{1,2}}}
+\end{equation}
+The variables $X_S, Y_S, \gamma$ are properties of a slice. The units 
+in which we have to specify $X_S, Y_S$ must be the same as the units of the
+radius in the tilted ring. For slices with angles $\gamma$ near $90^o$. a
+problem arises because $\tan \gamma \rightarrow \infty$.
+For $45^o < \gamma < 135^o$ and $225^o < \gamma < 315^o$  determine 
+the intersection(s) with the ellipse and
+$X = {1\over{m}}Y + b$. Because ${1\over{\tan \gamma}} = \tan (90^o-\gamma)$
+we can also write $X = m' Y + b$ with $m' = \tan (90^o-\gamma)$. 
+Then we find:
+$$
+Y_{1,2} = {{-q \pm \sqrt{q^2-4pr}} \over{2p}}, \ \ \ \  X_{1,2} = m'Y_{1,2} + b
+$$
+with $p,q,r$ equal to
+\begin{equation}
+\begin{array} {rllll}
+p & = & A {m'}^2 + Bm' + C  \nonumber\\
+q & = & Bb + 2m'bA\\
+r & = & Ab^2 - R^2 \nonumber\\
+\end{array}
+\end{equation}
+and again $$\tan \beta_{1,2} = {Y_{1,2}\over{X_{1,2}}}$$
+ 
+
+\section{Calculation of slice sample points on a sphere}
+
+{\it INSPECTOR\ } calculates positions in physical coordinates which are 
+then transformed to grids. So all sample positions on a slice line have
+the same distance to their neighbours in physical coordinates (e.g. arcsec),
+when this transformation is possible. With this approach we exclude
+projection effects. Usually these will be small, but it seems more clean to apply.
+Slice sample points are all separated at distance $b$. Suppose the slice
+has angle $\alpha$ on a sphere. If we know a starting point $Q_1$ on
+that sphere then the coordinates of the next sample point is calculated
+using some spherical geometry.
+For an arbitrary spherical triangle with sides $a, b, c$ and angles $\alpha, \beta,$ and $\gamma$
+opposite to these sides, there are a number of formulas that can be used to 
+derive some useful relations.
+First there is the sine formula:
+$${\sin a \over{\sin \alpha}} = {\sin b \over{\sin \beta}} = {\sin c \over{\sin \gamma}}$$
+Then there is the cosine formula for sides:
+\begin{equation}
+\begin{array} {rllll}
+  \cos a &=& \cos b\ \cos c &+& \sin b\ \sin c\ \cos \alpha \\
+  \cos b &=& \cos c\ \cos a &+& \sin c\ \sin a\ \cos \beta \\
+  \cos c &=& \cos a\ \cos b &+& \sin a\ \sin b\ \cos \gamma \\
+\end{array}
+\end{equation}
+ 
+And the cosine formula for angles:
+\begin{equation}
+\begin{array} {rllll}
+  \cos \alpha &=& -\cos \beta\  \cos \gamma &+& \sin \beta\  \sin \gamma\ \cos a \\
+  \cos \beta  &=& -\cos \gamma\ \cos \alpha &+& \sin \gamma\ \sin \alpha\ \cos b \\
+  \cos \gamma &=& -\cos \alpha\ \cos \beta  &+& \sin \alpha\ \sin \beta\  \cos c \\
+\end{array}
+\end{equation}
+
+ 
+\begin{figure}
+   \centering
+   \includegraphics[bb=90 237 422 533]{fig4.ps}
+   \caption{\it A spherical triangle has sides a, b and c. Opposite to these
+    sides are the angles $\alpha,  \beta, \gamma$. Angle $\beta$ is equal to the
+    hour angle in degrees. 
+    If the position of $Q_0$ is known and the length of $Q_0Q_1$ is $b$,
+    what then are the coordinates of $Q_1$ if the angle between $PQ_0Q_1$
+    is equal to $\alpha$?   }
+   \label{fig:fig4}
+\end{figure}
+
+ 
+Suppose you have the coordinates in hour angle and declination, 
+$H_0, \delta_0$ of a point $Q_0$
+on the sphere and you want to know the coordinates of a point $Q_1$ at 
+distance $b$ so that the angle $PQ_0Q_1$ is $\alpha$.
+This angle, the {\it slice angle}, is defined wrt. the positive Y-axis ($Q_0P$) in the 
+direction of the positive latitude axis. Two situations are distinguished:
+first, the direction of the positive latitude axis is to the right,
+(as in the figure)
+and second, the more usual case of an equatorial sky system, 
+where the direction of positive latitude axis is to the left.
+In the latter case, you can put $\alpha$ in the plot to the 
+left of the axis $Q_0P$, and check that the same relations 
+for a spherical triangle with the properties as described above,
+will hold.
+
+ 
+We are interested in the position $Q_1$ with hour angle $H_1$, and declination $\delta_1$. 
+Use the cosine relation:
+$$\cos a = \cos b\ \cos c + \sin b\ \sin c\ \cos \alpha $$
+This results in:
+$$\cosb{90-\delta_1} = \cosb{b}\ \cosb{90-\delta_0} +
+ \sinb{b}\ \sinb{90-\delta_0}\ \cosb{\alpha} $$
+which is the same as:
+\begin{equation}
+\sinb{\delta_1} = \cosb{b}\ \sinb{\delta_0} + \sinb{b} \cosb{\delta_0} \cosb{\alpha} 
+\end{equation}
+The value of $\delta_1$ can be found by taking the arcsine of the right part 
+of the formula above.
+From the sine formulas we use the relation:
+$${\sin b \over{\sin \beta}} = {\sin a \over{\sin \alpha}}$$
+which transforms to:
+\begin{equation}
+{\sinb{b} \over{\sinb{H_1-H_0}}} = {\sinb{90-\delta_1} \over{\sinb{\alpha}}}
+\end{equation}
+and therefore:
+\begin{equation}
+(H_1-H_0) = \asinb{{{\sinb{\alpha}\ \sinb{b}}\over{\cosb{\delta_1}}}}
+\end{equation}
+$\alpha$ and $b$ are properties of the sample, $H_0$ is the longitude
+of $Q_0$, $\delta_1$ is calculated using formula (19). Then $H_1$
+follows from the formula above.
+
+ 
+To check whether the new positions are reliable, you can put them 
+in the distance formula:
+$$\cos b = \cos c\ \cos a + \sin c\ \sin a\ \cos \beta \rightarrow$$
+$$\cosb{b} = \cosb{90-\delta_0} \cosb{90-\delta_1} + 
+\sinb{90-\delta_0} \sinb{90-\delta_1}\cosb{H_1-H_0} \rightarrow$$
+\begin{equation}
+\cosb{b} = \sinb{\delta_0} \sinb{\delta_1}+\cosb{\delta_0} \cosb{\delta_1} \cosb{H_1-H_0}
+\end{equation}
+which gives the distance $b$ if both positions $Q_0$ and $Q_1$ are known.
+
+Again, the same formula's are valid if we work in the physical coordinate system 
+in which the position angle is defined from the north to the east, so that the 
+values for the hour angle increases along the $-X$ axis, i.e.
+
+Sample positions are converted to grids. Those grids are usually non-integer.
+Therefore we use a bilinear interpolation method to extract an 
+image value from the channel maps.
+\pagebreak
+
+ 
+\section{Relations between position angle,  \\
+inclination and $\beta$, $\theta$, coupled to the central disk}
+
+One can define the geometrical tilted ring parameters with respect to the central disk.
+Historically these parameters (angles) are called $\theta$ and $\beta$.
+{\bf Please note that these angles do NOT correspond to the angles $\theta$ and $\beta$
+mentioned before!}
+\begin{itemize}
+{ \it
+\item Define 'Line of nodes' is the intersection ofthe plane of the ring and the plane 
+of the disk. 
+The {\bf disk} is the ring with the first radius ($=$ the smallest), position angle 
+and inclination.
+\item Define $\beta =$ the angle between the line of nodes and the line of intersection 
+of the ''disk'' and the sky. 
+\item Define $\theta =$ the angle between the plane of the ring and the plane of 
+the smallest ring (the disk) 
+}
+\end{itemize}
+
+
+\begin{figure}
+   \centering
+   \includegraphics[bb=130 270 486 603]{fig5.ps}
+   \caption{\it Central disk is the ring with axes $x_{0}$ and $y_{0}$.
+                A ring with different position angle and/or inclination intersects
+                the disk at point 'S'. The angle between $x_{0}$ and the line 
+                from (0,0,0) to S is called $\beta$.  The angle near S in the spherical 
+                triangle $x_{0}$, $x_{1}$, S is called $\theta$. Note that this angle is
+                the same as the angle between the two spin vectors (of the disk and 
+                the ring).}
+   \label{fig:fig5}
+\end{figure}
+
+ 
+The angle $\theta$ is the angle between the two spinvectors $i_{0}$ and i.
+With the cosine rule for sides 
+$\cosb{a}=\cosb{b} \cosb{c}+ \sinb{b} \sinb{c} \cosb{\alpha}$ 
+%%$\longrightarrow$
+we find:
+\begin{equation}
+\cosb{\theta}=\cosb{i} \cosb{i_{0}}+ \sinb{i} \sinb{i_{0}} \cosb{\alpha - \alpha_{0}}
+\end{equation}
+ 
+Note that $\alpha - \alpha_{0} = \frac{\pi}{2} -p-\left( \frac{\pi}{2}-p_{0} \right) = p_{0}-p = - \left( p - p_{0} \right) $\\
+Then \begin{equation}
+\cosb{\theta} =\cosb{i} \cosb{i_{0}} + \sinb{i} \sinb{i_{0}} \cosb{p-p_{0}}
+\label{cosine1}
+\end{equation}
+
+
+\begin{figure}[h]
+   \centering
+%%   \includegraphics[bb=130 270 486 603]{fig6.ps}
+   \includegraphics[height=8cm,width=8cm]{fig6.ps}
+   \caption{\it Sperical triangle showing the relations between several angles.}
+   \label{fig:fig6}
+\end{figure}
+
+ 
+From the plot we could also extract the triangle on the sphere $S$ $x_0$ $u_1$.  
+Apply the cosine rule for angles 
+$\cosb{ \alpha}   =  - \cosb{ \beta} \cosb {\gamma} + \sinb { \beta} \sinb {\gamma} \cosb {\alpha}$
+\begin{eqnarray}
+\cosb {\theta} &  = &  - \cosb {180 - i} \cosb {i_0} + \sinb {180-i} \sinb {i_0} \cosb {\alpha - \alpha_0} \nonumber \\
+& = & \cosb {i} \cosb {i_0} + \sinb {i} \sinb {i_0} \cosb {\alpha - \alpha_0} \nonumber
+\label{cosine2}
+\end{eqnarray}
+Which is equivalent to (\ref{cosine1}).
+On the other hand we have the sine rule:
+\begin{eqnarray}
+\frac {\sinb {\theta}} {\sinb {\alpha - \alpha_0}} & = & \frac{\sinb{180 - i}}{\sinb {\beta}} \Rightarrow \nonumber  \\
+\sinb {\beta} & = &\frac{\sinb {i} \sinb {\alpha - \alpha_0}} {\sinb {\theta}} = \frac{- \sinb {i} \sinb {p - p_0}}{\sinb {\theta}} \label{equation2}
+\end{eqnarray}
+With the cosine rule for angles:
+\begin{eqnarray}
+\cosb{180-i} & = & -\cosb {i_0} \cosb {\theta} + \sinb {i_0} \sinb {\theta} \cosb {\beta} \rightarrow \nonumber\\
+\cosb {\beta} & = & \frac{- \cosb {i} + \cosb {i_0} \cosb {\theta}}{\sinb {i_0} \sinb {\theta}} \rightarrow \label{equation3} \\
+\beta & = &  \arctan \left( \frac{\sinb {\beta}}{\cosb {\beta}} \right) \label{equation4} \\
+\end{eqnarray}
+Inverse formula's:
+\begin{eqnarray}
+\sinb{p - p_0} & = & \frac {-\sinb {\beta} \sinb {\theta}}{\sinb {i}} \label{equation5}\\
+                  \cosb {i} & = & \cosb {i_0} \cosb {\theta} - \sinb {i_0} \sinb {\theta} \cosb {\beta} \label{equation6}
+\end{eqnarray}
+Note that the signs of (\ref{equation2}) and (\ref{equation3}) differ from those in 
+the article {\it HI in NGC3718}, Schwarz, U.J. 1985, A and A 142, 273.\\
+The reason is pure mathematical and depends on which direction you define to
+get a positive value for the angle $\theta$.
+According to (\ref{cosine2}) both $\theta$ and
+$-\theta$ are valid solutions. If one substitutes $-\theta$ in the equations, then
+they are exactly the same as those in the article by Schwarz.
+The conversion from position angle and inclination to $\beta$ and $\theta$ is 
+valid from $0$ to $360$
+degrees. For the inverse formula's you need information about the current position 
+angle to get the right quadrant. These formula's are valid for inclinations
+ranging from $0$ to $180$ degrees. The sign of $\beta$ changes if the sign of $(p-p_0)$
+changes.
+\pagebreak
+
+
+ 
+\section{Tilted ring markers on channel maps}
+A tilted ring projected onto the sky is usually an ellipse. It has a position 
+angle $\phi$ and a major axis with length $R$ and an inclination $i$ so that
+its minor axis is equal to $R\cosb{i}$. The velocity in the ring is assumed to be constant
+and is called $V_c$. However, the the radial velocity (projected velocity), 
+the velocity that we measured in the sky, varies on the ellipse. 
+We derived two important relations:
+\begin{equation}
+V_Z(X,Y) = V_{sys} + V_C \sinb{i} \cosb{\theta}
+\end{equation}
+and
+\begin{equation}
+\tanb{\theta} = {{\tanb{\beta}}\over{\cosb{i}}}
+\label{tanbeta}
+\end{equation}
+Angle $\beta$ is defined in the same plane as the position angle.
+So for a given $\beta$ and $i$ we can calculate the velocity in the direction of
+the observer $V_Z$. Alternatively, one can ask, what are the positions on the ellipse
+where the velocity is equal to the velocity of a selected channel map?
+Channel maps are observations at made certain frequency c.q. velocity. 
+Assume channel map $m$ has velocity $V_m$. What then are the conditions for which:
+\begin{equation}
+V_m = V_{sys} + V_C \sinb{i} \cosb{\theta}
+\end{equation}
+The inclination of the selected ring is a constant, so one can vary only $\theta$ 
+to find $V_m$
+\begin{eqnarray}
+V_C \sinb{i} \cosb{\theta} &=& V_m - V_{sys} \nonumber \\
+\cosb{\theta} &=& {{V_m - V_{sys}}\over{V_C \sinb{i}}}
+\end{eqnarray}
+With the fact that $\cosb{\theta}=\cosb{-\theta}$ we find two solutions for
+angle $\theta$. But what does this mean for a position in the channel map (the $XY$ plane)? 
+We know from equation (\ref{tanbeta}) how we can calculate angle $\beta$.
+\begin{eqnarray}
+\tanb{\beta} &=& \cosb{i} \tanb{\theta} \nonumber \\
+& = & \cosb{i} \sqrt{{{1}\over{\cosb{\theta}^2}} - 1} \nonumber \\
+& = & \cosb{i} \sqrt{{{1}\over{\lambda^2}} - 1} \rightarrow \nonumber \\
+\beta &=& \atanb{\cosb{i} \sqrt{{{1}\over{\lambda^2}} - 1}}
+\end{eqnarray}
+where we defined $\lambda = \cosb{\theta}$. Note that if both $\theta$ and $-\theta$ 
+are solutions, then also are $\beta$ and $-\beta$. By introducing the variable $\lambda$
+we avoided the calculation of $\theta$. 
+We also have a relation between the radius of the tilted ring and its projected radius:
+\begin{eqnarray}
+R' &=& R {{\cosb{\theta}}\over{\cosb{\beta}}} \rightarrow \nonumber \\
+R' &=& {\lambda R} \over {\cosb{\beta}}
+\end{eqnarray}
+So for a given $V_m$, two angles $\beta$ and $-\beta$ can be found which 
+set the length of the projected radius and the position angle in the sky.
+This position angle is defined by the relation $\gamma = 90 + \phi - \beta$.
+After a correction for the real north direction of our channel map we can 
+calculate a new position $(X',Y')$ in the map which is the position of the 
+corresponding tilted ring marker.
+
+\section{Literature}
+
+A full description of how to derive rotation curves with
+INSPECTOR and its advantages and disadvantages over
+existing methods is given in 'Dark Matter in
+Late-type Dwarf galaxies', Rob Swaters, PhD thesis
+Rijkuniversiteit Groningen, Oct 1999.
+
+\begin{itemize}
+\item Bosma, A.: 1978 Ph.D. thesis, {\it The distribution and kinematics of neutral hydrogen in spiral galaxies of various types}, Groningen University
+\item Schwarz, U.J.: 1985, A and A 142, 273. HI in NGC3718
+\item Begeman, K.: 1987 Ph.D. thesis, {\it HI rotation curves of spiral galaxies}, Groningen University, chapter 3.2
+\item Smart, W.M.: Textbook on Spherical Astronomy, Cambridge press 1977
+\end{itemize}
+\pagebreak
+
+\section*{Appendix I: Relation between coordinate systems}
+\begin{figure}
+   \centering
+   \includegraphics[bb=130 270 486 603]{fig2.ps}
+   \caption{\it Determine the line-of-sight component $V(X,Y)$ in terms of the 
+     circular velocity $V_C$ (in the $xy$ plane), inclination $i$ 
+     and azimuth $\beta$. $R$ is the radius in the plane of the galaxy and $R'$
+     is the projection of $R$ onto the plane of the sky ($X,Y$).}
+   \label{fig:fig2ap}
+\end{figure}
+
+The components of $ \vec s$ are:
+\begin{equation}
+\begin{array} {rccl}
+s_X & = &   & \sin \alpha \sin i \nonumber\\
+s_Y & = & - & \cos \alpha \sin i \\
+s_Z & = &   & \cos i             \nonumber
+\end{array}
+\end{equation}
+Define a unit vector $\vec p$ along the receding part of the major axis.
+The components of $\vec p$ are:
+\begin{equation}
+\begin{array} {rcl}
+p_X & = &  \cos \alpha \nonumber\\
+p_Y & = &  \sin \alpha \\
+p_Z & = &  0           \nonumber
+\end{array}
+\end{equation}
+ 
+Finally, define a unit vector $ \vec q \perp \vec p$ and $ \perp \vec s$
+according to $\vec q = \vec s \times \vec p$. The components of $\vec q$ are:
+\begin{equation}
+\begin{array}{rclccl}
+q_X & = &  s_Y p_Z - s_Z p_Y & = & - & \sin \alpha \cos i  \nonumber\\
+q_Y & = &  s_Z p_X - s_X p_Z & = &   & \cos \alpha \cos i  \\
+q_Z & = &  s_X p_Y - s_Y p_X & = &   & \sin i              \nonumber
+\end{array}
+\end{equation}
+ 
+Define a second coordinate system, coupled to the central disk
+of the tilted ring model: the $z$ axis along the rotation axis of 
+the central disk i.e. $z \parallel {\vec s}_0$ and the $x$ axis along
+the major axis of the central disk i.e. $x \parallel {\vec p}_0$.
+Further, $y \parallel{\vec q}_0$. If we use the unit vectors $\vec e$ then
+$\vec e_x = \vec p_0, \: \vec e_y = \vec q_0, \: \vec e_z = \vec s_0$.
+This is the intrinsic coordinate system for the tilted ring system.
+The relation between this system and the system in which we observe ($X,Y,Z$):
+\begin{equation}
+\begin{array} {rcclclcl}
+\vec e_x & = &   & \cos \alpha _0 \: \vec e_X
+             & + & \sin \alpha _0 \: \vec e_Y
+             &   &      \nonumber\\
+\vec e_y & = & - & \sin \alpha _0 \cos i_0 \: \vec e_X
+             & + & \cos \alpha _0 \cos i_0 \: \vec e_Y
+             & + & \sin i_0 \: \vec e_Z   \\
+\vec e_z & = &   & \sin \alpha _0 \sin i_0 \: \vec e_X
+             & - & \cos \alpha _0 \sin i_0 \: \vec e_Y
+             & + & \cos i_0 \: \vec e_Z   \nonumber \\
+\end{array}
+\end{equation}
+
+ 
+Inverse:
+\begin{equation}
+\begin{array} {rcclclcl}
+\vec e_X & = &   & \cos \alpha _0 \: \vec e_x
+             & - & \sin \alpha _0 \cos i_0 \: \vec e_y
+             & + & \sin \alpha _0 \sin i_0 \: \vec e_z   \nonumber\\
+\vec e_Y & = &   & \sin \alpha _0 \: \vec e_x
+             & + & \cos \alpha _0 \cos i_0 \: \vec e_y
+             & - & \cos \alpha _0 \sin i_0 \: \vec e_z   \\
+\vec e_Z & = &   &
+             &   & \sin i_0 \: \vec e_y
+             & + & \cos i_0 \: \vec e_z   \nonumber \\
+\end{array}
+\end{equation}
+
+ 
+Note that the coefficient-determinant of (4) is equal to 1.
+For a point P($x,y,z$) in the tilted ring system the $X,Y,Z$
+coordinates are:
+($ x \vec e_x + y \vec e_y +z \vec e_z
+=  X \vec e_X + Y \vec e_Y +Z \vec e_Z $):
+\begin{equation}
+\begin{array} {rclclcl}
+X & = & x \cos \alpha _0 & - & y \sin \alpha _0 \cos i_0
+                         & + & z \sin \alpha _0 \sin i_0 \nonumber \\
+Y & = & x \sin \alpha _0 & + & y \cos \alpha _0 \cos i_0
+                         & - & z \cos \alpha _0 \sin i_0 \\
+Z & = &                  &   & y \sin i_0
+                         & + & z \cos i_0 \nonumber
+\end{array}
+\end{equation}
+ 
+For a point P($X,Y,Z$) in the system of observation, the tilted ring 
+coordinates $x,y,z$ are:
+\begin{equation}
+\begin{array} {rclllllll}
+x & = &+& X \cos \alpha _0          & + & Y \sin \alpha _0          &   & \nonumber \\
+y & = &-& X \sin \alpha _0 \cos i_0 & + & Y \cos \alpha _0 \cos i_0 & + & Z \sin i_0\\
+z & = &+& X \sin \alpha _0 \sin i_0 & - & Y \cos \alpha _0 \sin i_0 & + & Z \cos i_0 \nonumber\\
+\label{xyzXYZap}
+\end{array}
+\end{equation}
+
+All rings get their own coordinate system. For these systems
+the same equations are applied but then $(i_0, \alpha_0)$ must be replaced
+by $(i_k, \alpha _k)$.
+\pagebreak
+
+
+\section*{Appendix II: Alternative calculation intersection slice and unrotated ellipse}
+Suppose we have an ellipse that is not rotated, i.e. the axes align with your
+coordinate system.  The slice has offset
+\begin{math} x_{1}, y_{1}  \end{math} and angle \begin{math} \beta_{s} \end{math}
+The line that connects the origin of your coordinate system and the position
+of the intersection of the slice with the ellipse $x_s$, $y_s$, 
+makes angle $\gamma$ with the positive X axis.
+We are looking for an expression for angle \begin{math} \gamma \end{math} so that we 
+can calculate $x_s$, $y_s$.
+If the semi-major axis of an ellipse is called $a$ and the semi-minor axis is 
+called $b$,
+than for an inclined circle we have the relation $b=a \cos (i)$.
+
+\begin{figure}[h]
+   \centering
+   \includegraphics[height=10cm,width=10cm]{fig8.ps}
+   \caption{\it Intersection of slice line and an ellipse with major axis $a$ and
+                minor axis $b = a\cosb{i}$.}
+   \label{fig:fig8}
+\end{figure}
+
+A point on the ellipse satisfies the condition:
+\begin{eqnarray}
+X &=& a \cos (\gamma)\\
+Y &=& b \sin (\gamma) = a \cos (i)\cdot \sin (\gamma)
+\end{eqnarray}
+Also this point is an element of the slice line, so insert the expressions 
+of X and Y into:
+\begin{eqnarray}
+Y &=& \tan (\beta_{s})(X-x_{1}) + y_1 \to
+\end{eqnarray}
+\begin{eqnarray}
+a\cosb{i} \  \sinb{\gamma} = \tan (\beta_{s}) a \cos (\gamma) - x_{1} \tan (\beta_{s}) + y_{1}\\
+\left\{ a \cosb{i}\right\} \sin (\gamma) +  \left\{-a \tan (\beta_{s})\right\} \cos (\gamma) = y_{1} - x_{1} \tan(\beta_{s})
+\end{eqnarray}
+This is an expression of the form:
+\begin{eqnarray}
+A\sinb{\gamma}+B\cosb{\gamma}=C
+\end{eqnarray}
+With:
+\begin{eqnarray}
+\begin{array}{l}
+A=a\cosb{i} \\
+B=-a\tanb{\beta_s} \\
+C=y_1-x_1\tanb{\beta_s}
+\end{array}
+\end{eqnarray}
+\begin{displaymath}
+\mathrm{Set}\quad p=\frac{C}{\sqrt{A^2+B^2}} \quad \mathrm{and}\quad \varphi =\atanb{\frac{B}{A}}
+\end{displaymath}
+Then we have solutions: (see appendix)
+\begin{eqnarray}
+\gamma & = & \asinb{p}-\varphi\\
+\gamma & = & -\asinb{p}+180-\varphi
+\end{eqnarray}
+$p$ in terms of ellipse parameters:
+\begin{displaymath}
+p=\frac{y_1-x_1\tanb{\beta_s}}{Q\sqrt{\cos^2 \left( i \right)+\tan^2 \left( \beta_s \right)}}
+\end{displaymath}
+With the value of $\gamma$ we calculate $x_s$, $y_s$
+\pagebreak
+
+The angle that we need is set by $\tan\left(\beta\right)=\frac{y_s}{x_s}$
+$$\beta = \arctan\left(\frac{y_s}{x_s}\right)$$
+Now we need a trick to find the offsets on the slice.
+The position of the intersection at $S$ with coordinates $x_s$, $y_s$ is 
+shifted over the distance $x_1,y_1$, the origin of the slice. 
+Then we rotate over angle $-\beta_s$ and the rotated x-values both set 
+the length of $R'$ and its sign. Note that in {\it INSPECTOR} we entered slice
+angles as position angles. In the program they are converted to azimuthal 
+angles coupled to the coordinate system we described before 
+($\beta_s$ is an azimuthal angle).
+
+The for the slice in figure \ref{fig:fig8} we observe:
+\begin{enumerate}
+\item The offset that is needed for the tilted ring marker is the 
+      distance from intersection $S$ to slice center $C$.
+\item From $C$ at $x_1,y_1$ to the left we call radii (projected) negative
+\item From $C$ to $S$ the projected radii are positive
+\end{enumerate}
+\pagebreak
+
+
+
+\section*{Appendix III: Rotated ellipse intersecting a slice}
+(Draft version)\\
+Assume an ellipse with axis a and $b = a\cosb{i}$ rotated over angle $\varphi$ \\
+and that there is a slice through point C with angle $\beta_s$\\
+In coordinate system $x$',$y$' the coordinates of S are:
+\begin{eqnarray}
+x' = a \cosb{\gamma}\nonumber\\
+y' = b \sinb{\gamma}
+\end{eqnarray}
+Now there are two scenario's. First you can expres x' and y' in x and y and insert these
+equations in the expression of the slice line:
+\begin{eqnarray}
+x = x' \cosb{\varphi} - y' \sinb{\varphi}\nonumber\\
+y = x' \sinb{\varphi} + y' \cosb{\varphi}
+\end{eqnarray}
+\begin{eqnarray}
+x =  a \cosb{\gamma}\cosb{\varphi} - b \sinb{\gamma} \sinb{\varphi}\nonumber\\
+y =  a \cosb{\gamma} \sinb{\varphi} + b \sinb{\gamma} \cosb{\varphi}
+\end{eqnarray}
+Inserting this in the expression for the slice line $$Y = \tanb{\beta_s} (X - x_1) + y_1$$
+and rearranging in terms of $A\sinb{\gamma} + B \cos{\gamma} = C$
+yields:
+\begin{equation}
+\begin{array}{llr}
+A = b \cosb{\varphi} + b \sinb{\varphi} \tanb{\beta_s} &  = & a \cosb{i} \left\{ \cosb{\varphi} + \sinb{\varphi} \tanb{\beta_s} \right\}\\
+B = a \sinb{\varphi} - a \cosb{\varphi} \tanb{\beta_s} & = & a \left\{ \sinb{\varphi} - \cosb{\varphi} \tanb{\beta_s} \right\}\\
+C = y_1 - x_1 \tanb{\beta_s} & &
+\end{array}
+\end{equation}
+In a previous section we demonstrated how to find solutions
+for $\gamma$. Then we know the values voor S. in the x' y' system.
+Use  2  to find x,y., again $\tanb{\beta} = \frac{y_s}{x_s}$\\
+
+In that section we needed expressions for $\frac{B}{A}$ and $\sqrt{A^2 + B^2}$.
+\begin{eqnarray}
+\frac{B}{A} & = & \frac{a}{a \cosb{i}} \left\{ \frac{\frac{\sinb{\varphi}}{\cosb{\varphi}} - \tanb{\beta_i}}
+{1 + \frac{\sinb{\varphi}}{\cosb{\varphi}} \tanb{\beta_s}} \right\}\nonumber\\
+ & = & \frac{1}{\cosb{i}} \left\{ \frac{\tanb{\varphi} - \tanb{\beta_s}}{1 + \tanb{\varphi}. \tanb{\beta_s}}\right\}\nonumber\\
+ & = & \frac{1}{\cosb{i}} \left\{ \tanb{\varphi - \beta_s}\right\}
+\end{eqnarray}
+
+And:
+\begin{eqnarray}
+\sqrt{A^2 + B^2} &  = &  a \sqrt{ \cosbb{i} \{\cosb{\varphi} + \sinb{\varphi} \tanb{\beta_s} \}^2 + \{\sinb{\varphi} - \cosb{\varphi} \tanb{\beta_s} \}^2} \nonumber\\
+& = & a \{ \cosb{\varphi} + \sinb{\varphi} \tanb{\beta_s} \} \sqrt{ \cosbb{i} + \left(\frac{\sinb{\varphi} - \cosb{\varphi} \tanb{\beta_s}}{\cosb{\varphi} + \sinb{\varphi} \tanb{\beta_s}}\right)^2}\nonumber\\
+& = & a \{ \cosb{\varphi} + \sinb{\varphi} \tanb{\beta_s} \} \sqrt{ \cosbb{i} + \tanb{\varphi - \beta}^2}
+\end{eqnarray}
+
+What happens if the angle of the intersecting line is $90^{\circ}$ or $270^{\circ}$. 
+We have a problem there because $\tanb{\beta} = \infty$ and in a code implementation we have
+to deal with this problem.
+
+Again the coordinates of a shifted slice origin are C = $(x_1, y_1)$.\\
+Then we know that the x coordinate of S = $x_1$.
+
+Also 
+\begin{eqnarray}
+x_1 & = & a \cosb{\gamma} \to \nonumber\\
+\cosb{\gamma} & = & \frac{x_1}{a} \to \nonumber\\
+\gamma_1 & = & a\ \cosb{\frac{x_1}{a}},  \gamma_2 = 2\pi - a \cosb{\frac{x_1}{a}} \nonumber\\
+y_1 & = & b \sinb{\gamma} \nonumber\\
+& = & a \cosb{i}\ \sinb{\gamma_{1,2}}
+\end{eqnarray}
+\pagebreak
+
+
+The second scenario: It is also possible to assume the ellipse is not 
+rotated and rotate the sliceline over an angle - $\varphi$.
+
+It is also possible to rotate the ellipse and sliceline over angle
+\ $-\phi$. Then the situation is as described before and we have a
+straightforward solution. The coordinates of S then need to be
+rotated back over $\phi$ to retrieve the real coordinates of the
+intersection.But how do we construct a rotated line?
+
+The slice line is defined by:
+$$y=\tanb{\beta_s}\left(X-x_1\right)+y_1$$
+Besides the point $\left(x,y\right)$ we need another point on this
+line. Take:
+$$y=0 \rightarrow X = \frac{-y_1}{\tanb{\beta_s}} + x_1 $$
+Rotate over $-\phi$!
+\begin{eqnarray}
+x_1' &=& x_1\cosb{\phi}+y_1\sinb{\phi}\nonumber\\
+y_1' &=& -x_1\sinb{\phi}+y_1\cosb{\phi}
+\end{eqnarray}
+and rotate 
+$$(x_2,y_2) = (-y_1/\tanb{\beta_1}+x_1,\ 0)$$
+to obtain:
+\begin{eqnarray}
+x_2' &=& \left(\frac{-y_1}{\tanb{\beta_s}}+x_1\right)\cosb{\phi}\nonumber\\
+y_2' &=& -\left(\frac{-y_1}{\tanb{\beta_s}}+x_1\right)\sinb{\phi}
+\end{eqnarray}
+The new angle of this line $\gamma$ is set by:
+\begin{eqnarray*}
+\tanb{\gamma} = 
+\frac{\Delta y}{\Delta x} & = & 
+\frac{y_{1}\cosb{\phi}-
+		\frac{y_{1}}{\tanb{\beta_{s}}}
+	\sinb{\phi}}
+     {y_{1}\sinb{\phi}+
+		\frac{y_1}{\tanb{\beta_{s}}}
+	\cosb{\phi}}
+\\ & = & 
+\frac{\tanb{\beta_{s}}\cosb{\phi}-\sinb{\phi}}
+     {\tanb{\beta_{s}}\sinb{\phi}+\cosb{\phi}}
+\\ & = & 
+\frac{\tanb{\beta_{s}}-
+		\frac{\sinb{\phi}}{\cosb{\phi}}
+	}
+      {\tanb{\beta_{s}}
+		\frac{\sinb{\phi}}{\cosb{\phi}}
+	+1}
+\\ & = & 
+\frac{\tanb{\beta_{s}}-\tanb{\phi}}
+      {\tanb{\beta_{s}}\tanb{\phi}+1}
+\\ & = & 
+\tanb{\beta_{s}-\phi}
+\end{eqnarray*}
+Therefore the new line can be written as
+\begin{equation}
+y=\tanb{\beta_{s}-\phi}\left(x-x_{1}'\right)+y_{1}'
+\end{equation}
+and this line is intersected with the unrotated elipse.
+\pagebreak
+
+
+
+\section*{Appendix IV: The angle between two spin vectors} 
+A third method to find an expression for $\theta$, the angle between the planes of two different rings,
+uses the inner product of two vectors $\hat \imath$ and $\hat \imath_0$.
+\begin{equation}
+(\hat \imath, \hat \imath_0) = ||\hat \imath||\   ||\hat \imath_0||\ \cosb{\theta}
+\end{equation}\\
+Where $\hat \imath$ is the spin vector of a ring and $\hat \imath_0$ is the spin vector of the disk.\\
+
+Using equation (6) and setting $\hat \imath$ to $\left( \begin{array}{c}0\\0\\1\end{array}\right)$ in the system of the ring or disk, we find:\\
+\begin{displaymath}
+\hat \imath = \left( \begin{array}{cc}\sinb{\alpha} & \sinb{i} \\ \cosb{\alpha} & \sinb{i} \\ \cosb{i} & \end{array} \right) \mathrm{and}\  \hat \imath_0 = \left( \begin{array}{cc}\sinb{\alpha_0} & \sinb{i_0} \\ \cosb{\alpha_0} & \sinb{i_0}\\ \cosb{i_0} &
+ \end{array} \right)
+\end{displaymath}\\
+The lengths of the spinvectors are 1 so\\
+\begin{displaymath}
+\begin{array}{rl}
+\cosb{ \theta} &= (\hat \imath \cdot\hat \imath_0)\\
+&= \sinb{\alpha} \sinb{i} \sinb{\alpha_0} \sinb{i_0} + \cosb{\alpha} \sinb{i} \cosb{\alpha_0} \sinb{i} + \cosb{i} \cosb{i_0} \\ &= \sinb{i} \sinb{i_0} (\sinb{\alpha} \sinb{\alpha_0} + \cosb{\alpha} \cosb{\alpha_0}) + \cosb{i}\cosb{i_0}\\
+&= \sinb{i} \sinb{i_0} (\cosb{\alpha - \alpha_0} ) + \cosb{i} \cosb{i_0}\\
+ & \\
+\cosb{\theta} &= \cosb{i_0} \cosb{i} + \sinb{i_0} \sinb{i} - \cosb{ \alpha - \alpha_0}
+\end{array}
+\end{displaymath}\\
+Which is consistent with the results of the other methods.
+\pagebreak
+
+
+\section*{Appendix V: Equation for a ring projected onto the sky}
+In the section where we first explained how we can find the intersection
+of a slice line and an ellipse, we used the formulas that define the transformation from
+the $xyz$ system to the $XYZ$ system to get an equation for the projected ring.
+This ring is an ellipse in the $XYZ$ system.
+To find the expression for a rotated ellipse we first examine the 
+relation between a coordinate system, $x,y$ and a rotated system $x',y'$.\\
+If the angle between the rotated $x$' axis and the $x$-axis is $\alpha$ then:\\
+\begin{eqnarray}
+x & = & x'\cos(\alpha) - y'\sin(\alpha)\nonumber\\
+y & = & x'\sin(\alpha) + y'\cos(\alpha)
+\label{eq:form}
+\end{eqnarray}
+Inverse:
+\begin{eqnarray}
+x' & = & x\cos(\alpha) + y\sin(\alpha)\nonumber\\
+y' & = & - x\sin(\alpha) + y\cos(\alpha)
+\label{eq:form2}
+\end{eqnarray}
+An ellipse in the unnrotated $x`y`$ plane is defined by the relation:\\
+\[\frac{{x'}^{2}}{a^{2}}+\frac{{y'}^{2}}{b^{2}} = 1\]\\
+If $a$ is the major axis and $b$ is the minor axis of the ellipse, 
+then $b = a \cos(i)$ where $i$ is the inclination of a tilted ring. Then:
+\begin{equation}
+\frac{{x}'^{2}}{a^{2}}+\frac{{y'}^{2}}{a^{2}\cosbb{i}} = 1 \rightarrow {x'}^{2}+\frac{{y'}^{2}}{\cosbb{i}} = a^{2}\\
+\label{eq:form3}
+\end{equation}
+Inserting the expressions \ref{eq:form2} into \ref{eq:form3} results in:\\
+\begin{equation}
+{ \left(x \cos(\alpha) + y \sin(\alpha) \right) }^2 + {\left( \frac{- x \sin(\alpha) + y \cos(\alpha)}{\cosb{i}} \right)}^2 = a^{2}\
+\end{equation}
+This is consistent with equation (\ref{projectedring})
+in section {\it The azimuthal angle in the plane of the galaxy} 
+provided that $a \equiv R$.
+\pagebreak
+
+
+\section*{Appendix VI:  Solutions for the expression:\\
+$A\sinb{x}+B\cosb{x}=C$}
+
+In one of the previous relations we encountered the expression
+$A\sinb{x}+B\cosb{x}$. We want to write this as $\lambda\sinb{\varphi}$ 
+for which we know the roots.
+
+\[A\sinb{x} + B\cosb{x} = A\left\{\sinb{x}+\frac{B}{A}\cosb{x}\right\}\]
+
+define \[\frac{B}{A}=\tan({\varphi})=\frac{\sinb{\varphi}}{\cosb{\varphi}}\]
+
+
+\begin{eqnarray}
+A\left\{\sinb{x}+\frac{B}{A}\cosb{x}\right\} &=& A\left\{\sinb{x}+\frac{\sinb{\varphi}\cosb{x}}{\cosb{\varphi}}\right\} \nonumber\\
+&=&\frac{A}{\cosb{\varphi}}\left\{\sinb{x}\cosb{\varphi}+\sinb{\varphi}\cosb{x}\right\} \nonumber\\
+&=&\frac{A}{\cosb{\varphi}}\left\{\sinb{x+\varphi}\right\} \nonumber
+\end{eqnarray}
+
+We also have the relation
+\[\cosb{\varphi}=\frac{A}{\sqrt{A^2+B^2}}\]
+and
+
+\[\varphi=\arctan\left({\frac{B}{A}}\right)\]
+Therefore if $A\sinb{x}+B\cosb{x}=C$ then
+
+\boxedeqn{
+\sinb{x+\arctan\left({\frac{B}{A}}\right)}=\frac{C}{\sqrt{A^2+B^2}}
+}
+To determine solutions for $x$, set
+
+\begin{displaymath}
+p=\frac{C}{\sqrt{A^2+B^2}}\rightarrow \sinb{x+\varphi}=p
+\end{displaymath}
+
+
+\begin{enumerate}
+\item $x+\varphi=a\sinb{p}\rightarrow x=a\sinb{p}-\varphi$
+\item $180^\circ-\left(x+\varphi\right)=a\sinb{p}\rightarrow x=-a\sinb{p}+180^\circ-\varphi$
+\end{enumerate}
+
+
+\end{document}

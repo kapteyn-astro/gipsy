@@ -1,0 +1,72 @@
+	SUBROUTINE GDS___CHECK(VERIFY,ERRI,ERRO,*)
+*
+* NOTICE: no C-compatible version possible due to alternate RETURN
+*
+*#>gds___check.dc3
+*Name:       GDS___CHECK
+*
+*Purpose:    Condition checking and handling routine
+*
+*Author:     J.P. Terlouw
+*
+*Use:        CALL GDS___CHECK ( cond, code, error, exit )
+*
+*                 cond   =   logical expression
+*                 code   =   INTEGER variable, constant or
+*                            expression
+*                 error  =   INTEGER variable containing the
+*                            error argument as declared
+*                 exit   =   any of the following specifiers:
+*                            *RETURN, *XWHILE, *XREPEAT, *XFOR or
+*                            *procedurename
+*
+*Description:
+*            If 'error' < 0 , this routine calls GDS___ERROR with this
+*            value and does no further checking.
+*            If 'error' >= 0, or if 'error' has not been specified in
+*            the call to the routine which calls this one, the following
+*            procedure is followed:
+*            If the condition 'cond' is .TRUE., this routine does nothing.
+*            If it is .FALSE., and 'error' has been specified in the call
+*            to the subroutine which calls GDS___CHECK, then 'code' is
+*            copied to 'error' and the statement specified in 'exit' is
+*            executed; if 'error' has not been specified, then GDS___CHECK
+*            calls GDS___ERROR with 'code' as argument.
+*
+*Note:       This routine is not C-compatible .
+*
+*Update history:
+*            1-Apr-87    Original document
+*           15-Dec-89    version compliant with GPS
+*#<
+	LOGICAL VERIFY,PRESENTN
+	INTEGER ERRI,ERRO
+
+* Check any previous error
+	IF PRESENTN(ERRO)
+	THEN
+N  Already error indication present?
+	   IF ERRO.LT.0
+	   THEN
+N  Hit at this occasion
+	      CALL GDS___ERROR(ERRO-1000)
+	   CIF
+	CIF
+
+N  Condition not met: error
+	IF .NOT.VERIFY
+	THEN
+N  Error argument specified?
+	   IF PRESENTN(ERRO)
+	   THEN
+N  Copy
+	      ERRO=ERRI
+N  and break normal flow of control
+F	      RETURN 1
+	   ELSE
+N  Not specified: severe punishment
+	      CALL GDS___ERROR(ERRI)
+	   CIF
+	CIF
+	RETURN
+	END

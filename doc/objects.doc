@@ -1,0 +1,17 @@
+
+Document:     objects
+
+Purpose:      The file objects, which resides in the gip_lib directory,
+              lists the object files originating from GIPSY sources.
+
+Category:     MANAGEMENT
+
+File:         objects.doc
+
+Author:       K.G. Begeman
+
+Description:  Each line contains a GIPSY source name and an object,
+              separated by a colon. The file is updated by compile.
+
+Updates:      Feb 26, 1992: Document created
+

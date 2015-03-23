@@ -1,0 +1,33 @@
+
+Script:       ngipsy
+
+Purpose:      Starts a GIPSY session with nhermes.
+
+Category:     MANAGEMENT
+
+File:         ngipsy.csh
+
+Author:       K. Begeman
+
+Use:          ngipsy [ -l<log file name> ] [ -t<minutes> ] 
+              { <user command> }
+
+Description:  The ngipsy script will start a GIPSY session. The gipsy
+              environment must have been defined. The script looks for
+              $HOME/.gipsyrc, and if this file is present it will source it.
+
+Directory:    $gip_sys/
+
+
+Related Docs: xgipsy.doc, gipsy.doc
+
+Updates:      Oct  7, 1991: KGB, script create.
+              Apr  2, 2002: JPT, improved command line argument passing.
+              May 30, 2001: JPT, undefined Ggi-incompatibe environment vars.
+              Nov 15, 2004: JPT, removed client exclusion test.
+              Nov  1, 2006: JPT, Python support added
+              Aug 20, 2007: JPT, changed PYTHONPATH for new Python module.
+              May 27, 2008: JPT, merge PYTHONPATH with existing PYTHONPATH
+              Mar 22, 2011: JPT, reversed PYTHONPATH merge order.
+              Jan 21, 2014: JPT, enforce C number format.
+

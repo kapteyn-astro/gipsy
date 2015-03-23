@@ -1,0 +1,27 @@
+
+Programme:    lckserver
+
+Purpose:      Handles GIPSY (un)lock requests on files.
+
+Category:     SYSTEM
+
+File:         lckserver.c
+
+Author:       K.G. Begeman
+
+Use:          $gip_exe/lckserver directory
+
+Description:  The GIPSY functions gip_lock and gip_unlock start the
+              lckserver if it was not running yet. When started,
+              it will create a inet socket on which it will be listening
+              for connection requests from the gip_(un)lock functions.
+              It will write a hidden file .glock in the directory where the
+              locking is monitored by the server in which the hostname
+              and the inet port number are stored (separated by a colon).
+              If no requests are pending, the server will die after one hour
+              and remove the .glock file. So the lckserver monitors the locking
+              in a particular directory (the one entered on the command line).
+              
+
+Updates:      Jan  5, 1993: KGB Document created.
+

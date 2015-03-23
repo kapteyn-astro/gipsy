@@ -1,0 +1,147 @@
+
+Document:     compile
+
+Purpose:      Describes how to compile/install a procedure/application
+              program, how to install a document or include file,
+              how to (un)reserve a source file with the program
+              compile.
+
+Category:     MANAGEMENT
+
+File:         compile.c
+
+Author:       K.G. Begeman
+
+Use:          $gip_exe/compile [switches] [source file(s)]
+
+              The following switches are recognized by the program:
+
+              -#          discard default switch #.
+              -c          compile sources.
+              -cc #       # indicates the name of the c compiler to
+                          be used instead of the default.
+              -check      checks the GIPSY tree for strange and missing
+                          files.
+              -copts      defines the following switches to be compiler
+                          switches.
+              -delete     deletes a source file.
+              -export #   compares the history files in $gip_sys and
+                          #/sys, and copies new/modified sources to #.
+              -fc #       # indicates the name of the fortran compiler
+                          to be used instead of the default.
+              -if #       # is the name of a file which contains
+                          names of source files (one per line).
+              -import #   compares the history files in # and $gip_sys,
+                          and copies new/modified sources to $gip_sys.
+              -install    install new version(s) of source file(s).
+              -lopts      defines the following switches to be loader
+                          switches.
+              -o #        # denotes the name of the executable to
+                          be produced.
+              -purify     uses purify to build/link tasks.
+              -rebuild    rebuilds procedures and applications.
+              -reserve    reserves a source for the user.
+              -retrieve   retrieves an older version of a source file
+                          (-version switch must also be used).
+              -sub        same as -c.
+              -sysgen     used only when generating the system.
+              -unreserve  unreserves a source file reserved by the user.
+              -update     updates out of date procedures (and
+                          applications if -c or -sub not used).
+              -version #  # indicates the version number of a source file
+                          for retrieval or reinstall (only with
+                          -retrieve switch).
+              -X          (private use) adds X11 compiler and/or linker
+                          options to the compiler command.
+                          If switch is found in the first line of a c-source
+                          file, it had the same effect for privileged use.
+              -XT         (private use) adds X-Tookit compiler and/or linker
+                          options to the compiler command.
+                          If switch is found in the first line of a c-source
+                          file, it has the same effect for privileged use.
+
+              The following file extensions are recognized:
+
+              .c          c source code.
+              .col        cola scripts.
+              .csh        csh shell script.
+              .dc0        level 0 documentation.
+              .dc1        level 1 documentation.
+              .dc2        level 2 documentation.
+              .dc3        level 3 documentation.
+              .h          c include file.
+              .f          fortran source code.
+              .make       make file.
+              .mem        memo's.
+              .mgr        management files.
+              .nws        file contains GIPSY news.
+              .o          object file.
+              .py         Python script
+              .rep        report files.
+              .sh         sh shell scripts
+              .shl        sheltran source code.
+              .src        a set of other known source files.
+              .tex        document in tex/latex format.
+
+              While running make, the following variables are defined:
+              ARCHITECTURE   type of machine (i.e. alliant, sun4)
+              CC_COMP        name of c compiler
+              CC_OPTS        default c compiler options
+              CC_LIBS        default libraries for GIPSY c programmes
+              FC_COMP        name of fortran compiler
+              FC_OPTS        default fortran compiler options
+              FC_LIBS        default libraries for GIPSY fortran programmes
+              X11_OPTS       default X11 compiler options (includes)
+              X11_LIBS       default X11 linker options (library)
+              XT_LIBS        default X-Toolkit linker options (libraries)
+
+              The sources will be directed to the following directories:
+
+              Extension           Directory
+              .c .f .shl .src     gip_sub (function), gip_tsk (application)
+              .col                gip_tsk
+              .csh .sh .mgr .py   gip_sys
+              .dc0 .doc .tex      gip_doc
+              .dc1                gip_tsk
+              .dc2 .dc3           gip_sub
+              .mem .nws .rep      gip_mis
+
+              Most sources need documentation:
+
+              Extension           Documentation (one of)
+              .c .f .shl .src     .dc1 or .doc for applications
+              .c .f .shl .src     .dc2 or .dc3 for functions
+              .col                .dc1
+              .csh .sh .mgr .py   .doc
+              .h                  .dc2 .dc3
+              .tex                .doc
+
+              The files extracted while installing a (new) source will be
+              directed to the following directories:
+
+              Extension           Directory
+              .dc0 .doc .tex      gip_doc
+              .dc1                gip_tsk
+              .dc2 .dc3           gip_sub
+              .h                  gip_inc (if parent is a function)
+              .csh .sh            gip_sys
+
+Updates:      May 23, 1991: KGB Document created.
+              Mar 22, 1993: KGB .rep and .sh extensions added.
+              Jan  3, 1995: KGB -export and -import options added.
+              Mar 22, 1996: KGB length of strings increased.
+              Oct  9, 1996: KGB switch -X implemented.
+              Nov 25, 1996: KGB switch -purify implemented.
+              May 12, 1997: KGB check for new server implemented.
+              Jun 22, 1997: KGB check for -X in first source line.
+              Jul 29, 1997: KGB check for -XT in first source line.
+              Nov  9, 1998: JPT doubled MAXCHILD and MAXSOURCE to 2048.
+              Feb  1, 1999: JPT declared big array static and reduced MAXCHILD
+                                and MAXSOURCE (due to Linux static limit)
+              Dec 12, 2000: JPT for Linux: private version of system()
+              Mar  9, 2001: JPT changed "thales" into "gipsy".
+              May  4, 2007: JPT included conditional code for Apple Mac.
+              Nov 24, 2008: JPT deactivated strip command.
+              Oct  7, 2010: JPT allow for code generated in relation to -fPIC
+              Jun  8, 2012: JPT .py extension added
+

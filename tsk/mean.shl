@@ -1,0 +1,640 @@
+E     PROGRAM MEAN (copyright notice)
+C mean.shl
+C                           COPYRIGHT (c) 1990
+C         Kapteyn Astronomical Institute - University of Groningen
+C            P.O. box 800,  9700 AV Groningen, The Netherlands
+C
+C#>   mean.syn
+Csum
+C#<
+E     PROGRAM MEAN (mean.dc1)
+C#>            mean.dc1
+C
+CProgram:      MEAN
+C
+CPurpose:      Program to calculate the mean of a number of subsets.
+C
+CCategory:     CALCULATION, COMBINATION
+C
+CFile:         mean.shl
+C
+CAuthor:       K.G. Begeman
+C
+CKeywords:
+C
+C  **TASK=     Name of the task under which the program is run.
+C              Either MEAN or SUM. To be used when program is run under
+C              an alias name.
+C
+C   INSET=     Set and subsets for which to calculate the mean subset.
+C              Maximum number of input subsets is 2048.
+C
+C   BOX=       Box for which to calculate average in input subsets
+C              [entire subset]. Outside this box MEAN will write
+C              BLANKS in the output map(s).
+C
+C   WEIGHTS=   Weights for individual subsets [1.0]. MEAN
+C              will normalize the weights. Negative weights are not
+C              allowed. This keyword will be repeated until default
+C              is used or the number of weights equals the number of
+C              input subsets.
+C
+C   OUTSET=    Set and subset(s) where to store the results. If two
+C              subsets are entered, then the second will contain the
+C              sum of the weights used to calculate the average.
+C              Default is only one subset (i.e. the mean).
+C
+CExample:      <USER  >MEAN
+C              <USER  >MEAN     ,INSET=AURORA FREQ 1:14  45:59
+C              Set AURORA has 3 axes
+C              RA-NCP             from    -7 to     8
+C              DEC-NCP            from    -7 to     8
+C              FREQ-OHEL          from     1 to    59
+C              <USER  >MEAN     ,BOX=
+C              BOX range for set AURORA :
+C              RA-NCP             from    -7 to     8
+C              DEC-NCP            from    -7 to     8
+C              <USER  >MEAN     ,WEIGHTS=
+C              <USER  >MEAN     ,OUTSET=CONTINUUM
+C              Set CONTINUUM has 3 axes
+C              RA-NCP             from    -7 to     8
+C              DEC-NCP            from    -7 to     8
+C              PARAM-MEAN         from     1 to     1
+C              <STATUS>  MEAN    +++ FINISHED +++
+C
+CUpdates:      Jan 31, 1990: KGB Document created.
+C              Dec 11, 1991: KGB Cancel replaced by reject.
+C              Feb 19, 1992: KGB Bug with BOX < frame repaired.
+C              Jun 29, 1992: KGB WEIGHTS= made a repeated keyword.
+C              Jul 28, 1994: JPT Introduced TASK= keyword
+C
+C#<
+E     PROGRAM MEAN (sum.dc1)
+C#>            sum.dc1
+C
+CProgram:      SUM
+C
+CPurpose:      Program to add a number of subsets.
+C
+CCategory:     CALCULATION, COMBINATION
+C
+CFile:         mean.shl
+C
+CAuthor:       K.G. Begeman
+C
+CKeywords:
+C
+C  **TASK=     Name of the task under which the program is run.
+C              Either MEAN or SUM. To be used when program is run under
+C              an alias name.
+C
+C   INSET=     Set and subsets over which to integrate. Maximum number
+C              of input subsets is 2048.
+C
+C   BOX=       Box over which to add the input subsets [entire subset].
+C              Outside this box MEAN will write BLANKS in the output
+C              map(s).
+C
+C   CUT=       Cutoff levels [No cutoff]. Only data values beyond the
+C              cutoff levels will be used in the sum.
+C
+C   OUTSET=    Set and subset(s) where to store the results. If two
+C              subsets are entered, then the second will contain the
+C              number of subsets used in the summation. Default is only
+C              one subset (i.e. the sum).
+C
+CExample:      <USER  >SUM
+C              <USER  >SUM      ,INSET=AURORA DEC
+C              Set AURORA has 3 axes
+C              RA-NCP             from    -7 to     8
+C              DEC-NCP            from    -7 to     8
+C              FREQ-OHEL          from     1 to    59
+C              <USER  >SUM      ,BOX=
+C              BOX range for set AURORA :
+C              RA-NCP             from    -7 to     8
+C              FREQ-OHEL          from     1 to    59
+C              <USER  >SUM      ,CUT=
+C              All values will be added
+C              <USER  >SUM      ,OUTSET=STRIP
+C              Set STRIP has 3 axes
+C              RA-NCP             from    -7 to     8
+C              FREQ-OHEL          from     1 to    59
+C              PARAM-SUM          from     1 to     1
+C              <STATUS>  SUM     +++ FINISHED +++
+C
+CUpdates:      Jan 31, 1990: KGB Document created.
+C              Nov 17, 1991: MV  Extra parameter for 'clipper'
+C              Dec 11, 1991: KGB Cancel replaced by reject.
+C              Feb 19, 1992: KGB Bug with BOX < frame repaired.
+C              Jul 28, 1994: JPT Introduced TASK= keyword
+C
+C#<
+E     PROGRAM MEAN (code)
+      program mean
+C
+C     Parameters:
+C
+      character*(*) ident
+N     Change version number on this line
+      parameter (ident = '  Version 1.02 Jul 28, 1994 ')
+      integer       maxaxes
+N     Maximum number of axes
+      parameter (maxaxes = 10)
+N     maximum number of axes this program can handle
+      integer       maxsub1
+N     Maximum number of subsets to integrate
+      parameter (maxsub1 = 2048)
+      integer       maxsub2
+N     Maximum number of output subsets
+      parameter (maxsub2 = 2)
+      integer       maxdata
+N     Maximum number of data in buffer
+      parameter (maxdata = 4096)
+C
+C     Declarations for input set
+C
+N     Name of input set
+      character*80 set1
+N     Axis names of input set
+      character*20 axname(maxaxes)
+N     Dimension of input set
+      integer      set1dim
+N     Array for subset coordinate words
+      integer      subset1(maxsub1)
+N     Number of input subsets
+      integer      nsub1
+N     Array with axis numbers
+      integer      axperm1(maxaxes)
+N     Array with axis sizes
+      integer      axsize1(maxaxes)
+N     Frame of input subsets
+      integer      flo1(maxaxes), fup1(maxaxes)
+N     Coordinate words for input set
+      integer      cwlo1(maxsub1), cwup1(maxsub1)
+N     Array with transfer id's
+      integer      tid1(maxsub1)
+N     Weights for input subsets
+      real         weights(maxsub1)
+N     Read buffer
+      real         work1(maxdata)
+C
+C     Declarations for output set
+C
+N     Name of output set
+      character*80 set2
+N     Param axis name
+      character*20 paramax
+N     Array for subset coordinate words
+      integer      subset2(maxsub2)
+N     Number of output subsets
+      integer      nsub2
+N     Array with axis numbers
+      integer      axperm2(maxaxes)
+N     Array with axis sizes
+      integer      axsize2(maxaxes)
+N     Frame of input subsets
+      integer      flo2(maxaxes), fup2(maxaxes)
+N     Coordinate words for input set
+      integer      cwlo2(maxsub2), cwup2(maxsub2)
+N     Array with transfer id's
+      integer      tid2(maxsub2)
+N     work buffer
+      real         work2(maxdata,maxsub2)
+C
+C     Local variables:
+C
+N     Name of application
+      character*10 name
+N     Text string
+      character*80 text
+N     Coordinate words denoting range of set
+      integer      cwlo, cwup
+N     GDSx_xxx error return code
+      integer      gerror
+N     Counter for initptr
+      integer      icount
+N     Pointer to data in/outside frame
+      integer      ip
+N     Loop counter
+      integer      k
+N     Counters for minmax3
+      integer      mcount(maxsub2)
+N     Loop counter
+      integer      n
+N     Number of blanks in output subsets
+      integer      nblank(maxsub2)
+N     Data counter
+      integer      nd
+N     Number of pixels read in one go
+      integer      ndone
+N     Number of pixels in/outside frame
+      integer      np
+N     Subset counter
+      integer      ns
+N     Total number of pixels in subset
+      integer      ntotal
+N     ???
+      integer      nw, nw1
+N     The number of axes over which to integrate
+      integer      outdim
+N     Dimension of subsets
+      integer      subdim
+N     Logical
+      logical      okay
+N     System defined BLANK
+      real         blank
+N     Cutoff levels
+      real         cutoff(2)
+N     Minimum and maximum in output subsets
+      real         datamin(maxsub2), datamax(maxsub2)
+C
+C     Functions:
+C
+N     Returs left-adjusted integer
+      character*3  chrint
+N     Returns name of application
+      character*9  myname
+N     Returns axis name
+      character*20 gdsc_name
+N     Returns end of character string
+      integer      nelc
+N     Returns full coordinate word
+      integer      gdsc_fill
+N     Returns grid extracted from coordinate word
+      integer      gdsc_grid
+N     Returns number of dimensions in coordinate word
+      integer      gdsc_ndims
+N     Gets input set and subsets from user
+      integer      gdsinp
+N     Gets output set (and subsets) from user
+      integer      gdsout
+N     Does a minimal match
+      integer      match
+N     Gets reals from user
+      integer      userreal
+N     Logical is true when cutoff if wanted
+      logical      clip
+N     Logical is true when inside sub frame
+      logical      insideptr
+N     Logical is true when outside sub frame
+      logical      outsideptr
+C
+C     Data statements:
+C
+N     Reset gds error return
+      data gerror   / 0 /
+N     Reset counter for initptr
+      data icount   / 0 /
+N     Reset total number of pixels
+      data ntotal   / 1 /
+N     Reset number of axes outside subset
+      data outdim   / 0 /
+N     Set weights
+      data weights  / maxsub1 * 1.0 /
+C
+C     Executable statements:
+C
+N     Get in touch with HERMES
+      call init
+N     Give me my name
+      name = myname()
+N     Modify name?
+      if ( index( name, 'MEAN_' ) .eq. 1 )
+      then
+         name = 'MEAN'
+      else if ( index( name, 'SUM_' ) .eq. 1 )
+      then
+         name = 'SUM'
+      cif
+N     User gets chance to modify name
+      call usercharu( name, 1, 2, 'TASK=', 'MEAN/SUM')
+N     Allowable name?
+      if ( name .ne. 'MEAN' .and. name .ne. 'SUM')
+      then
+      while .true.
+      call usercharu( name, 1, 0, 'TASK=', 'MEAN/SUM')
+      if ( name .ne. 'MEAN' .and. name .ne. 'SUM')
+      then
+      call reject('TASK=', 'Bad task name')
+      else
+      xwhile
+      cif
+      cwhile
+      cif
+
+N     Inform user who we are
+      call anyout( 8, ' ' // name(:nelc(name)) // ident )
+N     Get system defined BLANK
+      call setfblank( blank )
+N     Get input set and subsets
+      nsub1 = gdsinp( set1,
+     #                subset1,
+     #                maxsub1,
+     #                0,
+     #                'INSET=',
+     #                'Give set and subsets over which to integrate',
+     #                0,
+     #                axperm1,
+     #                axsize1,
+     #                maxaxes,
+     #                2,
+     #                outdim )
+N     Dimension of set
+      set1dim = gdsc_ndims( set1, 0 )
+N     Get subset dimensions
+      subdim = set1dim - outdim
+N     Get axis names
+      for k = 1, set1dim
+         axname(k) = gdsc_name( set1, axperm1(k), gerror )
+      cfor
+N     Next get part of subset to work on
+      call gdsbox( flo1,
+     #             fup1,
+     #             set1,
+     #             subset1,
+     #             1,
+     #             ' ',
+     #             ' ',
+     #             0,
+     #             0 )
+N     If name is 'MEAN', get weights from user
+      if (name(:4) .eq. 'MEAN')
+      then
+N        Param axis name
+         paramax = 'PARAM-MEAN'
+N        Reset number of weights
+         nw = 0
+N        loop until weights ok.
+         while (nw .lt. nsub1)
+N           Until weights are >= 0.0
+            repeat
+N              reset logical
+               okay = .true.
+N              Request weights from user
+               nw1 = userreal( weights(nw+1),
+     #                         nsub1 - nw,
+     #                         1,
+     #                         'WEIGHTS=',
+     #                         'Weights for input subsets [1.0]' )
+N              Loop to check weights
+               for n = 1, nw1
+                  if (weights(nw+n) .lt. 0.0)
+                  then
+                     okay = .false.
+                  endif
+               cfor
+               if (.not. okay)
+               then
+N                 Reject keyword
+                  call reject( 'WEIGHTS=',
+     #               'Negative weights are not allowed!' )
+               endif
+            until (okay)
+            call cancel( 'WEIGHTS=' )
+            if (nw1 .eq. 0)
+            then
+               xwhile
+            endif
+            nw = nw + nw1
+         cwhile
+         for ns = nw + 1, nsub1
+N           Default weight
+            weights(ns) = 1.0
+         cfor
+N        User weights, so show them
+         if (nw .ne. 0)
+         then
+            call anyout( 0, 'The following weights will be used' )
+            for n = 1, nsub1
+               write( text, '(''Subset '',I5,'' Weight '', G12.5)')
+     #                n, weights(n)
+               call anyout( 0, text )
+            cfor
+         endif
+      cif
+N     if name is 'SUM', get cuts from user
+      if (name(:3) .eq. 'SUM')
+      then
+N        Param axis name
+         paramax = 'PARAM-SUM'
+         n = userreal( cutoff,
+     #                 2,
+     #                 1,
+     #                 'CUT=',
+     #                 'Cutoff level(s) [No cutoff]' )
+N        Select cutoff option
+         if (n .eq. 0)
+         then
+N           No cutoff
+            clip = .false.
+            write( text, '(''All values will be added'')')
+         else
+            clip = .true.
+            if (n .eq. 1)
+            then
+N              Absolute cutoff
+               cutoff(2) = cutoff(1)
+               cutoff(1) = -cutoff(1)
+            cif
+N           Inform user
+            if (cutoff(1) .lt. cutoff(2))
+            then
+               write( text, '(''Values < '', g10.3, '' or > '',
+     #            g10.3, '' will be added'')') cutoff(1), cutoff(2)
+            else
+               write( text, '(''Values < '', g10.3, '' and > '',
+     #            g10.3, '' will be added'')') cutoff(2), cutoff(1)
+            cif
+         cif
+N        Info for user
+         call anyout( 11, text )
+      cif
+N     Copy subdim axes from GDSINP buffer to GDSOUT buffer
+      call gdsasn( 'INSET=',
+     #             'OUTSET=',
+     #             2 )
+N     Find unique axis name
+      if (match( axname, set1dim, paramax ) .ne. 0)
+      then
+         k = 1
+         repeat
+            k = k + 1
+            text = paramax(1:nelc(paramax)) // chrint( k )
+         until (match( axname, set1dim, text ) .eq. 0)
+         paramax = text
+      cif
+N     Add 'PARAM' axis to GDSOUT buffer
+      call gdscpa( 'OUTSET=',
+     #             subdim + 1,
+     #             1,
+     #             1.0d0,
+     #             0.0d0,
+     #             0.0d0,
+     #             0.0d0,
+     #             paramax,
+     #             ' ',
+     #             14 )
+N     Now get output set and subset(s)
+      nsub2 = gdsout( set2,
+     #                subset2,
+     #                maxsub2,
+     #                0,
+     #                'OUTSET=',
+     #                'Give output set and subset(s)',
+     #                0,
+     #                axperm2,
+     #                axsize2,
+     #                maxaxes )
+N     Now get frame of output subsets
+      call gdsc_range( set2, 0, cwlo, cwup, gerror )
+N     Loop to over subset dimension
+      for n = 1, subdim
+N        Calculate total number of pixels
+         ntotal = ntotal * axsize2(n)
+N        Start writing at this grid
+         flo2(n) = gdsc_grid( set2, axperm2(n), cwlo, gerror )
+N        Stop writing at this grid
+         fup2(n) = gdsc_grid( set2, axperm2(n), cwup, gerror )
+      cfor
+N     Loop through input subsets
+      for ns = 1, nsub1
+N        Reset transfer id
+         tid1(ns) = 0
+N        Get coordinate words of entire frame
+         call gdsc_range( set1, subset1(ns), cwlo1(ns), cwup1(ns),
+     #                    gerror )
+      cfor
+N     Loop through output subsets
+      for ns = 1, nsub2
+N        Reset transfer id
+         tid2(ns) = 0
+N        Reset counter for minmax3
+         mcount(ns) = 0
+N        Get coordinate word of lower edge
+         cwlo2(ns) = gdsc_fill( set2, subset2(ns), flo2 )
+N        Get coordinate word of upper edge
+         cwup2(ns) = gdsc_fill( set2, subset2(ns), fup2 )
+      cfor
+N     Show user how far we got
+      call stabar( 0.0, float( ntotal ), 0.0 )
+N     Loop through output subsets
+      repeat
+N        Loop through output subsets
+         for ns = 1, maxsub2
+N           Set to zero
+            call presetr( 0.0, work2(1,ns), maxdata )
+         cfor
+N        Loop through input subsets
+         for ns = 1, nsub1
+N           Read data from disk
+            call gdsi_read( set1,
+     #                      cwlo1(ns),
+     #                      cwup1(ns),
+     #                      work1,
+     #                      maxdata,
+     #                      ndone,
+     #                      tid1(ns) )
+N           Show progress
+            call stabar( 0.0, float( ntotal ), float( icount ) +
+     #         float( ndone ) * float( ns ) / float( nsub1 ) )
+N           ADD data
+            if (name(:3) .eq. 'SUM' .and. clip)
+            then
+N              Clip the data
+               call clipper( cutoff(1), cutoff(2), work1, work1,
+     #            work1, ndone, blank )
+            cif
+N           Loop through data in buffer
+            for nd = 1, ndone
+N              BLANK value ?
+               if (work1(nd) .ne. blank)
+               then
+N                 Add value
+                  work2(nd,1) = work2(nd,1) + work1(nd) * weights(ns)
+N                 Add weight
+                  work2(nd,2) = work2(nd,2) + weights(ns)
+               cif
+            cfor
+         cfor
+N        Initialize pointers
+         call initptr( flo2,
+     #                 fup2,
+     #                 flo1,
+     #                 fup1,
+     #                 subdim,
+     #                 ndone,
+     #                 icount )
+N        Outside frame of input subset
+         while (outsideptr( ip, np ))
+N            Loop over output subsets
+             for ns = 1, maxsub2
+N               Fill with blanks
+                call setnfblank( work2(ip+1,ns), np )
+             cfor
+         cwhile
+N        Inside frame of box
+         while (insideptr( ip, np ))
+N           Average ?
+            if (name(:4) .eq. 'MEAN')
+            then
+N              Loop over this line
+               for nd = 1, np
+N                 Defined ?
+                  if (work2(ip+nd,2) .gt. 0.0)
+                  then
+N                    Calculate average
+                     work2(ip+nd,1) = work2(ip+nd,1) / work2(ip+nd,2)
+                  else
+N                    make it BLANK
+                     work2(ip+nd,1) = blank
+                  cif
+               cfor
+            cif
+N           Add
+            if (name(:3) .eq. 'SUM')
+            then
+N              Loop over this line
+               for nd = 1, np
+N                 Defined ?
+                  if (work2(ip+nd,2) .eq. 0.0)
+                  then
+N                    make it BLANK
+                     work2(ip+nd,1) = blank
+                  cif
+               cfor
+            cif
+         cwhile
+N        Loop to write output data
+         for ns = 1, nsub2
+N           write results to disk
+            call gdsi_write( set2,
+     #                       cwlo2(ns),
+     #                       cwup2(ns),
+     #                       work2(1,ns),
+     #                       ndone,
+     #                       ndone,
+     #                       tid2(ns) )
+N           Find running minimum and maximum
+            call minmax3( work2(1,ns),
+     #                    ndone,
+     #                    datamin(ns),
+     #                    datamax(ns),
+     #                    nblank(ns),
+     #                    mcount(ns) )
+         cfor
+      until (icount .eq. ntotal)
+N     Update the header
+      call wminmax( set2,
+     #              subset2,
+     #              datamin,
+     #              datamax, 
+     #              nblank,
+     #              nsub2,
+     #              1 )
+N     Quit communication via HERMES
+      call finis
+C
+C     End of program MEAN
+C
+      stop
+      end

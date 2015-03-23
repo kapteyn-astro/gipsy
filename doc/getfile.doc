@@ -1,0 +1,31 @@
+
+Script:       getfile
+
+Purpose:      Retrieves a file from the GIPSY source server.
+
+Category:     MANAGEMENT
+
+File:         getfile.csh
+
+Author:       K.G. Begeman
+
+Use:          getfile.csh filename
+
+Description:  You have to follow the following 3 steps to obtain
+              a file from the GIPSY source server.
+              1. Goto the directory in the GIPSY tree where the file
+              resides (i.e. cd $gip_tsk for compile.c and cd
+              $gip_exe for compile).
+              2. Type $gip_sys/getfile.csh filename to retrieve
+              filename in the current directory. If the file already
+              exists, it will be renamed to filename.old
+              3. Check whether the file arrived. The script cannot
+              check this. If the file has extension csh or it is a 
+              binary executable, it will be made executable.
+
+Example:      To obtain $gip_exe/stat
+              cd $gip_exe
+              $gip_sys/getfile.csh stat
+
+Updates:      Jan 25, 1993: KGB, Document created.
+

@@ -1,0 +1,113 @@
+c#>irc_nonlin.dc2
+c Subroutine:	irc_nonlin.
+c
+c Purpose:	Corrects raw data for nonlinearity and detector noise.
+c
+c Category:	IRAS.
+c
+c File:		irc_nonlin.shl.
+c
+c Author:	Do Kester
+c
+c Use:
+c	IRC_NONLIN ( detnr  	input		INTEGER
+c		      raw    	in/out		REAL
+c		      nraw	input		INTEGER
+c		      satsec 	input		INTEGER
+c		      bias )	input		REAL
+c	detnr    detector number (IRASES p II-12/3)
+c	raw      First word address for input values.
+c	nraw     Total nr of raw this call
+c	satsec   satcal modulo 100 for coherent noise of det 5
+c	bias	 'Arbitrary' offset w.r.t. compressed data
+c
+c Description:
+c	 IRC_NONLIN corrects the data in array RAW for nonlinearity of the
+c	feedback resister IRASES p VI-4.  For detectors 5, 19 and 43 coherent
+c	detector noise is subtracted according to IRASES p VI-3.  The data in
+c	RAW are replaced with the corrected ones.
+c
+c Externals:
+c -
+c
+c References:
+c	Former routine name: CRNLIN.
+c
+c Updates:
+c	90 Oct  5 Sjag Steensma; Adapt for GIPSY,
+c	890109  Timo Prusti, unification of versions
+c       871006  WvO, Declared: real raw(*)
+c
+c#<
+c@ subroutine irc_nonlin( integer, real, integer, integer, real )
+
+       subroutine irc_nonlin ( detnr, raw, nraw, satsec, bias )
+
+       integer   	detnr, nraw, satsec
+       real      	raw(nraw), bias
+
+c c1 data number voltage conversion IRASES p VI-1 & p II-23
+       real          	C1
+       parameter   	( C1    = 125e-6 )
+c spikes in det 19 and 43 pos. and neg.
+       real          	SP19, SP43P, SP43N
+       parameter   	( SP19  = 13.6, SP43P =  3.2, SP43N =  1.7 )
+       integer 		izzzse
+
+        integer 	ofstep(62), kr, ks, dis
+        real    	gain(62), sj, vtia, wave(0:15)
+
+c Data statements for gain and ofstep IRASES p II-12&13
+        data gain /26.6, 24.6, 25.4, 24.1, 26.2, 25.9, 24.7,
+     &             21.2, 20.2, 21.3, 21.1, 21.3, 23.1, 21.0, 21.3,
+     &             12.3, 11.8, 11.3, 13.1, 11.7, 11.8, 11.9,
+     &             14.2, 14.8, 15.5, 14.3, 14.2, 15.3, 13.9, 14.5,
+     &             20.8, 20.8, 22.6, 20.8, 21.0, 20.7, 20.8, 18.9,
+     &             15.2, 15.7, 14.7, 16.1, 13.9, 14.8, 15.3, 15.4,
+     &             14.5, 14.0, 14.4, 14.1, 14.2, 14.3, 14.4, 13.8,
+     &             22.9, 27.3, 26.2, 27.6, 26.8, 26.9, 26.8, 26.5/
+        data ofstep /3*3,4,2,4,3*3,4,4*3,2*4,3,8*4,3,4,3,2*4,
+     &       6*3,4,3,2*4,3,4,3,4,2*3,4,3,4,2,2*3,4*4,3,4,2*3,2*4/
+c data for the waveform of det 5
+        data wave /-2.09,  0.06, -1.90, -0.39, -2.32,
+     &             -3.76, -3.81, -3.87, -4.08,  0.84,  4.75,
+     &              5.77,  6.34,  5.51, -0.92, -0.09/
+
+
+c commandable offset level IRASES p II-21
+        sj = (ofstep(detnr) - 4) * 0.0178
+
+        for kr = 1, nraw
+c non-linearity correction IRASES p VI-4
+            vtia = c1 * raw(kr) / gain(detnr) - sj
+            raw(kr) = raw(kr) * ( 1 + vtia * ( 2.49841 + vtia * 
+     $      	( 0.1286127 - vtia * 0.00517339 ))) / 
+     $		( 1 + 1.55671 * vtia ) - bias
+        cfor
+
+c removal of coherent detector noise IRASES p VI-3
+        select detnr
+        case 19
+c spike on data pt 9 of each sec (sample rate = 16)
+          for kr = 9, nraw, 16
+            raw(kr) = amax1( (raw(kr+1) + raw(kr-1)) / 2, 
+     #			raw(kr) - sp19 )
+          cfor
+        case 43
+c positive spike on 9 and negative on 10 ( rate = 16 )
+          for kr = 9, nraw, 16
+            raw(kr) = raw(kr) - sp43p
+            ks = kr + 1
+            raw(ks) = raw(ks) + sp43n
+          cfor
+        case 5
+c coherent noise of 0.25 Hz (sample rate = 4)
+          dis = satsec * 4
+          for kr = 1, nraw
+            raw(kr) = raw(kr) - wave(mod( dis + kr, 16 ))
+          cfor
+        other
+        cselect
+
+        return
+        end

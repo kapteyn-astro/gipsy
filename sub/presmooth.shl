@@ -1,0 +1,850 @@
+      INTEGER FUNCTION PRESMOOTH( APsetin, APsubin, 
+     #                            oldbeam, oldPA, newbeam, newPA, 
+     #                            fitsize, cutoffratio, 
+     #                            decim, tol, epsilon, clip, 
+     #                            conbeam, conPA, 
+     #                            scalefac, APgridspac )
+
+C-----------------------------------------------------------------------
+C#>            presmooth.dc2
+C
+CFunction:     PRESMOOTH
+C
+CPurpose:      Calculate convolution function parameters for use in 
+C              smoothing to a bigger (rotated) beam and determine 
+C              scale factor to be able to preserve definition of 
+C              brightness temperature.
+C
+CFiles:        presmooth.shl
+C
+CAuthor:       M. Vogelaar
+C
+CCategory:     CONVOLUTION
+C
+CUse:          INTEGER PRESMOOTH( APsetin,    IN     CHARACTER*(*)
+C                                 APsubin,    IN     INTEGER
+C                                 oldbeam,    IN     REAL ARRAY
+C                                 oldPA,      IN     REAL
+C                                 newbeam,    IN/OUT REAL ARRAY
+C                                 newPA,      IN/OUT REAL        
+C                                 fitsize,    IN     INTEGER ARRAY
+C                                 cutoffratio IN     REAL
+C                                 decim       IN     INTEGER ARRAY
+C                                 tol         IN     REAL
+C                                 epsilon     IN     REAL
+C                                 clip        IN     REAL
+C                                 conbeam     OUT    REAL ARRAY
+C                                 conPA       OUT    REAL 
+C                                 scalefac    OUT    REAL 
+C                                 APgridspac  OUT    REAL ARRAY )
+C    
+C              PRESMOOTH:
+C               0 : Pre-smoothing was successful
+C              -1 : Could not find major axis in AP header (BMMAJ)
+C              -2 : Could not find minor axis in AP header (BMMAJ)
+C              -3 : Could not find pos. angle of beam in AP header (BMPA)           
+C              -4 : Unsuitable combination of new beam parameters!
+C              -5 : Axis units not equal!
+C              -6 : Cannot convert units to seconds of arc!
+C              -7 : No grid spacings in header of this AP set!
+C              -8 : Convolution region too big!
+C              -9 : Central max. of AP is not a maximum!
+C              -10: No convergence after max. steps
+C              -11: AP too small for this convolution
+C
+C           APsetin      Name of antenna pattern to be 
+C                        used in iteration towards new beam.
+C           APsubin      Subset level of AP. Only one level
+C                        is allowed and the subset must be 2-dim.
+C           oldbeam      Major and minor axis of AP in seconds of arc.
+C                        If the values are blank on input, the items
+C                        (BMMAJ, BMMIN) are examined in the AP header 
+C                        on subset level. If nothing could be found, 
+C                        the pre smoothing is aborted and error (-1) 
+C                        or (-2) is returned.
+C           oldPA        Rotation angle of the major axis of the beam 
+C                        wrt. the North in the direction of the East.
+C                        The angle is in degrees. If on input, the value 
+C                        is blank, the routine tries to find a value 
+C                        (BMPA) in the header on given subset level.
+C                        If nothing could be found, error (-3) is returned.
+C           newbeam      Major and minor axes in seconds of arc of the
+C                        wanted beam. If the iteration stops, the convol-
+C                        ved beam is fitted once again but with the angle
+C                        as free parameter. The results are values close
+C                        to the new beam and are consistent with the 
+C                        results obtained with the program ANTPAT. These
+C                        results are returned in 'newbeam' and 'newPA'
+C                        so that they can be used to update the header of 
+C                        a smoothed AP.
+C           newPA        Rotation angle of the major axis of the wanted beam
+C                        wrt. the North in the direction of the East.
+C                        The angle is in degrees.
+C           fitsize      Minimum size of convolved part of AP used in
+C                        a least squares fit.
+C           cutoffratio  This is the ratio of the gaussian function values
+C                        at central point and a point x on the boundary.
+C                        It determines the border of your gaussian 
+C                        convolution function. Outside this border all
+C                        function values are set to zero.
+C           decim        Integer regrid values. The values are needed in the
+C                        fitting process to be able to compare the wanted 
+C                        properties of a smoothed AP with the values obtained
+C                        by other fitting programs (like QFIT, ANTPAT).
+C           tol          Fitting of the new beam stops when successive 
+C                        iterations fail to produce a decrement in
+C                        reduced chi-squared less than TOLERANCE. If its value
+C                        is less than the minimum tolerance possible, it will 
+C                        be set to this value. This means that maximum accuracy 
+C                        can be obtained by setting TOLERANCE=0.0.
+C           epsilon      Stop iteration if calculated new beam sizes
+C                        and wanted beam sizes don't differ more than epsilon
+C                        (percentage!).
+C           clip         When fitting the convolved AP in the iteration,
+C                        take only values greater than 'clip'. If 'clip'
+C                        equals blank on input, fit all AP data.
+C           conbeam      Output convolution beam (major x minor) in seconds 
+C                        of arc
+C           conPA        Angle of the major axis (N->E) 
+C                        in degrees of the 2-dim gaussian that 
+C                        represents the convolution function.
+C           scalefac     After iteration, a scale factor is calculated with
+C                        which the smoothed image can be rescaled so that 
+C                        the definition of brightness temperature is preserved.
+C           APgridspac   The grid spacings used to construct the convolution
+C                        function inside this routine are returned so that 
+C                        the same convolution function can be constructed in
+C                        the calling environment.
+C
+C
+CDescription:  The function PRESMOOTH is used to determine the 
+C              convolution function needed to convolve data
+C              in 'APsetin' in order to get a beam with the characte-
+C              ristics defined in 'newbeam'. To preserve the definition
+C              of brightness temperature, a scale factor is determined.
+C              
+C              The sizes in 'fitsize' determine the size of the
+C              AP box used in the lsqfit routine. The sizes 
+C              cannot exceed 255 and must be odd. If they are 
+C              not odd, 1 is subtracted in size. The minimum size
+C              is 3. 
+C              If the initial 'fitsize' is not allowed, the routine
+C              generates a warning and will adjust the value.
+C              If the values are accepted, they will be used to 
+C              determine the AP box to read the data. The routine
+C              assumes that the position of the centre of the AP 
+C              is always 0,0
+C              In most cases the beam of the original distribution
+C              can be found in the header of the AP ('oldbeam')
+C              If the values are blank on input, the routine tries
+C              to find the beam in the header of 'APsetin', but
+C              if this fails, it will return with an error. The 
+C              errors are:
+C              PRESMOOTH = -1; could not find major axis in AP
+C                              header (BMMAJ)
+C              PRESMOOTH = -2; could not find minor axis in AP
+C                              header (BMMAJ)
+C              PRESMOOTH = -3; could not find pos. angle of beam
+C                              in AP header (BMPA)
+C              
+C              If the old  beam is known and the wanted beam is
+C              known ('newbeam'), the routine calculates the con-
+C              volution parameters. If it cannot find a suitable
+C              set, a warning is given and error (-4) is returned.
+C              The AP cannot be used in the iteration if the units
+C              of the axes are not equal to each other, error (-5)
+C              or if the units cannot be converted to 'ARCSEC',
+C              error (-6), or if the grid spacing cannot be found
+C              in the AP header (CDELT#), error (-7).
+C              If the wanted new beam needs a convolution function
+C              greater than 255*255 pixels, a warning is generated
+C              and error (-8) is returned. 
+C              If the central maximum of the AP is not a maximum,
+C              the routine is aborted with error (-9) and a 
+C              warning. The central value is only compared with the
+C              image value at the right and the image value at
+C              above the central position. If the AP is not big
+C              enough for a convolution function, abort and return
+C              with error (-11).
+C              It is possible that there is no convergence within 
+C              'maxiters' steps. Abort with an error (-10) message 
+C              in that case.
+C
+CNotes:        The function FUNC and the subroutine
+C              DERV must be defined outside this function.
+C
+CUpdates:      Sep 10, VOG, Document created
+C
+C#<
+C-----------------------------------------------------------------------
+C@ integer function presmooth( character, integer, real, 
+C@                             real, real, real, integer,
+C@                             real, integer, real, real, 
+C@                             real, real, real, real, real )
+C
+
+N     Maximum dimensions of the 'FITBOX'
+      INTEGER            maxfitX, maxfitY
+      PARAMETER        ( maxfitX = 255, maxfitY = 255 )
+N     Prevent iteration forever           
+      INTEGER            maxiters
+      PARAMETER        ( maxiters = 50 )
+
+
+      CHARACTER*80       APsetin
+      INTEGER            APsubin
+      INTEGER            fitsize(2)
+N     Relative tolerance
+      REAL               tol
+N     Variable to control the iteration
+      REAL               epsilon
+      REAL               clip
+N     Axes of gaussian beams
+      REAL               oldbeam(2), newbeam(2), conbeam(2)
+      REAL               oldPA, newPA, conPA
+N     Ratio gauss f(0)/f(x) where x is boundary
+      REAL               cutoffratio
+      INTEGER            decim(2)
+N     Scale factor
+      REAL               scalefac
+      REAL               APgridspac(2)
+
+
+      INTEGER            GDSC_GRID
+      INTEGER            GDSC_NDIMS
+      INTEGER            GDSC_SIZE
+      INTEGER            GDSC_FILL
+      INTEGER            CONVPARS
+N     Performs convolution
+      INTEGER            CONVOLVE
+      INTEGER            AXUNIT
+      INTEGER            FACTOR
+      INTEGER            LSQFIT
+      INTEGER            FILLGAUSS2D
+      REAL               confie( maxfitX * maxfitY )
+      INTEGER            k, m
+      INTEGER            APsetdim
+      INTEGER            r1, r2
+      INTEGER            Nx, Ny
+      INTEGER            APlower(2), APupper(2)
+      INTEGER            APcwlo, APcwhi
+      INTEGER            tid
+      INTEGER            totpixels, pixelsdone
+      REAL               valc, valx, valy
+      REAL               blank
+      REAL               nconbeam(2)
+      REAL               fittedbeam(2)
+N     Beam widths major, minor axis from header
+      DOUBLE PRECISION   Dbmmin, Dbmmaj
+N     Position angle of major axis of beam (header)
+      DOUBLE PRECISION   Dbmpa
+      INTEGER            subcount
+      INTEGER            storecount 
+      INTEGER            closer
+N     Array holding presmoothed AP's     
+      REAL               APimageIN( maxfitX*maxfitY )
+      REAL               APimageOUT( maxfitX*maxfitY )
+      CHARACTER*120      txt
+      CHARACTER*20       cunit(2)
+      DOUBLE PRECISION   Dcfact
+      REAL               unittoarc
+      DOUBLE PRECISION   APcdelt( 2 )
+      INTEGER            toplevel
+      INTEGER            maxconv
+      INTEGER            NconX, NconY
+      INTEGER            lenX, lenY
+N     Contains coordinates of data points in fit
+      REAL               XYdat( 2, maxfitX * maxfitY )
+N     Dimension of fit      
+      INTEGER            Xdim      
+N     Contains data points
+      REAL               Zdat( maxfitX * maxfitY )
+N     Contains weights for data points
+      REAL               Wdat( maxfitX * maxfitY )
+N     Number of data points   
+      INTEGER            Ndat
+N     Inp: Initial est. Outp: fitted parms                        
+      REAL               parlist( 7 )
+N     Estimates of errors in fitted parameters
+      REAL               errlist( 7 )
+N     Logical mask free/fixed parameters
+      INTEGER            Mpar( 7 )
+N     Number of parameters
+      INTEGER            Npar
+N     Maximum number of iterations
+      INTEGER            its
+N     Mixing parameter
+      REAL               lab
+N     (Unused) function option for FUNC & DERV
+      INTEGER            fopt     
+      LOGICAL            decimate
+N     Angle of latitude axis wrt (N->E)
+      DOUBLE PRECISION   APcrotaD
+      REAL               APcrota
+N     Convert degrees to radians
+      REAL               degtorad
+N     Convert radians to degrees
+      REAL               radtodeg
+      LOGICAL            nomore
+      INTEGER            pos
+      INTEGER            axcountAP(2)
+      REAL               gridspac(2)
+      INTEGER            x, y
+      REAL               posang
+      INTEGER            NxAP, NyAP
+      INTEGER            devnum
+      REAL               M1, M2
+      INTEGER            APflo(2), APfhi(2)
+
+
+N     Statement function to determine one dim. pos.
+      IMPOS(x,y) = 1 + NxAP*(y-APlower(2))+(x-APlower(1))
+C----------------------------------------------------------------------
+C     This part determines the corners of a part of the AP
+C     so that the centre of this part is the central pixel of
+C     the AP, and that, after convolution, the inner Nx*Ny
+C     (Note: Nx and Ny are odd) pixels are convolved. 
+C----------------------------------------------------------------------
+
+      CALL SETFBLANK( blank )
+      CALL STATUS( 'Reading AP data' )
+      toplevel = 0
+      maxconv  = maxfitX*maxfitY
+N     Convert degrees to radians
+      degtorad = ATAN(1.0) / 45.0
+N     Convert radians to degrees
+      radtodeg = 45.0 / ATAN(1.0)
+
+C     Get the max lengths of the axes of the subset
+      APsetdim = GDSC_NDIMS( APsetin, 0 )
+      r1 = 0
+      CALL GDSC_RANGE( APsetin, APsubin, APcwlo, APcwhi, r1 )
+      m = 0
+      FOR k = 1, APsetdim
+        r1 = 0
+        r2 = GDSC_GRID( APsetin, k, APsubin, r1 )
+        IF (r1 .LT. 0)
+        THEN
+N         It must be one of the subset axes
+          m = m + 1          
+          r1 = 0
+          r2 = 0
+          APflo(m) = GDSC_GRID( APsetin, k, APcwlo, r1 )
+          APfhi(m) = GDSC_GRID( APsetin, k, APcwhi, r2 )
+          IF (r1 .LT. 0)
+          THEN
+            APflo(m) = 0
+          CIF
+          IF (r2 .LT. 0)
+          THEN
+            APfhi(m) = 0
+          CIF
+          WRITE( txt, '(''Presmooth: Axis from '', I4, '' to '', I4)')
+     #           APflo(m), APfhi(m)
+          CALL ANYOUT(16, txt)
+          r2 = 0          
+          axcountAP(m) = GDSC_SIZE( APsetin, k, r2 )
+          IF (r2 .GE. 0)
+          THEN
+            WRITE( txt, '(''Presmooth: Size of AP axis: '', I6)' )
+     #             axcountAP(m)
+            CALL ANYOUT(16, txt)
+            r2 = AXUNIT( APsetin, k, cunit(m) )
+            IF (r2 .NE. 0)
+            THEN
+              txt = 'Presmooth: Units first axis not in header? '//
+     #              'Assuming 0.0'
+              CALL ANYOUT( 8, txt )
+              cunit(m) = 'DEGREE'
+            CIF
+            r1 = 0
+            r2 = 0
+            WRITE( txt, '(''CDELT'', I1)' ) k
+            CALL GDSD_RDBLE( APsetin, txt, toplevel, APcdelt(m), r1 )
+            IF (r1 .LT. 0)
+            THEN
+              txt = 'Presmooth: No grid spacings in ' // 
+     #              'header of this AP set!'
+              CALL ANYOUT( 8, txt )
+              PRESMOOTH = -7
+              RETURN
+            CIF
+          ELSE
+            CALL ANYOUT(3, 'Presmooth: Cannot find axis size!')
+          CIF
+        CIF
+      CFOR
+
+
+      IF ( cunit(1) .NE. cunit(2) )
+      THEN 
+        txt = 'Presmooth: Axis units not equal!'
+        CALL ANYOUT( 8, txt )
+        PRESMOOTH = -5
+        RETURN
+      ELSE
+        r1 = FACTOR( cunit(1), 'ARCSEC', Dcfact )
+        IF (r1 .NE. 0)
+        THEN
+          txt = 'Presmooth: Cannot convert units to seconds of arc'
+          CALL ANYOUT( 8, txt )
+          PRESMOOTH = -6
+          RETURN
+        ELSE 
+          unittoarc = SNGL( Dcfact )
+        CIF        
+      CIF
+
+      
+      IF (fitsize(1) .LT. 3)
+      THEN 
+        CALL ANYOUT( 3, 'Presmooth: Size of AP box (in x) was ' //
+     #                  'smaller than 3')
+        fitsize(1) = 3
+      CIF
+      IF (fitsize(2) .LT. 3)
+      THEN 
+        CALL ANYOUT( 3, 'Presmooth: Size of AP box (in y) was ' //
+     #                  'smaller than 3')
+        fitsize(2) = 3
+      CIF
+
+N     Maximum allowed values        
+      Nx      = MIN( fitsize(1), maxfitX, axcountAP(1) )
+      Ny      = MIN( fitsize(2), maxfitY, axcountAP(2) )            
+N     Sizes have to be odd      
+      IF ( MOD( Nx, 2 ) .EQ. 0 ) 
+      THEN 
+        CALL ANYOUT(16, 'Presmooth: Size of AP box [in x] was even')
+        Nx = Nx - 1
+      CIF
+      IF ( MOD( Ny, 2 ) .EQ. 0 ) 
+      THEN 
+        CALL ANYOUT(16, 'Presmooth: Size of AP box [in y] was even')
+        Ny = Ny - 1
+      CIF          
+      Nx = MAX( 3, Nx )
+      Ny = MAX( 3, Ny )
+      WRITE( txt, '(''Presmooth: Size of box in AP to fit beam: '',
+     #       I3, '' x'', I3 )' ) Nx, Ny
+      CALL ANYOUT( 16, txt )
+
+
+      IF (oldbeam(1) .EQ. blank)
+      THEN
+	r1 = 0
+        CALL GDSD_RDBLE( APsetin,'BMMAJ',APsubin, Dbmmaj, r1 )
+        IF ( r1 .LT. 0 )
+        THEN
+          txt = 'Presmooth: Major axis length not in AP header'
+          PRESMOOTH = -1
+          RETURN
+        ELSE
+          oldbeam(1) = SNGL(Dbmmaj)      
+        CIF
+      CIF 
+      IF (oldbeam(2) .EQ. blank)     
+      THEN
+N       Minor axis:        
+        r1 = 0
+        CALL GDSD_RDBLE( APsetin, 'BMMIN', APsubin, Dbmmin, r1 )
+        IF ( r1 .LT. 0 )
+        THEN
+          txt = 'Presmooth: Minor axis length not in APheader'
+          PRESMOOTH = -2
+          RETURN
+        ELSE
+          oldbeam(2) = SNGL(Dbmmin)
+        CIF
+      CIF
+      IF (oldPA .EQ. blank)
+      THEN
+N       Position angle from header in degrees 
+        r1 = 0
+        CALL GDSD_RDBLE( APsetin, 'BMPA', APsubin, Dbmpa, r1 )
+        IF ( r1 .LT. 0 )
+        THEN
+          txt = 'Presmooth: Position angle not in AP header'
+          PRESMOOTH = -3
+          RETURN
+        ELSE
+          oldPA = SNGL(Dbmpa)      
+        CIF      
+      CIF
+
+      WRITE( txt, '(''Presmooth: major x minor axis (arcsec): '', 
+     #       F7.3, F7.3, '' PA='', F6.2, ''deg (N->E)'' )' ) 
+     #       oldbeam(1), oldbeam(2), oldPA
+      CALL ANYOUT( 16, txt )
+
+
+N     Does AP have rotation wrt north?
+      r1 = 0
+N     Get angle of latitude axis (wrt north)
+      CALL GDSD_RDBLE( APsetin, 'CROTA2', toplevel, APcrotaD, r1 )
+      IF (r1 .LT. 0)
+      THEN
+        CALL ANYOUT( 8, 'Presmooth: No rotation of latitude in ' //
+     #                 'AP header, 0 is assumed.')
+        APcrota = 0.0
+      ELSE
+        APcrota = SNGL( APcrotaD )
+      CIF
+
+        
+
+      r1 = CONVPARS( oldbeam, newbeam, oldPA+90.0, 
+     #               newPA+90.0, conbeam, conPA )
+      IF (r1 .LT. 0) 
+      THEN
+        txt = 'Presmooth: Unsuitable combination of new beam'//
+     #        ' parameters, try other combination.'
+        CALL ANYOUT( 8, txt )
+        PRESMOOTH = -4
+        RETURN
+      CIF
+
+C----------------------------------------------------------------------     
+C     Calculations are done in arcsecs and degrees. A conversion
+C     is needed to convert header units to arcsecs. 
+C----------------------------------------------------------------------
+ 
+      gridspac(1) = SNGL( APcdelt(1) ) * unittoarc
+      gridspac(2) = SNGL( APcdelt(2) ) * unittoarc
+      WRITE( txt, '(''Presmooth: Gridspacing AP: '', 
+     #       F6.2, '' x'', F6.2,
+     #       '' arcsec'' )' ) gridspac(1), gridspac(2)
+      CALL ANYOUT( 16, txt ) 
+N     Set amplitude to zero and normalize gaussian             
+      r1 = FILLGAUSS2D( conbeam, conPA-APcrota, maxconv, gridspac, 
+     #                  1.0, cutoffratio, 1,
+     #                  NconX, NconY, confie )
+      IF (r1 .LT. 0)
+      THEN
+        txt = 'Presmooth: Convolution region too big! ' // 
+     #        'Please select smaller beam.'
+        CALL ANYOUT( 8 , txt )
+        PRESMOOTH = -8
+        RETURN
+      CIF 
+
+C----------------------------------------------------------------------
+C     Use this Nx, Ny and NconX, NconY to determine the smallest 
+C     possible sizes of the AP sub structure we are going to read.
+C     The must be some room for growth, so instead of NconXY/2 use
+C     NconXY/2 + 10
+C----------------------------------------------------------------------
+
+N     Determine the corners of the AP to read        
+      APupper(1) = NconX/2 + 10 + (Nx - 1) / 2
+      APlower(1) = -1.0 * APupper(1)
+      APupper(2) = NconY/2 + 10 + (Ny - 1) / 2
+      APlower(2) = -1.0 * APupper(2)
+      IF ( ( APupper(1) .GT. APfhi(1) ) .OR.
+     #     ( APupper(2) .GT. APfhi(2) ) .OR.
+     #     ( APlower(1) .LT. APflo(1) ) .OR.
+     #     ( APlower(2) .LT. APflo(2) ) )
+      THEN
+        txt = 'Presmooth: AP too small for this convolution function'
+        CALL ANYOUT( 8 , txt )
+        PRESMOOTH = -11
+        RETURN
+      CIF
+N     Make coordinate words for these corners
+      APcwlo = GDSC_FILL( APsetin, APsubin, APlower )
+      APcwhi = GDSC_FILL( APsetin, APsubin, APupper )        
+      tid = 0
+      NxAP = APupper(1)-APlower(1)+1
+      NyAP = APupper(2)-APlower(2)+1
+      totpixels = NxAP * NyAP
+N     Read data in given box
+      CALL GDSI_READ( APsetin, APcwlo, APcwhi, APimageIN,
+     #                totpixels, pixelsdone, tid )
+N     Value of the central pixel        
+      valc = APimageIN( IMPOS(0,0) )
+N     Value of the pixel right of central pixel
+      valx = APimageIN( IMPOS(0,1) )
+N     Value of the pixel above the central pixel 
+      valy = APimageIN( IMPOS(1,0)   )
+      IF ( valc .LT. (1.0 - 0.0001) )        
+      THEN 
+        txt = 'Presmooth: Warning! Central value AP not equal to 1'
+        CALL ANYOUT( 3, txt )
+      CIF
+
+
+
+C     *** Start of iteration ***
+
+      nconbeam(1) = conbeam(1)
+      nconbeam(2) = conbeam(2)
+      subcount    = 0
+      storecount  = 0
+      closer      = 1
+      decimate = ((decim(1) .NE. blank) .AND. (decim(2) .NE. blank))
+
+
+      REPEAT      
+        r1 = CONVOLVE( confie, NconX, NconY, APimageIN, 
+     #                 APimageOUT, NxAP, NyAP )
+N       Something went wrong in CONVOLVE subroutine     
+        IF (r1 .NE. 0) 
+        THEN
+          txt = 'Presmooth: Cannot convolve with these parameters'
+          CALL ANYOUT( 8, txt )
+N         Generate warning with reason of abortion
+          CALL ERRORMESS( 'CONVOLVE', r1, 1 )           
+        CIF
+C----------------------------------------------------------------------        
+C       Get estimates beam sizes of just smoothed AP:
+C----------------------------------------------------------------------
+N       Value of the central pixel        
+        valc = APimageOUT( IMPOS(0,0) )
+N       Value of the pixel right of central pixel
+        valx = APimageOUT( IMPOS(1,0) )
+N       Value of the pixel above the central pixel 
+        valy = APimageOUT( IMPOS(0,1)   )
+C----------------------------------------------------------------------
+C       Abort the program if the AP data is not in the right format.
+C----------------------------------------------------------------------
+        IF ( (valy/valc .GT. 1.0) .OR. (valx/valc .GT. 1.0) .OR.
+     #       (valy/valc .LT. 0  ) .OR. (valx/valc .LT. 0  )  )
+        THEN
+          txt = 'Presmooth: Central max. is not a maximum.'
+          CALL ANYOUT( 8, txt )
+          PRESMOOTH = -9
+          RETURN
+        CIF          
+C----------------------------------------------------------------------
+C       Construct array for use in least squares fit of gaussian.
+C       In XYdat you put the x,y coordinates wrt. the origin (all in
+C       arcsec). Ydat contains the values and Wdat the weights. 
+C       The term 'fitbox' is introduced to indicate a part of the 
+C       AP used for a LSQ-fit. If the user wanted decimation, the 
+C       fitbox is decimated also by setting appropriate weights to 
+C       zero. The reason for this is to be consistent with the 
+C       program ANTPAT, which would otherwise give different results 
+C       for the smoothed output AP.
+C----------------------------------------------------------------------
+N       One dimensional position fitbox
+        pos  = 0
+N       Sizes of fitbox          
+        lenX = (Nx - 1 ) / 2
+        lenY = (Ny - 1 ) / 2          
+        
+        FOR j = -lenY, lenY
+          FOR i = -lenX, lenX
+            value = APimageOUT( IMPOS(i,j) ) 
+N           Position in the fit array              
+            pos = pos + 1
+            XYdat(1, pos) = i * ABS(gridspac(1))
+            XYdat(2, pos) = j * ABS(gridspac(2))
+N           Scale the data              
+            IF (value .EQ. blank)
+            THEN
+              Zdat(pos) = 0.0
+              Wdat(pos) = 0.0 
+            ELSE
+              IF ( ABS(value) .LT. 0.00001 )
+              THEN
+                Zdat(pos) = 0.0
+                Wdat(pos) = 0.0                 
+              ELSE
+                Zdat(pos) = value / valc                 
+                Wdat(pos) = 1.0 
+N               If there is a clip level, clip the data
+                IF ((clip .NE. blank) .AND. (value .LT. clip))
+                THEN
+                  Wdat(pos) = 0.0
+                CIF
+              CIF
+            CIF
+            IF decimate 
+            THEN
+              IF ( .NOT. ( ( mod(i, decim(1) ) .EQ. 0 ) .AND.
+     #                     ( mod(j, decim(2) ) .EQ. 0 ) )  )
+              THEN
+                Wdat(pos) = 0.0 
+              CIF
+            CIF
+          CFOR
+        CFOR
+        Ndat = pos
+        Npar = 7
+N       Amplitude of scaled data is 1.0
+        parlist(1) = 1.0
+N       Major axis, first time estimate
+        parlist(2) = newbeam(1)
+N       Minor axis          
+        parlist(3) = newbeam(2)
+N       X-pos origin          
+        parlist(4) = 0.0
+N       Y-pos origin          
+        parlist(5) = 0.0          
+C----------------------------------------------------------------------
+C       Parlist number 6 is the angle of the major axis with respect
+C       to the X-axis, corrected for the map PA.
+C----------------------------------------------------------------------
+        parlist(6) = (newPA - APcrota + 90.0) * degtorad
+        parlist(7) = 0.0
+N       Fixed: Mpar = 0, free: Mpar <> 0
+        Mpar(1) = 0
+        Mpar(2) = 1
+        Mpar(3) = 1
+        Mpar(4) = 0
+        Mpar(5) = 0
+        Mpar(6) = 0 
+        Mpar(7) = 0
+        Xdim    = 2
+        its     = 75
+        lab     = 0.01
+        fopt    = 0
+        r1 = LSQFIT( XYdat, Xdim, Zdat, Wdat, Ndat, parlist, 
+     #               errlist, Mpar, Npar, tol, its, lab, fopt )
+        IF (r1 .LT. 0)
+        THEN
+          CALL ANYOUT( 8, 'Presmooth: LSQ-FIT routine aborted' )
+          CALL ERRORMESS( 'LSQFIT', r1, 1 )
+        CIF
+C----------------------------------------------------------------------
+C       Determine the real major and minor axes, and the difference
+C       of fitted axes and wanted axes (all squared). Use these 
+C       differences to construct the new convolution beam.
+C----------------------------------------------------------------------
+
+        fittedbeam(1) = parlist(2)
+        fittedbeam(2) = parlist(3)
+        M1 = newbeam(1) - fittedbeam(1)
+        M2 = newbeam(2) - fittedbeam(2)
+
+        nomore = (closer .GE. maxiters) 
+        IF nomore
+        THEN
+          WRITE( txt, '(''Presmooth: Fit aborted after '', I4, 
+     #           '' iterations.'' )' ) maxiters
+          CALL ANYOUT( 8, txt )
+          PRESMOOTH = -10
+          RETURN
+        CIF
+
+N       No more iterations needed?          
+        nomore = nomore .OR. (
+     #         ( ABS(M1)/newbeam(1) .LT. (epsilon / 100.0) )
+     #          .AND.
+     #         ( ABS(M2)/newbeam(2) .LT. (epsilon / 100.0) )
+     #         ) 
+        IF nomore
+        THEN
+C----------------------------------------------------------------------
+C         Now we have the new beam we wanted. For these parameters
+C         do a final fit but now with free position angle. To avoid
+C         problems with fitting with an extra free parameter, 
+C         increase the tolerance.
+C----------------------------------------------------------------------
+N         Make angle a free parameter            
+          Mpar(6) = 1
+N         Increase tolerance!
+          tol     = 0.05         
+          r1      = LSQFIT( XYdat, Xdim, Zdat, Wdat, Ndat, parlist, 
+     #                      errlist, Mpar, Npar, tol, its, lab, fopt)
+N         Give message if fit was not successful     
+          IF (r1.LT. 0)
+          THEN
+            txt = 'Presmooth: LSQ-FIT with free position angle aborted' 
+            CALL ANYOUT( 8, txt )
+          ELSE
+C----------------------------------------------------------
+C           Return the values of the convolution beam.
+C           Fill function in calling environment (so that
+C           angle can be corrected for the rotation angle
+C           of the image that has to be smoothed.
+C----------------------------------------------------------
+            conbeam(1) = nconbeam(1)
+            conbeam(2) = nconbeam(2)
+            conPA = conPA - 90.0
+            APgridspac(1) = gridspac(1)
+            APgridspac(2) = gridspac(2)
+          CIF
+C----------------------------------------------------------------------
+C         Show the results:
+C----------------------------------------------------------------------
+          devnum = 3
+          CALL ANYOUT( devnum, ' ' )
+          txt = ' ***RESULTS***'
+          CALL ANYOUT( devnum, txt )
+          CALL ANYOUT( devnum, ' ' )
+          scalefac = 1.0 / valc
+          WRITE( txt, '(''Automatic scale factor: '', F10.4)')
+     #           scalefac
+          CALL ANYOUT( devnum, txt )
+          WRITE( txt, '(''Convolution parameters: Major, minor: '',
+     #           F7.3, '', '', F7.3 )' ) conbeam(1), conbeam(2)
+          CALL ANYOUT( devnum, txt )
+N         Angle now (N->E) again
+          IF (conPA .LT. 0.0)
+          THEN 
+            conPA = conPA + 180.0
+          CIF
+          WRITE( txt, '(''                        P.a. (N->E) : '',
+     #           F7.2, '' degrees'')' ) conPA
+          CALL ANYOUT( devnum, txt )
+          CALL ANYOUT( devnum, ' ' )
+          CALL ANYOUT( devnum, 'Fit parameters of aerial beam ' //
+     #                'after smoothing the input AP: ' )
+          CALL ANYOUT( devnum, ' ' )
+          WRITE( txt, '(''Major axis (FWHM): '',F9.2,'' +-'',F9.3)')
+     #           parlist(2), errlist(2)
+          txt = txt( 1:NELC(txt) ) // ' arcsec'
+          CALL ANYOUT( devnum, txt )
+          WRITE( txt, '(''Minor axis (FWHM): '',F9.2,'' +-'',F9.3)')
+     #           parlist(3), errlist(3)       
+          txt = txt( 1:NELC(txt) ) // ' arcsec'
+          CALL ANYOUT( devnum, txt )
+N         P.a wrt. North & corrected for AP rotation
+          posang = parlist(6) * radtodeg - 90.0 + APcrota
+          WRITE( txt, '(''Position angle   : '',F9.2,'' +-'',F9.3)')
+     #           posang, errlist(6)*radtodeg
+          txt = txt( 1:NELC(txt) ) // ' degrees (N->E)'
+          CALL ANYOUT( devnum, txt )
+          txt = '===============================================' //
+     #          '=============================='
+          CALL ANYOUT( devnum, txt )
+          CALL ANYOUT( devnum, ' ' )                        
+N         Store these results for header update
+          newbeam(1) = parlist(2)
+          newbeam(2) = parlist(3)
+          newPA      = posang            
+        ELSE
+C----------------------------------------------------------------------      
+C         More iterations are needed so make new beam.
+C----------------------------------------------------------------------
+
+          nconbeam(1) = nconbeam(1) + M1
+          nconbeam(2) = nconbeam(2) + M2       
+          WRITE(txt, '(''Iter. '',I3,'' uses '',F6.2,'','',F6.2, 
+     #       '' and yields '', F6.2,'','',F6.2, '' with '', 
+     #       I3, '' x'', I3, '' box'' )' ) 
+     #       closer, nconbeam(1), nconbeam(2), 
+     #       fittedbeam(1), fittedbeam(2), NconX, NconY
+          CALL ANYOUT( 16, txt )
+          txt = txt( 1:54 )
+          CALL STATUS( txt )
+          closer = closer + 1
+          r1 = FILLGAUSS2D( nconbeam, conPA-APcrota,maxconv,gridspac, 
+     #                      1.0, cutoffratio, 1, NconX,NconY, confie )
+          IF (r1 .LT. 0)
+          THEN
+            txt = 'Presmooth: Convolution region too big! ' // 
+     #            'Please select smaller beam.'
+            CALL ANYOUT( 8 , txt )
+            PRESMOOTH = -8
+            RETURN
+          CIF
+        CIF
+      UNTIL nomore
+N     All ok?
+      PRESMOOTH = 0
+      RETURN
+      END
+
+
