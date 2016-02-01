@@ -33,18 +33,20 @@ Updates:       Dec  6, 1989: WZ, migrated to C
 #<
 
 @ integer function gdsc_ndims( character, 
-@                              integer )
+@                              integer*8 )
 
 ----------------------------------------------------------------------------*/
 
 #include    "gdsparams.h"
 #include    "gdserrors.h"
 #include    "gdsd_basic.h"
+#include    "gds___unpack.h"
 
 fint   gdsc_ndims_c( fchar    set,                       /* name of set     */
-                     fint    *coord_word )               /* coordinate word */
+                     fint8    *coord_word )               /* coordinate word */
 {
-   fint        coord, err = 0, iax, ndim = 0, naxis;
+   fint8		coord;
+	fint        err = 0, iax, ndim = 0, naxis;
    gds_coord   *setinfo;
    
    (void)gds_rhed(set, &setinfo);
