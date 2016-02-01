@@ -1993,7 +1993,7 @@ static char *syntax[] = {
 #define	MAXSYNTAX	(sizeof(syntax)/sizeof(char *))
 
 fint dcdpos_c( fchar   set    ,
-               fint   *subset ,
+               fint8   *subset ,
                fchar   string ,
                double *pos    ,
                fint   *option )
