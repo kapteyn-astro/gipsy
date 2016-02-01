@@ -41,10 +41,10 @@ Updates:       Dec 18, 1989: WZ, migrated to C
                Mar 24, 1994: JPT, modified to cooperate with GDS server.
 #<
 
-@ integer function gdsc_word( character, 
+@ integer*8 function gdsc_word( character,
 @                             integer,
-@                             integer,
-@                             integer,
+@                             integer*8,
+@                             integer*8,
 @                             integer )
 
 ----------------------------------------------------------------------------*/
@@ -52,21 +52,27 @@ Updates:       Dec 18, 1989: WZ, migrated to C
 #include    "gdsparams.h"
 #include    "gdserrors.h"
 #include    "gdsd_basic.h"
+#include    "gds___unpack.h"
+#include    "gds___pack.h"
+#include    "presentn.h"
 
-fint   gdsc_word_c( fchar     set,                /* name of set            */
+fint8   gdsc_word_c( fchar     set,                /* name of set            */
                     fint     *axnum,              /* axis number            */
-                    fint     *grid,               /* grid value to be added */
-                    fint     *coord_word,         /* coordinate word        */
+                    fint8     *grid,               /* grid value to be added */
+                    fint8     *coord_word,         /* coordinate word        */
                     fint     *err )               /* error code             */
 {
-   fint        grid_1, iax, ix, new_coord, naxis;
+   fint8       grid_1, new_coord;
+   fint        iax, ix, naxis;
    gds_coord   *setinfo;
 
    (void)gds_rhed(set, &setinfo);
    iax = *axnum - 1;
    naxis = setinfo->naxis;
    grid_1 = gds___unpack_c( set, coord_word, &iax, err ); /* axis defined ? */
+   anyoutf(1, "DEBUG: gdsc_word_c: grid_1 = %ld", grid_1);
    if ( *err != GDS_COORDUNDEF ) {         /* yes: make new coordinate word */
+	   anyoutf(1, "DEBUG: gdsc_word_c: undefined ");
       for ( ix = 0; ix < naxis; ix++ ) { 
          if ( ix != iax ) {                      /*from grids on other axes */
             grid_1 = gds___unpack_c( set, coord_word, &ix, err );
@@ -75,10 +81,13 @@ fint   gdsc_word_c( fchar     set,                /* name of set            */
       }
    } else {
       new_coord = *coord_word;             /* no: take this coordinate word */
+      anyoutf(1, "DEBUG: gdsc_word_c: defined, use coord woord %ld", new_coord);
       *err = 0;
    }
    if ( presentn_c( grid ) ) {                       /* add new grid values */
+	  anyoutf(1, "DEBUG: gdsc_word_c: pack, add %ld in axis %d to %ld", *grid, *axnum, new_coord);
       gds___pack_c( set, &new_coord, grid, &iax, err );
+      anyoutf(1, "DEBUG: gdsc_word_c: new_coord=%ld, err=%d", new_coord, *err);
    }
    return( new_coord );
 }
