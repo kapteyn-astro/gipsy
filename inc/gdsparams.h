@@ -22,7 +22,7 @@ Updates:    Mar 14, 1994: JPT, New document.
 
 
 /* ------------------------------- CONSTANTS ----------------------------- */
-#define GDS_VERSION     3            /* version number                     */
+#define GDS_VERSION     2            /* version number                     */
 #define GDS_SUBVERSION  0            /* sub-version number                 */
 #define GDS_MAXDIM     20            /* maximum number of dimensions       */
 #define GDS_KEYLEN     21            /* descriptor key length (bytes)      */
