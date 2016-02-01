@@ -998,7 +998,7 @@ Updates:      Aug  1, 1989: KGB, original document.
 
 */
 
-fint fiedo_c( float *data, fint *nop, float *results, fint *id )
+fint fiedo_c( float *data, fint8 *nop, float *results, fint *id )
 /*
  * data       dimensions: <npar> * <nop>
  * nop        number of operations
@@ -1006,7 +1006,8 @@ fint fiedo_c( float *data, fint *nop, float *results, fint *id )
  * id         id of generated code
  */
 {
-   int iop, i, c, o, opc;
+	fint8 iop;
+   int i, c, o, opc;
    fiedbl a, b, r;
    fiedbl params[MAXPAR], arg[MAXARG];
    
