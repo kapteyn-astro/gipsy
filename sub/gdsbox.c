@@ -78,10 +78,10 @@ Updates:      Feb  1, 1990: KGB, Document created.
 
 Fortran to C interface:
 
-@ subroutine gdsbox( integer   ,
-@                    integer   ,
+@ subroutine gdsbox( integer*8   ,
+@                    integer*8   ,
 @                    character ,
-@                    integer   ,
+@                    integer*8   ,
 @                    integer   ,
 @                    character ,
 @                    character ,
@@ -122,10 +122,10 @@ typedef struct {                                     /* struct for axis names */
 static char buf[MAXBUFLEN];                          /* buffer for input text */
 static char mes[MAXMESLEN];                     /* buffer for default message */
 
-void gdsbox_c( fint  *blo    ,
-               fint  *bhi    ,
+void gdsbox_c( fint8  *blo    ,
+               fint8  *bhi    ,
                fchar  set    ,
-               fint  *subset ,
+               fint8 *subset ,
                fint  *defmode,
                fchar  keyword,
                fchar  message,
@@ -140,8 +140,8 @@ void gdsbox_c( fint  *blo    ,
    fint    boxerr = 0;                          /* internal GDSBOX error code */
    fint    cerror = 0;                  /* error return for GDSC_xxx routines */
    fint    cp = 0;                                /* keyword CPOS= was used ? */
-   fint    cwhi;                           /* upper coordinate word of subset */
-   fint    cwlo;                           /* lower coordinate word of subset */
+   fint8    cwhi;                           /* upper coordinate word of subset */
+   fint8    cwlo;                           /* lower coordinate word of subset */
    fint   *ghi;                     /* buffer for upper right grids of subset */
    fint   *glo;                      /* buffer for lower left grids of subset */
    fint    k;                                              /* general counter */
@@ -174,7 +174,7 @@ void gdsbox_c( fint  *blo    ,
    while (k < subdim) {                           /* loop to get subdim grids */
       (void) gdsc_grid_c( set, &axnum, subset, &cerror );
       if (cerror) {           /* grid not defined in subset cw, so we want it */
-         char  *ptr;
+         //char  *ptr;
          fchar name;
 
          cerror = 0;
@@ -184,7 +184,7 @@ void gdsbox_c( fint  *blo    ,
          gdsc_name_c( name, set, &axnum, &cerror );          /* get axis name */
          name.a[MAXNAMLEN] = 0;                         /* trailing zero byte */
          strcpy( axs[k].ctype, name.a );               /* save full axis name */
-         ptr = strtok( name.a, "- " );                  /* truncate axis name */
+         //ptr = strtok( name.a, "- " );                  /* truncate axis name */
          k += 1;                                                  /* increase */
       }
       axnum += 1;                                         /* next axis number */
@@ -224,16 +224,16 @@ void gdsbox_c( fint  *blo    ,
                char num[20];               /* local buffer to generate number */
 
                if (k) {
-                  sprintf( num, ",%4d", blo[k] );        /* generate number */
+                  sprintf( num, ",%4ld", blo[k] );        /* generate number */
                } else {
-                  sprintf( num, " [%4d", blo[k] );       /* generate number */
+                  sprintf( num, " [%4ld", blo[k] );       /* generate number */
                }
                strcat( mes, num );                      /* concatenate number */
             }
             for (k = 0; k < subdim; k++) {                     /* subset loop */
                char num[20];               /* local buffer to generate number */
 
-               sprintf( num, ",%4d", bhi[k] );             /* generate number */
+               sprintf( num, ",%4ld", bhi[k] );             /* generate number */
                strcat( mes, num );                      /* concatenate number */
             }
             strcat( mes, "]" );                    /* closing default bracket */
@@ -242,9 +242,9 @@ void gdsbox_c( fint  *blo    ,
                char num[20];               /* local buffer to generate number */
 
                if (k) {
-                  sprintf( num, ",%4d", blo[k] );          /* generate number */
+                  sprintf( num, ",%4ld", blo[k] );          /* generate number */
                } else {
-                  sprintf( num, " [CPOS=%4d", blo[k] );    /* generate number */
+                  sprintf( num, " [CPOS=%4ld", blo[k] );    /* generate number */
                }
                strcat( mes, num );                      /* concatenate number */
             }
@@ -254,9 +254,9 @@ void gdsbox_c( fint  *blo    ,
                char num[20];               /* local buffer to generate number */
 
                if (k) {
-                  sprintf( num, ",%4d", bhi[k] );          /* generate number */
+                  sprintf( num, ",%4ld", bhi[k] );          /* generate number */
                } else {
-                  sprintf( num, " [D %4d", bhi[k] );       /* generate number */
+                  sprintf( num, " [D %4ld", bhi[k] );       /* generate number */
                }
                strcat( mes, num );                      /* concatenate number */
             }
@@ -375,9 +375,9 @@ void gdsbox_c( fint  *blo    ,
                      char num[20];         /* local buffer to generate number */
 
                      if (k) {
-                        sprintf( num, ",%4d", blo[k] );    /* generate number */
+                        sprintf( num, ",%4ld", blo[k] );    /* generate number */
                      } else {
-                        sprintf( num, " [%4d", blo[k] );   /* generate number */
+                        sprintf( num, " [%4ld", blo[k] );   /* generate number */
                      }
                      strcat( mes, num );                /* concatenate number */
                   }
@@ -636,7 +636,7 @@ void gdsbox_c( fint  *blo    ,
             for (k = 0; k < subdim; k++) {
                blo[k] = NINT( pos[k] );
                bhi[k] = NINT( pos[k+subdim] );
-               sprintf( mes, "%.*s from %5d to %5d", MAXNAMLEN, axs[k].ctype, blo[k], bhi[k] );
+               sprintf( mes, "%.*s from %5ld to %5ld", MAXNAMLEN, axs[k].ctype, blo[k], bhi[k] );
                anyout_c( showdev, tofchar( mes ) );
             }
             break;
