@@ -49,21 +49,24 @@ Updates:       Dec  5, 1989: WZ, migrated to C
                Feb 21, 1995: JPT, return -1 in case of error.
 #<
 
-@ integer function gdsc_fill( character, 
-@                             integer, 
-@                             integer )
+@ integer*8 function gdsc_fill( character,
+@                             integer*8,
+@                             integer*8 )
 
 ----------------------------------------------------------------------------*/
 
 #include    "gdsparams.h"
 #include    "gdserrors.h"
 #include    "gdsd_basic.h"
+#include    "gds___unpack.h"
+#include    "gds___pack.h"
 
-fint   gdsc_fill_c( fchar     set,               /* set name                */
-                    fint     *subset,            /* coord.word to be filled */
-                    fint     *grids )            /* array with grid values  */
+fint8   gdsc_fill_c( fchar     set,               /* set name                */
+                    fint8     *subset,            /* coord.word to be filled */
+                    fint8     *grids )            /* array with grid values  */
 {
-   fint        iax, coord_word, err = 0, grid, nax_in = 0, naxis;
+   fint        iax, err = 0, nax_in = 0, naxis;
+   fint8 coord_word, grid;
    gds_coord   *setinfo;
 
    (void)gds_rhed(set, &setinfo);
