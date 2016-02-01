@@ -47,12 +47,13 @@ Updates:       Dec  5, 1989: WZ, migrated to C
 #include    "gipsyc.h"
 #include    "gds___unpack.h"
 
-fint   gdsc_grid_c( fchar     set,                           /* name of set */
+fint8   gdsc_grid_c( fchar     set,                           /* name of set */
                     fint     *axnum,                         /* axis number */
-                    fint     *coord_word,                    /* coord.word  */
+                    fint8     *coord_word,                    /* coord.word  */
                     fint     *err )                          /* error code  */
 {
-   fint        grid, iax;
+   fint        iax;
+   fint8       grid;
    
    iax = *axnum - 1;
    grid = gds___unpack_c( set, coord_word, &iax, err );
