@@ -1,12 +1,12 @@
 gdsserver.src
 
-        Copyright (c) Kapteyn Laboratorium Groningen 2009
+        Copyright (c) Kapteyn Astronomical Institute, Groningen 2015
         All Rights Reserved.
 
 Name:         gdsserver.src
-Creator:      hans
-Host:         plato
-Date:         Feb 19, 2009
+Creator:      breddels
+Host:         jansky
+Date:         Apr 13, 2015
 Contents:     Makefile.uti gdsserver.doc gdsserver.make acceptor.h alloc.h
               clientmgr.h descr.h file.h gdsdescr.h inetsocket.h
               linkedlist.h mainloop.h object.h primes.h request.h
@@ -157,10 +157,12 @@ extern void NewClient(int fd, contype conn);
 extern void DeleteClient(object client);
 extern int PutBuffer(object client, void *data, int nbytes);
 extern int PutFint(object currid, fint srctype, fint *data, int nelems);
+extern int PutFint8(object currid, fint srctype, fint8 *data, int nelems);
 extern int PutFloat(object currid, fint srctype, float *data, int nelems);
 extern int PutDouble(object currid, fint srctype, double *data, int nelems);
 extern int GetBuffer(object currid, void *data, int nbytes);
 extern int GetFint(object currid, fint dsttype, fint *data, int nelems);
+extern int GetFint8(object currid, fint dsttype, fint8 *data, int nelems);
 extern int GetFloat(object currid, fint dsttype, float *data, int nelems);
 extern int GetDouble(object currid, fint dsttype, double *data, int nelems);
 extern int ClientBuffer(object client, int size);
@@ -292,7 +294,7 @@ typedef struct {
 /* --- this point in the structure must align to a multiple of 8 bytes --- */
    double ax_origin[MAXDIM];   /* axis origins */
    fint   ax_size  [MAXDIM];   /* axis sizes */
-   fint   ax_factor[MAXDIM+1]; /* factors */
+   fint8   ax_factor[MAXDIM+1]; /* factors */
    fint   naxis;          /* number of axes */
    fint   nitems;         /* number of descriptor items (from version 2.2) */
    fint   reserved2;      /* not currently used */
@@ -749,6 +751,28 @@ extern int PutFint(object currid, fint srctype, fint *data, int nelems)
 }
 
 /* ========================================================================== */
+/*                                 PutFint8                                    */
+/* -------------------------------------------------------------------------- */
+/*  PutFint8 appends 'nelems' of 'data' to the client buffer and adjusts
+ *  the client's 'datalen'.
+ */
+extern int PutFint8(object currid, fint srctype, fint8 *data, int nelems)
+{
+   client current=(client)currid;
+   int nbytes=nelems*sizeof(fint8);
+   int minsize=current->datalen+nbytes;
+   
+   if (minsize > current->bufsize) (void)ClientBuffer(currid, minsize);
+   memcpy(current->buffer+current->datalen, data, nbytes);
+   if (((client)currid)->itype != srctype) {
+      int i;
+      fint8 *idata=(fint8*)(current->buffer+current->datalen);
+      for (i=0; i<nelems; i++) idata[i] = swapfint8(idata[i]);
+   }
+   current->datalen = minsize;
+   return 0;
+}
+/* ========================================================================== */
 /*                                 PutFloat                                   */
 /* -------------------------------------------------------------------------- */
 /*  PutFloat appends 'nelems' of 'data' to the client buffer and adjusts
@@ -840,6 +864,30 @@ extern int GetFint(object currid, fint dsttype, fint *data, int nelems)
    if (((client)currid)->itype != dsttype) {
       int i;
       for (i=0; i<nelems; i++) data[i] = swapfint(data[i]);
+   }
+   return nelems;
+}
+
+/* ========================================================================== */
+/*                                 GetFint8                                    */
+/* -------------------------------------------------------------------------- */
+/*  GetFint obtains 'nelems' of 'data' from the client buffer and adjusts
+ *  the client's 'datadone' and 'datalen'.
+ */
+extern int GetFint8(object currid, fint dsttype, fint8 *data, int nelems)
+{
+   client current=(client)currid;
+   int nbytes = nelems*sizeof(fint8);
+   int maxsize=current->datadone;
+   
+   if (nbytes>maxsize) nbytes = maxsize;
+   nelems = nbytes/sizeof(fint8);
+   memcpy(data, current->buffer+current->datalen, nbytes);
+   current->datadone -= nbytes;
+   current->datalen += nbytes;
+   if (((client)currid)->itype != dsttype) {
+      int i;
+      for (i=0; i<nelems; i++) data[i] = swapfint8(data[i]);
    }
    return nelems;
 }
@@ -1514,7 +1562,7 @@ extern int DescrRhead(object client, object dscobj)
    
    PutDouble(client, current->ftype, head->ax_origin, MAXDIM);
    PutFint(client, current->itype, head->ax_size, MAXDIM);
-   PutFint(client, current->itype, head->ax_factor, MAXDIM+1);
+   PutFint8(client, current->itype, head->ax_factor, MAXDIM+1);
    PutFint(client, current->itype, &head->naxis, 1);
    return 0;
 }
@@ -1532,7 +1580,7 @@ extern int DescrWhead(object client, object dscobj)
    
    GetDouble(client, current->ftype, head->ax_origin, MAXDIM);
    GetFint(client, current->itype, head->ax_size, MAXDIM);
-   GetFint(client, current->itype, head->ax_factor, MAXDIM+1);
+   GetFint8(client, current->itype, head->ax_factor, MAXDIM+1);
    GetFint(client, current->itype, &head->naxis, 1);
    /* bitmap should be updated here */
    CHANGED(current)
