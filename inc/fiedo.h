@@ -1,1 +1,1 @@
-extern fint fiedo_c(float *,fint *,float *,fint *);
+extern fint fiedo_c(float *,fint8 *,float *,fint *);

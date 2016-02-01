@@ -1,1 +1,1 @@
-extern fint dcdpos_c(fchar,fint *,fchar,double *,fint *);
+extern fint dcdpos_c(fchar,fint8 *,fchar,double *,fint *);

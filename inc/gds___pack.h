@@ -1,1 +1,1 @@
-extern void gds___pack_c(fchar,fint *,fint *,fint *,fint *);
+extern void gds___pack_c(fchar,fint8 *,fint8 *,fint *,fint *);

@@ -1,1 +1,1 @@
-extern fint gdsc_fill_c(fchar,fint *,fint *);
+extern fint8 gdsc_fill_c(fchar,fint8 *,fint8 *);

@@ -22,8 +22,8 @@ Updates:    Mar 14, 1994: JPT, New document.
 
 
 /* ------------------------------- CONSTANTS ----------------------------- */
-#define GDS_VERSION     2            /* version number                     */
-#define GDS_SUBVERSION  2            /* sub-version number                 */
+#define GDS_VERSION     3            /* version number                     */
+#define GDS_SUBVERSION  0            /* sub-version number                 */
 #define GDS_MAXDIM     20            /* maximum number of dimensions       */
 #define GDS_KEYLEN     21            /* descriptor key length (bytes)      */
 #define GDS_NAMLEN    256            /* set name length (bytes)            */
@@ -32,9 +32,11 @@ Updates:    Mar 14, 1994: JPT, New document.
 typedef struct {
    double origin[GDS_MAXDIM];
    fint   size  [GDS_MAXDIM];
-   fint   factor[GDS_MAXDIM+1];
+   fint8   factor[GDS_MAXDIM+1];
    fint   naxis;
    char   name  [GDS_NAMLEN];
 } gds_coord;                            /* used by RHED and WHED functions */
 
 #endif /* _gdsparams_h_ */
+
+

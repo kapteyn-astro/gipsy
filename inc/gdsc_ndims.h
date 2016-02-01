@@ -1,1 +1,1 @@
-extern fint gdsc_ndims_c(fchar,fint *);
+extern fint gdsc_ndims_c(fchar,fint8 *);

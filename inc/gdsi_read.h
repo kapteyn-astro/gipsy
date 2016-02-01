@@ -1,1 +1,1 @@
-extern void gdsi_read_c(fchar,fint *,fint *,float *,fint *,fint *,fint *);
+extern void gdsi_read_c(fchar,fint8 *,fint8 *,float *,fint8 *,fint8 *,fint *);

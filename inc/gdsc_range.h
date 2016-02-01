@@ -1,1 +1,1 @@
-extern fint gdsc_range_c(fchar,fint *,fint *,fint *,fint *);
+extern fint gdsc_range_c(fchar,fint8 *,fint8 *,fint8 *,fint *);
