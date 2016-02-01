@@ -452,7 +452,7 @@ Updates:       Nov 30,  1992: VOG, Document created.
 /* Variables for input */
 
 static fchar    Setin;              /* Name of input set */
-static fint     subin[MAXSUBSETS];  /* Subset coordinate words */
+static fint8     subin[MAXSUBSETS];  /* Subset coordinate words */
 static fint     nsubs;              /* Number of input subsets */
 static fint     axnum[MAXAXES];     /* Array of size MAXAXES containing the */
                                     /* axes numbers.  The first elements (upto */
@@ -481,10 +481,10 @@ static fint     setdim;             /* Dimension of set. */
 
 /* Box and frame related */
 
-static fint     flo[MAXAXES];       /* Low  edge of frame in grids */
-static fint     fhi[MAXAXES];       /* High edge of frame in grids */
-static fint     blo[MAXAXES];       /* Low  edge of box in grids */
-static fint     bhi[MAXAXES];       /* High edge of box in grids */
+static fint8     flo[MAXAXES];       /* Low  edge of frame in grids */
+static fint8     fhi[MAXAXES];       /* High edge of frame in grids */
+static fint8     blo[MAXAXES];       /* Low  edge of box in grids */
+static fint8     bhi[MAXAXES];       /* High edge of box in grids */
 static fint     boxopt;             /* The different options are: */
                                     /*  1 box may exceed subset size */
                                     /*  2 default is in BLO */
@@ -501,7 +501,7 @@ static float    image[MAXBUF];      /* Buffer for read routine. */
 /* Miscellaneous */
 
 static fchar    Key, Mes;
-static fint     setlevel = 0;       /* To get header items at set level. */
+static fint8     setlevel = 0;       /* To get header items at set level. */
 static float    blank;              /* Global value for BLANK. */
 static char     message[MAXWIDTH];  /* All purpose character buffer. */
 static bool     agreed;             /* Loop guard. */
@@ -913,18 +913,18 @@ static void printminmax( fchar Formstr, int formlen )
    fchar   Prusingstr;
    double  val;
    char    displaystr[MAXWIDTH];
-   fint    l;
+   /*fint    l;*/
   
    fmake( Prusingstr, STRLEN );
    (void) sprintf( displaystr, "Min: " );
    val = (double) datamin;  
-   l = printusing_c( Formatstr, &val, Prusingstr );   
+   /*l = */printusing_c( Formatstr, &val, Prusingstr );
    (void) sprintf( displaystr,
                    "%.*s%.*s  Max: ",
                    strlen(displaystr), displaystr,
                    formlen, Prusingstr.a );
    val = (double) datamax;
-   l = printusing_c( Formatstr, &val, Prusingstr );
+   /*l = */printusing_c( Formatstr, &val, Prusingstr );
    (void) sprintf( displaystr,
                   "%.*s%.*s    Number of blanks: %d  ",
                    strlen(displaystr), displaystr,
@@ -940,25 +940,26 @@ static void printminmax( fchar Formstr, int formlen )
 }
                       
 
-static void displaydata( fint *dlo, fint *dhi, int subdim, int setdim,
+static void displaydata( fint8 *dlo, fint8 *dhi, int subdim, int setdim,
                          fint tablen, fint tabwidth, fchar Formstr, int formlen,
                          int maxcols )
 /*------------------------------------------------------*/
 /* Re permutate the grids, read in data line by line.   */
 /*------------------------------------------------------*/
 {
-   fint    cwlo, cwhi;
+   fint8    cwlo, cwhi;
    fint    tid = 0;
-   fint    maxIObuf = MAXBUF;
-   fint    pixelsread;
+   fint8    maxIObuf = MAXBUF;
+   fint8    pixelsread;
    int     i, j;   
    char    displaystr[MAXWIDTH];
    fchar   Prusingstr;
    fint    l;
    int     cols;
-   fint    rlo[MAXAXES], rhi[MAXAXES];
+   fint8    rlo[MAXAXES], rhi[MAXAXES];
    int     x, y;
    int     scr = 3;
+   fint pixelsread_fint;
 
 
 
@@ -1007,7 +1008,9 @@ static void displaydata( fint *dlo, fint *dhi, int subdim, int setdim,
             return;
          }
       }
-      minmax3_c( image, &pixelsread, &datamin, &datamax, &nblanks, &datacount );
+      /* WARNING: we assume here that we don't do more than 2^31-1 at once */
+      pixelsread_fint = (fint)pixelsread;
+      minmax3_c( image, &pixelsread_fint, &datamin, &datamax, &nblanks, &datacount );
       if (subdim >= 2) {
          (void) sprintf( displaystr, "%*d: ", OFFSET-2, y );
       } else {
@@ -1027,7 +1030,7 @@ static void displaydata( fint *dlo, fint *dhi, int subdim, int setdim,
 
 
 
-static void rebox( fint *blo, fint *bhi, int subdim, int setdim, 
+static void rebox( fint8 *blo, fint8 *bhi, int subdim, int setdim,
                    fint tablen, fint tabwidth, fchar Formstr, int formlen,
                    int maxcols )
 /*---------------------------------------------------*/
@@ -1036,7 +1039,7 @@ static void rebox( fint *blo, fint *bhi, int subdim, int setdim,
 /*---------------------------------------------------*/
 {
    int       i;
-   fint      dlo[MAXAXES], dhi[MAXAXES];
+   fint8      dlo[MAXAXES], dhi[MAXAXES];
    int       len, lenleft;
    int       width, widthleft;
    int       dimstart;
@@ -1051,7 +1054,7 @@ static void rebox( fint *blo, fint *bhi, int subdim, int setdim,
    dimstart = MYMIN( subdim, 2 );
    (void) sprintf( message, "Set: %.*s", nelc_c(Setin), Setin.a );
    for (i = dimstart; i < setdim; i++) {
-      (void) sprintf( message, "%.*s %s=%d ",
+      (void) sprintf( message, "%.*s %s=%ld ",
                       strlen(message), message,
                       axname[i], blo[i] );
    }
@@ -1121,6 +1124,7 @@ MAIN_PROGRAM_ENTRY
    showdev = 3;
    Key     = KEY_INSET;
    Mes     = MES_INSET;
+   anyoutC(1, "starting...");
    nsubs   = gdsinp_c( Setin,      /* Name of input set. */
                        subin,      /* Array containing subsets coordinate words. */
                        &maxsubs,   /* Maximum number of subsets in 'subin'.*/
@@ -1139,13 +1143,15 @@ MAIN_PROGRAM_ENTRY
                                    /* the operation for each subset. */
                        &class,     /* Class 1 is for applications which repeat */
                        &subdim );  /* Dimensionality of the subsets for class 1 */
+   anyoutf(1, "n subs = %d", nsubs);
    setdim  = gdsc_ndims_c( Setin, &setlevel );
 
    /*-------------------------------*/
    /* Determine edges of this frame */
    /*-------------------------------*/
+   anyoutf(1, "determine edges");
    {
-      fint cwlo, cwhi;                          /* Local coordinate words */
+      fint8 cwlo, cwhi;                          /* Local coordinate words */
       int  m;
       r1 = 0;
       gdsc_range_c( Setin, &subin[0], &cwlo, &cwhi, &r1 );
@@ -1167,6 +1173,7 @@ MAIN_PROGRAM_ENTRY
    /*-----------------------------*/
    /* Get the axis names          */
    /*-----------------------------*/
+   anyoutf(1, "get axis names");
    for (i = 0; i < setdim; i++) {
       fchar   Ctype;
       Ctype.a = axname[i];
@@ -1180,16 +1187,19 @@ MAIN_PROGRAM_ENTRY
    /*-------------------------------*/
    /* Prepare a box for INSET       */
    /*-------------------------------*/
+   anyoutf(1, "prepare box");
    boxopt  = 0;
    showdev = 3;
    dfault  = REQUEST;
    Key     = KEY_BOX;
    Mes     = MES_BOX;
+   anyoutf(1, "gdsbox start");
    gdsbox_c( flo, fhi, Setin, subin, &dfault, 
              Key, Mes, &showdev, &boxopt );
 
+   anyoutf(1, "gdsbox done");
    for (i = 0; i < setdim; i++) {
-      (void) sprintf( message, "max. range %s: flo=%d  fhi=%d", axname[i], flo[i], fhi[i] );
+      (void) sprintf( message, "max. range %s: flo=%ld  fhi=%ld", axname[i], flo[i], fhi[i] );
       anyoutC( 16, message );
    }
    
@@ -1270,6 +1280,8 @@ MAIN_PROGRAM_ENTRY
    /* to construct a reasonable default format.                   */
    /*-------------------------------------------------------------*/   
 
+   anyoutf(1, "construct default format");
+
    datamin = blank;
    datamax = blank;
    for (i = 0; i < nsubs; i++) {
@@ -1345,6 +1357,8 @@ MAIN_PROGRAM_ENTRY
    /*------------------------------------*/
    /* For scaling etc, use an expression */
    /*------------------------------------*/
+   anyoutf(1, "DEBUG: scaling stuff");
+
    {
       fint     numpars;
       fint     errpos;
@@ -1387,6 +1401,7 @@ MAIN_PROGRAM_ENTRY
    /* non subset axes.                                         */
    /*----------------------------------------------------------*/
 
+   anyoutf(1, "DEBUG: display dim part");
    datacount = 0;
    printuserid();     
    
@@ -1394,8 +1409,10 @@ MAIN_PROGRAM_ENTRY
    /* subsequent way. For each subset, the grids on the subset axis   */
    /* are calculated. */
    
+   anyoutf(1, "DEBUG: subset loop");
+
    for (subnr = 0; subnr < nsubs; subnr++) {
-      fint cwlo, cwhi;                          /* Local coordinate words */
+      fint8 cwlo, cwhi;                          /* Local coordinate words */
       int  m;
       r1 = 0;
       gdsc_range_c( Setin, &subin[subnr], &cwlo, &cwhi, &r1 );
@@ -1428,6 +1445,7 @@ MAIN_PROGRAM_ENTRY
       }
    }
    
+   anyoutf(1, "DEBUG: print minmax");
    printminmax( Formatstr, formlen );
    if (toasciiz) fclose( asciiptr );
    if (toprint) {
