@@ -18,9 +18,9 @@ File:          gdsc_range.c
 Author:        W. Zwitser
 
 Use:           GDSC_RANGE( SET,                    Input       character
-                           SUBSET,                 Input       integer
-                           CLOW,                   Output      integer
-                           CUPP,                   Output      integer
+                           SUBSET,                 Input       integer*8
+                           CLOW,                   Output      integer*8
+                           CUPP,                   Output      integer*8
                            ERROR )                 In/Out      integer
 
                SET           set name      
@@ -40,9 +40,9 @@ Updates:       Dec  5, 1989: WZ, migrated to C
 #<
 
 @ integer function gdsc_range( character, 
-@                              integer, 
-@                              integer, 
-@                              integer, 
+@                              integer*8,
+@                              integer*8,
+@                              integer*8,
 @                              integer )
 
 ----------------------------------------------------------------------------*/
@@ -50,17 +50,20 @@ Updates:       Dec  5, 1989: WZ, migrated to C
 #include    "gdsparams.h"
 #include    "gdserrors.h"
 #include    "gdsd_basic.h"
+#include "userfio.h"
 
 void  gdsc_range_c( fchar     set,           /* name of set                 */
-                    fint     *subset,        /* subset coordinate word      */
-                    fint     *c1,            /* lower left coordinate word  */
-                    fint     *c2,            /* upper right coordinate word */
+                    fint8     *subset,        /* subset coordinate word      */
+                    fint8     *c1,            /* lower left coordinate word  */
+                    fint8     *c2,            /* upper right coordinate word */
                     fint     *err )          /* error code                  */
 {
-   fint        iax, min, max, naxis, size;
+   fint        iax, naxis, size;
+   fint8       max, min;
    gds_coord *setinfo;
 
    (void)gds_rhed(set, &setinfo);
+   anyoutf(1, "range start: %lld %lld %lld\n", *subset, *c1, *c1);
    *c1 = *subset;
    *c2 = *subset;
    naxis = setinfo->naxis;
@@ -75,4 +78,5 @@ void  gdsc_range_c( fchar     set,           /* name of set                 */
          gds___pack_c( set, c2, &max, &iax, err );
       }
    }
+   anyoutf(1, "range %lld %lld %lld %lld %lld\n", min, max, *c1, *c2);
 }
