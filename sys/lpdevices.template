@@ -1,0 +1,6 @@
+# lpdevices (see: $gip_doc/lpdevices)
+#
+# l1psprinter
+#
+#*:l1psprinter:Printer in room ....:\
+#a2ps -1 -Pps1 -nd -nf -nH -l -ns %s:178:71

@@ -1,0 +1,50 @@
+# programmers.mgr
+#
+#       Copyright (c) Kapteyn Laboratorium Groningen 1992
+#       All Rights Reserved.
+#
+##>            programmers.doc
+#
+#Document:     programmers
+#
+#Purpose:      Maintains a list of all users who are allowed to
+#              install GIPSY software.
+#
+#Category:     MANAGEMENT
+#
+#File:         programmers.mgr
+#
+#Author:       K.G. Begeman
+#
+#Description:  Each privileged user has a one line entry in this file.
+#              This line has three fields, separated by colons (:).
+#              Field       Contents
+#                1         contains the logname of the user.
+#                2         mail address of user.
+#                3         full name of user.
+#
+#Updates:      Jun 20, 1991: KGB Document created.
+#
+##<
+#
+# Here are the wize guys
+#
+albrecht:albrecht@sron.rug.nl:Albrecht de Jonge
+begerman:kgb@astro.rug.nl:Kor G. Begeman
+danny:danny@astro.rug.nl:Danny Boxhoorn
+do:do@sron.rug.nl:Do Kester
+do:do@sron.rug.nl:Uwe Peppel
+do:do@sron.rug.nl:Wim van Oosterom
+freddy:freddy@astro.rug.nl:Fred Lahuis
+gipsy:gipsy@astro.rug.nl:Gipsy Manager
+kgb:kgb@astro.rug.nl:Kor G. Begeman
+kgb:kgb@rugrcx.rug.nl:Kor G. Begeman
+pjotr:pjotr@sron.rug.nl:Peter R. Roelfsema
+prusti:pjotr@sron.rug.nl:T. Prusti
+sicking:sicking@astro.rug.nl:F.J. Sicking
+terlouw:terlouw@astro.rug.nl:J.P. Terlouw
+terlouw:terlouw@astro.rug.nl:M.A.M. Ruiter
+vogelaar:vogelaar@astro.rug.nl:Martin Vogelaar
+zwitser:zwitser@astro.rug.nl:Wim Zwitser
+zwitser:zwitser@astro.rug.nl:T.J. Pearson
+susana:susana@astro.rug.nl:Susana Sanchez Exposito

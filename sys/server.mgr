@@ -1,0 +1,49 @@
+# server.mgr
+#
+#       Copyright (c) Kapteyn Laboratorium Groningen 1993
+#       All Rights Reserved.
+#
+##>            server.doc
+#
+#Document:     server
+#
+#Purpose:      This file contains the name (or address) of the gipsy
+#              server from which to obtain the sources. The file is
+#              also used by programme report (bug).
+#
+#Category:     MANAGEMENT
+#
+#File:         server.mgr
+#
+#Author:       K.G. Begeman
+#
+#Description:  If the local GIPSY site wants continued updates of the
+#              GIPSY library and GIPSY applications with the command
+#              $gip_exe/compile -update, then this file holds the information
+#              for compile how to obtain the updates.
+#              The following fields, separated by colons (':'), contain
+#              the following information:
+#
+#              Field        Meaning
+#                #1         Address of GIPSY File Server
+#                #2         Mail address of GIPSY File Server
+#                #3         pseudo-path to gip_root on GIPSY File Server
+#
+#              If you don't have a nameserver/mailserver which can translate
+#              the name of the GIPSY File Server, you should create a
+#              file `server' in the gip_loc directory with the internet
+#              addresses instead of the names, i.e.
+#              129.125.6.224:gipsy@[129.125.6.224]:/tha3/users/gipsy
+#
+#Updates:      May 22, 1992: KGB Document created.
+#              Feb  5, 1993: KGB Minor change in documentation.
+#              May 10, 1997: KGB Adapted for new server.
+#              Mar  9, 2001: JPT New server hostname.
+#
+
+##<
+#
+# Here comes the info:
+#
+gipsy.astro.rug.nl:gipsy@astro.rug.nl:/tha3/users/gipsy
+

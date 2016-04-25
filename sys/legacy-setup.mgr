@@ -1,0 +1,751 @@
+# setup.mgr
+#
+#       Copyright (c) Kapteyn Laboratorium Groningen 1992, 1997, 1999
+#       All Rights Reserved.
+#
+##>            setup.doc
+#
+#Document:     setup
+#
+#Purpose:      Describes the system dependent commands for compiling
+#              and installing GIPSY source files.
+#
+#Category:     MANAGEMENT
+#
+#File:         setup.mgr
+#
+#Author:       K.G. Begeman
+#
+#Description:  The file setup, which should reside in $gip_loc,
+#              contains the compiler options for compiling GIPSY
+#              sources for different architectures.
+#              Each architecture has one entry in $gip_loc/setup. Each
+#              entry consists of several fields, separated by colons.
+#              Each entry may be split into several lines by putting
+#              a backslash before each newline.
+#              The fields have the following meaning:
+#
+#              field  meaning
+#                #1   architecture.
+#                #2   name of C compiler.
+#                #3   C compiler options for installation.
+#                #4   default C compiler options for private use.
+#                #5   libraries to link with C main program.
+#                #6   name of Fortran compiler.
+#                #7   Fortran compiler options for installation.
+#                #8   default Fortran compiler options for private use.
+#                #9   libraries to link with Fortran main program.
+#                #10  command to compile assembler code.
+#                #11  command to archive objects.
+#                #12  command to remove objects from library.
+#                #13  maximum length of name in archive.
+#                #14  command to prepare archive for loader.
+#                #15  command to print symbol list name [optional].
+#                #16  options to compile with X11 includes etc. [optional].
+#                #17  options to link with X11 libraries etc. [optional].
+#                #18  options to link with X-Toolkit libraries etc. [optional].
+#
+#Notes:        1) For some commands it is necessary to know where to
+#                 place the file names on which it has to operate.
+#                 Therefore some symbols are defined which inform compile
+#                 where to place these names. The symbols recognized by
+#                 compile are:
+#
+#                 #source              source file for compiler
+#                 #object              object file
+#                 #library             library file
+#                 #executable          executable
+#
+#                 If it soes not matter where to place the file names,
+#                 don't put it in the command. compile will then append
+#                 the names to the command.
+#              2) You should copy the relevant parts of this file to
+#                 $gip_loc/setup. The install.csh script and $gip_exe/compile
+#                 will first look for $gip_loc/setup.`hostname`, and if not
+#                 present or if no entry is found for the current architecture
+#                 $gip_loc/setup will be searched. In $gip_sys/setup.mgr
+#                 you might find some examples for your kind of machine
+#                 to make your $gip_loc/setup file.
+#
+#Updates:      Jun  5, 1991: KGB Document created.
+#              Jul 29, 1997: KGB added field #18.
+#              Feb  3, 1999: JPT cleaned up and added X11 and Xaw lines
+#
+##<
+#
+# AIX/IBM/RS6000 architecture (Version 4, Release 2)
+# xlf version
+# xlc version
+#
+aix:\
+xlc:\
+-O -I. -I$gip_inc -I- -DNGROUPS_MAX=32 -w:\
+-O -I. -I$gip_inc -I- -DNGROUPS_MAX=32:\
+$gip_lib/giplib.a -lxlf90 -lxlf -lm:\
+xlf:\
+-O -qfips -qcharlen=32767 -w:\
+-O -qfips -qcharlen=32767:\
+$gip_lib/giplib.a -lm -lc:\
+as -o #object #source:\
+ar rc #library #object:\
+ar d #library #object:\
+14:\
+ranlib #library:\
+/usr/ucb/nm -B #object:\
+-I/usr/include:\
+-lX11:\
+-lXaw -lXmu -lXt -lXext -lX11
+#
+# DEC ALPHA (OSF1 1.2)
+# f77 version
+# cc version
+#
+alpha:\
+cc:\
+-std1 -O -Olimit 1500 -I. -I$gip_inc -w:\
+-std1 -O -Olimit 1500 -I. -I$gip_inc:\
+$gip_lib/giplib.a -lUfor -lfor -lutil -lots -lm:\
+f77:\
+-O -assume backslash -static -w -std:\
+-O -assume backslash -static -std:\
+$gip_lib/giplib.a -lots:\
+as #source -o #object:\
+ar rc #library #object:\
+ar d #library #object:\
+14:\
+ranlib #library:\
+nm -oB #object:\
+-I/usr/include -I/usr/include/X11:\
+-lX11:\
+-lXaw -lXmu -lXt -lXext -lSM -lICE -lX11
+#
+# CONVEX architecture (ConvexOS V10.0) [convex native floating point]
+# fc version V7.0
+# cc version V4.3.2.0
+#
+convex:\
+cc:\
+-compat rrf=new -ext -I. -I$gip_inc -I-:\
+-compat rrf=new -ext -I. -I$gip_inc -I-:\
+$gip_lib/giplib.a -lF77 -lI77 -lU77 -lD77 -lmathC2 -lm -lc:\
+fc:\
+-O1 -nw:\
+-O1:\
+$gip_lib/giplib.a -lm -lc:\
+as -o #object #source:\
+ar rc #library #object:\
+ar d #library #object:\
+14:\
+ranlib #library:\
+nm #object:\
+-I/usr/include -I/usr/include/X11:\
+-L/usr/X11/lib/ -lX11:\
+-L/usr/X11/lib -lXaw -lXmu -lXt -lXext -lX11
+#
+# CONVEX architecture (ConvexOS V11.0) [IEEE floating point (BLANK=-FLT_MAX)]
+# fc
+# cc
+#
+convex:\
+cc -fi:\
+-DBLANK2 -compat rrf=stack -ext -I. -I$gip_inc -I- -nw:\
+-DBLANK2 -compat rrf=stack -ext -I. -I$gip_inc -I-:\
+$gip_lib/giplib.a -lF77 -lI77 -lU77 -lD77 -lmathC2  -lveclib -llfs -lm -lc:\
+fc -fi:\
+-O1  -a1 -nw:\
+-O1  -a1:\
+$gip_lib/giplib.a -lm -lveclib -lc:\
+as -o #object #source:\
+ar rc #library #object:\
+ar d #library #object:\
+14:\
+/usr/bin/ranlib #library:\
+/bin/nm #object:\
+-I/usr/include -I/usr/include/X11:\
+-L/usr/X11/lib/ -lX11:\
+-L/usr/X11/lib -lXaw -lXmu -lXt -lXext -lX11
+#
+# HP9000S700 architecture (HP-UX Rel. 9.01)
+# f77 version
+# cc  version
+#
+hp9000s700:\
+cc:\
++O1 -I. -I$gip_inc -I- -Aa -w:\
++O1 -I. -I$gip_inc -I- -Aa:\
+$gip_lib/giplib.a -lf -lm:\
+f77:\
++O1 -a -w:\
++O1 -a:\
+$gip_lib/giplib.a -lf -lm:\
+as -o #object #source:\
+ar rc #library #object:\
+ar d #library #object:\
+14:\
+:\
+nm -p #object:\
+-I/usr/X11R6.1/include -I/usr/X11R6.1/include/X11:\
+-L/usr/X11R6.1/lib/ -lX11:\
+-L/usr/X11R6.1/lib -lXaw -lXmu -lXt -lXext -lSM -lICE -lX11
+#
+# HP9000S700 architecture (HP-UX 10.20)
+#
+hp9000s700:\
+/opt/ansic/bin/cc:\
+-O -I. -I$gip_inc -I- -Aa -w:\
+-O -I. -I$gip_inc -I- -Aa:\
+$gip_lib/giplib.a -lf -lm:\
+/opt/fortran/bin/f77:\
+-O -a -w:\
+-O -a:\
+$gip_lib/giplib.a -lf -lm:\
+/usr/ccs/bin/as -o #object #source:\
+ar cq #library #object:\
+ar d #library #object:\
+14:\
+:\
+nm -p #object:\
+-I/usr/X11R6.3/include:\  
+-L/usr/X11R6.3/lib -lX11:\
+-L/usr/X11R6.3/lib -lXaw3d -lXmu -lXt -lXext -lSM -lICE -lX11
+#
+#
+#
+# OS: 2.4.20 (Distribution Red Hat 9.0)
+# CC: gcc 3.2.2
+#
+# Remarks: Builds 'essential' utilities static to avoid errno problems
+#          Using  -lpthread for X applications
+#
+linux:\
+g77:\
+-D_BSD_SOURCE -Dntohl=ntohl -D__g77__=2 -I. -I$gip_inc -I- -I/usr/include -ansi -pedantic -w:\
+-D_BSD_SOURCE -Dntohl=ntohl -D__g77__=2 -I. -I$gip_inc -I- -I/usr/include -ansi -pedantic -Wall:\
+$gip_lib/giplib.a -lm:\
+g77:\
+ -ansi -fno-backslash -fno-f2c -w:\
+ -ansi -fno-backslash -fno-f2c -Wall:\
+$gip_lib/giplib.a -lm:\
+as -o #object #source:\
+ar cq #library #object:\
+ar d #library #object:\
+14:\
+ar d #library __.SYMDEF; ar s #library:\
+nm #object:\
+-I/usr/X11R6/include -I/usr/X11R6/include/X11:\
+-L/usr/lib -lpthread -L/usr/X11R6/lib/ -lX11:\
+-L/usr/X11R6/lib -lXaw3d -lXmu -lXt -lXext -lSM -lICE -lX11 -lpthread
+#
+# OS: 2.6.9-1.648_ELsmp (Distribution Red Hat Enterprise, x86_64)
+# CC: gcc 3.4.2
+#
+#
+linux:\
+g77:\
+-D_BSD_SOURCE -Dntohl=ntohl -D__g77__=2 -I. -I$gip_inc -I- -I/usr/include -ansi -pedantic -m32 -w:\
+-D_BSD_SOURCE -Dntohl=ntohl -D__g77__=2 -I. -I$gip_inc -I- -I/usr/include -ansi -pedantic -m32 -Wall:\
+$gip_lib/giplib.a -m32 -lm:\
+g77:\
+ -ansi -fno-backslash -fno-f2c -m32 -w:\
+ -ansi -fno-backslash -fno-f2c -m32 -Wall:\
+$gip_lib/giplib.a -lm:\
+as -o #object #source:\
+ar cq #library #object:\
+ar d #library #object:\
+14:\
+ar d #library __.SYMDEF; ar s #library:\
+nm #object:\
+-I/usr/X11R6/include -I/usr/X11R6/include/X11:\
+-L/usr/lib -lpthread -L/usr/X11R6/lib/ -lX11:\
+-L/usr/X11R6/lib -lXaw -lXmu -lXt -lXext -lSM -lICE -lX11 -lpthread
+#
+# OS: Linux 2.2.5 (Distribution SuSE 6.1 and Red Hat 6.0/6.1)
+# CC: gcc (egcs-1.1.2 release)
+# FC: g77 (egcs-1.1.2 release)
+#
+#  Note: g77 compiler optimization switched off because
+#  of internal compiler error in version 2.96 20000731.
+#
+linux:\
+g77:\
+-D_BSD_SOURCE -Dntohl=ntohl -D__g77__=2 -I. -I$gip_inc -I- -I/usr/include -ansi -pedantic -w:\
+-D_BSD_SOURCE -Dntohl=ntohl -D__g77__=2 -I. -I$gip_inc -I- -I/usr/include -ansi -pedantic -Wall:\
+$gip_lib/giplib.a -lm:\
+g77:\
+-O -ansi -fno-backslash -fno-f2c -w:\
+-O -ansi -fno-backslash -fno-f2c -Wall:\
+$gip_lib/giplib.a -lm -static:\
+as -o #object #source:\
+ar cq #library #object:\
+ar d #library #object:\
+14:\
+ar d #library __.SYMDEF; ar s #library:\
+nm #object:\
+-I/usr/X11R6/include -I/usr/X11R6/include/X11:\
+-L/usr/X11R6/lib/ -lX11:\
+-L/usr/X11R6/lib -lXaw3d -lXmu -lXt -lXext -lSM -lICE -lX11
+#
+# LINUX 1.2.8
+# gcc
+# f2c
+#
+linux:\
+gcc:\
+-O1 -I. -I$gip_inc -I- -I/usr/include/bsd -ansi -pedantic:\
+-O1 -I. -I$gip_inc -I- -I/usr/include/bsd -ansi -pedantic -Wall:\
+$gip_lib/giplib.a -lf2c -lm:\
+$gip_sys/f2c.csh:\
+-f2c -A -R -Nn802 -w -f2c -f2cC gcc -O -I. -I$gip_inc -I- -ansi -pedantic:\
+-f2c -A -R -Nn802 -f2c -f2cC gcc -O -I. -I$gip_inc -I- -ansi -pedantic:\
+$gip_lib/giplib.a -lf2c -lm:\
+as -o #object #source:\
+ar cq #library #object:\
+ar d #library #object:\
+14:\
+ar d #library __.SYMDEF; ar s #library:\
+nm #object:\
+-I/usr/X11R6/include -I/usr/X11R6/include/X11:\
+-L/usr/X11/lib/ -lX11:\
+-L/usr/X11/lib/ -lXaw3d -lXmu -lXext -lSM -lICE -lXt -lX11
+#
+# OS: Linux 2.0.36
+# CC: gcc 2.7.2.3
+# FC: g77 (egcs-1.0.3 release)
+#
+linux:\
+gcc:\
+-D_BSD_SOURCE -Dntohl=ntohl -D__g77__ -O -I. -I$gip_inc -I- -I/usr/include -ansi -pedantic -w:\
+-D_BSD_SOURCE -Dntohl=ntohl -D__g77__ -O -I. -I$gip_inc -I- -I/usr/include -ansi -pedantic -Wall:\
+$gip_lib/giplib.a /usr/lib/libf2c.a -lm:\
+g77:\
+-O -ansi -fno-backslash -fno-f2c -w:\
+-O -ansi -fno-backslash -fno-f2c -Wall:\
+$gip_lib/giplib.a -lm -static:\
+as -o #object #source:\
+ar cq #library #object:\
+ar d #library #object:\
+14:\
+ar d #library __.SYMDEF; ar s #library:\
+nm #object:\
+-I/usr/X11R6/include -I/usr/X11R6/include/X11:\
+-L/usr/X11R6/lib/ -lX11:\
+-L/usr/X11R6/lib -lXaw3d -lXmu -lXt -lXext -lSM -lICE -lX11
+#
+# SGI architecture (IRIX 6.5.10F)
+# cc  version 7.3.1.2m
+# f77 version 7.3.1.2m
+#
+sgi:\
+cc:\
+-D__sgi__ -O -I. -I$gip_inc -ansi -w -mips3:\
+-D__sgi__ -O -I. -I$gip_inc -ansi:\
+$gip_lib/giplib.a -lftn -lm -lmpc:\
+f77:\
+-backslash -O -w -mips3:\
+-backslash -O -mips3:\
+$gip_lib/giplib.a:\
+as -o #object #source:\
+ar rc #library #object:\
+ar d #library #object:\
+14:\
+:\
+nm -oB #object:\
+-I/usr/include -I/usr/include/X11:\
+-lX11:\
+-lXaw -lXmu -lXt -lXext -lSM -lICE -lX11
+#
+# SGI architecture (IRIX 4.0.5F)
+# cc  version 3.10
+# f77 version 3.10
+#
+sgi:\
+cc:\
+-O -I. -I$gip_inc -I- -ansi -w:\
+-O -I. -I$gip_inc -I- -ansi:\
+$gip_lib/giplib.a -lF77 -lm -lU77 -lI77 -lisam -lmpc:\
+f77:\
+-backslash -O -w:\
+-backslash -O:\
+$gip_lib/giplib.a:\
+as -o #object #source:\
+ar rc #library #object:\
+ar d #library #object:\
+14:\
+:\
+nm -oB #object:\
+:\
+-lX11:\
+-lXaw -lXmu -lXt -lXext -lSM -lICE -lX11
+#
+# SUN4 (sparc) architecture (SunOS 5.0, Solaris 2.0)
+# f77 version 2.0
+# gcc version 2.3.1
+#
+sol4:\
+gcc:\
+-O -I. -I$gip_inc -I- -ansi -pedantic -w:\
+-O -I. -I$gip_inc -I- -ansi -pedantic -Wall:\
+$gip_lib/giplib.a /usr/lang/SC2.0/cg89/__fstd.o -L/usr/lang/SC2.0 -lF77 -lV77 -lM77 -lm -L/usr/lib -lc -lsocket -lnsl -L/usr/ucblib -lucb:\
+/usr/lang/SC2.0/f77:\
+-ansi -O -Nl999 -xl -f -w:\
+-ansi -O -Nl999 -xl -f:\
+$gip_lib/giplib.a -lc -lsocket -lnsl -L/usr/local/lib/gcc-lib/sparc-sun-solaris2.0/2.3.1 -lgcc -L/usr/ucblib -lucb:\
+as -o #object #source:\
+ar rc #library #object:\
+ar d #library #object:\
+14:\
+:\
+nm -hp #object:\
+-I/usr/X11R6.3/include:\
+-R /usr/X11R6.3/lib -L/usr/X11R6.3/lib -lX11:\
+-R /usr/X11R6.3/lib -L/usr/X11R6.3/lib -lXaw -lXmu -lXt -lXext -lSM -lICE -lX11
+#
+# SUN4 (sparc) architecture (SunOS 5.2, Solaris 2.2)
+# f77 version 2.0
+# gcc version 2.3.3
+#
+sol4:\
+gcc:\
+-O -I. -I$gip_inc -I- -ansi -pedantic -w:\
+-O -I. -I$gip_inc -I- -ansi -pedantic -Wall:\
+$gip_lib/giplib.a /opt/SUNWspro/SC2.0.1/cg89/__fstd.o -L/opt/SUNWspro/SC2.0.1 -lF77 -lV77 -lM77 -lm -L/usr/lib -lc -lsocket -lnsl -lelf -L/usr/ucblib -lucb:\
+/opt/SUNWspro/SC2.0.1/f77:\
+-ansi -O -Nl999 -xl -f -w:\
+-ansi -O -Nl999 -xl -f:\
+$gip_lib/giplib.a -lsocket -lnsl -lelf -L/usr/ucblib -lucb -L/opt/gnu/lib/gcc-lib/sparc-sun-solaris2/2.3.3 -lgcc:\
+as -o #object #source:\
+ar rc #library #object:\
+ar d #library #object:\
+14:\
+:\
+nm -hp #object:\
+-I/usr/X11R6.3/include:\
+-R /usr/X11R6.3/lib -L/usr/X11R6.3/lib -lX11:\
+-R /usr/X11R6.3/lib -L/usr/X11R6.3/lib -lXaw -lXmu -lXt -lXext -lSM -lICE -lX11
+#
+# SUN4 architecture for sparc (SunOS 5.3, Solaris 2.3)
+# f77 version 2.0.1
+# acc version 2.0.1
+#
+sol4:\
+/opt/SUNWspro/SC2.0.1/acc:\
+-D__svr4__ -O -I. -I$gip_inc -I- -Xa -w:\
+-D__svr4__ -O -I. -I$gip_inc -I- -Xa:\
+$gip_lib/giplib.a -L/opt/SUNWspro/SC2.0.1 -lF77 -lV77 -lM77 -lm -L/usr/lib -lc -lsocket -lnsl -lelf -L/usr/ucblib -lucb:\
+/opt/SUNWspro/SC2.0.1/f77:\
+-ansi -O -Nl999 -xl -f -w:\
+-ansi -O -Nl999 -xl -f:\
+$gip_lib/giplib.a -lsocket -lnsl -lelf -L/usr/ucblib -lucb:\
+as -o #object #source:\
+ar rc #library #object:\
+ar d #library #object:\
+14:\
+:\
+/usr/ccs/bin/nm -hp #object:\
+-I/usr/X11R6.3/include:\
+-R /usr/X11R6.3/lib -L/usr/X11R6.3/lib -lX11:\
+-R /usr/X11R6.3/lib -L/usr/X11R6.3/lib -lXaw3d -lXmu -lXt -lXext -lSM -lICE -lX11
+#
+# SUN4 architecture for sparc (SunOS 5.3, Solaris 2.3)
+# f77 version 3.0.1
+# cc  version 3.0.1
+#
+sol4:\
+/opt/SUNWspro/bin/cc:\
+-D__svr4__ -O -I. -I$gip_inc -I- -Xa -w:\
+-D__svr4__ -O -I. -I$gip_inc -I- -Xa:\
+$gip_lib/giplib.a -L/opt/SUNWspro/lib -lF77 -lV77 -lM77 -lsunmath -lm -L/usr/lib -lc -lsocket -lnsl -lelf -L/usr/ucblib -lucb:\
+/opt/SUNWspro/bin/f77:\
+-ansi -O -Nl999 -xl -f -w:\
+-ansi -O -Nl999 -xl -f:\
+$gip_lib/giplib.a -lsocket -lnsl -lelf -L/usr/ucblib -lucb:\
+as -o #object #source:\
+ar qc #library #object:\
+ar d #library #object:\
+14:\
+:\
+/usr/ccs/bin/nm -hp #object:\
+-I/usr/X11R6.3/include:\
+-R /usr/X11R6.3/lib -L/usr/X11R6.3/lib -lX11:\
+-R /usr/X11R6.3/lib -L/usr/X11R6.3/lib -lXaw3d -lXmu -lXt -lXext -lSM -lICE -lX11
+#
+# SUN4 architecture for sparc (SunOS 5.3, Solaris 2.3)
+# f77 version 3.0.1
+# gcc  version 2.6.3
+#
+sol4:\
+/usr/local/bin/gcc:\
+-O -I. -I$gip_inc -I- -ansi -pedantic -w:\
+-O -I. -I$gip_inc -I- -ansi -pedantic -Wall:\
+$gip_lib/giplib.a /opt/SUNWspro/SC3.0.1/lib/cg89/__fstd.o -L/opt/SUNWspro/SC3.0.1/lib -lF77 -lV77 -lM77 -lsunmath -lm -L/usr/lib -lc -lsocket -lnsl -lelf -L/usr/ucblib -lucb:\
+/opt/SUNWspro/bin/f77:\
+-ansi -O -Nl999 -xl -f -w:\
+-ansi -O -Nl999 -xl -f:\
+$gip_lib/giplib.a -lsocket -lnsl -lelf -L/usr/ucblib -lucb -L/usr/local/gnu/gcc263 -lgcc:\
+as -o #object #source:\
+ar rc #library #object:\
+ar d #library #object:\
+14:\
+:\
+/usr/ccs/bin/nm -hp #object:\
+-I/usr/X11R6.3/include:\
+-R /usr/X11R6.3/lib -L/usr/X11R6.3/lib -lX11:\
+-R /usr/X11R6.3/lib -L/usr/X11R6.3/lib -lXaw3d -lXmu -lXt -lXext -lSM -lICE -lX11
+#
+#  SUN4 (sparc) architecture (SunOS 5.5.1, Solaris 2.5.1)
+# f77 version SC4.0
+# gcc version 2.7.2
+#
+sol4:\
+gcc:\
+-O -I. -I$gip_inc -I- -ansi -pedantic -w:\
+-O -I. -I$gip_inc -I- -ansi -pedantic -Wall:\
+$gip_lib/giplib.a -L/opt/SUNWspro/SC4.0/lib -lF77 -lV77 -lM77 -lm -L/opt/SUNWspro/SC4.0/lib -lsunmath -L/usr/lib -lc -lsocket -lnsl:\
+/opt/SUNWspro/SC4.0/bin/f77:\
+-ansi -O -Nl999 -xl -f -w:\
+-ansi -O -Nl999 -xl -f:\
+$gip_lib/giplib.a -lsocket -lnsl -lelf -L/usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2 -lgcc:\
+as -o #object #source:\
+ar rc #library #object:\
+ar d #library #object:\
+14:\
+:\
+/usr/ccs/bin/nm -hp #object:\
+-I/usr/X11R6.3/include:\
+-R /usr/X11R6.3/lib -L/usr/X11R6.3/lib -lX11:\
+-R /usr/X11R6.3/lib -L/usr/X11R6.3/lib -lXaw3d -lXmu -lXt -lXext -lSM -lICE -lX11
+#
+# SUN4 architecture for sparc (SunOS 4.1.3)
+# f77 version 2.0.1
+# acc version 2.0.1
+#
+sun4:\
+/usr/lang/SC2.0.1/acc:\
+-O -I. -I$gip_inc -I- -Xa -w:\
+-O -I. -I$gip_inc -I- -Xa:\
+$gip_lib/giplib.a -L/usr/lang/SC2.0.1 -lF77 -lV77 -lM77 -lm:\
+/usr/lang/SC2.0.1/f77:\
+-ansi -O -Nl999 -xl -f -w:\
+-ansi -O -Nl999 -xl -f:\
+$gip_lib/giplib.a -L/usr/lang/SC2.0.1 -lc:\
+as -o #object #source:\
+ar rc #library #object:\
+ar d #library #object:\
+14:\
+ranlib #library:\
+nm #object:\
+-I/usr/X11R6/include:\
+-L/usr/X11R6/lib -lX11:\
+-L/usr/X11R6/lib -lXaw3d -lXmu -lXt -lXext -lSM -lICE -lX11
+#
+# SUN4 architecture for sparc (SunOS 4.1.3)
+# f77 version 2.0.1
+# gcc version 2.3.3
+#
+sun4:\
+gcc:\
+-O -I. -I$gip_inc -I- -ansi -pedantic -w:\
+-O -I. -I$gip_inc -I- -ansi -pedantic -Wall:\
+$gip_lib/giplib.a /usr/lang/SC2.0.1/values-Xs.o -L/usr/lang/SC2.0.1 -lF77 -lV77 -lM77 -lm -lansi:\
+/usr/lang/SC2.0.1/f77:\
+-ansi -O -Nl999 -xl -f -w:\
+-ansi -O -Nl999 -xl -f:\
+$gip_lib/giplib.a -L/usr/local/lib/gcc-lib/sparc-sun-sunos4.1.3/2.3.3 -lgcc:\
+as -o #object #source:\
+ar rc #library #object:\
+ar d #library #object:\
+14:\
+ranlib #library:\
+nm #object:\
+-I/usr/X11R6/include:\
+-L/usr/X11R6/lib -lX11:\
+-L/usr/X11R6/lib -lXaw3d -lXmu -lXt -lXext -lSM -lICE -lX11
+#
+# SUN4 architecture for sparc (SunOS 5.7)
+# f77: WorkShop Compilers 4.2 30 Oct 1996 FORTRAN 77 4.2
+# gcc: version 2.95.2
+#
+sol4:\
+/usr/local/bin/gcc:\
+-O -I. -I$gip_inc -I- -ansi -pedantic -w:\
+-O -I. -I$gip_inc -I- -ansi -pedantic -Wall:\
+$gip_lib/giplib.a -lm -L/opt_shared/SUNWspro/lib -lF77 -lV77 -lM77 -lm -L/opt_shared/SUNWspro/lib -lsunmath -L/usr/lib -lc -lsocket -lnsl:\
+/opt_shared/SUNWspro/bin/f77:\
+-ansi -O -Nl999 -xl -f -w:\
+-ansi -O -Nl999 -xl -f:\
+$gip_lib/giplib.a -lsocket -lnsl -lelf -L/usr/local/lib/gcc-lib/sparc-sun-solaris2.7/2.95.2/ -lgcc:\
+as -o #object #source:\
+ar rc #library #object:\
+ar d #library #object:\
+14:\
+:\
+/usr/ccs/bin/nm -hp #object:\
+-I/usr/openwin/include:\
+-R /usr/openwin/lib -L/usr/X/lib -lX11:\
+-R /usr/openwin/lib -L/usr/X/lib -lXaw -lXmu -lXt -lXext -lSM -lICE -lX11
+#
+# SUN4 (sparc) architecture (SunOS 5.7)
+# -------------------------------------
+# f77: Sun WorkShop 6 update 2 FORTRAN 77 5.3 2001/05/15
+# NOTICE: optimization switched off because of incorrect Sheltran output
+# 
+# cc: Sun WorkShop 6 update 2 C 5.3 2001/05/15
+#
+sol4:\
+/opt/SUNWspro/WS6U2/bin/cc:\
+-D__svr4__ -O -I. -I$gip_inc -I- -Xa -w:\
+-D__svr4__ -O -I. -I$gip_inc -I- -Xa:\
+-R /opt/SUNWspro/WS6U2/lib $gip_lib/giplib.a -L/opt/SUNWspro/WS6U2/lib -lF77 -lV77 -lM77 -lsunmath -lm -L/usr/lib -lc -lsocket -lnsl -lelf:\
+/opt/SUNWspro/WS6U2/bin/f77:\
+-ansi -Nl999 -xl -f -w:\
+-ansi -Nl999 -xl -f:\
+-R /opt/SUNWspro/WS6U2/lib $gip_lib/giplib.a -lsocket -lnsl -lelf:\
+/usr/ccs/bin/as -o #object #source:\
+/usr/ccs/bin/ar qc #library #object:\
+/usr/ccs/bin/ar d #library #object:\
+14:\
+:\
+/usr/ccs/bin/nm -hp #object:\
+-I/usr/X11R6.3/include:\
+-R /usr/X11R6.3/lib -L/usr/X11R6.3/lib -lX11:\
+-R /usr/X11R6.3/lib -L/usr/X11R6.3/lib -lXaw3d -lXmu -lXt -lXext -lSM -lICE -lX11
+#
+#
+# Apple MacOS X - Motorola
+#
+apple_m:\
+g77:\
+-D__g77__=2 -O2 -I. -I$gip_inc -I- -I/usr/include -ansi -pedantic -w:\
+-D__g77__=2 -O2 -I. -I$gip_inc -I- -I/usr/include -ansi -pedantic -Wall:\
+$gip_lib/giplib.a -lmx:\
+g77:\
+-O2 -fno-backslash -fno-f2c -w:\
+-O2 -fno-backslash -fno-f2c -Wall:\
+$gip_lib/giplib.a -lmx:\
+as -o #object #source:\
+ar cq #library #object:\
+ar d #library #object:\
+14:\
+ar d #library __.SYMDEF; ar s #library:\
+nm #object:\
+-I/usr/X11R6/include -I/usr/X11R6/include/X11:\
+-L/usr/X11R6/lib/ -lX11:\
+-L/usr/X11R6/lib -L/sw/lib/ -lXaw3d -lXmu -lXt -lXext -lSM -lICE -lX11
+#
+#
+# Apple MacOS X - Intel (tested on Version 10.4.9)
+#
+apple_i:\
+g77:\
+-D__g77__=2 -O2 -I. -I$gip_inc -I- -I/usr/include -ansi -pedantic -w:\
+-D__g77__=2 -O2 -I. -I$gip_inc -I- -I/usr/include -ansi -pedantic -Wall:\
+$gip_lib/giplib.a -lmx:\
+g77:\
+-O2 -fno-backslash -fno-f2c -w:\
+-O2 -fno-backslash -fno-f2c -Wall:\
+$gip_lib/giplib.a -lmx:\
+as -o #object #source:\
+ar cq #library #object:\
+ar d #library #object:\
+14:\
+ar d #library __.SYMDEF; ar s #library:\
+nm #object:\
+-I/usr/X11R6/include -I/usr/X11R6/include/X11:\
+-L/usr/X11R6/lib/ -lX11:\
+-L/usr/X11R6/lib -L/sw/lib/ -lXaw3d -lXmu -lXt -lXext -lSM -lICE -lX11
+# -------------------------------------------------------------------------
+# Linux with GNU Fortran for 64-bit in 32-bit mode.
+# To use this architecture, remove the other linux sections from this
+# file and change the architecture name "linux32" into "linux64".
+# Only to be used in case of problems with the normal 64-bit setup.
+# Functionality is reduced: tasks written in Python cannot be run.
+# -------------------------------------------------------------------------
+linux32:\
+gfortran:\
+-Dntohl=ntohl -D__GFORTRAN__ -iquote . -iquote $gip_inc -pedantic -m32 -w:\
+-Dntohl=ntohl -D__GFORTRAN__ -iquote . -iquote $gip_inc -pedantic -m32 -Wall:\
+$gip_lib/giplib.a -m32 -lm:\
+gfortran:\
+ -fno-backslash -ff2c -m32 -w:\
+ -fno-backslash -ff2c -m32 -Wall:\
+$gip_lib/giplib.a -m32 -lm:\
+as -o #object #source:\
+ar cq #library #object:\
+ar d #library #object:\
+64:\
+ar s #library:\
+nm #object:\
+ :\
+-lX11:\
+-lXaw3d -lXmu -lXt -lXext -lSM -lICE -lX11
+#
+# -------------------------------------------------------------------------
+# Linux with g77 (deprecated)
+# To use this architecture, remove the other linux sections from this
+# file and change the architecture name "g77linux" into "linux".
+# -------------------------------------------------------------------------
+g77linux:\
+g77:\
+-D_BSD_SOURCE -Dntohl=ntohl -D__g77__=2 -I. -I$gip_inc -I- -I/usr/include -ansi -pedantic -w:\
+-D_BSD_SOURCE -Dntohl=ntohl -D__g77__=2 -I. -I$gip_inc -I- -I/usr/include -ansi -pedantic -Wall:\
+$gip_lib/giplib.a -lm:\
+g77:\
+ -ansi -fno-backslash -fno-f2c -w:\
+ -ansi -fno-backslash -fno-f2c -Wall:\
+$gip_lib/giplib.a -lm:\
+as -o #object #source:\
+ar cq #library #object:\
+ar d #library #object:\
+14:\
+ar d #library __.SYMDEF; ar s #library:\
+nm #object:\
+-I/usr/X11R6/include -I/usr/X11R6/include/X11:\
+-L/usr/lib -lpthread -L/usr/X11R6/lib/ -lX11:\
+-L/usr/X11R6/lib -lXaw3d -lXmu -lXt -lXext -lSM -lICE -lX11 -lpthread
+#
+# -------------------------------------------------------------------------
+# Apple MacOS X - PowerPC (Motorola)
+# -------------------------------------------------------------------------
+apple_m:\
+g77:\
+-D__g77__=2 -O2 -I. -I$gip_inc -I- -I/usr/include -ansi -pedantic -w:\
+-D__g77__=2 -O2 -I. -I$gip_inc -I- -I/usr/include -ansi -pedantic -Wall:\
+$gip_lib/giplib.a -lmx:\
+g77:\
+-O2 -fno-backslash -fno-f2c -w:\
+-O2 -fno-backslash -fno-f2c -Wall:\
+$gip_lib/giplib.a -lmx:\
+as -o #object #source:\
+ar cq #library #object:\
+ar d #library #object:\
+14:\
+ar d #library __.SYMDEF; ar s #library:\
+nm #object:\
+-I/usr/X11R6/include -I/usr/X11R6/include/X11:\
+-L/usr/X11R6/lib/ -lX11:\
+-L/usr/X11R6/lib -L/sw/lib/ -lXaw3d -lXmu -lXt -lXext -lSM -lICE -lX11
+#
+# -------------------------------------------------------------------------
+# Apple MacOS X - Intel (tested on Version 10.4.9)
+# Uses g77. Obsolete.
+# -------------------------------------------------------------------------
+apple_g77:\
+g77:\
+-D__g77__=2 -O2 -I. -I$gip_inc -I- -I/usr/include -ansi -pedantic -w:\
+-D__g77__=2 -O2 -I. -I$gip_inc -I- -I/usr/include -ansi -pedantic -Wall:\
+$gip_lib/giplib.a -lmx:\
+g77:\
+-O2 -fno-backslash -fno-f2c -w:\
+-O2 -fno-backslash -fno-f2c -Wall:\
+$gip_lib/giplib.a -lmx:\
+as -o #object #source:\
+ar cq #library #object:\
+ar d #library #object:\
+14:\
+ar d #library __.SYMDEF; ar s #library:\
+nm #object:\
+-I/usr/X11R6/include -I/usr/X11R6/include/X11:\
+-L/usr/X11R6/lib/ -lX11:\
+-L/usr/X11R6/lib -L/sw/lib/ -lXaw3d -lXmu -lXt -lXext -lSM -lICE -lX11
+#
+# Always put a comment at The End

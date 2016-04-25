@@ -1,0 +1,54 @@
+# grdevices (see: $gip_doc/grdevices.doc)
+#
+# All machines have NULL
+#
+*:0:NULL:
+#
+# All machines have TEKTRONIX
+#
+*:1:TEKTRONIX:TEK_DEVICE
+#
+# L1LASER
+#
+#*:2:L1LASER:lp -s -dps1 %s
+#
+# All machines have LPSFILE
+#
+*:2:LPSFILE:echo Created file %s
+#
+# P1LASER
+#
+#*:3:P1LASER:lp -s -dps1 %s
+#
+#
+# All machines have PPSFILE
+#
+*:3:PPSFILE:echo Created file %s
+#
+#*:4:LCOLOUR:lp -s -dcps4 %s
+#
+# All machines have LCPSFILE
+#
+*:4:LCPSFILE:echo Created file %s
+#
+#*:5:PCOLOUR:lp -s -dcps4 %s
+#
+# All machines have PCPSFILE
+#
+*:5:PCPSFILE:echo Created file %s:7800:9500:250:1100
+#
+# All machines have XTERM
+#
+*:6:XTERM:/dev/tty
+#
+# All machines have GIDS
+#
+*:7:GIDS:DEFAULT_DISPLAY
+#
+# All machines have THERTEK
+#
+*:8:THERTEK:THERTEK
+#
+# All machines have X11
+*:9:X11:PGWINDOW
+#

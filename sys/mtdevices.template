@@ -1,0 +1,4 @@
+# mtdevices (see: $gip_doc/mtdevices)
+#
+#*:DAT0:magellan.astro.rug.nl:/dev/rmt/0mn:61000:MAGELLAN DAT recorder (ZG 137):3198
+#*:DAT1:spica.sron.rug.nl:/dev/rmt/0mn:61000:SPICA DAT recorder (ZG 95):3198

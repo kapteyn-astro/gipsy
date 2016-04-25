@@ -1,0 +1,214 @@
+# setup.mgr
+#
+#       Copyright (c) Kapteyn Astronomical Institute 1992-2011
+#       All Rights Reserved.
+#
+##>            setup.doc
+#
+#Document:     setup
+#
+#Purpose:      Describes the system dependent commands for compiling
+#              and installing GIPSY source files.
+#
+#Category:     MANAGEMENT
+#
+#File:         setup.mgr
+#
+#Author:       K.G. Begeman
+#
+#Description:  The file setup, which should reside in $gip_loc,
+#              contains the compiler options for compiling GIPSY
+#              sources for different architectures.
+#              Each architecture has one entry in $gip_loc/setup. Each
+#              entry consists of several fields, separated by colons.
+#              Each entry may be split into several lines by putting
+#              a backslash before each newline.
+#              The fields have the following meaning:
+#
+#              field  meaning
+#                #1   architecture.
+#                #2   name of C compiler.
+#                #3   C compiler options for installation.
+#                #4   default C compiler options for private use.
+#                #5   libraries to link with C main program.
+#                #6   name of Fortran compiler.
+#                #7   Fortran compiler options for installation.
+#                #8   default Fortran compiler options for private use.
+#                #9   libraries to link with Fortran main program.
+#                #10  command to compile assembler code.
+#                #11  command to archive objects.
+#                #12  command to remove objects from library.
+#                #13  maximum length of name in archive.
+#                #14  command to prepare archive for loader.
+#                #15  command to print symbol list name [optional].
+#                #16  options to compile with X11 includes etc. [optional].
+#                #17  options to link with X11 libraries etc. [optional].
+#                #18  options to link with X-Toolkit libraries etc. [optional].
+#
+#Notes:        1) For some commands it is necessary to know where to
+#                 place the file names on which it has to operate.
+#                 Therefore some symbols are defined which inform compile
+#                 where to place these names. The symbols recognized by
+#                 compile are:
+#
+#                 #source              source file for compiler
+#                 #object              object file
+#                 #library             library file
+#                 #executable          executable
+#
+#                 If it soes not matter where to place the file names,
+#                 don't put it in the command. compile will then append
+#                 the names to the command.
+#              2) You should copy the relevant parts of this file to
+#                 $gip_loc/setup. The install.csh script and $gip_exe/compile
+#                 will first look for $gip_loc/setup.`hostname`, and if not
+#                 present or if no entry is found for the current architecture
+#                 $gip_loc/setup will be searched. In $gip_sys/setup.mgr
+#                 you might find some examples for your kind of machine
+#                 to make your $gip_loc/setup file.
+#
+#Updates:      Jun  5, 1991: KGB Document created.
+#              Jul 29, 1997: KGB added field #18.
+#              Feb  3, 1999: JPT cleaned up and added X11 and Xaw lines.
+#              Nov 25, 2008: JPT cleaned up and introduced GNU Fortran section.
+#              Feb  4, 2009: JPT added 64-bit Linux section (32-bit mode).
+#              Jun 16, 2009: JPT added true 64-bit Linux section.
+#              Nov 24, 2009: JPT added Apple with gfortran section.
+#              Oct  7, 2010: JPT added -fPIC to 32-bit Linux compile options.
+#              Mar 16, 2011: JPT added compile options for large files.
+#              Dec 12, 2011: JPT added 64-bit Apple section.
+#              Jan 23, 2014: JPT modified apple_i and apple_i64 sections.
+#
+##<
+# -------------------------------------------------------------------------
+# Linux with GNU Fortran for 32-bit.
+# -------------------------------------------------------------------------
+linux:\
+gfortran:\
+-Dntohl=ntohl -D__GFORTRAN__ -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -iquote . -iquote $gip_inc -fPIC -pedantic -w:\
+-Dntohl=ntohl -D__GFORTRAN__ -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -iquote . -iquote $gip_inc -fPIC -pedantic -Wall:\
+$gip_lib/giplib.a -lm:\
+gfortran:\
+ -fsecond-underscore -fPIC -w:\
+ -fsecond-underscore -fPIC -Wall:\
+$gip_lib/giplib.a -lm:\
+as -o #object #source:\
+ar cq #library #object:\
+ar d #library #object:\
+64:\
+ar s #library:\
+nm #object:\
+ :\
+-lX11:\
+-lXaw3d -lXmu -lXt -lXext -lSM -lICE -lX11
+#
+# -------------------------------------------------------------------------
+# Linux with GNU Fortran for 64-bit.
+# -------------------------------------------------------------------------
+linux64:\
+gfortran:\
+-Dntohl=ntohl -D__GFORTRAN__ -iquote . -iquote $gip_inc -fPIC -pedantic -w:\
+-Dntohl=ntohl -D__GFORTRAN__ -iquote . -iquote $gip_inc -fPIC -pedantic -Wall:\
+$gip_lib/giplib.a -lm:\
+gfortran:\
+ -fsecond-underscore -fPIC -w:\
+ -fsecond-underscore -fPIC -Wall:\
+$gip_lib/giplib.a -lm:\
+as -o #object #source:\
+ar cq #library #object:\
+ar d #library #object:\
+64:\
+ar s #library:\
+nm #object:\
+ :\
+-lX11:\
+-lXaw3d -lXmu -lXt -lXext -lSM -lICE -lX11
+#
+# -------------------------------------------------------------------------
+# Apple MacOS X - PowerPC (Motorola)
+# -------------------------------------------------------------------------
+apple_m:\
+g77:\
+-D__g77__=2 -O2 -I. -I$gip_inc -I- -I/usr/include -ansi -pedantic -w:\
+-D__g77__=2 -O2 -I. -I$gip_inc -I- -I/usr/include -ansi -pedantic -Wall:\
+$gip_lib/giplib.a -lmx:\
+g77:\
+-O2 -fno-backslash -fno-f2c -w:\
+-O2 -fno-backslash -fno-f2c -Wall:\
+$gip_lib/giplib.a -lmx:\
+as -o #object #source:\
+ar cq #library #object:\
+ar d #library #object:\
+14:\
+ar d #library __.SYMDEF; ar s #library:\
+nm #object:\
+-I/usr/X11R6/include -I/usr/X11R6/include/X11:\
+-L/usr/X11R6/lib/ -lX11:\
+-L/usr/X11R6/lib -L/sw/lib/ -lXaw3d -lXmu -lXt -lXext -lSM -lICE -lX11
+#
+# -------------------------------------------------------------------------
+# Apple MacOS X - Intel with gfortran (contributed by Rachel Kuzio de Naray)
+# To use this section, change "apple_i32" into "apple_i".
+# -------------------------------------------------------------------------
+apple_i32:\
+gfortran:\
+-Dntohl=ntohl -D__GFORTRAN__ -iquote . -iquote $gip_inc -pedantic -m32 -w:\
+-Dntohl=ntohl -D__GFORTRAN__ -iquote . -iquote $gip_inc -pedantic -m32 -Wall:\
+$gip_lib/giplib.a -m32 -lm:\
+gfortran:\
+ -fno-backslash -ff2c -m32 -w:\
+ -fno-backslash -ff2c -m32 -Wall:\
+$gip_lib/giplib.a -m32 -lm:\
+as -o #object #source:\
+ar cq #library #object:\
+ar d #library #object:\
+64:\
+ar d #library __.SYMDEF; ar s #library:\
+nm #object:\
+-I/usr/X11R6/include -I/usr/X11R6/include/X11:\
+-L/usr/X11R6/lib/ -lX11:\
+-L/usr/X11R6/lib -L/sw/lib/ -lXaw3d -lXmu -lXt -lXext -lSM -lICE -lX11
+# -------------------------------------------------------------------------
+# Apple MacOS X - Intel with gfortran
+# -------------------------------------------------------------------------
+apple_i:\
+gfortran:\
+-Dntohl=ntohl -D__GFORTRAN__ -iquote . -iquote $gip_inc -pedantic -w:\
+-Dntohl=ntohl -D__GFORTRAN__ -iquote . -iquote $gip_inc -pedantic -Wall:\
+$gip_lib/giplib.a -lm:\
+gfortran:\
+ -fno-backslash -fsecond-underscore -w:\
+ -fno-backslash -fsecond-underscore -Wall:\
+$gip_lib/giplib.a -lm:\
+as -o #object #source:\
+ar cq #library #object:\
+ar d #library #object:\
+64:\
+ar d #library __.SYMDEF; ar s #library:\
+nm #object:\
+-I/usr/X11R6/include -I/usr/X11R6/include/X11:\
+-L/usr/X11R6/lib/ -lX11:\
+-L/usr/X11R6/lib -lXaw3d -lXmu -lXt -lXext -lSM -lICE -lX11
+# -------------------------------------------------------------------------
+# Apple MacOS X - Intel 64-bit with gfortran
+# -------------------------------------------------------------------------
+apple_i64:\
+gfortran:\
+-Dntohl=ntohl -D__GFORTRAN__ -iquote . -iquote $gip_inc -pedantic -w:\
+-Dntohl=ntohl -D__GFORTRAN__ -iquote . -iquote $gip_inc -pedantic -Wall:\
+$gip_lib/giplib.a -lm:\
+gfortran:\
+ -fno-backslash -fsecond-underscore -w:\
+ -fno-backslash -fsecond-underscore -Wall:\
+$gip_lib/giplib.a -lm:\
+as -o #object #source:\
+ar cq #library #object:\
+ar d #library #object:\
+64:\
+ar d #library __.SYMDEF; ar s #library:\
+nm #object:\
+-I/usr/X11R6/include -I/usr/X11R6/include/X11:\
+-L/usr/X11R6/lib/ -lX11:\
+-L/usr/X11R6/lib -lXaw3d -lXmu -lXt -lXext -lSM -lICE -lX11
+#
+# Always put a comment at The End

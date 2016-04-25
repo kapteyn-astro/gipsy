@@ -1,0 +1,36 @@
+# manager.mgr
+#
+#       Copyright (c) Kapteyn Laboratorium Groningen 1992
+#       All Rights Reserved.
+#
+##>            manager.doc
+#
+#Document:     manager
+#
+#Purpose:      The file manager.mgr, which resides in the gip_sys
+#              directory, contains the name, address and logname of
+#              the GIPSY manager.
+#              The file manager, which resides in the gip_loc directory,
+#              contains the mail addresses of local GIPSY managers for
+#              different hosts.
+#
+#Category:     MANAGEMENT
+#
+#File:         manager.doc
+#
+#Author:       K.G. Begeman
+#
+#Description:  For the $gip_loc/manager file, each entry contains the name
+#              of the host computer followed by the mail address of the
+#              local GIPSY manager (in between a colon is necessary).
+#              The $gip_sys/update.csh script sends a logfile
+#              to the local GIPSY manager each time when it runs.
+#
+#Updates:      Jun 29, 1992: KGB, Document created.
+#
+##<
+#
+#
+#K.G. Begeman:kgb@astro.rug.nl:kgb
+#M.G.R. Vogelaar:vogelaar@astro.rug.nl:vogelaar
+J.P. Terlouw:terlouw@astro.rug.nl:terlouw
