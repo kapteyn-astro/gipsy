@@ -1,13 +1,13 @@
-gdsserver.src
+gdsserver64.src
 
         Copyright (c) Kapteyn Astronomical Institute, Groningen 2015
         All Rights Reserved.
 
-Name:         gdsserver.src
+Name:         gdsserver64.src
 Creator:      breddels
 Host:         jansky
 Date:         Apr 13, 2015
-Contents:     Makefile.uti gdsserver.doc gdsserver.make acceptor.h alloc.h
+Contents:     Makefile.uti gdsserver64.doc gdsserver64.make acceptor.h alloc.h
               clientmgr.h descr.h file.h gdsdescr.h inetsocket.h
               linkedlist.h mainloop.h object.h primes.h request.h
               server.h setmgr.h unixsocket.h acceptor.c alloc.c
@@ -19,8 +19,8 @@ Contents:     Makefile.uti gdsserver.doc gdsserver.make acceptor.h alloc.h
 SHELL  = /bin/sh
 
 pack::
-	$$gip_sys/pack.csh gdsserver.src Makefile.uti \
-        gdsserver.doc gdsserver.make \
+	$$gip_sys/pack.csh gdsserver64.src Makefile.uti \
+        gdsserver64.doc gdsserver64.make \
         acceptor.h alloc.h clientmgr.h descr.h file.h gdsdescr.h \
         inetsocket.h linkedlist.h mainloop.h \
         object.h primes.h request.h server.h setmgr.h unixsocket.h \
@@ -29,22 +29,22 @@ pack::
         unixsocket.c
 
 clean::
-	rm -f gdsserver *.o
+	rm -f gdsserver64 *.o
 
 #<
 
-#>            gdsserver.doc
-Program:      gdsserver
+#>            gdsserver64.doc
+Program:      gdsserver64
 
 Purpose:      Handles GDS requests from GIPSY tasks.
 
 Category:     SYSTEM
 
-File:         gdsserver.src
+File:         gdsserver64.src
 
 Author:       J.P. Terlouw
  
-Use:          $gip_exe/gdsserver
+Use:          $gip_exe/gdsserver64
 
 Description:  The server is normally started by the first task which needs it.
               This is done transparantly when any GDS routine is called.
@@ -68,22 +68,22 @@ Description:  The server is normally started by the first task which needs it.
               To connect to the server, a task uses the following files in the
               user's home directory, which are created by the server:
 
-                 .gds_sockets<directory_id>
-                 .gds_read
-                 .gds_write
+                 .gds64_sockets<directory_id>
+                 .gds64_read
+                 .gds64_write
                 
-              .gds_sockets* contain information about the Internet address of
+              .gds64_sockets* contain information about the Internet address of
               the host on which the server runs, the Internet port number and
               the path of the Unix socket. This file is only present when the
               server is active.
                
-              .gds_read contains a 'password' which the client software needs
+              .gds64_read contains a 'password' which the client software needs
               to read from a GDS set using the server. The protection of this
               file determines who can access the server to read from any sets
               it serves. The default protection of this file is 644, but this
               can be changed by the user with the chmod command.
                
-              .gds_write contains a 'password' which the client software needs
+              .gds64_write contains a 'password' which the client software needs
               to write to a GDS set using the server. The default protection 
               of this file is 600, but this can also be changed.
 
@@ -108,7 +108,7 @@ Updates:      Apr  9, 1994: JPT original document created.
               Feb 19, 2009: JPT Implemented temporary (FITS pseudo-) sets.
 #<
 
-#>            gdsserver.make
+#>            gdsserver64.make
 SHELL   = /bin/sh
 #C_OPTS  = -g -I. -I$(gip_inc) -I- -Aa
 C_OPTS  = $(CC_OPTS)
@@ -119,8 +119,8 @@ OBJECTS = acceptor.o alloc.o clientmgr.o file.o inetsocket.o \
 .c.o :
 	$(CC_COMP) -c $(C_OPTS) $<
 
-gdsserver: $(OBJECTS)
-	$(CC_COMP) -o gdsserver $(C_OPTS) $(OBJECTS)  $(CC_LIBS)
+gdsserver64: $(OBJECTS)
+	$(CC_COMP) -o gdsserver64 $(C_OPTS) $(OBJECTS)  $(CC_LIBS)
 
 
 #<
@@ -294,7 +294,7 @@ typedef struct {
 /* --- this point in the structure must align to a multiple of 8 bytes --- */
    double ax_origin[MAXDIM];   /* axis origins */
    fint   ax_size  [MAXDIM];   /* axis sizes */
-   fint   ax_factor[MAXDIM+1]; /* factors */
+   fint8   ax_factor[MAXDIM+1]; /* factors */
    fint   naxis;          /* number of axes */
    fint   nitems;         /* number of descriptor items (from version 2.2) */
    fint   reserved2;      /* not currently used */
@@ -1266,9 +1266,6 @@ int ftruncate(int fd, int length);
 
 #define BMSIZE(s) (((s)-1)/(sizeof(int)*REC_SIZ*8)+1)
 
-#define VERSION_32 2
-#define SUBVERSION_32 2
-
 typedef struct {
    int        recno;
    fint       level;
@@ -2102,7 +2099,7 @@ extern fint RecoverDescr(char *name)
       return GDS_OPENFAIL;     
    }
     
-   if ((file->version!=VERSION_32) && (file->version!=swapfint(VERSION_32))) {
+   if ((file->version!=VERSION) && (file->version!=swapfint(VERSION))) {
       CloseFile(&fd);
       return GDS_BADVERSION;
    }
@@ -2200,7 +2197,7 @@ static int ExtendDescr(descr current)
    current->size = newsize;
    return CheckDescr(current);
 }
-   
+#include <stdio.h>
 /* -------------------------------------------------------------------------- */
 /*                                 CheckDescr                                 */
 /* -------------------------------------------------------------------------- */
@@ -2215,17 +2212,18 @@ static int CheckDescr(descr current)
    header file=(header)current->file;
    fint one;
    fint maxrec;
+   FILE * log;
       
    /* ---- check version compatibility
    */
-   if ((file->version!=VERSION_32) && (file->version!=swapfint(VERSION_32)))
+   if ((file->version!=VERSION) && (file->version!=swapfint(VERSION)))
       return GDS_BADVERSION;
 
    /* ---- version 2.0: convert to 2.1+ 
     *      (set the floating point type to either IEEE High Endian 
     *       or IEEE Little Endian.)
     */
-   if ((file->subversion == 0) && (file->version<3)) {
+   if ((file->subversion == 0) & (file->version ==2)) {
       union {
          fint        l;
          char        b[sizeof(fint)];
@@ -2257,7 +2255,8 @@ static int CheckDescr(descr current)
    
    /* ---- consistency checks; possible conversion from 2.1 to 2.2
     */
-   if ( (!current->safe) && (file->version<3)) {
+   current->safe = 0; 
+   if ( (!current->safe) ) {
       int nitems, ibuk;
       fint *htab=file->hash_tab;
       fint nbuk =RecFint(file,n_buck);
@@ -2265,16 +2264,26 @@ static int CheckDescr(descr current)
       fint maxrec=RecFint(file,maxrec);
       record rec=(record)file;
       fint recno;
+      log = fopen("gds64.log", "w");
+      fprintf(log, "consistency check: 1\n");
+      fflush(log);
                                                                 /* free list */
       for (recno=SWAP(file->free,file->one); recno; recno=NextExt(rec[recno]))
          if (recno<rec_start || recno>maxrec) return GDS_BADLINK;
                                                          /* descriptor items */
+      fprintf(log, "consistency check: 2\n");
+      fflush(log);
       nitems = 0;
+      fprintf(log, "nbuk = %d\n", nbuk);
+      fflush(log);
       for (ibuk=0; ibuk<nbuk; ibuk++) {
+		printf("consistency check: 3-%d\n", ibuk);
+      fflush(log);
+		fprintf(log, "ibuk = %d\n", ibuk);
          int k=SWAP(htab[ibuk],one);
          while (k) {
             for (recno=k; recno; recno=NextExt(rec[recno]))
-               if (recno<rec_start || recno>maxrec) return GDS_BADLINK;
+               if (recno<rec_start || recno>maxrec) return GDS_TRUNCATED;
             nitems++;
             k = NextKey(rec[k]); 
          }
@@ -2314,7 +2323,6 @@ static int CheckDescr(descr current)
    if (file->one != 1) current->itype = !current->itype;
    return GDS_SUCCESS;
 }
-
 /* -------------------------------------------------------------------------- */
 /*                                 InitDescr                                  */
 /* -------------------------------------------------------------------------- */
@@ -2336,8 +2344,8 @@ static void InitDescr(descr current, fint prime)
    file->h.n_buck    = prime;                /* hash table size           */
    for ( ;   0<prime--;   file->h.hash_tab[prime] = 0 );
                                                 /* clear hash table          */
-   file->h.version       = VERSION_32;
-   file->h.subversion    = SUBVERSION_32;
+   file->h.version       = VERSION;
+   file->h.subversion    = SUBVERSION;
    {
       union {
        fint   l;
@@ -3481,9 +3489,6 @@ Author: J.P. Terlouw
 #include "setmgr.h"
 #include "descr.h"
 #include "request.h"
-#define VERSION_32 2
-#define SUBVERSION_32 2
-
 
 #define NOTIMPL     { gds_notimpl(current); return;}
 
@@ -3586,7 +3591,7 @@ static void gds_connect(object current)
    gdsConnect request=(gdsConnect)ClientRequest(current);
    int perm;
 
-   if (ClientFint(current,request->version) != VERSION_32) {
+   if (ClientFint(current,request->version) != VERSION) {
       if (!WriteReply(current,GDS_BADVERSION,0)) DeleteClient(current);
       return;
    }
@@ -3990,7 +3995,7 @@ void main(int argc, char *argv[])
 /*
  *  Password stuff
  */
-   sprintf(pwdfile,"%s/.gds_write",getenv("HOME"));        /* WRITE password */
+   sprintf(pwdfile,"%s/.gds64_write",getenv("HOME"));        /* WRITE password */
    f = fopen(pwdfile,"r");
    if (f) {
                                            /* file exists: use file contents */
@@ -4006,7 +4011,7 @@ void main(int argc, char *argv[])
    }
    fclose(f);
    
-   sprintf(pwdfile,"%s/.gds_read",getenv("HOME"));          /* READ password */
+   sprintf(pwdfile,"%s/.gds64_read",getenv("HOME"));          /* READ password */
    f = fopen(pwdfile,"r");
    if (f) {
       fscanf(f,"%d\n",&server->pwdr);
@@ -4026,7 +4031,7 @@ void main(int argc, char *argv[])
  */
    server->ux = UnixSocket(unixname);
    server->in = InetSocket(inetname);
-   sprintf(sockfile,"%s/.gds_sockets%s",getenv("HOME"),dir_id);
+   sprintf(sockfile,"%s/.gds64_sockets%s",getenv("HOME"),dir_id);
    f = fopen(sockfile,"w");
    fprintf(f,"%s:%s:%s\n",netaddr(),unixname,inetname);
    if (fclose(f)) {

@@ -123,7 +123,7 @@ typedef struct {                          /* struct contains axes information */
    fint   smask;                                   /* mask for secondary axis */
    fint   def;                             /* axis defined (outside subset) ? */
    fint   npos;                            /* number of grids along this axis */
-   fint  *pos;                       /* array containing the grids along axis */
+   fint8  *pos;                       /* array containing the grids along axis */
    fint   low;                                    /* lower grid value on axis */
    fint   upp;                                    /* upper grid value on axis */
 } ax_struct;
@@ -146,7 +146,7 @@ typedef struct {                           /* struct contains set information */
 } set_struct;
 
 typedef struct {                      /* struct contains grids along one axis */
-   fint *pos;                                                  /* grid values */
+   fint8 *pos;                                                  /* grid values */
    fint  count;                             /* internal counter for gdsc_word */
    fint  npos;                                  /* number of grids along axis */
    fint  axnum;                                        /* axis number of axis */
@@ -625,8 +625,8 @@ static void copy_descriptors( set_struct set1 , set_struct set2 )
    fint        dscerr = 0;   /* error occurred when searching for descriptors */
    fint        not_equal;                /* input and output set are the same */
    fint       *flg;          /* flags whether grids are continuous along axis */
-   fint       *grid1;         /* array with grids defined for input set level */
-   fint       *grid2;        /* array with grids defined for output set level */
+   fint8       *grid1;         /* array with grids defined for input set level */
+   fint8       *grid2;        /* array with grids defined for output set level */
    fint        k;
    fint        m;
    fint       *min;       /* array with the smallest grid position on an axis */
@@ -670,8 +670,8 @@ static void copy_descriptors( set_struct set1 , set_struct set2 )
     */
    axnum1 = (fint *) calloc( set1.naxis, sizeof( fint ) );
    axnum2 = (fint *) calloc( set2.naxis, sizeof( fint ) );
-   grid1 = (fint *) calloc( set1.naxis, sizeof( fint ) );
-   grid2 = (fint *) calloc( set2.naxis, sizeof( fint ) );
+   grid1 = (fint8 *) calloc( set1.naxis, sizeof( fint8 ) );
+   grid2 = (fint8 *) calloc( set2.naxis, sizeof( fint8 ) );
    def1 = (fint *) calloc( set1.naxis, sizeof( fint ) );
    def2 = (fint *) calloc( set2.naxis, sizeof( fint ) );
    /*
@@ -727,7 +727,7 @@ static void copy_descriptors( set_struct set1 , set_struct set2 )
          fint  m;
          fint  n;
          fint  npos = set1.ax[axnum1[k]-1].npos;
-         fint *pos1 = set1.ax[axnum1[k]-1].pos;
+         fint8 *pos1 = set1.ax[axnum1[k]-1].pos;
 
          min[k] = max[k] = pos1[0];
          for (n = 1; n < npos; n++) {
@@ -780,14 +780,15 @@ static void copy_descriptors( set_struct set1 , set_struct set2 )
          fint defin = 0;
          fint defout = 0;
          fint destruct = 0;
-         fint level = 0;
+         fint8 level = 0;
+         fint level_fint = 0;
 
          /*
           * Find the next descriptor in input set.
           */
-         gdsd_find_c( dsc, name2, NULL, &recno, &level );
-         if (!recno) { level = 0; break; }    /* nothing found, so leave loop */
-         if (level < 0) { dscerr = level; level = 0; break; }
+         gdsd_find_c( dsc, name2, NULL, &recno, &level_fint );
+         if (!recno) { level_fint = 0; break; }    /* nothing found, so leave loop */
+         if (level_fint < 0) { dscerr = level_fint; level_fint = 0; break; }
          /*
           * is it a special descriptor ?
           */
@@ -798,8 +799,9 @@ static void copy_descriptors( set_struct set1 , set_struct set2 )
              */
             for (k = 0; k < set2.naxis; k++) {
                fint cerror = 0;
-
+               level = level_fint;
                grid2[k] = gdsc_grid_c( name2, &axnum2[k], &level, &cerror );
+               level_fint = (fint)level;
                if (cerror) {                                   /* not defined */
                   def2[k] = 0;
                } else {                                            /* defined */
@@ -820,7 +822,7 @@ static void copy_descriptors( set_struct set1 , set_struct set2 )
                   if (def2[k]) {
                      fint  n;
                      fint  npos = set2.ax[axnum2[k]-1].npos;
-                     fint *pos2 = set2.ax[axnum2[k]-1].pos;
+                     fint8 *pos2 = set2.ax[axnum2[k]-1].pos;
 
                      for (n = 0; n < npos; n++) {
                         if (pos2[n] == grid2[k]) break;
@@ -833,7 +835,7 @@ static void copy_descriptors( set_struct set1 , set_struct set2 )
             if (destruct) {                           /* put in destruct list */
                des_buf = (des_struct *) realloc( des_buf, sizeof(des_struct) * ++des_num );
                strncpy( des_buf[des_num-1].dsc, dsc.a, MAXDSCNAMLEN );
-               des_buf[des_num-1].level = level;
+               des_buf[des_num-1].level = level_fint;
             }
          }
       } while (recno);
@@ -860,9 +862,8 @@ static void copy_descriptors( set_struct set1 , set_struct set2 )
       fint defin = 0;                 /* nuber of defined grids inside subset */
       fint defout = 0;               /* nuber of defined grids outside subset */
       fint flag;          /* flag, when 1 do copy, else don't copy descriptor */
-      fint level1 = 0;                 /* level at which descriptor was found */
-      fint level2 = 0;           /* level to which descriptor is to be copied */
-
+      fint8 level1 = 0;                 /* level at which descriptor was found */
+      fint8 level2 = 0;           /* level to which descriptor is to be copied */
       /*
        * Find the next descriptor in input set.
        */
@@ -878,7 +879,9 @@ static void copy_descriptors( set_struct set1 , set_struct set2 )
          for (k = 0; k < set1.naxis; k++) {
             fint cerror = 0;
 
+            //level1_fint8 = level1;
             grid1[k] = gdsc_grid_c( name1, &axnum1[k], &level1, &cerror );
+            //level1 = (fint)level1_fint8;
             if (cerror) {                                      /* not defined */
                def1[k] = 0;
             } else {                                               /* defined */
@@ -928,8 +931,8 @@ static void copy_descriptors( set_struct set1 , set_struct set2 )
                      fint  found = 0;
                      fint  n;
                      fint  npos = set1.ax[axnum1[k]-1].npos;
-                     fint *pos1 = set1.ax[axnum1[k]-1].pos;
-                     fint *pos2 = set2.ax[axnum2[k]-1].pos;
+                     fint8 *pos1 = set1.ax[axnum1[k]-1].pos;
+                     fint8 *pos2 = set2.ax[axnum2[k]-1].pos;
 
                      for (n = 0; !found && n < npos; n++) {
                         if (pos1[n] == grid1[k]) found = n + 1;
@@ -957,6 +960,7 @@ static void copy_descriptors( set_struct set1 , set_struct set2 )
             if (def2[k]) {
                level2 = gdsc_word_c( name2, &axnum2[k], &grid2[k],
                   &level2, &cerror );
+               //level2 = level2_fint8;
             }
          }
          /*
@@ -1063,7 +1067,7 @@ Files:        gdsinp.c
 Author:       K.G. Begeman
 
 Use:          INTEGER GDSINP( SET      ,  I/O  character*(*)
-                              SUBSET   ,   O   integer array
+                              SUBSET   ,   O   integer array*8
                               MAXSUB   ,   I   integer
                               DEFAULT  ,   I   integer
                               KEYWORD  ,   I   character*(*)
@@ -1154,7 +1158,7 @@ Updates:      Jan 22, 1990: KGB, Document created.
 Fortran to C interface:
 
 @integer function gdsinp( character,
-@                         integer  ,
+@                         integer*8  ,
 @                         integer  ,
 @                         integer  ,
 @                         character,
@@ -1169,7 +1173,7 @@ Fortran to C interface:
 */
 
 fint gdsinp_c( fchar  set      ,
-               fint  *subsets  ,
+               fint8  *subsets  ,
                fint  *maxsub   ,
                fint  *defmode  ,
                fchar  keyword  ,
@@ -1190,7 +1194,7 @@ fint gdsinp_c( fchar  set      ,
    fint        fatal = 4;                                     /* fatal errors */
    fint        gerror;                               /* gds error return code */
    fint        l;
-   fint        level = 0;                                /* subset top level  */
+   fint8        level = 0;                                /* subset top level  */
    fint        mode = (*defmode & 3);                /* stripped default mode */
    fint        n;
    fint        ndef = 0;                     /* number of axes outside subset */
@@ -1260,6 +1264,7 @@ fint gdsinp_c( fchar  set      ,
       if (!seterr) if (!tobool(gds_exist_c( name, &gerror )) || gerror) seterr = 2;
       if (!seterr) if (*maxaxes < gdsc_ndims_c( name, &level )) seterr = 3;
       if (!seterr) if (set.l < name.l) seterr = 4;
+      anyoutf(1, "debug gdsinp.c 1");
       if (!seterr) {
          fint axnum;
 
@@ -1279,6 +1284,7 @@ fint gdsinp_c( fchar  set      ,
                   if (m) m = -1; else m = n + 1;
                }
             }
+            anyoutf(1, "debug gdsinp.c 2");
             switch(m) {
                case -1: {                             /* axis name not unique */
                   seterr = 5;
@@ -1304,15 +1310,16 @@ fint gdsinp_c( fchar  set      ,
                      fint  n;
                      fint  nold;
                      fint  ntot;
-                     fint *nptr;
+                     fint8 *nptr;
 
                      nold = set_info.ax[axnum-1].npos;
                      if (nold) nptr = set_info.ax[axnum-1].pos; else nptr = NULL;
                      ntot = nold + nval;
-                     nptr = (fint *) realloc( (char *) nptr, ntot * sizeof( fint ) );
+                     nptr = (fint8 *) realloc( (char *) nptr, ntot * sizeof( fint8 ) );
                      set_info.ax[axnum-1].npos = ntot;
                      set_info.ax[axnum-1].pos = nptr;
                      for (n = 0; n < nval; n++) nptr[nold+n] = ints[n];
+                     anyoutf(1, "setting nptr[nold+n] = ints[n] = %d", ints[n]);
                   }
                   free( ints );
                   break;
@@ -1330,6 +1337,7 @@ fint gdsinp_c( fchar  set      ,
             sub = parse( NULL, sep );               /* get next position/axis */
          }
       }
+      anyoutf(1, "debug gdsinp.c 3");
       if (!seterr) {                            /* check dimensions of subset */
          subdim = set_info.naxis - ndef;               /* dimension of subset */
          set_info.subdim = subdim;                           /* put in buffer */
@@ -1343,6 +1351,7 @@ fint gdsinp_c( fchar  set      ,
             }
          }
       }
+      anyoutf(1, "debug gdsinp.c 4");
       if (!seterr) {                             /* fill in default positions */
          fint m;
 
@@ -1353,9 +1362,10 @@ fint gdsinp_c( fchar  set      ,
                if (!npos) {               /* default is all positions on axis */
                   fint n;
                   npos = set_info.ax[m].npos = set_info.ax[m].naxis;
-                  set_info.ax[m].pos = (fint *) calloc( npos, sizeof(fint) );
+                  set_info.ax[m].pos = (fint8 *) calloc( npos, sizeof(fint8) );
                   for (n = 0; n < npos; n++) {
                      set_info.ax[m].pos[n] = set_info.ax[m].low + n;
+                     anyoutf(1, "setting pos[%d] = %ld", n, set_info.ax[m].pos[n]);
                   }
                } else {
                   fint n;
@@ -1370,6 +1380,7 @@ fint gdsinp_c( fchar  set      ,
             }
          }
       }
+      anyoutf(1, "debug gdsinp.c 5");
       if (!seterr) {                      /* check here the number of subsets */
          if (*defmode & 4) {
             if (r != *maxsub) seterr = 11;       /* Unequal number of subsets */
@@ -1378,6 +1389,7 @@ fint gdsinp_c( fchar  set      ,
          }
          if ((*class == 2) && (r == 1)) seterr = 13;
       }
+      anyoutf(1, "debug gdsinp.c 6");
       if (!seterr) {             /* now calculate the subset coordinate words */
          fint        cerror = 0;
          fint        done = 0;
@@ -1390,9 +1402,11 @@ fint gdsinp_c( fchar  set      ,
          }
          m1 = 0;
          pos = (pos_struct *) calloc( set_info.naxis, sizeof(pos_struct) );
+         anyoutf(1, "calc subset coord words: %d", set_info.naxis);
          for (n = 0; n < set_info.naxis; n++) {
             fint m = set_info.ax[n].def;
-
+            anyoutf(1, "set_info.ax[n].pos....");
+            //anyoutf(1, "set_info.ax[n].pos[0]=%ld", set_info.ax[n].pos[0]);
             if (m) {
                m2 = subdim + m - 1;
                axperm[m2] = n + 1;
@@ -1407,7 +1421,7 @@ fint gdsinp_c( fchar  set      ,
             }
          }
          while (done < r) {
-            fint cw = 0;
+            fint8 cw = 0;
 
             for (n = 0; n < ndef; n++) {
                fint c = pos[n].count;
@@ -1415,13 +1429,16 @@ fint gdsinp_c( fchar  set      ,
                   pos[n].count = c = 0;
                   pos[n+1].count += 1;
                }
+               anyoutf(1, "ok, creating word: cw=%ld axnum=%d pos=%ld name=%s", cw, pos[n].axnum, pos[n].pos[c], name.a);
                cw = gdsc_word_c( name, &pos[n].axnum, &pos[n].pos[c], &cw, &cerror );
+               anyoutf(1, "ok, created  word: cw=%ld", cw);
             }
             pos[0].count += 1;
             subsets[done++] = cw;
          }
          free( pos );                                    /* deallocate memory */
       }
+      anyoutf(1, "debug gdsinp.c 7");
       switch(seterr) {                           /* print the errors (if any) */
          case 1: {
             strcpy( errmes, "No set name entered!" );
@@ -1625,6 +1642,7 @@ fint gdsout_c( fchar  set      ,
    fint        k = -1;
    fint        l;
    fint        level = 0;                                /* subset top level  */
+   fint8       level_fint8 = 0;
    fint        mode = (*defmode & 3);                /* stripped default mode */
    fint        n;
    fint        ndef = 0;                     /* number of axes outside subset */
@@ -1696,7 +1714,8 @@ fint gdsout_c( fchar  set      ,
          if (gerror) {			                      /* set not okay */
             seterr = -1;
          } else {
-            if (*maxaxes < gdsc_ndims_c( name, &level )) seterr = 3;
+            if (*maxaxes < gdsc_ndims_c( name, &level_fint8 )) seterr = 3;
+            level = (fint)level_fint8;
             if (!seterr) {
                set_info = get_set_info( name );               /* get set info */
                set_info.change = out_buf[k].change;
@@ -1759,12 +1778,12 @@ fint gdsout_c( fchar  set      ,
                      fint  n;
                      fint  nold;
                      fint  ntot;
-                     fint *nptr;
+                     fint8 *nptr;
 
                      nold = set_info.ax[axnum-1].npos;
                      if (nold) nptr = set_info.ax[axnum-1].pos; else nptr = NULL;
                      ntot = nold + nval;
-                     nptr = (fint *) realloc( (char *) nptr, ntot * sizeof( fint ) );
+                     nptr = (fint8 *) realloc( (char *) nptr, ntot * sizeof( fint8 ) );
                      set_info.ax[axnum-1].npos = ntot;
                      set_info.ax[axnum-1].pos = nptr;
                      for (n = 0; n < nval; n++) nptr[nold+n] = ints[n];
@@ -1845,7 +1864,7 @@ fint gdsout_c( fchar  set      ,
 
                if (!npos) {               /* default is all positions on axis */
                   npos = set_info.ax[m].npos = set_info.ax[m].naxis;
-                  set_info.ax[m].pos = (fint *) calloc( npos, sizeof(fint) );
+                  set_info.ax[m].pos = (fint8 *) calloc( npos, sizeof(fint8) );
                   for (n = 0; n < npos; n++) {
                      set_info.ax[m].pos[n] = set_info.ax[m].low + n;
                   }
@@ -2187,7 +2206,7 @@ fint gdsout_c( fchar  set      ,
             }
          }
          while (done < r) {
-            fint cw = 0;
+            fint8 cw = 0;
 
             for (n = 0; n < ndef; n++) {
                fint c = pos[n].count;
@@ -2595,7 +2614,7 @@ void gdsasn_c( fchar keyin, fchar keyout, fint *class )
       for (n = naxis; n < in_buf[ki].naxis; n++) {
          fint  np;
          fint  npos = in_buf[ki].ax[axnum[n]].npos;
-         fint *pos = in_buf[ki].ax[axnum[n]].pos;
+         fint8 *pos = in_buf[ki].ax[axnum[n]].pos;
          fint  sum = 0;
          fint  pmask = 0;
          fint  smask = 0;
@@ -3025,11 +3044,11 @@ Updates:      Mar  6, 1990: KGB, Document created.
 
 Fortran to C interface:
 
-@ subroutine gdscas( character, integer, integer )
+@ subroutine gdscas( character, integer*8, integer )
 
 */
 
-void gdscas_c( fchar gdsoutkey, fint *selsubset, fint *axcount )
+void gdscas_c( fchar gdsoutkey, fint8 *selsubset, fint *axcount )
 {
    char   kbuf[MAXKEYLEN];
    fchar  orig_set;

@@ -205,6 +205,7 @@ N     Get axis names and prepare axis lables
       for m = 1, setdim
 N        Get name of axis
          axname(m) = gdsc_name( set, axperm(m), gerror )
+         call anyout(8, axname)
 N        Reset label
          axlab(m) = ' '
 N        Length of axis name

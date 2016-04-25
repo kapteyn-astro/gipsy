@@ -35,6 +35,10 @@
 #include "userfio.h"
 #include "gds___server.h"
 
+#include <sys/stat.h>
+#include <fcntl.h>
+
+
 typedef struct _server {   
    struct _server *next;    /* link to next block */
    char      *dir;          /* directory name */
@@ -48,12 +52,14 @@ typedef struct _server {
 #define NNew(n,type) ((type *)calloc(n,sizeof(type)))
 #define Delete(x)  {free(x); x=NULL;}
 
+static char *StrDup(char*);
 static char *RealName(char *name);
 static char *StrDup(char*);
-static int ServerConnect(server srv);
+static int ServerConnect(server srv, char* type);
 static char *gds___dirid(char *dirname);
 static server srvlist=NULL;
 static int srverr;
+static int setname_is64bit(char *name);
 
 
 /* ========================================================================== */
@@ -139,13 +145,20 @@ extern gdsserver gds___server(char *name)
       }
    }
    
+   
 /*
  * No appropriate server known: find server.
  */
    current      = New(_server);
    current->dir = dir;
    current->id  = srvid;
-   if (!ServerConnect(current)) {
+   char* type = "";
+   if(setname_is64bit(name)) {
+	   type = "64";
+   }
+   printf("connect: type: %s\n", type);
+   fflush(stdout);
+   if (!ServerConnect(current, type)) {
       current->next = srvlist;
       srvlist       = current;
    } else {
@@ -443,7 +456,7 @@ extern int gds___srverr(void)
 /* -------------------------------------------------------------------------- */
 /*                                 ServerConnect                              */
 /* -------------------------------------------------------------------------- */
-static int ServerConnect(server current)
+static int ServerConnect(server current, char* type)
 {
 
    int    result, nbytes, status;
@@ -472,20 +485,25 @@ static int ServerConnect(server current)
    close(fd);
    close(fd2);
 
-   sprintf(filename,"%s/.gds_sockets%s",getenv("HOME"),current->id);
+   sprintf(filename,"%s/.gds%s_sockets%s",getenv("HOME"),type,current->id);
    if (!(f = fopen(filename,"r"))) {
       /* no sockets file: start server */
       int pid=fork();
       if (!pid) {
                                   /* ---- child (server) process branch ---- */
+         char execpath[200];
          char execname[100];
          if (chdir(current->dir)) {
             printf("chdir failed\n");
             exit(1);
          }
-         strcpy(execname,getenv("gip_exe"));
-         strcat(execname,"/gdsserver");
-         if (execl(execname,"gdsserver",current->id,NULL)) exit(1);
+		 sprintf(execname, "gdsserver%s", type);
+         sprintf(execpath, "%s/%s", getenv("gip_exe"), execname);
+         //strcpy(execname,getenv("gip_exe"));
+         //strcat(execname,"/gdsserver");
+		 printf("starting %s as %s\n", execpath, execname);
+         if (execl(execpath,execname,current->id,NULL)) exit(1);
+		 //if (execl(execname,"gdsserver",current->id,NULL)) exit(1);
       } else {
                                  /* ---- parent (client) process branch ---- */
          waitpid(pid, &status, 0);             /* wait until server is ready */
@@ -499,7 +517,7 @@ static int ServerConnect(server current)
    fclose(f);
    if (nf<2) {
       remove(filename);                                  /* bad sockets file */
-      return ServerConnect(current);
+      return ServerConnect(current,type);
    }
    
    if (!strcmp(host,netaddr())) {
@@ -514,7 +532,7 @@ static int ServerConnect(server current)
       /* failed to connect - if existing sockets file: try again, else fail */
          close(fd);
          remove(filename);
-         return started ? -1 : ServerConnect(current);
+         return started ? -1 : ServerConnect(current,type);
       }
    } else {
                                     /* 'foreign' server: use Internet socket */
@@ -533,16 +551,16 @@ static int ServerConnect(server current)
       /* failed to connect - if existing sockets file: try again, else fail  */
          close(fd);
          remove(filename);
-         return started ? -1 : ServerConnect(current);
+         return started ? -1 : ServerConnect(current, type);
       }
    }
    /*
     *  Try to get write permission, or else read permission.
     */
-   sprintf(filename,"%s/.gds_write",getenv("HOME"));
+   sprintf(filename,"%s/.gds%s_write",getenv("HOME"), type);
    f = fopen(filename,"r");
    if (!f) {
-      sprintf(filename,"%s/.gds_read",getenv("HOME"));
+      sprintf(filename,"%s/.gds%s_read",getenv("HOME"), type);
       f = fopen(filename,"r");
    }
    if (f) {
@@ -555,8 +573,13 @@ static int ServerConnect(server current)
    u.b[1]             = OS_FLOATING_TYPE;
    request.head.id    = u.l;
    request.pwd        = pwd;
-   request.version    = VERSION;
-   request.subversion = SUBVERSION;
+   if(strcmp(type, "64") == 0) {
+	request.version    = VERSION;
+	request.subversion = SUBVERSION;
+   } else {
+	request.version    = VERSION_32;
+	request.subversion = SUBVERSION_32;
+   }
    result = gds___srvreq((gdsserver)current, (void*)&request,
                           sizeof(request), &nbytes);
    if (result) close(fd);
@@ -663,6 +686,32 @@ static char *StrDup (char *orig)
    strcpy(result,orig);
    return result;
 }
+/*
+typedef struct {
+   fint   version;
+   fint   subversion;
+} _header, *header;
+*/
+static int setname_is64bit(char *name) {
+//return 1; }
+	//*
+	int fd;
+	fint version;
+	char desc_name[200];
+	strcpy(desc_name, name);
+	strcat(desc_name, DESCR);
+   fd = open(desc_name,O_RDONLY,NULL);
+   if (fd<0) {
+	   /* if file does not exist yet, we'll make it a 64 bit file */
+	   anyoutf(1, "file %s does not exist yet, we will use the 64 bit server", desc_name);
+	   return 1;
+   }
+   read(fd, &version, sizeof(fint));
+   anyoutf(1, "file %s is %s", desc_name, (version >= 3) ? "64 bit" : "32 bit");
+   return (version >= 3);
+}/**/
+
+
 
 /* -------------------------------------------------------------------------- */
 /*                                 gds___server.h                             */

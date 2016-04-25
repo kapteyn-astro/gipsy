@@ -66,10 +66,10 @@
 typedef struct {                        /* bookkeeping per transfer */
    fint dims;                           /* dimension of database */
    off_t fptr;                          /* points to next file position */
-   fint left[GDS_MAXDIM];               /* counters along sub database */
-   fint size[GDS_MAXDIM];               /* size of sub database */
-   fint step[GDS_MAXDIM];               /* step when overflow */
-   fint todo;                           /* number of pixels still to handle */
+   fint8 left[GDS_MAXDIM];               /* counters along sub database */
+   fint8 size[GDS_MAXDIM];               /* size of sub database */
+   fint8 step[GDS_MAXDIM];               /* step when overflow */
+   fint8 todo;                           /* number of pixels still to handle */
 #ifdef  FPC                             /* floating point conversion */
    fint type;                           /* floating point type */
 #endif                                  /* floating point conversion */
@@ -108,17 +108,17 @@ static  void    gdsi_close( int fi )    /* image file descriptor */
  */
 
 static  tid_struct      initfptr( fchar set ,   /* the set name */
-                                  fint  *cwlo , /* lower c.w. */
-                                  fint  *cwup ) /* upper c.w. */
+                                  fint8  *cwlo , /* lower c.w. */
+                                  fint8  *cwup ) /* upper c.w. */
 {
-   fint         b1;                     /* lower box limit */
-   fint         b2;                     /* upper box limit */
-   fint         f1;                     /* lower frame limit */
-   fint         f2;                     /* upper frame limit */
-   fint         ftotal = 1;             /* pixel counter */
+   fint8         b1;                     /* lower box limit */
+   fint8         b2;                     /* upper box limit */
+   fint8         f1;                     /* lower frame limit */
+   fint8         f2;                     /* upper frame limit */
+   fint8         ftotal = 1;             /* pixel counter */
    fint         gerror = 0;             /* GDS error return */
    fint         n;                      /* counter */
-   fint         zero = 0;               /* just zero */
+   fint8         zero = 0;               /* just zero */
    tid_struct   r;                      /* return value */
 
    r.dims = gdsc_ndims_c( set, &zero ); /* get number of axes */
@@ -137,12 +137,12 @@ static  tid_struct      initfptr( fchar set ,   /* the set name */
    gdsc_range_c( set, &zero, &f1, &f2, &gerror );
    for (n = 0; n < r.dims; n++) {       /* loop to initialize the struct */
       fint      axnum = n + 1;          /* the axis number */
-      fint      blo;                    /* lower box grid */
-      fint      bup;                    /* upper box grid */
-      fint      bsize;                  /* number of box grids */
-      fint      flo;                    /* lower frame grid */
-      fint      fup;                    /* upper frame grid */
-      fint      fsize;                  /* number of frame grids */
+      fint8      blo;                    /* lower box grid */
+      fint8      bup;                    /* upper box grid */
+      fint8      bsize;                  /* number of box grids */
+      fint8      flo;                    /* lower frame grid */
+      fint8      fup;                    /* upper frame grid */
+      fint8      fsize;                  /* number of frame grids */
 
       blo = gdsc_grid_c( set, &axnum, &b1, &gerror );
       bup = gdsc_grid_c( set, &axnum, &b2, &gerror );
@@ -153,7 +153,7 @@ static  tid_struct      initfptr( fchar set ,   /* the set name */
        * Only reads and writes along increasing axis coordinates
        * are allowed!
        */
-      if (blo > bup) { fint sav = blo; blo = bup; bup = sav; }
+      if (blo > bup) { fint8 sav = blo; blo = bup; bup = sav; }
       flo = gdsc_grid_c( set, &axnum, &f1, &gerror );
       fup = gdsc_grid_c( set, &axnum, &f2, &gerror );
       bsize = bup - blo + 1;            /* size of box */
@@ -202,11 +202,11 @@ static  off_t    movefptr( tid_struct *r )       /* the transfer struct */
  */
 
 static  off_t   nextfptr( tid_struct *r ,       /* transfer structure */
-                          fint       *nbuf ,    /* number of pixels to do */
-                          fint       *np )      /* pixels we can do */
+                          fint8       *nbuf ,    /* number of pixels to do */
+                          fint8       *np )      /* pixels we can do */
 {
    off_t fptr = r->fptr;                /* current file position */
-   fint step;                           /* the step size */
+   fint8 step;                           /* the step size */
 
    if ((*nbuf) > r->todo) (*nbuf) = r->todo;
    (*np) = 0;                           /* reset */
@@ -234,8 +234,8 @@ static  off_t   nextfptr( tid_struct *r ,       /* transfer structure */
  */
 
 static  fint    gdsi_open( fchar set ,          /* name of set */
-                           fint  *cwlo ,        /* lower c.w. of box */
-                           fint  *cwup ,        /* upper c.w. of box */
+                           fint8  *cwlo ,        /* lower c.w. of box */
+                           fint8  *cwup ,        /* upper c.w. of box */
                            int   qtid )         /* read or write tid */
 {
    fint         itid = 0;               /* transfer id */
@@ -340,23 +340,23 @@ Updates:      May 21, 1987: WZ, istalled.
 
 Fortran to C interface:
 
-@ subroutine gdsi_read( character, integer, integer, real, integer, integer, integer )
+@ subroutine gdsi_read( character, integer*8, integer*8, real, integer*8, integer*8, integer*8 )
 
 */
 
 void    gdsi_read_c( fchar set ,                /* the set name */
-                     fint  *cwlo ,              /* lower coordinate word */
-                     fint  *cwup ,              /* upper coordinate word */
+                     fint8  *cwlo ,              /* lower coordinate word */
+                     fint8  *cwup ,              /* upper coordinate word */
                      float *data ,              /* the data buffer */
-                     fint  *size ,              /* size of buffer above */
-                     fint  *done ,              /* number done */
+                     fint8  *size ,              /* size of buffer above */
+                     fint8  *done ,              /* number done */
                      fint  *tid )               /* transfer id */
 {
    fint         ltid;                   /* local transfer id */
-   fint         ndone;                  /* number of pixels done */
-   fint         nleft;                  /* number of pixels left */
-   fint         nread;                  /* number done */
-   fint         ntotl;                  /* number to do */
+   fint8         ndone;                  /* number of pixels done */
+   fint8         nleft;                  /* number of pixels left */
+   fint8         nread;                  /* number done */
+   fint8         ntotl;                  /* number to do */
    int          f;                      /* file descriptor */
    tid_struct   *ctid;                  /* transfer struct */
 
@@ -392,9 +392,9 @@ void    gdsi_read_c( fchar set ,                /* the set name */
    do {
       off_t     eptr;                   /* end position */
       off_t     fptr = nextfptr( ctid, &nleft, &ndone );
-      fint      nptr;                   /* number of positions */
-      size_t    nd;                     /* number of bytes done */
-      size_t    nr;                     /* number of bytes to be read */
+      fint8      nptr;                   /* number of positions */
+      fint8    nd;                     /* number of bytes done */
+      fint8    nr;                     /* number of bytes to be read */
 
       eptr = lseek(f, 0, SEEK_END) / sizeof( float );   /* get end position */
       nptr = eptr - fptr;               /* number of positions */
@@ -420,14 +420,18 @@ void    gdsi_read_c( fchar set ,                /* the set name */
          }
 #ifdef  FPC                             /* floating point conversion */
          if (OS_FLOATING_TYPE != ctid->type) {
-            spfpfl_c( &ctid->type, &data[nread], &data[nread], &nptr );
+        	fint nptr_fint;
+            spfpfl_c( &ctid->type, &data[nread], &data[nread], &nptr_fint );
+            nptr = nptr_fint;
          }
 #endif                                  /* floating point conversion */
          nread += nptr;                 /* update */
          ndone -= nptr;                 /* update */
       }
       if (ndone) {                      /* not yet done */
-         setnfblank_c( &data[nread], &ndone );  /* fill with blanks */
+    	 fint ndone_fint;
+         setnfblank_c( &data[nread], &ndone_fint );  /* fill with blanks */
+         ndone = ndone_fint ;
          nread += ndone;                /* update */
       }
    } while (nleft);                     /* until all done */
@@ -515,25 +519,27 @@ Updates:      May 21, 1987: WZ, installed.
 
 Fortran to C interface:
 
-@ subroutine gdsi_write( character, integer, integer, real, integer, integer, integer )
+@ subroutine gdsi_write( character, integer*8, integer*8, real, integer*8, integer*8, integer )
 
 */
 
 void    gdsi_write_c( fchar set ,               /* the set name */
-                      fint  *cwlo ,             /* lower coordinate word */
-                      fint  *cwup ,             /* upper coordinate word */
+                      fint8  *cwlo ,             /* lower coordinate word */
+                      fint8  *cwup ,             /* upper coordinate word */
                       float *data ,             /* the data to write */
-                      fint  *size ,             /* size of buffer above */
-                      fint  *done ,             /* number done */
+                      fint8  *size ,             /* size of buffer above */
+                      fint8  *done ,             /* number done */
                       fint  *tid )              /* transfer id */
 {
    fint         ltid;                   /* local transfer id */
-   fint         ndone;                  /* number of pixels done */
-   fint         nleft;                  /* number of pixels left */
-   fint         ntotl;                  /* number of pixels to do */
-   fint         nwrit;                  /* counts number of pixels done */
+   fint8         ndone;                  /* number of pixels done */
+   fint8         nleft;                  /* number of pixels left */
+   fint8         ntotl;                  /* number of pixels to do */
+   fint8         nwrit;                  /* counts number of pixels done */
    int          f;                      /* file descriptor */
    tid_struct   *ctid;                  /* transfer struct */
+
+   /*anyoutf(1, "gds write: %lld %lld\n", cwlo, cwup, size);*/
 
    if (tobool(presentn_c( tid ))) {     /* argument present */
       ltid = (*tid);                    /* then copy it */
@@ -607,9 +613,9 @@ void    gdsi_write_c( fchar set ,               /* the set name */
       lseek( f, fptr * sizeof( float ), SEEK_SET );
 #ifdef  FPC                             /* floating point conversion */
       if (OS_FLOATING_TYPE != ctid->type) {
-         fint   pleft = ndone;
-         fint   pstep = NFLOATS;
-         fint   pwrit = nwrit;
+         fint8   pleft = ndone;
+         fint   pstep = NFLOATS; /* TODO: should this be fint8? */
+         fint8   pwrit = nwrit;
 
          while (pleft) {
             if (pstep > pleft) pstep = pleft;
@@ -747,7 +753,7 @@ Fortran to C interface:
 void    gdsi_cancel_c( fchar set ,              /* the set name */
                        fint  *tid )             /* the transfer id */
 {
-   int          f;                      /* file descriptor */
+   /*int          f;*/                      /* file descriptor */
    tid_struct   *ctid;                  /* transfer struct */
 
    if ((*tid) < 0) {                    /* error from previous call */
@@ -758,7 +764,7 @@ void    gdsi_cancel_c( fchar set ,              /* the set name */
    }
    if ((*tid) == 0) return;             /* already done */
    ctid = &tids[(*tid)-1];              /* get transfer struct */
-   f = ctid->ufid;                      /* get file descriptor */
+   /*f = ctid->ufid;*/                      /* get file descriptor */
    if (ctid->todo) {                    /* not yet finished */
       (*tid) = 0;                       /* reset */
       ctid->todo = 0;                   /* now its finished */
