@@ -39,7 +39,7 @@
 #include <fcntl.h>
 
 
-typedef struct _server {   
+typedef struct _server {
    struct _server *next;    /* link to next block */
    char      *dir;          /* directory name */
    char      *id;           /* server id */
@@ -86,7 +86,7 @@ Description:  gds___server() obtains a pointer to a structure associated with
               In case of failure NULL is returned. In this case gds___srverr()
               can be called to obtain the error code.
 
-Related docs: gds___srvreq.dc3, gds___srvsnd.dc3, gds___srvrcv.dc3, 
+Related docs: gds___srvreq.dc3, gds___srvsnd.dc3, gds___srvrcv.dc3,
               gds___srvcls.dc3, gds___srvnam.dc3, gds___srverr.dc3.
 
 Updates:      Mar 28, 1995: JPT, Document created.
@@ -108,7 +108,7 @@ extern gdsserver gds___server(char *name)
    server current;
    char   *dir, *srvid, *dirid;
    int    i;
-    
+
    dir = RealName(name);
    for (i=strlen(dir)-1; i>0; i--) {
       if (dir[i-1]=='/') {
@@ -126,7 +126,7 @@ extern gdsserver gds___server(char *name)
          return (gdsserver)current;
       }
    }
-   
+
 /*
  * Check whether directory is served under a different name.
  */
@@ -144,8 +144,8 @@ extern gdsserver gds___server(char *name)
          return (gdsserver)current;
       }
    }
-   
-   
+
+
 /*
  * No appropriate server known: find server.
  */
@@ -190,20 +190,20 @@ Use:          #include "gds___server.h"
                                void *request,
                                int size,
                                int *nbytes)
-   
+
               id         server 'object', obtained by calling gds___server().
               request    request to server. Requests are defined in gdscom.h.
               size       size of request (bytes).
               nbytes     output argument. If not NULL, it will receive the
                          number of bytes to be read or written as a result
                          of this request.
-               
+
               return value: zero on success; non-zero in case of errors.
-              
+
               A set name in a request must be specified relative to the
               directory in which the set resides.
 
-Related docs: gds___server.dc3, gds___srvsnd.dc3, gds___srvrcv.dc3, 
+Related docs: gds___server.dc3, gds___srvsnd.dc3, gds___srvrcv.dc3,
               gds___srvcls.dc3, gds___srvnam.dc3.
 
 Updates:      Mar 28, 1995: JPT, Document created.
@@ -218,7 +218,7 @@ extern int gds___srvreq(gdsserver id, void *request, int size, int *nbytes)
       fint       size;
       _uRequest  request;
    } reqmsg;
-   
+
    _gdsReply replymsg;
 
    reqmsg.size = rsize;
@@ -247,13 +247,13 @@ File:         gds___server.c
 
 Author:       J.P. Terlouw
 
-Use:          #include "gds___server.h" 
+Use:          #include "gds___server.h"
               int gds___srvsnd( gdsserver id, void* data, int nbytes)
-              
+
               id         server 'object', obtained by calling gds___server().
               data       data to be sent
               nbytes     number of bytes to be sent.
-              
+
               return value:
               success:   number of bytes still to be transferred;
               error:     -1
@@ -268,7 +268,7 @@ extern int gds___srvsnd(gdsserver id, void* data, int nbytes)
 {
    server current=(server)id;
    int    result;
-   
+
    if ((nbytes>=0) && (nbytes <= current->nbytes)) {
       if (nbytes) {
 #if defined(__linux__) | defined(__APPLE__)
@@ -282,7 +282,7 @@ extern int gds___srvsnd(gdsserver id, void* data, int nbytes)
    } else result = -1;
    return result;
 }
-   
+
 /* ========================================================================== */
 /*                                 gds___srvrcv                               */
 /* -------------------------------------------------------------------------- */
@@ -298,13 +298,13 @@ File:         gds___server.c
 
 Author:       J.P. Terlouw
 
-Use:          #include "gds___server.h" 
+Use:          #include "gds___server.h"
               int gds___srvrcv( gdsserver id, void* data, int nbytes)
-              
+
               id         server 'object', obtained by calling gds___server().
               data       data to be received
               nbytes     number of bytes to be received.
-              
+
               return value:
               success:   number of bytes still to be transferred;
               error:     -1
@@ -321,7 +321,7 @@ extern int gds___srvrcv(gdsserver id, void* vdata, int nbytes)
    char   *data=(char*)vdata;
    int    result;
    int    nread=0;
-   
+
    if (nbytes>=0) {
       while (nbytes>0) {
          nread = read(current->fd,data,nbytes);
@@ -357,7 +357,7 @@ Author:       J.P. Terlouw
 Use:          #include "gds___server.h"
               void gds___srvreq( void )
 
-Related docs: gds___server.dc3, gds___srvsnd.dc3, gds___srvrcv.dc3, 
+Related docs: gds___server.dc3, gds___srvsnd.dc3, gds___srvrcv.dc3,
               gds___srvreq.dc3, gds___srvnam.dc3.
 
 Updates:      Mar 28, 1995: JPT, Document created.
@@ -366,7 +366,7 @@ Updates:      Mar 28, 1995: JPT, Document created.
 extern void gds___srvcls(void)
 {
    server current;
-    
+
    while (current=srvlist) {
       srvlist = current->next;
       close(current->fd);
@@ -396,11 +396,11 @@ Use:          #include "gds___server.h"
 
               id         server 'object', obtained by calling gds___server().
               name       full-path set name.
-              
+
               return value:
               pointer to set name as expected by the GDS server
 
-Related docs: gds___server.dc3, gds___srvsnd.dc3, gds___srvrcv.dc3, 
+Related docs: gds___server.dc3, gds___srvsnd.dc3, gds___srvrcv.dc3,
               gds___srvreq.dc3, gds___srvcls.dc3.
 
 Updates:      Mar 28, 1995: JPT, Document created.
@@ -413,7 +413,7 @@ extern char *gds___srvnam(gdsserver id, char *name)
    static char result[GDS_NAMLEN+1];
    char        *cp;
    char        *fullname;
-    
+
    fullname = RealName(name);
    for(cp=fullname+strlen(fullname)-1; cp>fullname; cp--) {
       if (*(cp-1)=='/') break;
@@ -467,14 +467,14 @@ static int ServerConnect(server current, char* type)
    char   inet_name[SNLEN+1];
    char   unix_name[SNLEN+1];
    char   host[SNLEN+1];
-   
+
    union {
       fint l;
       char b[sizeof(fint)];
    } u;
-   
+
    _gdsConnect request;
-    
+
    fd  = dup(0);
    fd2 = dup(0);
    if (fd2<0) {
@@ -512,18 +512,18 @@ static int ServerConnect(server current, char* type)
          if (!(f = fopen(filename,"r"))) return -1;  /* sockets file problem */
       }
    }
-   nf = xscanf( f, "%*s %*s %*s", 
+   nf = xscanf( f, "%*s %*s %*s",
                SNLEN, host, SNLEN, unix_name, SNLEN, inet_name);
    fclose(f);
    if (nf<2) {
       remove(filename);                                  /* bad sockets file */
       return ServerConnect(current,type);
    }
-   
+
    if (!strcmp(host,netaddr())) {
                                      /* server on this host: use UNIX socket */
       struct sockaddr_un  uxaddr;              /* unix socket address struct */
-       
+
       fd = socket( AF_UNIX, SOCK_STREAM, 0 );               /* create socket */
       if (fd<0) return 0;
       uxaddr.sun_family = AF_UNIX;
@@ -540,7 +540,7 @@ static int ServerConnect(server current, char* type)
       struct hostent      *hp;               /* host entry struct */
       struct hostent      *gethostbyname( ); /* get host info */
       struct sockaddr_in  inaddr;            /* inet socket address struct */
-          
+
       fd = socket( AF_INET, SOCK_STREAM, 0);              /* create socket */
       if (fd<0) return 0;
       port = atoi(inet_name);
@@ -596,17 +596,17 @@ static int ServerConnect(server current, char* type)
 static char *gds___dirid(char *dirname)
 {
    int    status, nf;
-   long   device=0, inode=0; 
+   long   device=0, inode=0;
    struct stat statbuf;
    FILE   *f;
    static char result[50];
    char   filename[128];
-    
+
    strcpy(filename,dirname);
    strcat(filename,IDENTFILE);
    status = stat(dirname, &statbuf);         /* check directory accessibility */
    if (status) return NULL;
-   
+
 /* Try to read directory identification file.
  * If the inode number is this file is consistent with inode found by stat(),
  * assume that this is a correct ident file.
@@ -644,10 +644,10 @@ static char *gds___dirid(char *dirname)
 static char *RealName(char *name)
 {
    int    i;
-   char   linkbuffer[LNBLEN]; 
+   char   linkbuffer[LNBLEN];
    int    linklen;
    char  *result;
-   
+
    result = NNew(strlen(name)+strlen(DESCR)+1,char);
    strcpy(result,name); strcat(result,DESCR);
    while ((linklen = readlink(result,linkbuffer,LNBLEN)) >0) {
@@ -682,7 +682,7 @@ static char *RealName(char *name)
 static char *StrDup (char *orig)
 {
    char *result=NNew(strlen(orig)+1,char);
-   
+
    strcpy(result,orig);
    return result;
 }
@@ -703,11 +703,11 @@ static int setname_is64bit(char *name) {
    fd = open(desc_name,O_RDONLY,NULL);
    if (fd<0) {
 	   /* if file does not exist yet, we'll make it a 64 bit file */
-	   anyoutf(1, "file %s does not exist yet, we will use the 64 bit server", desc_name);
+	   printf("file %s does not exist yet, we will use the 64 bit server", desc_name);
 	   return 1;
    }
    read(fd, &version, sizeof(fint));
-   anyoutf(1, "file %s is %s", desc_name, (version >= 3) ? "64 bit" : "32 bit");
+   printf("file %s is %s", desc_name, (version >= 3) ? "64 bit" : "32 bit");
    return (version >= 3);
 }/**/
 
