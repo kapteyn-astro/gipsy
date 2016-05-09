@@ -5,3 +5,5 @@
 # ugly way to do defaults, but AM_LDFLAGS doesnt work
 CCLD=gfortran
 LDFLAGS=-ggdb2 $(top_srcdir)/sub/libgipsy.a
+
+LDADD = $(top_srcdir)/sub/libgipsy.a
