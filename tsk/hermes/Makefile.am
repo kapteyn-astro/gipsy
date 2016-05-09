@@ -1,8 +1,8 @@
 include $(top_srcdir)/common.mk
 include $(top_srcdir)/tasks.mk
 #AM_LDFLAGS=-ggdb2 $(top_srcdir)/sub/libgipsy.a
-#LINKER=gfortran
-#AM_LINK=$(LINKER) $(CFLAGS) $(LDFLAGS) -o $@
+#LINKER=gcc
+#AM_LINK=bla $(LINKER) $(CFLAGS) $(LDFLAGS) -o $@
 
 bin_PROGRAMS = thermes
 thermes_SOURCES=thermes.c mainloop.c keyboard.c screen.c taskmgr.c substi.c \
@@ -17,5 +17,8 @@ thermes_SOURCES=thermes.c mainloop.c keyboard.c screen.c taskmgr.c substi.c \
           dcderrstr.c dcdfile.c dcdgds.c dcdparse.c dcdscan.c stubs.c varmgr.c \
           showexpr.c calculator.c callback.c absname.c webhelp.c notifier.c
 
+$(thermes_SOURCES): ../hermes.src
+	$(top_srcdir)/exe/$(SYSTEM)/xfile $<
 thermes_LDFLAGS=-lcurses
-LDFLAGS=-ggdb2 $(top_srcdir)/sub/libgipsy.a
+#LDFLAGS=-ggdb2 $(top_srcdir)/sub/libgipsy.a
+#LDADD=$(top_srcdir)/sub/libgipsy.a
