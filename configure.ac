@@ -1,7 +1,7 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 
-AC_PREREQ([2.69])
+AC_PREREQ([2.63])
 AC_INIT([gipsy], [1.0], [gipsy@astro.rug.nl])
 AC_CONFIG_SRCDIR([inc/aborttask.h])
 AC_CONFIG_HEADERS([config.h])
@@ -15,6 +15,9 @@ AC_PROG_AWK
 AC_PROG_CC
 AC_PROG_F77
 #AC_PROG_INSTALL
+
+# older versions of automake need this
+AM_PROG_CC_C_O
 
 # Checks for libraries.
 
@@ -48,4 +51,24 @@ AC_PROG_RANLIB
 #AC_CHECK_FUNCS([atexit floor ftime ftruncate getcwd gethostbyname gethostname gettimeofday inet_ntoa memchr memmove memset mkdir modf pow select socket sqrt strchr strcspn strdup strerror strpbrk strrchr strspn strstr strtol strtoul uname])
 #AM_INIT_AUTOMAKE
 
+AM_CONDITIONAL([SYSTEM], [test $(uname) -eq "Darwin"])
+AC_CANONICAL_HOST
+
+case $host_os in
+  darwin* )
+        SYSTEM="apple_i64"
+        ;;
+  linux*)
+        SYSTEM="linux64"
+        ;;
+    *)
+        #Default Case
+        AC_MSG_ERROR([Your platform is not currently supported])
+        ;;
+esac
+
+AC_SUBST(SYSTEM)
 AC_OUTPUT
+
+
+
