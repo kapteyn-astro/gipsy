@@ -4,5 +4,5 @@
 
 # ugly way to do defaults, but AM_LDFLAGS doesnt work
 CCLD=$(F77)
-#LDFLAGS=-ggdb2 $(top_srcdir)/sub/libgipsy.a
+LDFLAGS=-ggdb3
 LDADD = $(top_srcdir)/sub/libgipsy.a

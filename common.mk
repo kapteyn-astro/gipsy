@@ -12,5 +12,5 @@
 	$(top_srcdir)/exe/$(SYSTEM)/f2cvv $<
 
 
-AM_CFLAGS=-Wall -ggdb2 -iquote$(top_srcdir)/inc
-AM_FFLAGS= -fno-backslash -fsecond-underscore
+AM_CFLAGS=-Wall -ggdb3 -iquote$(top_srcdir)/inc  -D__GFORTRAN__
+AM_FFLAGS= -fno-backslash -fsecond-underscore  -ggdb3 -D__GFORTRAN__
