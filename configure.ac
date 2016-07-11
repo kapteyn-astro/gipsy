@@ -8,7 +8,9 @@ AC_CONFIG_HEADERS([config.h])
 AM_INIT_AUTOMAKE
 AC_CONFIG_FILES([Makefile sub/Makefile tsk/Makefile
 	tsk/hermes/Makefile
-	tsk/gdsserver/Makefile])
+	tsk/gdsserver/Makefile
+	tsk/gdsserver64/Makefile
+	])
 
 # Checks for programs.
 AC_PROG_AWK
