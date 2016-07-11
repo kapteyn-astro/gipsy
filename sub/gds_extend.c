@@ -90,7 +90,7 @@ Updates:       Dec 21, 1990: WZ, migrated to C
 #include    <stdint.h>
 #include "userfio.h"
 #define     NAX_LEN  80
-#define     MAXFACT  2147483647
+#define     MAXFACT  9223372036854775807L
 
 void  gds_extend_c( fchar     set,                          /* name of set  */
                     fchar     axname,                       /* name of axis */
@@ -181,7 +181,6 @@ void  gds_extend_c( fchar     set,                          /* name of set  */
          set_info->size[iax] = size_i;
          factor = (int64_t)set_info->factor[iax] * 
                   (set_info->size[iax] + 1 );
-		anyoutf(1, "factor %ld", factor);
          if (factor>MAXFACT) {
             naxis--;
             key = tofchar( "NAXIS" );
