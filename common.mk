@@ -12,5 +12,7 @@
 	$(top_srcdir)/exe/$(SYSTEM)/f2cvv $<
 
 
-AM_CFLAGS=-Wall -ggdb3 -iquote$(top_srcdir)/inc  -D__GFORTRAN__
-AM_FFLAGS= -fno-backslash -fsecond-underscore  -ggdb3 -D__GFORTRAN__
+AM_CFLAGS=-Wall -O0 -ggdb3 -iquote$(top_srcdir)/inc  -D__GFORTRAN__
+AM_FFLAGS=-Wall -Wpedantic -Wno-unused-label -O0 -fno-backslash -fsecond-underscore  -ggdb3 -D__GFORTRAN__
+FFLAGS=-O0
+CFLAGS=-O0
