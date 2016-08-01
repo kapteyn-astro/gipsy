@@ -76,7 +76,7 @@ N     Maximum number of axes in set
       integer       maxsubs
 N     Maximum number of subsets
       parameter (maxsubs = 2048)
-      integer       maxbuf
+      integer(8)       maxbuf
 N     Size of data array
       parameter (maxbuf = 4096)
       integer       outdev
@@ -94,7 +94,7 @@ N     Permutation array of axes numbers
 N     Array with sizes of subset axis
       integer       axsize(maxaxes)
 N     Coordinate Words of choosen frame
-      integer       cwlo, cwhi
+      integer(8)       cwlo, cwhi
 N     Number of input subsets
       integer       nsub
 N     Array with subset coordinate words
@@ -111,15 +111,15 @@ C
 N     Labels for axes
       character*5   axlab(maxaxes)
 N     Arrays containing choosen frame
-      integer       blo(maxaxes), bhi(maxaxes)
+      integer(8)       blo(maxaxes), bhi(maxaxes)
 N     Grid counter
-      integer       g
+      integer(8)       g
 N     Various GDS error returns
       integer       gerror
 N     Arrays containing min and max position
-      integer       gmin(maxaxes), gmax(maxaxes)
+      integer(8)       gmin(maxaxes), gmax(maxaxes)
 N     Position of minimum and maximum
-      integer       imin, imax
+      integer(8)       imin, imax
 N     Length of axis name
       integer       l
 N     Loop counter
@@ -131,15 +131,15 @@ N     Loop counter
 N     Number of blanks in subsets
       integer       nblank(maxsubs)
 N     Number of points actually read from subset
-      integer       nd
+      integer(8)       nd
 N     Array containing number of pixels (dimension)
-      integer       nf(maxaxes)
+      integer(8)       nf(maxaxes)
 N     Number of points on axis inside frame 
-      integer       np
+      integer(8)       np
 N     Subset counter
       integer       ns
 N     Total number of pixels in subset
-      integer       ntotal
+      integer(8)       ntotal
 N     For output formatting
       integer       tabs(6)
 N     Logical indicating whether header update is possible
@@ -512,9 +512,9 @@ N     Set dimension
 N     Subset dimension
       integer subdim
 N     Grid positions of minimum
-      integer gmin(*)
+      integer(8) gmin(*)
 N     Grid positions of maximum
-      integer gmax(*)
+      integer(8) gmax(*)
 N     Minimum value
       real    amin
 N     Maximum value
