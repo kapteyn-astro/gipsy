@@ -160,7 +160,7 @@ C
 C     parameters:
 C
 N     Maximum size of buffer
-      integer            maxIObuf
+      INTEGER(8)            maxIObuf
       parameter        ( maxIObuf = 4096)
       CHARACTER*(*)      ident
       PARAMETER        ( ident = '  Version 1.0  Jul 22, 1990 ' )
@@ -198,7 +198,7 @@ N     Error codes
 N     Coordinate types
       integer            typ, skysys, prosys, velsys
 N     Coordinate words
-      integer            cwlo, cwhi
+      INTEGER(8)            cwlo, cwhi
 N     Real values
       double precision   crpix, crval, cdelt, crota, freq0, drval
 N     Logicals
@@ -206,8 +206,8 @@ N     Logicals
 N     Axis counter
       INTEGER            nax
 N     Grid vectors of entire frame of set
-      INTEGER            FgridLO( maxaxes )
-      INTEGER            FgridHI( maxaxes )
+      INTEGER(8)            FgridLO( maxaxes )
+      INTEGER(8)            FgridHI( maxaxes )
 C
 C     Functions:
 C
@@ -261,29 +261,30 @@ N     Id. for a function string
 N     Device number for output
       INTEGER            devnum
 N     Some counters
-      INTEGER            i, j, m, k
+      INTEGER            i, j, k
+      INTEGER(8)          m
 N     Total number of pixels in this set
-      INTEGER            totpixels
+      INTEGER(8)            totpixels
 N     One dimensional position in set array
-      INTEGER            pos
+      INTEGER(8)            pos
 N     Transfer id for output
       INTEGER            tid
 N     How many pixels are left?
-      INTEGER            pixelsleft
+      INTEGER(8)            pixelsleft
 N     How many pixels have been written?
-      INTEGER            pixelsdone
+      INTEGER(8)            pixelsdone
 N     Counter for MINMAX routine
       INTEGER            mcount
 N     How many pixels are there in the buffer
-      INTEGER            bufpixels
+      INTEGER(8)            bufpixels
 N     Variable used to determine n-dim. position
-      INTEGER            remain
+      INTEGER(8)            remain
 N     Number of pixels in n-1 dim sub structure
       INTEGER            NN
 N     Number of underlying complete substructures
-      INTEGER            num
+      INTEGER(8)            num
 N     Total index in input array
-      INTEGER            ind
+      INTEGER(8)            ind
 N     Array containing the function parameters
       REAL               x( maxaxes * maxiobuf )
 N     Array containing the function values
@@ -477,7 +478,7 @@ C----------------------------------------------------------------------
 C     Evaluate a function with number of parameters equal to or
 C     less than the number of axes in this set.
 C----------------------------------------------------------------------
-      CALL GDSC_RANGE( set, 0, cwlo, cwhi, gerror )
+      CALL GDSC_RANGE( set, 0_8, cwlo, cwhi, gerror )
 N     Get corners for all axes
       FOR i = 1, nax
         R1 = 0
