@@ -979,7 +979,7 @@ Author:        J.P. Terlouw
 
 Use:           CALL GDSD_READ( SET ,          Input    CHARACTER*(*)
                                KEY ,          Input    CHARACTER*20
-                               LEVEL ,        Input    INTEGER
+                               LEVEL ,        Input    INTEGER*8
                                BUFFER ,       Output   any type except CHARACTER
                                NBYTES ,       Input    INTEGER
                                POSITION ,     Input    INTEGER
@@ -1019,7 +1019,7 @@ Updates:      25-May-87   original document
                1-Mar-94   rewritten for GDS server
 #<
 ------------------------------------------------------------------------------*/
-extern void gdsd_read_c(fchar set, fchar key, fint *level, char buf[],
+extern void gdsd_read_c(fchar set, fchar key, fint8 *level, char buf[],
               fint *nb, fint *pos, fint *done, fint *err)
 {
    fint     level_i;
@@ -1078,7 +1078,7 @@ Author:        J.P. Terlouw
 
 Use:           CALL GDSD_WRITE( SET ,         Input    CHARACTER*(*)
                                 KEY ,         Input    CHARACTER*20
-                                LEVEL ,       Input    INTEGER
+                                LEVEL ,       Input    INTEGER*8
                                 BUFFER ,      Output   any type except CHARACTER
                                 NBYTES ,      Input    INTEGER
                                 POSITION ,    Input    INTEGER
@@ -1116,7 +1116,7 @@ Updates:      25-May-87   original document
                3-Mar-94   rewritten for GDS server
 #<
 ------------------------------------------------------------------------------*/
-extern void gdsd_write_c(fchar set, fchar key, fint *level, char buf[],
+extern void gdsd_write_c(fchar set, fchar key, fint8 *level, char buf[],
                          fint *nb, fint *pos, fint *done, fint *err)
 {
    fint      level_i;
@@ -1796,7 +1796,7 @@ Author:        J.P. Terlouw
 
 Use:           CALL GDSD_READC( SET ,          Input    CHARACTER*(*)
                                 KEY ,          Input    CHARACTER*20
-                                LEVEL ,        Input    INTEGER
+                                LEVEL ,        Input    INTEGER*8
                                 BUFFER ,       Output   CHARACTER*(*)
                                 NBYTES ,       Input    INTEGER
                                 POSITION ,     Input    INTEGER
@@ -1829,7 +1829,7 @@ Updates:       14-Dec-89   --  original document
                24-Mar-94   --  modified for GDS server
 #<
 ------------------------------------------------------------------------------*/
-void      gdsd_readc_c   (fchar set, fchar key, fint *level,
+void      gdsd_readc_c   (fchar set, fchar key, fint8 *level,
                           fchar buffer, fint *nbytes, fint *position,
                           fint *done, fint *error)
 {

@@ -16,12 +16,7 @@ File:         rfits.c
 Author:       K.G. Begeman
 
 Description:  The program RFITS is designed to load FITS files into
-              GIPSY sets. Since the F in FITS stands for flexible,
-              it is not that simple to comprehend the data structure
-              which is to be loaded. Therefore RFITS needs a lot of
-              interaction with the user, and the user must know what
-              is on tape and where it is on tape.
-              Since this program must also be flexible, it will always
+              GIPSY sets. yaks
               be in devellopment, which means that there will be
               a constant interaction between the user and the programmer.
               So don't hesitate to bring forward suggestions for
@@ -395,10 +390,10 @@ typedef struct {			/* structure for axis info */
    fint   skysys;			/* sky system code */
    fint   prosys;			/* projection system code */
    fint   velsys;			/* velocity system code */
-   fint   low;                          /* lower grid value on axis */
-   fint   upp;                          /* upper grid value on axis */
-   fint   min;				/* wanted lower grid value on axis */
-   fint   max;				/* wanted upper grid value on axis */
+   fint8   low;                          /* lower grid value on axis */
+   fint8   upp;                          /* upper grid value on axis */
+   fint8   min;				/* wanted lower grid value on axis */
+   fint8   max;				/* wanted upper grid value on axis */
    fint   grid;				/* grid position */
 } ax_struct;
 
@@ -408,7 +403,7 @@ typedef struct {			/* set info structure */
    char      instrumeb[MAXFTSNAMLEN];	/* name of instrument */
    fchar     set;			/* f character points to setb */
    fchar     instrume;			/* f character points to instrumeb */
-   fint      subset;			/* level of subset */
+   fint8      subset;			/* level of subset */
    double    epoch;			/* epoch of set */
    double    freq0;			/* rest frequency of set */
    fint      exist;			/* does set exist */
@@ -2272,14 +2267,14 @@ static	void	copydata( void )
  */
 {
    char   message[MAXTEXTLEN];			/* buffer for message */
-   fint   bmax[MAXAXES];			/* upper box coordinate */
-   fint   bmin[MAXAXES];			/* lower box coordinate */
+   fint8   bmax[MAXAXES];			/* upper box coordinate */
+   fint8   bmin[MAXAXES];			/* lower box coordinate */
    fint   bsr = 1;				/* back skip a record */
-   fint   cwlo = 0;				/* lower coordinate word */
-   fint   cwhi = 0;				/* upper coordinate word */
+   fint8   cwlo = 0;				/* lower coordinate word */
+   fint8   cwhi = 0;				/* upper coordinate word */
    fint   elev = 4;				/* error level (FATAL) */
-   fint   smax[MAXAXES];			/* upper frame coordinate */
-   fint   smin[MAXAXES];			/* lower frame coordinate */
+   fint8   smax[MAXAXES];			/* upper frame coordinate */
+   fint8   smin[MAXAXES];			/* lower frame coordinate */
    fint   gerror = 0;				/* GDS error code */
    fint   n;					/* loop counter */
    fint   nc = 0;				/* out count */
@@ -2323,7 +2318,8 @@ static	void	copydata( void )
    for (n = 0; n < set_buf.naxis; n++) {	/* loop over all axis */
       if (!set_buf.ax[n].matchax) {		/* not matched */
          fint axnum = n + 1;			/* axis number */
-         fint grid;				/* grid position */
+         fint8 grid;				/* grid position */
+         fint grid4;                /* TODO: userint_c needs a fint8 version */
 
          if (axnum < set_buf.naxis) {		/* cannot extend */
             if (set_buf.ax[n].naxis == 1) {	/* only one grid possible */
@@ -2336,7 +2332,8 @@ static	void	copydata( void )
 
                (void) sprintf( keyword, "GRID%d=", n + 1 );
                (void) sprintf( message, "Grid along %.*s", MAXFTSNAMLEN, set_buf.ax[n].ctype.a );
-               (void) userint_c( &grid, &one, &dlev, tofchar( keyword ), tofchar( message ) );
+               (void) userint_c( &grid4, &one, &dlev, tofchar( keyword ), tofchar( message ) );
+               grid = grid4; // TODO: so that we do not need this
                cancel_c( tofchar( keyword ) );
                if ((grid < set_buf.ax[n].low) || (grid > set_buf.ax[n].upp)) {
                   error_c( &one, COPYDATA_ERR1 );
@@ -2353,7 +2350,8 @@ static	void	copydata( void )
 
                (void) sprintf( keyword, "GRID%d=", n + 1 );
                (void) sprintf( message, "Grid along %.*s", MAXFTSNAMLEN, set_buf.ax[n].ctype.a );
-               (void) userint_c( &grid, &one, &dlev, tofchar( keyword ), tofchar( message ) );
+               (void) userint_c( &grid4, &one, &dlev, tofchar( keyword ), tofchar( message ) );
+               grid = grid4; // TODO: and here
                cancel_c( tofchar( keyword ) );
                if (grid < set_buf.ax[n].low) {	/* error */
                   error_c( &one, COPYDATA_ERR1 );
@@ -2605,7 +2603,6 @@ static	void	copydata( void )
    }
 }
 
-
 static	void	copyheader( void )
 /*
  * copyheader copies the relevant FITS descriptors to the GDS descriptor
@@ -2838,3 +2835,5 @@ MAIN_PROGRAM_ENTRY                              /* program entry */
    finis_c( );                                  /* exit servant mode */
    return( EXIT_SUCCESS );			/* exit with status */
 }
+
+

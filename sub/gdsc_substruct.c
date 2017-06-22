@@ -18,8 +18,8 @@ File:          gdsc_substruct.c
 Author:        W. Zwitser
 
 Use:           INTEGER  GDSC_SUBSTRUCT( SET,           Input       character
-                                        CLOW,          Input       integer
-                                        CUPP,          Input       integer
+                                        CLOW,          Input       integer(8)
+                                        CUPP,          Input       integer(8)
                                         ERROR )        In/Out      integer
 
                GDSC_SUBSTRUCT    level of CLOW and CUPP
@@ -39,8 +39,8 @@ Updates:       Dec  5, 1989: WZ, migrated to C
 #<
 
 @ integer function gdsc_substruct( character, 
-@                                  integer,
-@                                  integer,
+@                                  integer*8,
+@                                  integer*8,
 @                                  integer )
 
 ----------------------------------------------------------------------------*/
@@ -50,8 +50,8 @@ Updates:       Dec  5, 1989: WZ, migrated to C
 #include    "gdsd_basic.h"
 
 fint  gdsc_substruct_c( fchar    set,        /* name of set                 */
-                        fint    *coord_1,    /* lower left coordinate word  */
-                        fint    *coord_2,    /* upper right coordinate word */
+                        fint8    *coord_1,    /* lower left coordinate word  */
+                        fint8    *coord_2,    /* upper right coordinate word */
                         fint    *err )       /* error code                  */
 {
    fint        iax, err_up, grid_1, grid_2, new_coord = 0, naxis;

@@ -20,9 +20,9 @@ extern void gds_optimize_c (fchar set, fint *err);
 extern void gds_sync_c (fchar set, fint *err);
 extern fint gds_recover_c (fchar set);
 
-extern void gdsd_read_c(fchar set, fchar key, fint *level, char buf[],
+extern void gdsd_read_c(fchar set, fchar key, fint8 *level, char buf[],
                         fint *nb, fint *pos, fint *done, fint *err);
-extern void gdsd_write_c(fchar set, fchar key, fint *level, char buf[],
+extern void gdsd_write_c(fchar set, fchar key, fint8 *level, char buf[],
                          fint *nb, fint *pos, fint *done, fint *err);
 void gdsd_delete_c (fchar set, fchar key, fint *level, fint *err);
 extern void gdsd_delall_c(fchar set, fchar key, fint *err);

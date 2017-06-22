@@ -1,4 +1,4 @@
-/* gdilib.c
+    /* gdilib.c
 
 	Copyright (c) Kapteyn Laboratorium Groningen 1990
 	All Rights Reserved.
@@ -2686,8 +2686,8 @@ Author:       K.G. Begeman
 
 Use:          INTEGER GDI_MHEAD( GDI_ID ,    Input      INTEGER
                                  SET ,       Input      CHARACTER*(*)
-                                 CWLO ,      Input      INTEGER
-                                 CWHI )      Input      INTEGER
+                                 CWLO ,      Input      INTEGER*8
+                                 CWHI )      Input      INTEGER*8
 
               GDI_MHEAD      Returns zero on success, negative on error.
               GDI_ID         Id of display.
@@ -2701,15 +2701,15 @@ Updates:      Dec 14, 1990: KGB Document created.
 
 Fortran to C interface:
 
-@ integer function gdi_mhead( integer, character, integer, integer )
+@ integer function gdi_mhead( integer, character, integer*8, integer*8 )
 
 */
 
 
 fint	gdi_mhead_c( fint	*gdi_id   ,	/* display id */
                      fchar	set       ,	/* set name */
-                     fint	*cwlo     ,	/* lower c.w. */
-                     fint  	*cwhi     )	/* upper c.w. */
+                     fint8	*cwlo     ,	/* lower c.w. */
+                     fint8  	*cwhi     )	/* upper c.w. */
 {
 #if	defined(NO_GIPSY)
    return( GDIE_NOT_IMPLEMENTED );
@@ -2720,12 +2720,12 @@ fint	gdi_mhead_c( fint	*gdi_id   ,	/* display id */
    fchar	rec;				/* points to FITS record */
    char		*header;			/* header data for server */
    fint 	gerror = 0;			/* GDS error return */
-   fint		level = 0;			/* set level (top ) */
+   fint8		level = 0;			/* set level (top ) */
    fint		mrec;				/* records in buffer */
    fint		r = GDIE_SUCCESS;		/* return value */
    fint		setdim;				/* dimensions of set */
    fint		subdim;				/* dimension of subset */
-   fint		subset = 0;			/* subset coordinate word */
+   fint8		subset = 0;			/* subset coordinate word */
    int		id = *gdi_id;			/* display id */
    int		nrec = 0;			/* current record */
    int		nw;				/* number of bytes to write */
@@ -3169,7 +3169,7 @@ Author:       K.G. Begeman
 
 Use:          INTEGER GDI_GDSID( GDI_ID ,       Input     INTEGER
                                  SET ,          Input     CHARACTER*(*)
-                                 SUBSET )       Input     INTEGER
+                                 SUBSET )       Input     INTEGER*8
 
               GDI_GDSID      Returns zero on success, negative on error.
               GDI_ID         Id of display.
@@ -3182,13 +3182,13 @@ Updates:      Nov 27, 1991: KGB, Document created.
 
 Fortran to C interface:
 
-@ integer function gdi_gdsid( integer, character, integer )
+@ integer function gdi_gdsid( integer, character, integer*8 )
 
 */
 
 fint	gdi_gdsid_c( fint	*display_id ,		/* display id */
                      fchar	set ,			/* set name */
-                     fint	*subset )		/* subset level */
+                     fint8	*subset )		/* subset level */
 {
 #if	defined(__vms__)			/* VMS */
    return( GDIE_NOT_IMPLEMENTED );		/* not implemented */
@@ -3555,13 +3555,13 @@ Updates:      Aug  1, 1991: KGB, Document created.
 
 Fortran to C interface:
 
-@ integer function gdi_setid( integer, character, integer, integer )
+@ integer function gdi_setid( integer, character, integer*8, integer )
 
 */
 
 fint	gdi_setid_c( fint	*display_id ,		/* display id */
                      fchar	set ,			/* set name */
-                     fint	*subset ,		/* subset level */
+                     fint8	*subset ,		/* subset level */
                      fint	*axperm )		/* axis permutation */
 {
 #if	defined(NO_GIPSY)
@@ -3576,7 +3576,7 @@ fint	gdi_setid_c( fint	*display_id ,		/* display id */
    fint		dir = 1;				/* direction of transform */
    fint		gerror = 0;				/* gds error return */
    fint		idlen;					/* length of id */
-   fint		level = 0;				/* set level */
+   fint8		level = 0;				/* set level */
    fint		ndims;					/* number of axes */
    fint		r = 0;					/* return value */
 

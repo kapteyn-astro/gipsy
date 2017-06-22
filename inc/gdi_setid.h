@@ -1,1 +1,1 @@
-extern fint gdi_setid_c(fint *,fchar,fint *,fint *);
+extern fint gdi_setid_c(fint *,fchar,fint8 *,fint *);

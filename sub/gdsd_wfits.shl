@@ -38,7 +38,8 @@ CCC	PARAMETER (IS_INT=-45,IS_REAL=-46,IS_DBLE=-47)
 	CHARACTER*(*)     FILNAM
 	CHARACTER*(*)     KEY
         CHARACTER*8       KEY_I
-	INTEGER           LEVEL,ERROR,ERROR_I
+	INTEGER*8         LEVEL
+	INTEGER           ERROR,ERROR_I
 	CHARACTER*80      FREC,FREC_I
 
         LOGICAL           PRESENTN,PRESENTC,BOOLER
@@ -68,7 +69,7 @@ N
 N
 N  >>>  GDSD_RFITS  <<<
 	ENTRY GDSD_RFITS(FILNAM,KEY,LEVEL,FREC,ERROR)
-*@subroutine gdsd_rfits(character,character,integer,character,integer)
+*@subroutine gdsd_rfits(character,character,integer*8,character,integer)
 *#>gdsd_rfits.dc2
 *Subroutine:    GDSD_RFITS
 *
@@ -90,7 +91,7 @@ N  >>>  GDSD_RFITS  <<<
 *                              item is to be obtained. If it is not
 *                              present at this level, higher levels are
 *                              inspected until the item is found or proven
-*                              to be not present.                  INTEGER
+*                              to be not present.                  INTEGER*8
 *               record   =     FITS record, consisting of keyword,
 *                              data and comment.                   CHARACTER*80
 *             * error    =     error return code,                  INTEGER
@@ -134,7 +135,7 @@ N  >>>  GDSD_RFITS  <<<
 *               name     =     name of FITS item.                  CHARACTER*8
 *               level    =     coordinate word specifying the
 *                              substructure at which the FITS
-*                              item is to be written.              INTEGER
+*                              item is to be written.              INTEGER*8
 *               value    =     variable containing the data for the
 *                              FITS record. Depending on `xxx', the type
 *                              can be REAL, DOUBLE, INTEGER,
@@ -172,7 +173,7 @@ N  >>>  GDSD_RFITS  <<<
 *                              item is to be obtained. If it is not
 *                              present at this level, higher levels are
 *                              inspected until the item is found or proven
-*                              to be not present.                  INTEGER
+*                              to be not present.                  INTEGER*8
 *               value    =     variable receiving the data from the
 *                              FITS record. Depending on `xxx', the type
 *                              can be REAL, DOUBLE, INTEGER, 
@@ -199,7 +200,7 @@ N
 N  >>>  GDSD_WINT  <<<
 N
 	ENTRY GDSD_WINT(FILNAM,KEY,LEVEL,INTVAL,ERROR)
-*@subroutine gdsd_wint(character,character,integer,integer,integer)
+*@subroutine gdsd_wint(character,character,integer*8,integer,integer)
 
 *#>gdsd_wint.dc2
 *Name:      GDSD_WINT
@@ -225,7 +226,7 @@ N
 N
 N  >>>  GDSD_RINT  <<<
 	ENTRY GDSD_RINT(FILNAM,KEY,LEVEL,INTVAL,ERROR)
-*@subroutine gdsd_rint(character,character,integer,integer,integer)
+*@subroutine gdsd_rint(character,character,integer*8,integer,integer)
 
 *#>gdsd_rint.dc2
 *Name:      GDSD_RINT
@@ -255,7 +256,7 @@ N  >>>  GDSD_RINT  <<<
 N
 N  >>>> GDSD_WREAL  <<<<
 	ENTRY GDSD_WREAL(FILNAM,KEY,LEVEL,REALVAL,ERROR)
-*@subroutine gdsd_wreal(character,character,integer,real,integer)
+*@subroutine gdsd_wreal(character,character,integer*8,real,integer)
 
 *#>gdsd_wreal.dc2
 *Name:      GDSD_WREAL
@@ -282,7 +283,7 @@ N
 N  >>>> GDSD_RREAL
 N
 	ENTRY GDSD_RREAL(FILNAM,KEY,LEVEL,REALVAL,ERROR)
-*@subroutine gdsd_rreal(character,character,integer,real,integer)
+*@subroutine gdsd_rreal(character,character,integer*8,real,integer)
 
 *#>gdsd_rreal.dc2
 *Name:      GDSD_RREAL
@@ -312,7 +313,7 @@ N
 N >>>> GDSD_WDBLE <<<<
 N
 	ENTRY GDSD_WDBLE(FILNAM,KEY,LEVEL,DBLEVAL,ERROR)
-*@subroutine gdsd_wdble(character,character,integer,double precision,integer)
+*@subroutine gdsd_wdble(character,character,integer*8,double precision,integer)
 
 *#>gdsd_wdble.dc2
 *Name:      GDSD_WDBLE
@@ -338,7 +339,7 @@ N
 N >>>> GDSD_RDBLE <<<<
 N
 	ENTRY GDSD_RDBLE(FILNAM,KEY,LEVEL,DBLEVAL,ERROR)
-*@subroutine gdsd_rdble(character,character,integer,double precision,integer)
+*@subroutine gdsd_rdble(character,character,integer*8,double precision,integer)
 
 *#>gdsd_rdble.dc2
 *Name:      GDSD_RDBLE
@@ -369,7 +370,7 @@ N
 N >>>> GDSD_WLOG <<<<
 N
 	ENTRY GDSD_WLOG(FILNAM,KEY,LEVEL,LOGVAL,ERROR)
-*@subroutine gdsd_wlog(character,character,integer,logical,integer)
+*@subroutine gdsd_wlog(character,character,integer*8,logical,integer)
 
 *#>gdsd_wlog.dc2
 *Name:      GDSD_WLOG
@@ -396,7 +397,7 @@ N
 N  >>>> GDSD_RLOG <<<<
 N
 	ENTRY GDSD_RLOG(FILNAM,KEY,LEVEL,LOGVAL,ERROR)
-*@subroutine gdsd_rlog(character,character,integer,logical,integer)
+*@subroutine gdsd_rlog(character,character,integer*8,logical,integer)
 
 *#>gdsd_rlog.dc2
 *Name:      GDSD_RLOG
@@ -433,7 +434,7 @@ N
 N >>>> GDSD_WCHAR <<<<
 N
 	ENTRY GDSD_WCHAR(FILNAM,KEY,LEVEL,CHARVAL,ERROR)
-*@subroutine gdsd_wchar(character,character,integer,character,integer)
+*@subroutine gdsd_wchar(character,character,integer*8,character,integer)
 
 *#>gdsd_wchar.dc2
 *Name:      GDSD_WCHAR
@@ -463,7 +464,7 @@ N
 N >>>> GDSD_RCHAR <<<<
 N
 	ENTRY GDSD_RCHAR(FILNAM,KEY,LEVEL,CHARVAL,ERROR)
-*@subroutine gdsd_rchar(character,character,integer,character,integer)
+*@subroutine gdsd_rchar(character,character,integer*8,character,integer)
 
 *#>gdsd_rchar.dc2
 *Name:      GDSD_RCHAR

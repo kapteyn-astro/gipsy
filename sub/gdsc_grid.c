@@ -17,9 +17,9 @@ Category:      GDS
 
 Author:        W. Zwitser
 
-Use:           INTEGER  GDSC_GRID( SET,           Input       character
+Use:           INTEGER*8  GDSC_GRID( SET,           Input       character
                                    AXNUM,         Input       integer
-                                   CWORD,         Input       integer
+                                   CWORD,         Input       integer*8
                                    ERROR )        In/Out      integer
 
                GDSC_GRID     extracted grid value
@@ -39,7 +39,7 @@ Updates:       Dec  5, 1989: WZ, migrated to C
 
 @ integer function gdsc_grid( character, 
 @                             integer,
-@                             integer,
+@                             integer*8,
 @                             integer )
 
 ----------------------------------------------------------------------------*/

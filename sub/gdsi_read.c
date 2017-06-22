@@ -340,7 +340,7 @@ Updates:      May 21, 1987: WZ, istalled.
 
 Fortran to C interface:
 
-@ subroutine gdsi_read( character, integer*8, integer*8, real, integer*8, integer*8, integer*8 )
+@ subroutine gdsi_read( character, integer*8, integer*8, real, integer, integer, integer)
 
 */
 
@@ -348,8 +348,8 @@ void    gdsi_read_c( fchar set ,                /* the set name */
                      fint8  *cwlo ,              /* lower coordinate word */
                      fint8  *cwup ,              /* upper coordinate word */
                      float *data ,              /* the data buffer */
-                     fint8  *size ,              /* size of buffer above */
-                     fint8  *done ,              /* number done */
+                     fint  *size ,              /* size of buffer above */
+                     fint  *done ,              /* number done */
                      fint  *tid )               /* transfer id */
 {
    fint         ltid;                   /* local transfer id */
@@ -519,7 +519,7 @@ Updates:      May 21, 1987: WZ, installed.
 
 Fortran to C interface:
 
-@ subroutine gdsi_write( character, integer*8, integer*8, real, integer*8, integer*8, integer )
+@ subroutine gdsi_write( character, integer*8, integer*8, real, integer, integer, integer )
 
 */
 
@@ -527,8 +527,8 @@ void    gdsi_write_c( fchar set ,               /* the set name */
                       fint8  *cwlo ,             /* lower coordinate word */
                       fint8  *cwup ,             /* upper coordinate word */
                       float *data ,             /* the data to write */
-                      fint8  *size ,             /* size of buffer above */
-                      fint8  *done ,             /* number done */
+                      fint  *size ,             /* size of buffer above */
+                      fint  *done ,             /* number done */
                       fint  *tid )              /* transfer id */
 {
    fint         ltid;                   /* local transfer id */

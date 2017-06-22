@@ -2077,7 +2077,7 @@ static fint mtio_read( fint mtid, char *buffer, fint size )	/* read from tape */
 }
 
 
-static fint mtio_write( fint mtid, char *buffer, fint size )	/* Write a block */
+static fint mtio_write( fint mtid, char *buffer, fint8 size )	/* Write a block */
 {
    fint mt_error = MTIO_NO_ERROR;		/* tape status */
 
@@ -3205,7 +3205,7 @@ Author:       K.G. Begeman
 
 Use:          INTEGER MTWRITE( MTID,       Input      INTEGER
                                DATA,       Input      INTEGER ARRAY
-                               NREQ )      Input      INTEGER
+                               NREQ )      Input      INTEGER*8
 
               MTWRITE   Returns:
                         >0 : Number of bytes written.
@@ -3225,12 +3225,12 @@ Updates:      Jul 20, 1989: KGB, Document created.
 
 Fortran to C interface:
 
-@ integer function mtwrite( integer, integer, integer )
+@ integer function mtwrite( integer, integer, integer*8 )
 
 */
 
 
-fint mtwrite_c( fint *mtid, char *buffer, fint *size )
+fint mtwrite_c( fint *mtid, char *buffer, fint8 *size )
 {
    if (legal( *mtid ) && mt_info[*mtid].open) {
       if (*size > 0) {

@@ -131,7 +131,7 @@ N     Loop counter
 N     Number of blanks in subsets
       integer       nblank(maxsubs)
 N     Number of points actually read from subset
-      integer(8)       nd
+      integer       nd
 N     Array containing number of pixels (dimension)
       integer(8)       nf(maxaxes)
 N     Number of points on axis inside frame 
@@ -200,8 +200,13 @@ N     get input database
      #               1,
      #               subdim )
 N     Get number of axis
-      setdim = gdsc_ndims( set, 0 )
+      setdim = gdsc_ndims( set, 0_8 )
 N     Get axis names and prepare axis lables
+      call anyout(8, 'debug line...')
+      call anyout(8, 'debug line...')
+      call anyout(8, 'debug line...')
+      call anyout(outdev, 'debug line...')
+      call anyout(outdev, 'debug line...')
       for m = 1, setdim
 N        Get name of axis
          axname(m) = gdsc_name( set, axperm(m), gerror )

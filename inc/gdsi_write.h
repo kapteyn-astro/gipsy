@@ -1,1 +1,1 @@
-extern void gdsi_write_c(fchar,fint *,fint *,float *,fint *,fint *,fint *);
+extern void gdsi_write_c(fchar,fint8 *,fint8 *,float *,fint *,fint *,fint *);

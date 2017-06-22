@@ -73,7 +73,7 @@ Updates:      Jul 22, 1989: KGB, Document created
 void minmax1_c( float *data, fint *n, float *amin, float *amax )
 {
    fint   def = 0;			/* define mode or not */
-   fint   l;				/* loop counter */
+   fint8   l;				/* loop counter */
    float  blank;			/* BLANK value */
 
    setfblank_c( amin );			/* set to blank, as initial value */
@@ -288,12 +288,12 @@ Updates:      Jul 22, 1989: KGB, Document created.
 #<
 
 @ subroutine minmax4( real, integer, real, real,
-@                     integer, integer, integer, integer )
+@                     integer*8, integer*8, integer, integer*8 )
 
 */
 
 void minmax4_c( float *data, fint *n, float *amin, float *amax,
-                fint *imin, fint *imax, fint *nblank, fint *count )
+                fint8 *imin, fint8 *imax, fint *nblank, fint8 *count )
 {
    fint   def;				/* define mode or not */
    fint   k = 0;			/* local BLANK counter */

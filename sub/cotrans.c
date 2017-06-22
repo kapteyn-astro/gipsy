@@ -160,7 +160,7 @@ static set_struct get_set_info( fchar set, fint subset, fint dir )
    if (d) {
       fchar instr;
       fint  derror = 0;
-      fint  level = 0;
+      fint8  level = 0;
       fint  setc;
 
       for (setc = 0; setc < MAXSETBUF; setc++) {
@@ -1056,7 +1056,7 @@ File:         cotrans.c
 Author:       K.G. Begeman
 
 Use:          INTEGER COTRANS ( SET    ,  Input   character
-                                SUBSET ,  Input   integer
+                                SUBSET ,  Input   integer*8
                                 COORD1 ,  Input   double precision array
                                 COORD2 ,  Output  double precision array
                                 DIR    )  Input   integer
@@ -1121,7 +1121,7 @@ Updates:      Dec 19, 1989: KGB, Document created.
 Fortran to C interface:
 
 @ integer function cotrans( character        ,
-@                           integer          ,
+@                           integer*8          ,
 @                           double precision ,
 @                           double precision ,
 @                           integer          )
@@ -1129,7 +1129,7 @@ Fortran to C interface:
 */
 
 fint cotrans_c( fchar   set      ,
-                fint   *subset   ,
+                fint8   *subset   ,
                 double *coordin  ,
                 double *coordout ,
                 fint   *dir      )

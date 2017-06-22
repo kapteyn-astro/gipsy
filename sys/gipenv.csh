@@ -96,7 +96,7 @@ else							# okay.
 
 
 #	else						# } else {
-#		echo "GIPSY client ${client} unknown\!\!"	# error message (suppressed)
+		echo "GIPSY client ${client} unknown\!\!"	# error message (suppressed)
 	endif						# }
 	unset	client					# remove
 	unset	fields					# remove

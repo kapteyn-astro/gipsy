@@ -1,1 +1,1 @@
-extern fint gdsc_substruct_c(fchar,fint *,fint *,fint *);
+extern fint gdsc_substruct_c(fchar,fint8 *,fint8 *,fint *);

@@ -2,6 +2,7 @@ import sys
 import numpy as np
 import struct
 import logging
+import collections
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger("gipsy.dataset")
@@ -46,9 +47,21 @@ typedef struct {
    char	name[KEY_LEN];  /* name of descriptor item */
 } _keyhead, *keyhead; /* ------------------------- header part of key record */
 
+#define SKH    (sizeof(_keyhead))
+#define SEH    (sizeof(_exthead))
+#define SL     (sizeof(fint))
+#define KEY_AL (SL+(SL*SKH-SKH)%SL)     /* alignment in key records         */
+#define EXT_AL (SL+(SL*SEH-SEH)%SL)     /* alignment in extension records   */
+#define KEY_DL (REC_SIZ-SKH-KEY_AL )    /* data length of key record        */
+#define EXT_DL (REC_SIZ-SEH-EXT_AL )    /* data length of extension record  */
+
+
 """
 REC_SIZ =  200 #                  /* internal record size (bytes)       */
 GDS_KEYLEN  =   21          #  /* descriptor key length (bytes)      *
+SKH = 8*4 + 1 + GDS_KEYLEN
+SL = 4
+KEY_AL = (SL+(SL*SKH-SKH)%SL)
 
 class GipsyDataset(object):
   def __init__(self, name):
@@ -56,6 +69,7 @@ class GipsyDataset(object):
     self.path_image = name + ".image"
     self.path_descr = name + ".descr"
     logger.info("opening descriptor: %s", self.path_descr)
+    self.headers = collections.OrderedDict()
 
     with open(self.path_descr) as f:
 		data_all = data_descr = f.read()
@@ -104,15 +118,20 @@ class GipsyDataset(object):
 				fmt = '8ic%is' % GDS_KEYLEN
 				data = struct.unpack(fmt, record_data[:struct.calcsize(fmt)])
 				key_ind, length, readpos, level, next_key, next_ext, last_ext, curr_ext, type, name = data
+				data = record_data[struct.calcsize(fmt)+KEY_AL:struct.calcsize(fmt)+KEY_AL+length]
 				indices.append(index)
 				logger.info("\tname: %s level: %s type: %r length: %s", name, level, type, length)
 				logger.info("\tnext_key: %s next_ext: %s last_ext: %s curr_ext: %s", next_key, next_ext, last_ext, curr_ext)
+				logger.info("\t%r" % data)
 				assert curr_ext == index, "corrupt file?"
+				self.headers[name] = data
 			#logger.info(" left over: %s", len(data_descr))
 			#while k:
 			#	data_all
 		indices = list(sorted(indices))
 		logger.info("used indices: %r", indices)
+		for name, value in self.headers.items():
+			print("%s = %r" % (name, value))
 
     #print numbers[4:]; print numbers[4:][20:]; print numbers[4:][40:]
 

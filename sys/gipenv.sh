@@ -45,8 +45,9 @@ else							# okay
 		export gip_tmp				# temporary
 		gip_tsk=${gip_root}/tsk			# gip_tsk
 		export gip_tsk				# applications
-#	else						# unknown client
-#		echo "GIPSY client ${client} unknown\!\!"	# error message (suppressed)
+		alias	gipsy=${gip_sys}/gipsy.sh
+	else						# unknown client
+		echo "GIPSY client ${client} unknown\!\!"	# error message (suppressed)
 	fi						# }
 	unset	client					# remove
 	unset	line					# remove

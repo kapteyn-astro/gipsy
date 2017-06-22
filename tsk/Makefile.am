@@ -1,8 +1,10 @@
 include $(top_srcdir)/common.mk
 include $(top_srcdir)/tasks.mk
 SUBDIRS=hermes gdsserver gdsserver64
-bin_PROGRAMS = create print mnmx header
+bin_PROGRAMS = create print mnmx header wfits rfits
 create_SOURCES = create.f
+wfits_SOURCES = wfits.c
+rfits_SOURCES = rfits.c
 print_SOURCES = print.c dummy.f
 mnmx_SOURCES = mnmx.f
 header_SOURCES = header.c dummy.f

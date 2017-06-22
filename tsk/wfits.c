@@ -206,8 +206,8 @@ Updates:      Oct 21, 1991: KGB, Modified code for new mtopen routine.
 
 #define	PUTOUT( f, m, p, n )	\
 { \
-   fint	size = ( blocked * FITSBLOCKLEN ); \
-   fint	plen = (n); \
+   fint8	size = ( blocked * FITSBLOCKLEN ); \
+   fint8	plen = (n); \
    byte	*b = (byte *)p; \
    if ((b == NULL) || (plen == 0)) { \
       while (nfts % FITSBLOCKLEN) ftsdata[nfts++] = 0; \
@@ -222,7 +222,7 @@ Updates:      Oct 21, 1991: KGB, Modified code for new mtopen routine.
          nfts = 0; \
       } \
    } else { \
-      fint	l = size - nfts; \
+      fint	l = (fint)(size - nfts); \
       while ( plen > l ) { \
          if (l) { \
             memmove( &ftsdata[nfts], b, l ); \
@@ -256,14 +256,14 @@ typedef	struct { char name[GDSDESCRLEN+1]; fint level; } desc;
 
 static	char	setb[TEXTLEN];			/* Buffer for name of set */
 static	fchar	set = { setb, TEXTLEN };	/* Name of set */
-static	fint	subsets[MAXSUBSETS];		/* The subsets */
+static	fint8	subsets[MAXSUBSETS];		/* The subsets */
 static	fint	nsubs;				/* Number of input subsets */
 static	fint	subdim;				/* Dimension of subset */
 static	fint	setdim;				/* Dimension of set */
 static	fint	fgridlo[MAXAXES];		/* Grids of entire frame */
 static	fint	fgridhi[MAXAXES];
-static	fint	bgridlo[MAXAXES];		/* Grids of part of frame */
-static	fint	bgridhi[MAXAXES];
+static	fint8	bgridlo[MAXAXES];		/* Grids of part of frame */
+static	fint8	bgridhi[MAXAXES];
 static	float	blank;				/* the blank value */
 
 /*
@@ -273,7 +273,7 @@ static	float	blank;				/* the blank value */
 static	byte	ftsdata[MAXBLOCK*FITSBLOCKLEN];	/* The fits data buffer */
 static	char	recordb[FITSRECORDLEN+1];	/* Fits header record buffer */
 static	fchar	record = { recordb, FITSRECORDLEN };	/* Header record */
-static	fint	nfts;				/* Bytes in fits data buffer */
+static	fint8	nfts;				/* Bytes in fits data buffer */
 static	char	tnameb[TEXTLEN];		/* Buffer for Ftname */
 static	fchar	tname = { tnameb, TEXTLEN };	/* Name of tape */
 
@@ -322,14 +322,17 @@ static	int	genname( char name[], char gname[], int n, int generate )
  * subset.
  */
 
-static	void	getmnmx( fint cwlo, fint cwhi, float mnmx[] )
+static	void	getmnmx( fint8 cwlo, fint8 cwhi, float mnmx[] )
 {
-   fint		maxdata = MAXDATA, nread, tid = 0;
+   fint		tid = 0;
+   fint    maxdata = MAXDATA;
+   fint    nread;
    float	datamin, datamax;
    float	data[MAXDATA];
 
    mnmx[0] = mnmx[1] = blank;
    do {
+       extern void gdsi_read_c(fchar,fint8 *,fint8 *,float *,fint *,fint *,fint *);
       gdsi_read_c( set, &cwlo, &cwhi, data, &maxdata, &nread, &tid  );
       minmax1_c( data, &nread, &datamin, &datamax );
       if (datamin != blank) {
@@ -462,14 +465,14 @@ MAIN_PROGRAM_ENTRY
       fint	axcount[MAXAXES];
       fint	axnum[MAXAXES];
       fint	class;
-      fint	cwhi;
-      fint	cwlo;
+      fint8	cwhi;
+      fint8	cwlo;
       fint	input;
       fint	error;
       fint	maxaxes;
       fint	maxsubs;
       fint	output;
-      fint	wholeset;
+      fint8	wholeset;
       int	m;
 
       keyword = tofchar("INSET=");
@@ -502,7 +505,7 @@ MAIN_PROGRAM_ENTRY
       fint	input;
       fint	output;
       int	m;
-      int	totpixels;
+      fint8	totpixels;
 
       keyword = tofchar("BOX=");
       message = tofchar(" ");
@@ -633,8 +636,8 @@ MAIN_PROGRAM_ENTRY
     * Loop over all subsets, create header, read data and write to tape.
     */
    for ( isub = 0; isub < nsubs; isub++ ) {
-      fint	cwlo;
-      fint	cwhi;
+      fint8	cwlo;
+      fint8	cwhi;
       fint	fitsblank;
       float     datablank;
       float	mnmx[2];
@@ -1162,3 +1165,4 @@ MAIN_PROGRAM_ENTRY
    finis_c( );					/* last routine */
    return( EXIT_SUCCESS );			/* last statement */
 }
+

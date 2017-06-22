@@ -17,8 +17,8 @@ File:         ftsd_mkhead.c
 Author:       K.G. Begeman
 
 Use:          INTEGER FTSD_MKHEAD( SET ,      Input    CHARACTER*(*)
-                                   CWLO ,     Input    INTEGER
-                                   CWHI ,     Input    INTEGER
+                                   CWLO ,     Input    INTEGER(8)
+                                   CWHI ,     Input    INTEGER(8)
                                    BLOCKED ,  Input    LOGICAL
                                    HEADER ,   Output   CHARACTER*(80)
                                    MAXREC )   Input    INTEGER
@@ -46,7 +46,7 @@ Updates:      Dec 16, 1990: KGB Document created.
 
 Fortran to C interface:
 
-@ integer function ftsd_mkhead( character, integer, integer, logical, character,
+@ integer function ftsd_mkhead( character, integer*8, integer*8, logical, character,
 @                               integer )
 
 */
@@ -97,10 +97,10 @@ Fortran to C interface:
    for (i = 0; i < FITSRECORDLEN; header.a[inhead++] = record[i++]); \
 }
 
-
+
 fint	ftsd_mkhead_c( fchar	set     ,	/* name of set */
-                       fint	*cwblo  ,	/* lower cw of subset frame */
-                       fint	*cwbhi  ,	/* upper cw of subset frame */
+                       fint8	*cwblo  ,	/* lower cw of subset frame */
+                       fint8	*cwbhi  ,	/* upper cw of subset frame */
                        bool	*blocked ,	/* blocked tape ? */
                        fchar	header  ,	/* the fits header */
                        fint	*maxrec )	/* maximum number of records */
@@ -109,19 +109,19 @@ fint	ftsd_mkhead_c( fchar	set     ,	/* name of set */
    char		record[FITSRECORDLEN+1];	/* buffer for one FITS record */
    double	dval;				/* double precision dummy */
    fchar	cval;				/* f character */
-   fint		cwfhi;				/* c.w. upper frame */
-   fint		cwflo;				/* c.w. lower frame */
-   fint		*gbhi;				/* grids upper box */
-   fint		*gblo;				/* grids lower box */
+   fint8		cwfhi;				/* c.w. upper frame */
+   fint8		cwflo;				/* c.w. lower frame */
+   fint8		*gbhi;				/* grids upper box */
+   fint8		*gblo;				/* grids lower box */
    fint 	gerror = 0;			/* GDS error return code */
-   fint		*gfhi;				/* grids upper frame */
-   fint		*gflo;				/* grids lower frame */
-   fint		level = 0;			/* level in set */
+   fint8		*gfhi;				/* grids upper frame */
+   fint8		*gflo;				/* grids lower frame */
+   fint8		level = 0;			/* level in set */
    fint		naxis;				/* number of axes */
    fint		*perm;				/* axis permutation */
    fint		r = 0;				/* return value */
    fint		setdim;				/* dimension of set */
-   fint		subset;				/* subset level */
+   fint8		subset;				/* subset level */
    fint		subdim;				/* dimension of subset */
    int		inhead = 0;			/* number of characters */
    int		n;				/* counter */
@@ -191,6 +191,7 @@ fint	ftsd_mkhead_c( fchar	set     ,	/* name of set */
       gfhi[idx] = gdsc_grid_c( set, &axnum, &cwfhi, &gerror );
       gflo[idx] = gdsc_grid_c( set, &axnum, &cwflo, &gerror );
    }
+   
    FITS_INT_DSC( record, "NAXIS", (int) setdim, " / NUMBER OF AXES" );
    if (r++ < *maxrec) ADD_RECORD( record, header, inhead );
    for (n = 0; n < setdim; n++) {

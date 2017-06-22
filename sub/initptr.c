@@ -9,11 +9,11 @@
 #include	"stdlib.h"			/* <stdlib.h> */
 #include	"gipsyc.h"			/* GIPSY symbols */
 
-static	fint	*fp = NULL;
-static	fint	*b1p = NULL, *b2p = NULL;
-static	fint	*gip = NULL, *gop = NULL;
-static	fint	*gis = NULL, *gos = NULL;
-static	fint	*p1p = NULL, *p2p = NULL;
+static	fint8	*fp = NULL;
+static	fint8	*b1p = NULL, *b2p = NULL;
+static	fint8	*gip = NULL, *gop = NULL;
+static	fint8	*gis = NULL, *gos = NULL;
+static	fint8	*p1p = NULL, *p2p = NULL;
 static	fint	*mp = NULL;
 static	fint	inc;
 static	fint	dim;
@@ -35,7 +35,7 @@ static	void	reseto( void )
    for (n = 0; n < dim; n++) gop[n] = gos[n];
 }
 
-static	bool	inside( fint g[] )
+static	bool	inside( fint8 g[] )
 {
    bool	ins = 1;
    fint	n = dim - 1;
@@ -46,7 +46,8 @@ static	bool	inside( fint g[] )
    return(ins);
 }
 
-static	void	next( fint g[] )
+
+static	void	next( fint8 g[] )
 {
    fint	n = 0;
    fint	l;
@@ -73,10 +74,10 @@ File:         initptr.c
 
 Author:       K.G. Begeman
 
-Use:          CALL INITPTR( RFLO,     	Input      INTEGER ARRAY
-                            RFHI,       Input      INTEGER ARRAY
-                            SFLO,       Input      INTEGER ARRAY
-                            SFHI,       Input      INTEGER ARRAY
+Use:          CALL INITPTR( RFLO,     	Input      INTEGER*8 ARRAY
+                            RFHI,       Input      INTEGER*8 ARRAY
+                            SFLO,       Input      INTEGER*8 ARRAY
+                            SFHI,       Input      INTEGER*8 ARRAY
                             NDIM,       Input      INTEGER
                             NR,         Input      INTEGER
                             NT )       In/Output   INTEGER
@@ -140,15 +141,15 @@ Updates:      Nov 15, 1988: KGB, Creation date.
 
 #<
 
-@ subroutine initptr( integer, integer, integer, integer,
+@ subroutine initptr( integer*8, integer*8, integer*8, integer*8,
 @                     integer, integer, integer )
 
 */
 
-void	initptr_c( fint *f1 ,
-                   fint *f2 ,
-                   fint *b1 ,
-                   fint *b2 ,
+void	initptr_c( fint8 *f1 ,
+                   fint8 *f2 ,
+                   fint8 *b1 ,
+                   fint8 *b2 ,
                    fint *ndim ,
                    fint *nd ,
                    fint *ntot )
@@ -157,7 +158,7 @@ void	initptr_c( fint *f1 ,
    fint	ipos;
 
    if (*ntot == 0) {
-      int	s = sizeof(fint);
+      int	s = sizeof(fint8);
       int	d = dim = *ndim;
 
       if (dim) {
@@ -222,9 +223,7 @@ Use:          LOGICAL INSIDEPTR( IP,    Output   INTEGER
 
               INSIDEPTR  Returns .TRUE. when still some data inside
                          subframe in readbuffer, else .FALSE.
-              IP         If INSIDEPTR .eq. .TRUE., offset pointer from
-                         start of readbuffer to where first data value
-                         insiderame can be found.
+              IP         If INSIDEPTR .eq. .TRUE., 
               NP         If INSIDEPTR .eq. .TRUE., number of data values
                          inside subframe in readbuffer starting at IP.
 
